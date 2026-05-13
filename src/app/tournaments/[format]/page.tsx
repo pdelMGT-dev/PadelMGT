@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Users, Clock, CheckCircle, ChevronRight, Trophy } from 'lucide-react';
 import { tournamentFormats, ongoingTournaments } from '@/lib/data';
 
 interface Props {
@@ -14,7 +13,7 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: Props) {
   const { format: slug } = await params;
   const fmt = tournamentFormats.find((f) => f.slug === slug);
-  return { title: `${fmt?.name ?? 'Format'} – PadelMGT` };
+  return { title: `${fmt?.name ?? 'Formato'} – PadelMGT` };
 }
 
 export default async function FormatDetailPage({ params }: Props) {
@@ -25,178 +24,157 @@ export default async function FormatDetailPage({ params }: Props) {
   const related = ongoingTournaments.filter((t) => t.formatSlug === slug).slice(0, 3);
   const otherFormats = tournamentFormats.filter((f) => f.slug !== slug).slice(0, 3);
 
+  const statusLabel: Record<string, string> = { ongoing: 'EN VIVO', upcoming: 'PRÓXIMO', completed: 'FINALIZADO' };
+
   return (
     <div>
-      {/* Hero */}
-      <section className="bg-slate-900 text-white py-16 px-4">
-        <div className="max-w-7xl mx-auto">
-          <nav className="text-slate-400 text-sm mb-6">
-            <Link href="/" className="hover:text-white">Home</Link>
-            <span className="mx-2">/</span>
-            <Link href="/tournaments" className="hover:text-white">Tournaments</Link>
-            <span className="mx-2">/</span>
-            <span className="text-white">{fmt.name}</span>
-          </nav>
-          <div className="flex items-start gap-6">
-            <div className="text-6xl">{fmt.icon}</div>
+      {/* Page Header */}
+      <div className="page-header">
+        <div className="page-header-bg" />
+        <div className="page-header-scrim" />
+        <div className="page-header-content">
+          <div className="hero-eyebrow" style={{ color: 'rgba(255,255,255,0.65)' }}>
+            <Link href="/tournaments" style={{ color: 'rgba(255,255,255,0.65)', textDecoration: 'none' }}>Torneos</Link>
+            {' / '}
+            <span style={{ color: '#fff' }}>{fmt.name}</span>
+          </div>
+          <h1 className="page-title">{fmt.name.toUpperCase()}</h1>
+          <p className="page-sub">{fmt.description}</p>
+        </div>
+      </div>
+
+      <section style={{ padding: '64px 48px 96px' }}>
+        <div style={{ maxWidth: 1440, margin: '0 auto' }}>
+          {/* Stats bar */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 64 }}>
+            {[
+              { label: 'Jugadores', value: `${fmt.minPlayers}–${fmt.maxPlayers}` },
+              { label: 'Duración', value: fmt.duration },
+              { label: 'Nivel', value: fmt.difficulty },
+            ].map((s) => (
+              <div key={s.label} style={{ background: '#fff', padding: '32px 40px' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--black)', lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginTop: 8 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 48 }}>
+            {/* Main */}
             <div>
-              <div className="text-green-400 font-semibold text-sm mb-2 uppercase tracking-wide">{fmt.type} Format</div>
-              <h1 className="text-4xl md:text-5xl font-bold mb-3">Padel {fmt.name}</h1>
-              <p className="text-slate-300 text-lg max-w-2xl">{fmt.description}</p>
-              <div className="flex flex-wrap gap-4 mt-6">
-                <div className="flex items-center gap-2 bg-slate-800 rounded-lg px-4 py-2 text-sm">
-                  <Users className="w-4 h-4 text-green-400" />
-                  <span>{fmt.minPlayers}–{fmt.maxPlayers} players</span>
+              {/* How it Works */}
+              <div style={{ marginBottom: 56 }}>
+                <h2 className="section-title" style={{ fontSize: 'clamp(28px, 3vw, 44px)', marginBottom: 32 }}>CÓMO FUNCIONA</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+                  {fmt.rules.map((rule, i) => (
+                    <div key={i} style={{ background: '#fff', padding: '24px 32px', display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 600, color: 'var(--neon)', lineHeight: 1, background: 'var(--black)', width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
+                      <p style={{ fontSize: 15, color: 'var(--grey-600)', lineHeight: 1.6, margin: 0, paddingTop: 12 }}>{rule}</p>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2 bg-slate-800 rounded-lg px-4 py-2 text-sm">
-                  <Clock className="w-4 h-4 text-green-400" />
-                  <span>{fmt.duration}</span>
+              </div>
+
+              {/* Why Choose */}
+              <div style={{ marginBottom: 56 }}>
+                <h2 className="section-title" style={{ fontSize: 'clamp(28px, 3vw, 44px)', marginBottom: 32 }}>¿POR QUÉ {fmt.name.toUpperCase()}?</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: 'var(--grey-200)' }}>
+                  {fmt.pros.map((pro, i) => (
+                    <div key={i} style={{ background: '#fff', padding: '24px 28px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                      <span style={{ color: 'var(--turf-green)', fontSize: 14, fontWeight: 700, flexShrink: 0, paddingTop: 2 }}>✓</span>
+                      <p style={{ fontSize: 14, color: 'var(--grey-600)', margin: 0, lineHeight: 1.5 }}>{pro}</p>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2 bg-slate-800 rounded-lg px-4 py-2 text-sm">
-                  <Trophy className="w-4 h-4 text-green-400" />
-                  <span>{fmt.difficulty}</span>
+              </div>
+
+              {/* Ideal For */}
+              <div style={{ background: 'var(--black)', padding: '40px 48px', marginBottom: 56 }}>
+                <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 600, marginBottom: 12 }}>Ideal para</div>
+                <p style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: '#fff', textTransform: 'uppercase', letterSpacing: '-0.01em', margin: 0 }}>{fmt.idealFor}</p>
+              </div>
+
+              {/* Related Tournaments */}
+              {related.length > 0 && (
+                <div>
+                  <h2 className="section-title" style={{ fontSize: 'clamp(28px, 3vw, 44px)', marginBottom: 32 }}>TORNEOS {fmt.name.toUpperCase()} ACTIVOS</h2>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+                    {related.map((t) => (
+                      <Link key={t.id} href={`/tournaments/detail/${t.id}`} style={{ background: '#fff', padding: '24px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', textDecoration: 'none' }}>
+                        <div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                            {t.status === 'ongoing' && <span className="badge badge-live">LIVE</span>}
+                            {t.status === 'upcoming' && <span className="badge badge-soon">Próximo</span>}
+                            {t.status === 'completed' && <span className="badge" style={{ background: 'var(--grey-100)', color: 'var(--grey-500)' }}>Finalizado</span>}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 18, textTransform: 'uppercase', color: 'var(--black)', letterSpacing: '-0.01em' }}>{t.name}</div>
+                          <div style={{ fontSize: 13, color: 'var(--grey-500)', marginTop: 4 }}>{t.club} · {t.city}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, color: 'var(--black)' }}>{t.players}<span style={{ fontSize: 16, color: 'var(--grey-400)' }}>/{t.maxPlayers}</span></div>
+                          <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600 }}>jugadores</div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
+              )}
+            </div>
+
+            {/* Sidebar */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* CTA */}
+              <div style={{ background: 'var(--black)', padding: '40px 32px', color: '#fff' }}>
+                <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 600, marginBottom: 12 }}>Organiza</div>
+                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', margin: '0 0 8px' }}>¿CREAR UN {fmt.name.toUpperCase()}?</h3>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, lineHeight: 1.5, marginBottom: 28 }}>Crea tu torneo en minutos. Gratis para hasta 12 jugadores.</p>
+                <Link href="/signup" className="btn btn-primary btn-lg" style={{ display: 'block', textAlign: 'center', borderRadius: 0, background: 'var(--neon)', color: 'var(--black)', marginBottom: 12 }}>
+                  Crear Torneo
+                </Link>
+                <Link href="/tournaments" style={{ display: 'block', textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}>
+                  Ver todos los torneos →
+                </Link>
+              </div>
+
+              {/* Summary */}
+              <div style={{ background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: '32px' }}>
+                <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 20 }}>Resumen del Formato</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {[
+                    { label: 'Jugadores', value: `${fmt.minPlayers}–${fmt.maxPlayers}` },
+                    { label: 'Duración', value: fmt.duration },
+                    { label: 'Nivel', value: fmt.difficulty },
+                    { label: 'Tipo', value: fmt.type },
+                  ].map((item) => (
+                    <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--grey-200)', paddingBottom: 16 }}>
+                      <span style={{ fontSize: 13, color: 'var(--grey-500)' }}>{item.label}</span>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, color: 'var(--black)', textTransform: 'uppercase' }}>{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Other Formats */}
+              <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '32px' }}>
+                <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 20 }}>Otros Formatos</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)', marginBottom: 16 }}>
+                  {otherFormats.map((f) => (
+                    <Link key={f.slug} href={`/tournaments/${f.slug}`} style={{ background: '#fff', padding: '16px', display: 'flex', alignItems: 'center', gap: 14, textDecoration: 'none' }}>
+                      <span style={{ fontSize: 24 }}>{f.icon}</span>
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14, textTransform: 'uppercase', color: 'var(--black)', letterSpacing: '-0.01em' }}>{f.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 2 }}>{f.difficulty}</div>
+                      </div>
+                      <span style={{ marginLeft: 'auto', color: 'var(--grey-300)', fontSize: 18 }}>→</span>
+                    </Link>
+                  ))}
+                </div>
+                <Link href="/tournaments" style={{ fontSize: 13, color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Ver todos los formatos →</Link>
               </div>
             </div>
           </div>
         </div>
       </section>
-
-      <div className="max-w-7xl mx-auto px-4 py-16">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-10">
-            {/* How it Works */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-8">
-              <h2 className="text-2xl font-bold text-slate-900 mb-6">How it Works</h2>
-              <ol className="space-y-4">
-                {fmt.rules.map((rule, i) => (
-                  <li key={i} className="flex items-start gap-4">
-                    <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shrink-0">
-                      {i + 1}
-                    </div>
-                    <p className="text-slate-700 pt-1">{rule}</p>
-                  </li>
-                ))}
-              </ol>
-            </div>
-
-            {/* Pros */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-8">
-              <h2 className="text-2xl font-bold text-slate-900 mb-6">Why Choose {fmt.name}?</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {fmt.pros.map((pro, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
-                    <p className="text-slate-700 text-sm">{pro}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Ideal For */}
-            <div className="bg-green-50 border border-green-200 rounded-2xl p-8">
-              <h2 className="text-xl font-bold text-green-900 mb-3">Ideal For</h2>
-              <p className="text-green-800">{fmt.idealFor}</p>
-            </div>
-
-            {/* Related Tournaments */}
-            {related.length > 0 && (
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-6">Active {fmt.name} Tournaments</h2>
-                <div className="space-y-4">
-                  {related.map((t) => (
-                    <Link
-                      key={t.id}
-                      href={`/tournaments/detail/${t.id}`}
-                      className="flex items-center justify-between bg-white border border-slate-200 rounded-xl p-5 card-hover"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                            t.status === 'ongoing' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                          }`}>
-                            {t.status === 'ongoing' ? '● LIVE' : 'UPCOMING'}
-                          </span>
-                        </div>
-                        <h3 className="font-bold text-slate-900">{t.name}</h3>
-                        <p className="text-sm text-slate-500">{t.club} · {t.city}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-slate-900">{t.players}/{t.maxPlayers}</div>
-                        <div className="text-xs text-slate-400">players</div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* CTA */}
-            <div className="bg-slate-900 text-white rounded-2xl p-6">
-              <h3 className="text-xl font-bold mb-2">Run a {fmt.name}?</h3>
-              <p className="text-slate-400 text-sm mb-5">Create a tournament in minutes. Free for up to 12 players.</p>
-              <Link
-                href="/signup"
-                className="block w-full text-center bg-green-500 hover:bg-green-400 text-white px-4 py-3 rounded-lg font-semibold transition-colors"
-              >
-                Create Tournament
-              </Link>
-              <Link
-                href="/tournaments"
-                className="block w-full text-center mt-3 text-slate-400 hover:text-white text-sm transition-colors"
-              >
-                Browse all tournaments →
-              </Link>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6">
-              <h3 className="font-bold text-slate-900 mb-4">Format Summary</h3>
-              <div className="space-y-3 text-sm">
-                {[
-                  { label: 'Players', value: `${fmt.minPlayers}–${fmt.maxPlayers}` },
-                  { label: 'Duration', value: fmt.duration },
-                  { label: 'Level', value: fmt.difficulty },
-                  { label: 'Type', value: fmt.type },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between">
-                    <span className="text-slate-500">{item.label}</span>
-                    <span className="font-semibold text-slate-800">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Other Formats */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6">
-              <h3 className="font-bold text-slate-900 mb-4">Other Formats</h3>
-              <div className="space-y-3">
-                {otherFormats.map((f) => (
-                  <Link
-                    key={f.slug}
-                    href={`/tournaments/${f.slug}`}
-                    className="flex items-center gap-3 hover:bg-slate-50 rounded-lg p-2 -mx-2 transition-colors"
-                  >
-                    <span className="text-2xl">{f.icon}</span>
-                    <div>
-                      <div className="font-semibold text-slate-800 text-sm">{f.name}</div>
-                      <div className="text-xs text-slate-400">{f.difficulty}</div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 ml-auto" />
-                  </Link>
-                ))}
-                <Link href="/tournaments" className="block text-center text-green-600 hover:text-green-700 text-sm font-semibold pt-2">
-                  View all formats →
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

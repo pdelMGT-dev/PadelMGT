@@ -1,0 +1,163 @@
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { clubs } from '@/lib/data';
+
+interface Props {
+  params: Promise<{ id: string }>;
+}
+
+export async function generateStaticParams() {
+  return clubs.map((c) => ({ id: c.id }));
+}
+
+export async function generateMetadata({ params }: Props) {
+  const { id } = await params;
+  const club = clubs.find((c) => c.id === id);
+  return { title: `${club?.name ?? 'Club'} – PadelMGT` };
+}
+
+const mockTournaments = [
+  { name: 'Americano de Mayo', format: 'Americano', date: '2026-05-18', players: 12, maxPlayers: 16, status: 'upcoming' },
+  { name: 'Liga Club Interna', format: 'Round Robin', date: '2026-05-10', players: 8, maxPlayers: 8, status: 'ongoing' },
+  { name: 'Abierto de Abril', format: 'Knockout', date: '2026-04-20', players: 16, maxPlayers: 16, status: 'completed' },
+];
+
+export default async function ClubDetailPage({ params }: Props) {
+  const { id } = await params;
+  const club = clubs.find((c) => c.id === id);
+  if (!club) notFound();
+
+  return (
+    <div>
+      {/* Page Header */}
+      <div className="page-header">
+        <div className="page-header-bg" />
+        <div className="page-header-scrim" />
+        <div className="page-header-content">
+          <div className="hero-eyebrow" style={{ color: 'rgba(255,255,255,0.65)' }}>
+            <Link href="/clubs" style={{ color: 'rgba(255,255,255,0.65)', textDecoration: 'none' }}>Clubes</Link>
+            {' / '}
+            <span style={{ color: '#fff' }}>{club.name}</span>
+          </div>
+          <h1 className="page-title">{club.name.toUpperCase()}</h1>
+          <p className="page-sub">{club.address}</p>
+        </div>
+      </div>
+
+      <section style={{ padding: '64px 48px 96px' }}>
+        <div style={{ maxWidth: 1440, margin: '0 auto' }}>
+          {/* Stats bar */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 56 }}>
+            {[
+              { label: 'Canchas', value: String(club.courts) },
+              { label: 'Miembros', value: String(club.members) },
+              { label: 'Valoración', value: `★ ${club.rating}` },
+              { label: 'Ciudad', value: club.city },
+            ].map((s) => (
+              <div key={s.label} style={{ background: '#fff', padding: '28px 32px' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--black)', lineHeight: 1, textTransform: 'uppercase' }}>{s.value}</div>
+                <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginTop: 6 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 48 }}>
+            {/* Main */}
+            <div>
+              {/* Court image */}
+              <div className="card-image" style={{ height: 320, marginBottom: 48, borderRadius: 0 }}>
+                <img src="/assets/court-green.svg" alt={club.name} style={{ opacity: 0.9 }} />
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.75) 100%)' }} />
+                <div style={{ position: 'absolute', bottom: 28, left: 32 }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 56, color: '#fff', fontWeight: 600 }}>★ {club.rating}</div>
+                </div>
+              </div>
+
+              {/* Amenities */}
+              <div style={{ marginBottom: 48 }}>
+                <h2 className="section-title" style={{ fontSize: 'clamp(28px, 3vw, 44px)', marginBottom: 24 }}>INSTALACIONES</h2>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {club.amenities.map((a) => (
+                    <span key={a} className="chip" style={{ fontSize: 13, padding: '8px 16px' }}>{a}</span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tournaments */}
+              <div>
+                <h2 className="section-title" style={{ fontSize: 'clamp(28px, 3vw, 44px)', marginBottom: 24 }}>TORNEOS</h2>
+                <div style={{ border: '1px solid var(--grey-200)' }}>
+                  <table className="rank-table">
+                    <thead>
+                      <tr>
+                        <th style={{ paddingLeft: 24 }}>Torneo</th>
+                        <th>Formato</th>
+                        <th>Fecha</th>
+                        <th style={{ textAlign: 'center' }}>Jugadores</th>
+                        <th>Estado</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mockTournaments.map((t, i) => (
+                        <tr key={i}>
+                          <td style={{ paddingLeft: 24, fontWeight: 600, fontSize: 15 }}>{t.name}</td>
+                          <td><span className="chip" style={{ fontSize: 10 }}>{t.format}</span></td>
+                          <td style={{ color: 'var(--grey-500)', fontSize: 13 }}>{t.date}</td>
+                          <td style={{ textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600 }}>{t.players}/{t.maxPlayers}</td>
+                          <td>
+                            {t.status === 'ongoing' && <span className="badge badge-live">LIVE</span>}
+                            {t.status === 'upcoming' && <span className="badge badge-soon">Próximo</span>}
+                            {t.status === 'completed' && <span className="badge" style={{ background: 'var(--grey-100)', color: 'var(--grey-500)' }}>Finalizado</span>}
+                          </td>
+                          <td><Link href="/signup" className="btn btn-secondary btn-sm">Ver →</Link></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Reserve CTA */}
+              <div style={{ background: 'var(--black)', padding: '36px 28px', color: '#fff' }}>
+                <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 600, marginBottom: 12 }}>Reserva</div>
+                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', margin: '0 0 8px' }}>RESERVA UNA CANCHA</h3>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 1.5, marginBottom: 24 }}>Elige horario y cancha disponible en línea.</p>
+                <Link href="/signup" className="btn btn-primary btn-lg" style={{ display: 'block', textAlign: 'center', borderRadius: 0, background: 'var(--neon)', color: 'var(--black)' }}>
+                  Reservar Cancha
+                </Link>
+              </div>
+
+              {/* Contact */}
+              <div style={{ background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: '32px 28px' }}>
+                <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 20 }}>Contacto</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {[
+                    { label: 'Teléfono', value: club.phone || '–' },
+                    { label: 'Email', value: club.email || '–' },
+                    { label: 'País', value: club.country },
+                  ].map((item) => (
+                    <div key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: 4, borderBottom: '1px solid var(--grey-200)', paddingBottom: 14 }}>
+                      <span style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600 }}>{item.label}</span>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--black)' }}>{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Join as member */}
+              <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '28px' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--black)', marginBottom: 8 }}>¿Quieres ser miembro?</div>
+                <p style={{ fontSize: 13, color: 'var(--grey-500)', lineHeight: 1.5, marginBottom: 16 }}>Accede a reservas prioritarias, torneos y descuentos exclusivos.</p>
+                <Link href="/signup" className="btn btn-secondary btn-sm" style={{ display: 'block', textAlign: 'center', borderRadius: 0 }}>Unirme al Club</Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

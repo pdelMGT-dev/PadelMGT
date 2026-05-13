@@ -8,6 +8,7 @@ export default function ClubsPage() {
   const [search, setSearch] = useState('');
   const [country, setCountry] = useState('All Countries');
   const [city, setCity] = useState('All Cities');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
 
   const available = cities[country] || ['All Cities'];
 
@@ -33,7 +34,7 @@ export default function ClubsPage() {
       <section style={{ padding: '64px 48px 96px' }}>
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>
           {/* Filters */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(2, auto)', gap: 12, marginBottom: 48, background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(2, auto)', gap: 12, marginBottom: 32, background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ color: 'var(--grey-400)' }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar clubes..." style={{ border: 'none', background: 'none', font: 'inherit', fontSize: 14, outline: 'none', width: '100%' }} />
@@ -46,46 +47,119 @@ export default function ClubsPage() {
             </select>
           </div>
 
-          <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 32, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>{filtered.length} club{filtered.length !== 1 ? 'es' : ''} encontrado{filtered.length !== 1 ? 's' : ''}</p>
+          {/* Count + view toggle */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+            <p style={{ fontSize: 12, color: 'var(--grey-400)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, margin: 0 }}>
+              {filtered.length} club{filtered.length !== 1 ? 'es' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
+            </p>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button onClick={() => setView('grid')} style={{
+                padding: '8px 14px', border: `2px solid ${view === 'grid' ? 'var(--black)' : 'var(--grey-200)'}`,
+                background: view === 'grid' ? 'var(--black)' : '#fff', cursor: 'pointer', borderRadius: 0,
+                color: view === 'grid' ? '#fff' : 'var(--black)', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+              }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="0" width="6" height="6"/><rect x="8" y="0" width="6" height="6"/><rect x="0" y="8" width="6" height="6"/><rect x="8" y="8" width="6" height="6"/></svg>
+                Cuadrícula
+              </button>
+              <button onClick={() => setView('list')} style={{
+                padding: '8px 14px', border: `2px solid ${view === 'list' ? 'var(--black)' : 'var(--grey-200)'}`,
+                background: view === 'list' ? 'var(--black)' : '#fff', cursor: 'pointer', borderRadius: 0,
+                color: view === 'list' ? '#fff' : 'var(--black)', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+              }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="0" y="0" width="14" height="2"/><rect x="0" y="6" width="14" height="2"/><rect x="0" y="12" width="14" height="2"/></svg>
+                Lista
+              </button>
+            </div>
+          </div>
 
-          {/* Club grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--grey-200)' }}>
-            {filtered.map((club) => (
-              <div key={club.id} style={{ background: '#fff', padding: 32 }}>
-                {/* Court image placeholder */}
-                <div className="card-image" style={{ height: 200, marginBottom: 24, borderRadius: 0 }}>
-                  <img src="/assets/court-green.svg" alt={club.name} style={{ opacity: 0.85 }} />
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.7) 100%)' }} />
-                  <div style={{ position: 'absolute', bottom: 16, left: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, color: '#fff' }}>★</span>
-                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20, color: '#fff' }}>{club.rating}</span>
+          {/* Grid view */}
+          {view === 'grid' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--grey-200)' }}>
+              {filtered.map((club) => (
+                <div key={club.id} style={{ background: '#fff', padding: 32 }}>
+                  <div className="card-image" style={{ height: 200, marginBottom: 24, borderRadius: 0 }}>
+                    <img src="/assets/court-green.svg" alt={club.name} style={{ opacity: 0.85 }} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.7) 100%)' }} />
+                    <div style={{ position: 'absolute', bottom: 16, left: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, color: '#fff' }}>★</span>
+                      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20, color: '#fff' }}>{club.rating}</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 22, textTransform: 'uppercase', letterSpacing: '-0.01em', margin: 0, lineHeight: 1 }}>{club.name}</h3>
+                  </div>
+
+                  <p style={{ fontSize: 13, color: 'var(--grey-500)', margin: '0 0 16px' }}>{club.address}</p>
+
+                  <div style={{ display: 'flex', gap: 24, fontSize: 13, color: 'var(--grey-500)', marginBottom: 20 }}>
+                    <span><strong style={{ color: 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 18 }}>{club.courts}</strong> canchas</span>
+                    <span><strong style={{ color: 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 18 }}>{club.members}</strong> miembros</span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 24 }}>
+                    {club.amenities.map((a) => (
+                      <span key={a} className="chip" style={{ fontSize: 10 }}>{a}</span>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Link href={`/clubs/${club.id}`} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>Ver Club</Link>
+                    <Link href="/signup" className="btn btn-secondary btn-sm">Reservar</Link>
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 22, textTransform: 'uppercase', letterSpacing: '-0.01em', margin: 0, lineHeight: 1 }}>{club.name}</h3>
-                </div>
-
-                <p style={{ fontSize: 13, color: 'var(--grey-500)', margin: '0 0 16px' }}>{club.address}</p>
-
-                <div style={{ display: 'flex', gap: 24, fontSize: 13, color: 'var(--grey-500)', marginBottom: 20 }}>
-                  <span><strong style={{ color: 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 18 }}>{club.courts}</strong> canchas</span>
-                  <span><strong style={{ color: 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 18 }}>{club.members}</strong> miembros</span>
-                </div>
-
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 24 }}>
-                  {club.amenities.map((a) => (
-                    <span key={a} className="chip" style={{ fontSize: 10 }}>{a}</span>
+          {/* List view */}
+          {view === 'list' && (
+            <div style={{ border: '1px solid var(--grey-200)' }}>
+              <table className="rank-table">
+                <thead>
+                  <tr>
+                    <th style={{ paddingLeft: 24 }}>Club</th>
+                    <th>Sede</th>
+                    <th style={{ textAlign: 'center' }}>Canchas</th>
+                    <th style={{ textAlign: 'center' }}>Miembros</th>
+                    <th style={{ textAlign: 'center' }}>Rating</th>
+                    <th>Servicios</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((club) => (
+                    <tr key={club.id}>
+                      <td style={{ paddingLeft: 24 }}>
+                        <div style={{ fontWeight: 600, fontSize: 15 }}>{club.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{club.address}</div>
+                      </td>
+                      <td style={{ fontSize: 13, color: 'var(--grey-500)' }}>{club.city}, {club.country}</td>
+                      <td style={{ textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>{club.courts}</td>
+                      <td style={{ textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>{club.members}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, color: '#f5a623' }}>★ {club.rating}</span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {club.amenities.slice(0, 3).map((a) => (
+                            <span key={a} className="chip" style={{ fontSize: 10 }}>{a}</span>
+                          ))}
+                          {club.amenities.length > 3 && <span className="chip" style={{ fontSize: 10 }}>+{club.amenities.length - 3}</span>}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <Link href={`/clubs/${club.id}`} className="btn btn-primary btn-sm">Ver →</Link>
+                          <Link href="/signup" className="btn btn-secondary btn-sm">Reservar</Link>
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Link href={`/clubs/${club.id}`} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>Ver Club</Link>
-                  <Link href="/signup" className="btn btn-secondary btn-sm">Reservar</Link>
-                </div>
-              </div>
-            ))}
-          </div>
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
 
