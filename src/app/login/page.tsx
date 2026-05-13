@@ -1,75 +1,55 @@
-'use client';
-
 import Link from 'next/link';
-import { useState } from 'react';
-import { Trophy, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center py-12 px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 font-bold text-2xl text-slate-900 mb-6">
-            <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-              <Trophy className="w-5 h-5 text-white" />
-            </div>
-            Padel<span className="text-green-600">MGT</span>
+    <div style={{ minHeight: '100vh', background: 'var(--grey-50)', display: 'flex' }}>
+      {/* Left image panel */}
+      <div style={{ flex: '0 0 45%', position: 'relative', overflow: 'hidden' }}>
+        <img src="/assets/court-dark.svg" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(10,22,56,0.9) 0%, rgba(26,78,216,0.8) 100%)' }} />
+        <div style={{ position: 'relative', padding: '64px 48px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', marginBottom: 64 }}>
+            <div style={{ width: 32, height: 32, background: '#fff', color: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18 }}>P</div>
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 22, textTransform: 'uppercase', color: '#fff', letterSpacing: '-0.01em' }}>PadelMGT</span>
           </Link>
-          <h1 className="text-3xl font-bold text-slate-900">Welcome back</h1>
-          <p className="text-slate-500 mt-2">Sign in to your PadelMGT account</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Your password"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-slate-600">
-                <input type="checkbox" className="rounded" /> Remember me
-              </label>
-              <Link href="/forgot-password" className="text-green-600 hover:text-green-700">Forgot password?</Link>
-            </div>
-            <button className="w-full bg-green-500 hover:bg-green-400 text-white py-3 rounded-xl font-bold text-lg transition-colors mt-2">
-              Sign In
-            </button>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'clamp(40px, 5vw, 80px)', textTransform: 'uppercase', letterSpacing: '-0.025em', lineHeight: 0.9, color: '#fff' }}>
+            BIENVENIDO<br /><span style={{ color: 'var(--neon)' }}>DE VUELTA.</span>
           </div>
         </div>
+      </div>
 
-        <p className="text-center text-slate-500 text-sm mt-6">
-          Don't have an account?{' '}
-          <Link href="/signup" className="text-green-600 hover:text-green-700 font-semibold">Sign up free</Link>
-        </p>
+      {/* Right form */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 48px' }}>
+        <div style={{ width: '100%', maxWidth: 420 }}>
+          <div style={{ marginBottom: 40 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Iniciar Sesión</p>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 52, textTransform: 'uppercase', letterSpacing: '-0.02em', lineHeight: 0.92, margin: 0 }}>ACCEDE A TU<br />CUENTA</h1>
+          </div>
+
+          <div className="field" style={{ marginBottom: 16 }}>
+            <label>Email</label>
+            <input type="email" placeholder="tu@email.com" style={{ borderRadius: 0 }} />
+          </div>
+          <div className="field" style={{ marginBottom: 8 }}>
+            <label>Contraseña</label>
+            <input type="password" placeholder="Tu contraseña" style={{ borderRadius: 0 }} />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--grey-500)', cursor: 'pointer' }}>
+              <input type="checkbox" /> Recordarme
+            </label>
+            <Link href="/forgot-password" style={{ fontSize: 13, color: 'var(--black)', fontWeight: 500, textDecoration: 'none' }}>¿Olvidaste tu contraseña?</Link>
+          </div>
+
+          <button className="btn btn-primary btn-lg" style={{ width: '100%', borderRadius: 0, fontSize: 14, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Iniciar Sesión
+          </button>
+
+          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--grey-400)', marginTop: 24 }}>
+            ¿Nuevo en PadelMGT? <Link href="/signup" style={{ color: 'var(--black)', fontWeight: 600 }}>Crear cuenta gratis</Link>
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -1,139 +1,113 @@
 import Link from 'next/link';
-import { Trophy, Users, Shield, Star, ChevronRight, Globe, Zap, BarChart3, QrCode } from 'lucide-react';
-import { ongoingTournaments, tournamentFormats } from '@/lib/data';
+import Image from 'next/image';
+
+const formats = [
+  { k: 'americano', name: 'Americano', desc: 'Cada pareja juega contra todas. Ideal para una tarde de juego.', when: '1 sesión', teams: '4–32 parejas', img: '/assets/court-card.svg' },
+  { k: 'express', name: 'Express', desc: 'Grupos cortos a 1 set. Termina en una mañana.', when: '3–4 horas', teams: '8–24 parejas', img: '/assets/court-green.svg' },
+  { k: 'champions', name: 'Champions League', desc: 'Fase de grupos + eliminatorias. El formato premium.', when: 'Multi-jornada', teams: '8–32 parejas', img: '/assets/court-dark.svg' },
+  { k: 'liga', name: 'Liga Regular', desc: 'Temporada larga con ascensos y descensos.', when: '8–24 semanas', teams: '6–48 equipos', img: '/assets/court-card.svg' },
+  { k: 'directa', name: 'Eliminatoria Directa', desc: 'Cuadro clásico. Pierdes y vuelas. Con consolación.', when: '1–3 días', teams: '8–128 parejas', img: '/assets/court-green.svg' },
+  { k: 'equipos', name: 'Por Equipos', desc: 'Club contra club. Liguilla por puntos colectivos.', when: 'Multi-jornada', teams: '4–24 clubes', img: '/assets/court-dark.svg' },
+];
+
+const liveMatches = [
+  { tournament: 'Open Buenos Aires 2026', t1: 'Martínez / Pérez', t2: 'García / López', s1: [6, 4, 3], s2: [3, 6, 5], court: 'Court Center' },
+  { tournament: 'Liga Andina Otoño', t1: 'Silva / Cruz', t2: 'Vargas / Romero', s1: [6, 6], s2: [2, 4], court: 'Court 4' },
+  { tournament: 'Open Buenos Aires 2026', t1: 'Hernández / Díaz', t2: 'Ramírez / Torres', s1: [4, 6, 6], s2: [6, 3, 4], court: 'Court 2' },
+];
+
+const topPlayers = [
+  { pos: 1, name: 'Diego García', country: '🇦🇷', club: 'Club Atlético Padel', level: 'Profesional', wins: 38, losses: 4, points: 2400 },
+  { pos: 2, name: 'Mateo Martínez', country: '🇲🇽', club: 'Padel Pro Center', level: 'Profesional', wins: 35, losses: 6, points: 2344 },
+  { pos: 3, name: 'Sofía Rodríguez', country: '🇨🇴', club: 'Pádel Caribe', level: 'Federado', wins: 32, losses: 7, points: 2288 },
+  { pos: 4, name: 'Lucas González', country: '🇨🇱', club: 'Andes Padel', level: 'Federado', wins: 30, losses: 9, points: 2232 },
+  { pos: 5, name: 'Valentina Hernández', country: '🇧🇷', club: 'Cancha 7', level: 'Avanzado', wins: 28, losses: 10, points: 2176 },
+  { pos: 6, name: 'Tomás López', country: '🇪🇸', club: 'Norte Sport', level: 'Federado', wins: 27, losses: 11, points: 2120 },
+  { pos: 7, name: 'Camila Pérez', country: '🇦🇷', club: 'Madero Club', level: 'Avanzado', wins: 26, losses: 12, points: 2064 },
+  { pos: 8, name: 'Joaquín Sánchez', country: '🇲🇽', club: 'Vertical Club', level: 'Avanzado', wins: 24, losses: 13, points: 2008 },
+];
+
+const marqueeItems = ['CREA', 'JUEGA', 'RANKEA', 'TORNEOS', 'LIGAS', 'CLUBES', 'AUTOMATIZA', 'GANA'];
 
 export default function HomePage() {
-  const featured = ongoingTournaments.slice(0, 3);
-
   return (
     <div>
-      {/* Hero */}
-      <section className="gradient-hero text-white py-24 px-4">
-        <div className="max-w-7xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-green-500/20 border border-green-500/30 rounded-full px-4 py-1.5 text-green-400 text-sm font-medium mb-6">
-            <Zap className="w-4 h-4" />
-            The #1 Padel Management Platform
-          </div>
-          <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
-            Manage Every<br />
-            <span className="text-green-400">Padel Game</span>
+      {/* ── HERO ── */}
+      <section className="hero">
+        <div className="hero-bg" />
+        <div className="hero-scrim" />
+        <div className="hero-content">
+          <div className="hero-eyebrow">Plataforma de gestión · LATAM</div>
+          <h1 className="hero-headline">
+            CREA. <span className="accent">JUEGA.</span> RANKEA.
           </h1>
-          <p className="text-xl text-slate-300 max-w-2xl mx-auto mb-10">
-            Create tournaments, run leagues, manage clubs, and track rankings — all in one platform. Built for players, club managers, league organizers, and federations.
+          <p className="hero-sub">
+            La plataforma para crear y gestionar torneos, ligas y clubes de pádel.
+            Diseñada para Latinoamérica. Construida para ganar.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-colors"
-            >
-              Get Started Free
-              <ChevronRight className="w-5 h-5" />
-            </Link>
-            <Link
-              href="/tournaments"
-              className="inline-flex items-center gap-2 border border-slate-600 hover:border-green-500 text-slate-300 hover:text-white px-8 py-4 rounded-xl font-semibold text-lg transition-colors"
-            >
-              Browse Tournaments
-            </Link>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 max-w-3xl mx-auto">
-            {[
-              { label: 'Players', value: '50,000+' },
-              { label: 'Tournaments', value: '12,000+' },
-              { label: 'Clubs', value: '1,500+' },
-              { label: 'Countries', value: '45+' },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-3xl font-bold text-green-400">{stat.value}</div>
-                <div className="text-slate-400 text-sm mt-1">{stat.label}</div>
-              </div>
-            ))}
+          <div className="hero-cta-row">
+            <Link href="/signup" className="btn btn-on-dark btn-lg">Empieza Gratis</Link>
+            <Link href="/tournaments" className="btn btn-outline-dark btn-lg">Ver Formatos</Link>
           </div>
         </div>
-      </section>
-
-      {/* Tournament Formats */}
-      <section className="py-20 px-4 bg-slate-50">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-slate-900">Tournament Formats</h2>
-            <p className="text-slate-500 mt-3 text-lg">Choose the format that fits your event perfectly</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {tournamentFormats.map((format) => (
-              <Link
-                key={format.id}
-                href={`/tournaments/${format.slug}`}
-                className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 card-hover group"
-              >
-                <div className="text-4xl mb-4">{format.icon}</div>
-                <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-green-600 transition-colors">
-                  {format.name}
-                </h3>
-                <p className="text-slate-500 text-sm mb-4 line-clamp-2">{format.description}</p>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="bg-green-50 text-green-700 px-2 py-1 rounded-full font-medium">{format.difficulty}</span>
-                  <span className="text-slate-400">{format.minPlayers}–{format.maxPlayers} players</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-          <div className="text-center mt-8">
-            <Link href="/tournaments" className="inline-flex items-center gap-2 text-green-600 hover:text-green-700 font-semibold">
-              See all formats <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Ongoing Tournaments */}
-      <section className="py-20 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-12">
-            <div>
-              <h2 className="text-4xl font-bold text-slate-900">Live & Upcoming</h2>
-              <p className="text-slate-500 mt-2 text-lg">Tournaments happening now and soon</p>
+        <div className="hero-stats">
+          {[
+            { n: '12,400+', l: 'Jugadores' },
+            { n: '380', l: 'Clubes' },
+            { n: '47', l: 'Ligas Activas' },
+          ].map((s) => (
+            <div key={s.l}>
+              <div className="hero-stat-num">{s.n}</div>
+              <div className="hero-stat-label">{s.l}</div>
             </div>
-            <Link href="/tournaments" className="hidden md:inline-flex items-center gap-2 text-green-600 hover:text-green-700 font-semibold">
-              View all <ChevronRight className="w-4 h-4" />
-            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* ── MARQUEE ── */}
+      <div className="marquee">
+        <div className="marquee-track">
+          {[...marqueeItems, ...marqueeItems].map((item, i) => (
+            <span key={i} className="marquee-item">{item}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* ── FORMAT GRID ── */}
+      <section style={{ padding: '120px 48px' }}>
+        <div style={{ maxWidth: 1760, margin: '0 auto' }}>
+          <div className="section-header-row">
+            <div>
+              <div className="section-eyebrow">Formatos</div>
+              <h2 className="section-title">TODO FORMATO.<br />UN SOLO LUGAR.</h2>
+              <p className="section-sub">
+                Desde Americano de una tarde hasta Champions League con grupos y eliminatorias.
+                PadelMGT automatiza el cuadro, los puntos y la difusión.
+              </p>
+            </div>
+            <Link href="/tournaments" className="btn btn-secondary">Ver Todo →</Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {featured.map((t) => (
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {formats.map((f, i) => (
               <Link
-                key={t.id}
-                href={`/tournaments/detail/${t.id}`}
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm card-hover overflow-hidden"
+                key={f.k}
+                href={`/tournaments/${f.k}`}
+                className="card-image"
+                style={{ height: 420, display: 'block', cursor: 'pointer', textDecoration: 'none', borderRadius: 0 }}
               >
-                <div className="bg-gradient-to-r from-slate-800 to-slate-700 p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                      t.status === 'ongoing'
-                        ? 'bg-green-500 text-white'
-                        : t.status === 'upcoming'
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-slate-600 text-slate-300'
-                    }`}>
-                      {t.status === 'ongoing' ? '● LIVE' : t.status === 'upcoming' ? 'UPCOMING' : 'COMPLETED'}
-                    </span>
-                    <span className="text-slate-400 text-xs">{t.format}</span>
-                  </div>
-                  <h3 className="text-white font-bold text-lg">{t.name}</h3>
+                <img src={f.img} alt={f.name} style={{ opacity: 0.82 }} />
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0) 25%, rgba(0,0,0,0.88) 100%)' }} />
+                <div style={{ position: 'absolute', top: 22, left: 22, color: '#fff' }}>
+                  <div style={{ fontSize: 10, letterSpacing: '0.2em', fontWeight: 600, opacity: 0.6 }}>0{i + 1} / 06</div>
                 </div>
-                <div className="p-5 space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-slate-600">
-                    <Globe className="w-4 h-4 text-slate-400" />
-                    {t.club} · {t.city}, {t.country}
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '24px' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 600, textTransform: 'uppercase', lineHeight: 0.95, letterSpacing: '-0.015em', color: '#fff', marginBottom: 8 }}>
+                    {f.name}
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-600">
-                    <Users className="w-4 h-4 text-slate-400" />
-                    {t.players}/{t.maxPlayers} players · {t.level}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">{t.category}</span>
-                    {t.prize && <span className="text-green-600 font-bold text-sm">{t.prize}</span>}
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', marginBottom: 14, maxWidth: 300 }}>{f.desc}</div>
+                  <div style={{ display: 'flex', gap: 14, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+                    <span>{f.when}</span><span>·</span><span>{f.teams}</span>
                   </div>
                 </div>
               </Link>
@@ -142,142 +116,107 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* User Roles */}
-      <section className="py-20 px-4 bg-slate-900 text-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-14">
-            <h2 className="text-4xl font-bold">Built for Everyone in Padel</h2>
-            <p className="text-slate-400 mt-3 text-lg">One platform, tailored for every role</p>
+      {/* ── LIVE MATCHES ── */}
+      <section style={{ background: '#111', color: '#fff', padding: '120px 48px' }}>
+        <div style={{ maxWidth: 1760, margin: '0 auto' }}>
+          <div className="section-header-row">
+            <div>
+              <div className="section-eyebrow" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ee0005', display: 'inline-block', animation: 'pulse 1.4s infinite' }} />
+                  En Vivo Ahora
+                </span>
+              </div>
+              <h2 className="section-title" style={{ color: '#fff' }}>PARTIDOS EN CURSO</h2>
+              <p className="section-sub" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                Resultados en tiempo real desde clubes de toda la región.
+              </p>
+            </div>
+            <Link href="/live-scores" className="btn btn-outline-dark">Ver todos →</Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              {
-                icon: <Users className="w-8 h-8" />,
-                title: 'Players',
-                color: 'bg-green-500',
-                href: '/signup?role=player',
-                description: 'Find matches, track your stats, join tournaments, and connect with other players via QR code.',
-                features: ['Personal dashboard', 'Match history & stats', 'Player rankings', 'QR code invites', 'Friend connections'],
-              },
-              {
-                icon: <Shield className="w-8 h-8" />,
-                title: 'Club Managers',
-                color: 'bg-blue-500',
-                href: '/signup?role=club_manager',
-                description: 'Manage your club, organize tournaments, upload player rosters, and promote events.',
-                features: ['Club dashboard', 'Tournament creation', 'Player upload & contact', 'Staff management', 'Event promotion'],
-              },
-              {
-                icon: <Trophy className="w-8 h-8" />,
-                title: 'League Organizers',
-                color: 'bg-amber-500',
-                href: '/signup?role=league_organizer',
-                description: 'Run multi-week competitions across multiple clubs with full league management tools.',
-                features: ['League dashboard', 'Multi-club support', 'Schedule management', 'Team/player uploads', 'Automated standings'],
-              },
-              {
-                icon: <Star className="w-8 h-8" />,
-                title: 'Federations',
-                color: 'bg-purple-500',
-                href: '/signup?role=federation',
-                description: 'Manage national rankings, sanction tournaments, and govern the sport at every level.',
-                features: ['National rankings', 'Tournament sanctioning', 'Multi-category management', 'Federation reports', 'Official certifications'],
-              },
-            ].map((role) => (
-              <div key={role.title} className="bg-slate-800 rounded-2xl p-6 border border-slate-700 flex flex-col">
-                <div className={`w-14 h-14 ${role.color} rounded-xl flex items-center justify-center text-white mb-4`}>
-                  {role.icon}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            {liveMatches.map((m, i) => (
+              <div key={i} style={{ background: '#1f1f21', padding: 24, border: '1px solid #28282a', borderRadius: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                  <span className="badge badge-live">LIVE</span>
+                  <span style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>{m.court}</span>
                 </div>
-                <h3 className="text-xl font-bold mb-3">{role.title}</h3>
-                <p className="text-slate-400 text-sm mb-4">{role.description}</p>
-                <ul className="space-y-2 mb-6 flex-1">
-                  {role.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-slate-300">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href={role.href}
-                  className="block text-center bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors mt-auto"
-                >
-                  Get Started →
-                </Link>
+                <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 16, fontWeight: 600 }}>{m.tournament}</div>
+                {[[m.t1, m.s1], [m.t2, m.s2]].map(([name, scores], j) => (
+                  <div key={j} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 0', borderTop: j > 0 ? '1px solid #28282a' : 'none' }}>
+                    <span style={{ fontSize: 15, fontWeight: 500, color: '#fff' }}>{name as string}</span>
+                    <div style={{ display: 'flex', gap: 16, fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600 }}>
+                      {(scores as number[]).map((s: number, k: number) => (
+                        <span key={k} style={{ color: s > ((j === 0 ? m.s2 : m.s1) as number[])[k] ? '#fff' : 'rgba(255,255,255,0.35)', minWidth: 20, textAlign: 'center' }}>{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="py-20 px-4 bg-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-14">
-            <h2 className="text-4xl font-bold text-slate-900">Everything You Need</h2>
-            <p className="text-slate-500 mt-3 text-lg">Powerful features that make padel management effortless</p>
+      {/* ── RANKING TEASER ── */}
+      <section style={{ padding: '120px 48px', background: '#fafafa' }}>
+        <div style={{ maxWidth: 1760, margin: '0 auto' }}>
+          <div className="section-header-row">
+            <div>
+              <div className="section-eyebrow">Ranking</div>
+              <h2 className="section-title">EL TOP DE LATAM</h2>
+              <p className="section-sub">Global, por liga, por club o por tu propio grupo.</p>
+            </div>
+            <Link href="/ranking" className="btn btn-secondary">Ver Todo →</Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              {
-                icon: <QrCode className="w-6 h-6 text-green-600" />,
-                title: 'QR Code Invites',
-                desc: 'Players can invite others to matches or tournaments instantly by scanning a QR code, just like at padelfast.com.',
-              },
-              {
-                icon: <Zap className="w-6 h-6 text-green-600" />,
-                title: 'Live Scoring',
-                desc: 'Follow matches in real-time with live score updates, court-by-court tracking, and match timelines.',
-              },
-              {
-                icon: <BarChart3 className="w-6 h-6 text-green-600" />,
-                title: 'Rankings & Stats',
-                desc: 'Automated ranking calculations per category. Full match statistics and historical performance data per player.',
-              },
-              {
-                icon: <Users className="w-6 h-6 text-green-600" />,
-                title: 'Player Management',
-                desc: 'Upload bulk player data via CSV. System automatically contacts players to join the platform.',
-              },
-              {
-                icon: <Globe className="w-6 h-6 text-green-600" />,
-                title: 'Multi-Club Leagues',
-                desc: 'Run leagues spanning multiple clubs and cities. Full schedule generation and standings management.',
-              },
-              {
-                icon: <Shield className="w-6 h-6 text-green-600" />,
-                title: 'Role-Based Access',
-                desc: 'Granular permissions for every role. Club admins can create sub-admins for specific tasks.',
-              },
-            ].map((f) => (
-              <div key={f.title} className="flex gap-4">
-                <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center shrink-0">
-                  {f.icon}
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 mb-1">{f.title}</h3>
-                  <p className="text-slate-500 text-sm">{f.desc}</p>
-                </div>
-              </div>
-            ))}
+
+          <div style={{ background: '#fff', border: '1px solid #e5e5e5' }}>
+            <table className="rank-table">
+              <thead>
+                <tr>
+                  <th style={{ paddingLeft: 32, width: 60 }}>#</th>
+                  <th>Jugador</th>
+                  <th>País</th>
+                  <th>Club</th>
+                  <th>Nivel</th>
+                  <th style={{ textAlign: 'right' }}>V/D</th>
+                  <th style={{ textAlign: 'right', paddingRight: 32 }}>Puntos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topPlayers.map((p) => (
+                  <tr key={p.pos}>
+                    <td style={{ paddingLeft: 32, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 18 }}>{p.pos}</td>
+                    <td style={{ fontWeight: 500 }}>{p.name}</td>
+                    <td><span style={{ fontSize: 18 }}>{p.country}</span></td>
+                    <td style={{ color: 'var(--grey-500)', fontSize: 13 }}>{p.club}</td>
+                    <td><span className="chip" style={{ padding: '4px 10px', fontSize: 10 }}>{p.level}</span></td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--grey-500)' }}>{p.wins}/{p.losses}</td>
+                    <td style={{ textAlign: 'right', paddingRight: 32, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20 }}>{p.points.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-20 px-4 gradient-green text-white">
-        <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-4xl font-bold mb-4">Ready to Get Started?</h2>
-          <p className="text-green-100 text-lg mb-8">
-            Join thousands of players, clubs, and organizers already using PadelMGT.
+      {/* ── CTA ── */}
+      <section style={{ position: 'relative', padding: '160px 48px', background: '#111', color: '#fff', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/assets/court-card.svg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.22 }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(17,17,17,0.4), rgba(17,17,17,0.96))' }} />
+        <div style={{ position: 'relative', maxWidth: 1440, margin: '0 auto', textAlign: 'center' }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'clamp(52px, 9vw, 140px)', lineHeight: 0.9, textTransform: 'uppercase', letterSpacing: '-0.025em', margin: '0 0 24px', color: '#fff' }}>
+            TU CANCHA.<br />TU LIGA.<br /><span style={{ color: 'var(--neon)' }}>TU MARCA.</span>
+          </h2>
+          <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.78)', maxWidth: 520, margin: '0 auto 40px', lineHeight: 1.55 }}>
+            Crea tu primer torneo en menos de 60 segundos.
           </p>
-          <Link
-            href="/signup"
-            className="inline-flex items-center gap-2 bg-white text-green-700 px-10 py-4 rounded-xl font-bold text-lg hover:bg-green-50 transition-colors"
-          >
-            Create Your Free Account
-            <ChevronRight className="w-5 h-5" />
-          </Link>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link href="/signup" className="btn btn-on-dark btn-lg">Empieza Gratis</Link>
+            <Link href="/pricing" className="btn btn-outline-dark btn-lg">Ver Planes</Link>
+          </div>
         </div>
       </section>
     </div>
