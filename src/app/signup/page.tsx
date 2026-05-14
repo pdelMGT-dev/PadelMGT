@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 type Role = 'player' | 'club_manager' | 'league_organizer' | 'federation';
 
@@ -14,9 +14,17 @@ const roles: { id: Role; label: string; sub: string; features: string[] }[] = [
 ];
 
 function SignupForm() {
+  const router = useRouter();
   const params = useSearchParams();
   const defaultRole = (params.get('role') as Role) || 'player';
   const [role, setRole] = useState<Role>(defaultRole);
+
+  const roleToPath: Record<Role, string> = {
+    player: '/dashboard/player',
+    club_manager: '/dashboard/club',
+    league_organizer: '/dashboard/league',
+    federation: '/dashboard/federation',
+  };
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', country: '', city: '', orgName: '' });
 
@@ -124,7 +132,11 @@ function SignupForm() {
               <p style={{ fontSize: 11, color: 'var(--grey-400)', marginBottom: 16, lineHeight: 1.5 }}>
                 Al crear una cuenta aceptas nuestros <Link href="/terms" style={{ color: 'var(--black)' }}>Términos</Link> y <Link href="/privacy" style={{ color: 'var(--black)' }}>Política de Privacidad</Link>.
               </p>
-              <button className="btn btn-primary btn-lg" style={{ width: '100%', borderRadius: 0, fontSize: 14, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              <button
+                onClick={() => router.push(roleToPath[role])}
+                className="btn btn-primary btn-lg"
+                style={{ width: '100%', borderRadius: 0, fontSize: 14, letterSpacing: '0.08em', textTransform: 'uppercase' }}
+              >
                 Crear Cuenta
               </button>
             </>

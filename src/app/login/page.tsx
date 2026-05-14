@@ -1,6 +1,11 @@
+'use client';
+
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
+  const router = useRouter();
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--grey-50)', display: 'flex' }}>
       {/* Left image panel */}
@@ -42,7 +47,11 @@ export default function LoginPage() {
             <Link href="/forgot-password" style={{ fontSize: 13, color: 'var(--black)', fontWeight: 500, textDecoration: 'none' }}>¿Olvidaste tu contraseña?</Link>
           </div>
 
-          <button className="btn btn-primary btn-lg" style={{ width: '100%', borderRadius: 0, fontSize: 14, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          <button
+            onClick={() => router.push('/dashboard/player')}
+            className="btn btn-primary btn-lg"
+            style={{ width: '100%', borderRadius: 0, fontSize: 14, letterSpacing: '0.08em', textTransform: 'uppercase' }}
+          >
             Iniciar Sesión
           </button>
 

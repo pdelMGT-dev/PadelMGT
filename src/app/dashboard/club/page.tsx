@@ -1,243 +1,150 @@
 import Link from 'next/link';
-import { Trophy, Users, Calendar, TrendingUp, Plus, Upload, Settings, ChevronRight, Building2, Star } from 'lucide-react';
 
-const clubStats = [
-  { label: 'Active Members', value: '450', icon: <Users className="w-5 h-5 text-blue-500" />, change: '+12 this month' },
-  { label: 'Courts', value: '8', icon: <Building2 className="w-5 h-5 text-green-500" />, change: '6 available now' },
-  { label: 'Tournaments This Month', value: '4', icon: <Trophy className="w-5 h-5 text-amber-500" />, change: '+1 vs last month' },
-  { label: 'Club Rating', value: '4.8', icon: <Star className="w-5 h-5 text-purple-500" />, change: '↑ 0.1 this month' },
+const stats = [
+  { label: 'Miembros', value: '127', delta: '+4 este mes' },
+  { label: 'Canchas', value: '8', delta: '78% ocupación' },
+  { label: 'Torneos activos', value: '3', delta: '1 en vivo ahora' },
+  { label: 'Ingresos (mes)', value: '$4,280', delta: '+12% vs anterior' },
 ];
 
-const recentTournaments = [
-  { name: 'Madrid Spring Americano', date: '2026-04-28', format: 'Americano', players: '12/12', status: 'ongoing' },
-  { name: 'Club Night Mexicano', date: '2026-04-21', format: 'Mexicano', players: '16/16', status: 'completed' },
-  { name: 'Easter Knockout Cup', date: '2026-04-14', format: 'Knockout', players: '8/8', status: 'completed' },
+const activeTournaments = [
+  { name: 'Liga Club Interna', format: 'Round Robin', round: 'Jornada 4/8', players: 8, status: 'live' },
+  { name: 'Americano de Mayo', format: 'Americano', round: 'Ronda 2', players: 12, status: 'live' },
+  { name: 'Open Knockout Junio', format: 'Knockout', round: 'Inscripciones', players: 6, status: 'upcoming' },
 ];
 
 const recentMembers = [
-  { name: 'Carlos García', joined: '2026-04-20', level: 'Intermediate', status: 'active' },
-  { name: 'Ana Martínez', joined: '2026-04-18', level: 'Advanced', status: 'active' },
-  { name: 'Luis Rodríguez', joined: '2026-04-15', level: 'Beginner', status: 'pending' },
-  { name: 'María López', joined: '2026-04-10', level: 'Intermediate', status: 'active' },
+  { name: 'Valentina Cruz', level: 'Intermedio', joined: 'Hoy', status: 'active' },
+  { name: 'Roberto Paz', level: 'Principiante', joined: 'Ayer', status: 'active' },
+  { name: 'Camila Ortiz', level: 'Avanzado', joined: 'Hace 3 días', status: 'active' },
+  { name: 'Santiago Mora', level: 'Intermedio', joined: 'Hace 5 días', status: 'pending' },
 ];
 
-const staff = [
-  { name: 'Club Admin', role: 'Owner', email: 'admin@club.com', permissions: 'Full access' },
-  { name: 'Tournament Manager', role: 'Staff', email: 'tm@club.com', permissions: 'Tournaments only' },
-  { name: 'Events Coordinator', role: 'Staff', email: 'events@club.com', permissions: 'Events & Promotions' },
+const courts = [
+  { name: 'C1', status: 'occupied', until: '21:30' },
+  { name: 'C2', status: 'free', until: null },
+  { name: 'C3', status: 'occupied', until: '22:00' },
+  { name: 'C4', status: 'free', until: null },
+  { name: 'C5', status: 'maintenance', until: null },
+  { name: 'C6', status: 'occupied', until: '20:30' },
+  { name: 'C7', status: 'free', until: null },
+  { name: 'C8', status: 'occupied', until: '21:00' },
 ];
 
 export default function ClubDashboardPage() {
+  const freeCourts = courts.filter(c => c.status === 'free').length;
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <div className="bg-slate-900 text-white py-10 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex items-center gap-5">
-              <div className="w-16 h-16 bg-blue-500 rounded-xl flex items-center justify-center">
-                <Building2 className="w-8 h-8 text-white" />
+    <div style={{ padding: '40px 40px 80px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40 }}>
+        <div>
+          <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Panel de control</div>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', lineHeight: 0.95, margin: 0 }}>
+            CLUB<br /><span style={{ color: 'var(--court-blue)' }}>LA CANTERA</span>
+          </h1>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link href="/dashboard/club/tournaments" className="btn btn-primary btn-sm" style={{ borderRadius: 0 }}>+ Crear Torneo</Link>
+          <Link href="/dashboard/club/members" className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }}>+ Agregar Miembro</Link>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
+        {stats.map((s) => (
+          <div key={s.label} style={{ background: '#fff', padding: '28px 24px' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, fontWeight: 600, letterSpacing: '-0.03em', color: 'var(--black)', lineHeight: 1 }}>{s.value}</div>
+            <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, margin: '6px 0 4px' }}>{s.label}</div>
+            <div style={{ fontSize: 12, color: s.delta.includes('+') ? 'var(--turf-green)' : 'var(--grey-400)' }}>{s.delta}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+        {/* Active tournaments */}
+        <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+          <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--grey-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)' }}>Torneos Activos</div>
+            <Link href="/dashboard/club/tournaments" style={{ fontSize: 12, color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Ver todos →</Link>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+            {activeTournaments.map((t, i) => (
+              <div key={i} style={{ background: '#fff', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+                    {t.status === 'live' ? <span className="badge badge-live">LIVE</span> : <span className="badge badge-soon">Próximo</span>}
+                    <span className="chip" style={{ fontSize: 10 }}>{t.format}</span>
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 2 }}>{t.round} · {t.players} jugadores</div>
+                </div>
+                <Link href="/dashboard/club/tournaments" className="btn btn-secondary btn-sm" style={{ borderRadius: 0, flexShrink: 0 }}>Gestionar</Link>
               </div>
-              <div>
-                <div className="text-blue-400 text-xs font-semibold uppercase tracking-wide mb-1">Club Manager Dashboard</div>
-                <h1 className="text-2xl font-bold">Padel Madrid Central</h1>
-                <p className="text-slate-400">Madrid, Spain · 8 Courts · 450 Members</p>
+            ))}
+          </div>
+        </div>
+
+        {/* Court availability */}
+        <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+          <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--grey-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)' }}>
+              Canchas — {freeCourts} libres / {courts.length}
+            </div>
+            <Link href="/dashboard/club/courts" style={{ fontSize: 12, color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Ver detalle →</Link>
+          </div>
+          <div style={{ padding: '16px 24px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {courts.map((c, i) => (
+              <div key={i} style={{ padding: '14px 8px', textAlign: 'center', background: c.status === 'occupied' ? 'var(--black)' : c.status === 'maintenance' ? 'var(--grey-100)' : 'rgba(30,170,82,0.08)', border: `1px solid ${c.status === 'occupied' ? 'var(--black)' : c.status === 'maintenance' ? 'var(--grey-200)' : 'rgba(30,170,82,0.3)'}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: c.status === 'occupied' ? '#fff' : c.status === 'maintenance' ? 'var(--grey-400)' : 'var(--turf-green)' }}>{c.name}</div>
+                <div style={{ fontSize: 9, color: c.status === 'occupied' ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', marginTop: 3 }}>
+                  {c.status === 'occupied' ? `→${c.until}` : c.status === 'maintenance' ? 'Mant.' : 'Libre'}
+                </div>
               </div>
-            </div>
-            <div className="flex gap-3">
-              <button className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors">
-                <Upload className="w-4 h-4" /> Import Players
-              </button>
-              <Link
-                href="/tournaments/new"
-                className="flex items-center gap-2 bg-blue-500 hover:bg-blue-400 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-              >
-                <Plus className="w-4 h-4" /> New Tournament
-              </Link>
-            </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-10">
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {clubStats.map((stat) => (
-            <div key={stat.label} className="bg-white rounded-2xl border border-slate-200 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-slate-500">{stat.label}</span>
-                {stat.icon}
-              </div>
-              <div className="text-2xl font-bold text-slate-900 mb-1">{stat.value}</div>
-              <div className="text-xs text-slate-400">{stat.change}</div>
-            </div>
-          ))}
+      {/* Recent members */}
+      <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--grey-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)' }}>Miembros Recientes</div>
+          <Link href="/dashboard/club/members" style={{ fontSize: 12, color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Ver todos →</Link>
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            {/* Quick Actions */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <h2 className="text-lg font-bold text-slate-900 mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: 'Create Tournament', icon: <Trophy className="w-5 h-5" />, color: 'bg-amber-50 text-amber-600 hover:bg-amber-100' },
-                  { label: 'Add Member', icon: <Users className="w-5 h-5" />, color: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
-                  { label: 'Import Players', icon: <Upload className="w-5 h-5" />, color: 'bg-green-50 text-green-600 hover:bg-green-100' },
-                  { label: 'Club Settings', icon: <Settings className="w-5 h-5" />, color: 'bg-slate-100 text-slate-600 hover:bg-slate-200' },
-                ].map((action) => (
-                  <button key={action.label} className={`flex flex-col items-center gap-2 p-4 rounded-xl transition-colors ${action.color}`}>
-                    {action.icon}
-                    <span className="text-xs font-medium text-center">{action.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Tournaments */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Club Tournaments</h2>
-                <button className="flex items-center gap-1 text-blue-600 text-sm font-medium hover:text-blue-700">
-                  <Plus className="w-4 h-4" /> New
-                </button>
-              </div>
-              <div className="divide-y divide-slate-50">
-                {recentTournaments.map((t, i) => (
-                  <div key={i} className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center">
-                        <Trophy className="w-4 h-4 text-amber-500" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-800 text-sm">{t.name}</p>
-                        <p className="text-xs text-slate-500">{t.format} · {t.players} players · {t.date}</p>
-                      </div>
+        <table className="rank-table">
+          <thead>
+            <tr>
+              <th style={{ paddingLeft: 24 }}>Miembro</th>
+              <th>Nivel</th>
+              <th>Ingresó</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {recentMembers.map((m, i) => (
+              <tr key={i}>
+                <td style={{ paddingLeft: 24 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 32, height: 32, background: 'var(--grey-100)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+                      {m.name.split(' ').map((w: string) => w[0]).join('')}
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                        t.status === 'ongoing' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {t.status === 'ongoing' ? '● LIVE' : 'Done'}
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-slate-400" />
-                    </div>
+                    <span style={{ fontWeight: 500, fontSize: 14 }}>{m.name}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Members */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-slate-900">Recent Members</h2>
-                <div className="flex gap-2">
-                  <button className="flex items-center gap-1 text-slate-500 hover:text-slate-700 text-sm">
-                    <Upload className="w-3.5 h-3.5" /> Import CSV
-                  </button>
-                  <button className="flex items-center gap-1 text-blue-600 text-sm font-medium">
-                    <Plus className="w-3.5 h-3.5" /> Add
-                  </button>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-100">
-                      <th className="text-left px-6 py-3 text-slate-500 font-medium">Name</th>
-                      <th className="text-left px-4 py-3 text-slate-500 font-medium">Level</th>
-                      <th className="text-left px-4 py-3 text-slate-500 font-medium">Joined</th>
-                      <th className="text-left px-4 py-3 text-slate-500 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {recentMembers.map((m, i) => (
-                      <tr key={i}>
-                        <td className="px-6 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
-                              {m.name.split(' ').map(n => n[0]).join('')}
-                            </div>
-                            <span className="font-medium text-slate-800">{m.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">{m.level}</td>
-                        <td className="px-4 py-3 text-slate-500 text-xs">{m.joined}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                            m.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                          }`}>
-                            {m.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Court Availability */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6">
-              <h3 className="font-bold text-slate-900 mb-4">Court Availability</h3>
-              <div className="space-y-2">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((court) => {
-                  const status = court <= 2 ? 'occupied' : court <= 4 ? 'reserved' : 'available';
-                  return (
-                    <div key={court} className="flex items-center justify-between py-1.5">
-                      <span className="text-sm text-slate-700">Court {court}</span>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        status === 'available' ? 'bg-green-100 text-green-700' :
-                        status === 'reserved' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {status}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Staff Management */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-slate-900">Staff</h3>
-                <button className="text-blue-600 text-sm font-medium">+ Add Staff</button>
-              </div>
-              <div className="space-y-3">
-                {staff.map((s, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
-                      {s.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-800 text-sm">{s.name}</p>
-                      <p className="text-xs text-slate-500">{s.permissions}</p>
-                    </div>
-                    <span className={`text-xs shrink-0 px-2 py-0.5 rounded-full ${
-                      s.role === 'Owner' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      {s.role}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Import Players Banner */}
-            <div className="bg-blue-600 text-white rounded-2xl p-6">
-              <Upload className="w-8 h-8 mb-3" />
-              <h3 className="font-bold text-lg mb-2">Import Player Data</h3>
-              <p className="text-blue-100 text-sm mb-4">Upload a CSV with player details. The system will automatically contact them to join the platform.</p>
-              <button className="w-full bg-white text-blue-700 px-4 py-2.5 rounded-lg font-semibold text-sm hover:bg-blue-50 transition-colors">
-                Upload CSV File
-              </button>
-            </div>
-          </div>
-        </div>
+                </td>
+                <td><span className="chip" style={{ fontSize: 10 }}>{m.level}</span></td>
+                <td style={{ fontSize: 13, color: 'var(--grey-400)' }}>{m.joined}</td>
+                <td>
+                  {m.status === 'active'
+                    ? <span className="badge" style={{ background: 'rgba(30,170,82,0.1)', color: 'var(--turf-green)', border: 'none' }}>Activo</span>
+                    : <span className="badge" style={{ background: 'rgba(245,166,35,0.1)', color: '#f5a623', border: 'none' }}>Pendiente</span>
+                  }
+                </td>
+                <td><button className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }}>Ver</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
