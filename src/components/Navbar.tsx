@@ -25,6 +25,9 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const isHome = pathname === '/';
 
+  // Don't render on dashboard routes — they use DashboardSidebar instead
+  if (pathname.startsWith('/dashboard')) return null;
+
   return (
     <>
       {/* Promo banner */}
