@@ -1,425 +1,783 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
-type ScoreType = 'sets' | 'points';
-type Visibility = 'public' | 'private';
-type Player = { id: string; name: string; level: string; registered: boolean };
+// ── Mock data ─────────────────────────────────────────────────────────────────
 
-const POINT_OPTIONS = [8, 12, 16, 20, 24, 28, 32] as const;
-const SET_OPTIONS = [1, 2, 3] as const;
-const TIEBREAK_OPTIONS = [7, 10] as const;
+const COUNTRIES = ['Argentina', 'Chile', 'Uruguay', 'Colombia', 'España', 'México'];
 
-const MOCK_PLAYERS: Player[] = [
-  { id: '1', name: 'Ana Rodríguez', level: 'Intermedio', registered: true },
-  { id: '2', name: 'Marcos Herrera', level: 'Avanzado', registered: true },
-  { id: '3', name: 'Carlos Vargas', level: 'Principiante', registered: true },
-  { id: '4', name: 'Sofía López', level: 'Intermedio', registered: true },
-  { id: '5', name: 'Pedro Morales', level: 'Avanzado', registered: true },
-  { id: '6', name: 'Laura Torres', level: 'Principiante', registered: true },
-  { id: '7', name: 'Diego Fernández', level: 'Intermedio', registered: true },
-  { id: '8', name: 'Isabel Bravo', level: 'Avanzado', registered: true },
-];
-
-const MOCK_CLUBS = [
-  { id: '1', name: 'Club Barrio Norte', city: 'Buenos Aires', country: 'Argentina' },
-  { id: '2', name: 'Padel Arena', city: 'Buenos Aires', country: 'Argentina' },
-  { id: '3', name: 'Club La Cantera', city: 'Córdoba', country: 'Argentina' },
-  { id: '4', name: 'Padel Santiago', city: 'Santiago', country: 'Chile' },
-  { id: '5', name: 'Club Deportivo Sur', city: 'Buenos Aires', country: 'Argentina' },
-];
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
-  textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 6, display: 'block',
+const CITIES: Record<string, string[]> = {
+  Argentina: ['Buenos Aires', 'Rosario', 'Córdoba', 'Mendoza', 'Mar del Plata'],
+  Chile: ['Santiago', 'Valparaíso', 'Concepción'],
+  Uruguay: ['Montevideo', 'Punta del Este'],
+  Colombia: ['Bogotá', 'Medellín', 'Cali'],
+  España: ['Madrid', 'Barcelona', 'Sevilla'],
+  México: ['Ciudad de México', 'Guadalajara', 'Monterrey'],
 };
-const inputStyle: React.CSSProperties = {
+
+type Club = { id: string; name: string; courts: number };
+const CLUBS: Record<string, Club[]> = {
+  'Buenos Aires': [
+    { id: 'c1', name: 'Club Barrio Norte', courts: 6 },
+    { id: 'c2', name: 'Padel Arena', courts: 10 },
+    { id: 'c3', name: 'Club Deportivo Sur', courts: 4 },
+  ],
+  Rosario: [{ id: 'c4', name: 'Padel Rosario Central', courts: 5 }],
+  Córdoba: [{ id: 'c5', name: 'Club La Cantera', courts: 8 }],
+  Santiago: [{ id: 'c6', name: 'Padel Santiago', courts: 6 }],
+  Montevideo: [{ id: 'c7', name: 'Club Carrasco', courts: 4 }],
+  Madrid: [{ id: 'c8', name: 'World Padel Tour Madrid', courts: 12 }],
+};
+
+type PlayerLevel = 'beginner' | 'intermediate' | 'advanced';
+type Player = {
+  id: string; name: string; ranking: number;
+  level: PlayerLevel; registered: boolean; email?: string;
+};
+
+const FRIENDS: Player[] = [
+  { id: 'f1', name: 'Ana Rodríguez',  ranking: 34,  level: 'intermediate', registered: true },
+  { id: 'f2', name: 'Marcos Herrera', ranking: 12,  level: 'advanced',     registered: true },
+  { id: 'f3', name: 'Carlos Vargas',  ranking: 89,  level: 'beginner',     registered: true },
+  { id: 'f4', name: 'Sofía López',    ranking: 56,  level: 'intermediate', registered: true },
+];
+const ALL_PLAYERS: Player[] = [
+  ...FRIENDS,
+  { id: 'p5',  name: 'Pedro Morales',  ranking: 8,   level: 'advanced',     registered: true },
+  { id: 'p6',  name: 'Laura Torres',   ranking: 101, level: 'beginner',     registered: true },
+  { id: 'p7',  name: 'Diego Fernández',ranking: 45,  level: 'intermediate', registered: true },
+  { id: 'p8',  name: 'Isabel Bravo',   ranking: 23,  level: 'advanced',     registered: true },
+  { id: 'p9',  name: 'Juan Castro',    ranking: 67,  level: 'intermediate', registered: true },
+  { id: 'p10', name: 'Elena Vidal',    ranking: 78,  level: 'beginner',     registered: true },
+  { id: 'p11', name: 'Raúl Ortega',    ranking: 15,  level: 'advanced',     registered: true },
+  { id: 'p12', name: 'Marta Fuentes',  ranking: 92,  level: 'beginner',     registered: true },
+];
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type Level = 'all' | 'beginner' | 'intermediate' | 'advanced';
+type PairType = 'fixed' | 'exchange';
+type ScoreType = 'traditional' | 'points';
+type DeuceRule = 'traditional' | 'gold' | 'silver' | 'ipf';
+
+const LEVEL_LABEL: Record<Level, string> = {
+  all: 'Todos los Niveles', beginner: 'Principiante',
+  intermediate: 'Intermedio', advanced: 'Avanzado',
+};
+const LEVEL_BODY_LABEL: Record<PlayerLevel, string> = {
+  beginner: 'Principiante', intermediate: 'Intermedio', advanced: 'Avanzado',
+};
+const DEUCE_LABEL: Record<DeuceRule, string> = {
+  traditional: 'Ventaja Tradicional', gold: 'Punto de Oro',
+  silver: 'Punto de Plata', ipf: 'IPF (2 ventajas máx.)',
+};
+const DEUCE_DESC: Record<DeuceRule, string> = {
+  traditional: 'D y AD hasta que un equipo gane 2 puntos consecutivos.',
+  gold:        'En Deuce, el siguiente punto gana el set. (Sin ventaja)',
+  silver:      'Solo se permite un AD. Si vuelven a D, el siguiente punto decide.',
+  ipf:         'Máximo 2 AD. Si vuelven a D por tercera vez, el siguiente punto decide.',
+};
+
+// ── Shared styles ─────────────────────────────────────────────────────────────
+
+const inp: React.CSSProperties = {
   width: '100%', padding: '10px 12px', fontSize: 13,
   border: '1px solid var(--grey-200)', background: '#fff',
-  color: 'var(--black)', outline: 'none',
+  color: 'var(--black)', outline: 'none', fontFamily: 'var(--font-body)',
 };
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  appearance: 'none' as const, cursor: 'pointer',
+const sel: React.CSSProperties = {
+  ...inp, appearance: 'none' as const, cursor: 'pointer',
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239E9EA0'/%3E%3C/svg%3E")`,
   backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center',
 };
+const lbl: React.CSSProperties = {
+  fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
+  textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 6, display: 'block',
+};
+const card: React.CSSProperties = {
+  background: '#fff', border: '1px solid var(--grey-200)', padding: '20px 24px', marginBottom: 16,
+};
+const sectionTitle: React.CSSProperties = {
+  fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700,
+  color: 'var(--grey-400)', marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)',
+};
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function Dot({ active, done }: { active: boolean; done: boolean }) {
   return (
-    <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)', marginBottom: 16, paddingBottom: 8, borderBottom: '1px solid var(--grey-200)' }}>
-      {children}
+    <div style={{
+      width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: done ? 'var(--turf-green)' : active ? 'var(--black)' : 'var(--grey-100)',
+      color: done || active ? '#fff' : 'var(--grey-400)',
+      fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700,
+    }}>
+      {done ? '✓' : active ? '●' : '○'}
     </div>
   );
 }
 
-export default function QuickGamePage() {
-  // Basic info
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [clubSearch, setClubSearch] = useState('');
-  const [selectedClub, setSelectedClub] = useState<typeof MOCK_CLUBS[0] | null>(null);
-  const [level, setLevel] = useState('Todos');
-  const [notes, setNotes] = useState('');
-  const [visibility, setVisibility] = useState<Visibility>('public');
-
-  // Players
-  const [playerSearch, setPlayerSearch] = useState('');
-  const [inviteName, setInviteName] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [selectedPlayers, setSelectedPlayers] = useState<(Player & { team: number })[]>([]);
-  const [numTeams, setNumTeams] = useState(2);
-
-  // Game type
-  const [scoreType, setScoreType] = useState<ScoreType>('sets');
-  const [numSets, setNumSets] = useState(2);
-  const [pointTarget, setPointTarget] = useState(16);
-  const [tiebreak, setTiebreak] = useState(7);
-
-  // UI state
-  const [showClubDropdown, setShowClubDropdown] = useState(false);
-  const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-
-  const filteredClubs = MOCK_CLUBS.filter(c =>
-    c.name.toLowerCase().includes(clubSearch.toLowerCase()) ||
-    c.city.toLowerCase().includes(clubSearch.toLowerCase())
-  );
-
-  const filteredPlayers = MOCK_PLAYERS.filter(p =>
-    p.name.toLowerCase().includes(playerSearch.toLowerCase()) &&
-    !selectedPlayers.find(s => s.id === p.id)
-  );
-
-  const maxPlayers = numTeams * 2;
-  const canAddPlayer = selectedPlayers.length < maxPlayers;
-
-  function addPlayer(p: Player, team: number) {
-    setSelectedPlayers(prev => [...prev, { ...p, team }]);
-    setPlayerSearch('');
-    setShowPlayerDropdown(false);
-  }
-
-  function removePlayer(id: string) {
-    setSelectedPlayers(prev => prev.filter(p => p.id !== id));
-  }
-
-  function addInvite() {
-    if (!inviteName.trim()) return;
-    const newPlayer: Player & { team: number } = {
-      id: `invite-${Date.now()}`,
-      name: inviteName.trim(),
-      level: 'Por confirmar',
-      registered: false,
-      team: 1,
-    };
-    setSelectedPlayers(prev => [...prev, newPlayer]);
-    setInviteName('');
-    setInviteEmail('');
-  }
-
-  if (submitted) {
-    return (
-      <div style={{ padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, textAlign: 'center' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 700, color: 'var(--turf-green)', marginBottom: 8 }}>✓</div>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 12px' }}>¡Juego Creado!</h2>
-        <p style={{ color: 'var(--grey-500)', marginBottom: 32, maxWidth: 360 }}>
-          Tu juego rápido fue creado exitosamente.
-          {visibility === 'public' && ' Compartí el código QR para que otros jugadores se unan.'}
-        </p>
-        {visibility === 'public' && (
-          <div style={{ background: 'var(--grey-100)', padding: 24, marginBottom: 24, display: 'inline-block' }}>
-            <div style={{ width: 120, height: 120, background: 'var(--grey-300)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--grey-500)', fontWeight: 600 }}>
-              QR Code
+function Steps({ current }: { current: number }) {
+  const labels = ['Nivel', 'Jugadores', 'Pareja', 'Configuración'];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 32, gap: 0 }}>
+      {labels.map((label, i) => {
+        const num = i + 1;
+        return (
+          <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <Dot active={current === num} done={current > num} />
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: current === num ? 'var(--black)' : current > num ? 'var(--turf-green)' : 'var(--grey-300)' }}>{label}</span>
             </div>
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--grey-500)', fontWeight: 600, letterSpacing: '0.1em' }}>CÓDIGO: JR-2026-4827</div>
+            {i < labels.length - 1 && (
+              <div style={{ width: 48, height: 2, background: current > num ? 'var(--turf-green)' : 'var(--grey-200)', margin: '0 4px', marginBottom: 18 }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function NavBtns({ onBack, onNext, nextLabel = 'Siguiente →', disabled = false }: {
+  onBack?: () => void; onNext: () => void; nextLabel?: string; disabled?: boolean;
+}) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28 }}>
+      {onBack
+        ? <button onClick={onBack} style={{ padding: '11px 24px', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, background: 'transparent', cursor: 'pointer', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>← Atrás</button>
+        : <div />}
+      <button onClick={onNext} disabled={disabled} style={{ padding: '11px 28px', background: disabled ? 'var(--grey-200)' : 'var(--black)', color: disabled ? 'var(--grey-400)' : '#fff', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        {nextLabel}
+      </button>
+    </div>
+  );
+}
+
+function initials(name: string) { return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(); }
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function QuickGamePage() {
+  const [step, setStep] = useState(0);
+
+  // INICIO
+  const [date, setDate]       = useState('');
+  const [time, setTime]       = useState('');
+  const [country, setCountry] = useState('');
+  const [city, setCity]       = useState('');
+  const [clubId, setClubId]   = useState('');
+
+  // Step 1
+  const [level, setLevel] = useState<Level | null>(null);
+
+  // Step 2
+  const [slots, setSlots]         = useState<(Player | null)[]>([null, null, null, null]);
+  const [searchMode, setSearchMode] = useState<'friends' | 'platform' | 'new' | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [newFirst, setNewFirst]   = useState('');
+  const [newLast, setNewLast]     = useState('');
+  const [newEmail, setNewEmail]   = useState('');
+
+  // Step 3
+  const [pairType, setPairType] = useState<PairType | null>(null);
+  const [teams, setTeams]       = useState<(Player | null)[][]>([]);
+
+  // Step 4
+  const [setsPerRound, setSetsPerRound] = useState(1);
+  const [scoreType, setScoreType]       = useState<ScoreType>('traditional');
+  const [deuceRule, setDeuceRule]       = useState<DeuceRule>('gold');
+  const [pointTarget, setPointTarget]   = useState(16);
+
+  const next = () => setStep(s => s + 1);
+  const back = () => setStep(s => s - 1);
+
+  const clubs         = city ? (CLUBS[city] || []) : [];
+  const selectedClub  = clubs.find(c => c.id === clubId) ?? null;
+  const filledSlots   = slots.filter((s): s is Player => s !== null);
+  const emptyCount    = slots.filter(s => s === null).length;
+  const hasQR         = emptyCount > 0;
+
+  // ── Player helpers ──────────────────────────────────────────────────────────
+
+  function compact(arr: (Player | null)[]) {
+    return [...arr.filter(Boolean), ...arr.filter(s => !s)];
+  }
+
+  function addToSlot(p: Player) {
+    if (slots.some(s => s?.id === p.id)) return;
+    const next = [...slots];
+    const idx = next.indexOf(null);
+    if (idx === -1) return;
+    next[idx] = p;
+    setSlots(compact(next));
+    setSearchQuery('');
+    setSearchMode(null);
+  }
+
+  function removeSlot(i: number) {
+    const next = [...slots];
+    next[i] = null;
+    setSlots(compact(next));
+  }
+
+  function setSlotCount(n: number) {
+    if (n < filledSlots.length) return;
+    const filled = slots.filter(Boolean);
+    const result: (Player | null)[] = [...filled];
+    while (result.length < n) result.push(null);
+    setSlots(result.slice(0, n));
+  }
+
+  function addNewPlayer() {
+    if (!newFirst.trim() && !newLast.trim()) return;
+    addToSlot({
+      id: `inv-${Date.now()}`,
+      name: `${newFirst.trim()} ${newLast.trim()}`.trim(),
+      ranking: 9999, level: level && level !== 'all' ? level : 'intermediate',
+      registered: false, email: newEmail.trim() || undefined,
+    });
+    setNewFirst(''); setNewLast(''); setNewEmail('');
+  }
+
+  // ── Team helpers ────────────────────────────────────────────────────────────
+
+  function initTeams() {
+    const n = slots.length / 2;
+    const t: (Player | null)[][] = Array.from({ length: n }, () => [null, null]);
+    filledSlots.forEach((p, i) => {
+      const ti = Math.floor(i / 2), si = i % 2;
+      if (ti < t.length) t[ti][si] = p;
+    });
+    setTeams(t);
+  }
+
+  function assignToTeam(player: Player, ti: number, si: number) {
+    const next = teams.map(t => [...t]);
+    // remove from current position
+    for (let a = 0; a < next.length; a++)
+      for (let b = 0; b < 2; b++)
+        if (next[a][b]?.id === player.id) next[a][b] = null;
+    next[ti][si] = player;
+    setTeams(next);
+  }
+
+  // ── Search results ──────────────────────────────────────────────────────────
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    const source = searchMode === 'friends' ? FRIENDS : ALL_PLAYERS;
+    return source
+      .filter(p => p.name.toLowerCase().includes(q))
+      .filter(p => !slots.some(s => s?.id === p.id))
+      .slice(0, 6);
+  }, [searchQuery, searchMode, slots]);
+
+  const levelFilter = (p: Player) => !level || level === 'all' || p.level === level;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 0 — INICIO
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  if (step === 0) {
+    const ok = date && time && country && city && clubId;
+    return (
+      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Jugadores</div>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>CREAR JUEGO RÁPIDO</h1>
+        </div>
+
+        <div style={card}>
+          <div style={sectionTitle}>Fecha y hora</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 4 }}>
+            <div><label style={lbl}>Fecha</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={inp} /></div>
+            <div><label style={lbl}>Hora</label><input type="time" value={time} onChange={e => setTime(e.target.value)} style={inp} /></div>
+          </div>
+        </div>
+
+        <div style={card}>
+          <div style={sectionTitle}>Club / Ubicación</div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={lbl}>País</label>
+            <select value={country} onChange={e => { setCountry(e.target.value); setCity(''); setClubId(''); }} style={sel}>
+              <option value="">Seleccioná un país</option>
+              {COUNTRIES.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          {country && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={lbl}>Ciudad</label>
+              <select value={city} onChange={e => { setCity(e.target.value); setClubId(''); }} style={sel}>
+                <option value="">Seleccioná una ciudad</option>
+                {(CITIES[country] || []).map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          {city && clubs.length > 0 && (
+            <div>
+              <label style={lbl}>Club</label>
+              <select value={clubId} onChange={e => setClubId(e.target.value)} style={sel}>
+                <option value="">Seleccioná un club</option>
+                {clubs.map(c => <option key={c.id} value={c.id}>{c.name} · {c.courts} canchas</option>)}
+              </select>
+            </div>
+          )}
+          {city && clubs.length === 0 && (
+            <div style={{ padding: '12px 14px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 12, color: 'var(--grey-400)' }}>
+              No hay clubes registrados en esta ciudad aún.
+            </div>
+          )}
+        </div>
+
+        <NavBtns onNext={next} nextLabel="Paso 1: Nivel →" disabled={!ok} />
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 1 — LEVEL
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  if (step === 1) {
+    const options: { key: Level; desc: string }[] = [
+      { key: 'all',          desc: 'Cualquier jugador puede participar. Equipos balanceados por ranking.' },
+      { key: 'beginner',     desc: 'Ideal para quienes están dando los primeros pasos.' },
+      { key: 'intermediate', desc: 'Jugadores con experiencia y manejo básico del juego.' },
+      { key: 'advanced',     desc: 'Alto nivel competitivo. Jugadores experimentados.' },
+    ];
+    return (
+      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+        <Steps current={1} />
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Nivel del Juego</h2>
+        <p style={{ color: 'var(--grey-400)', fontSize: 13, margin: '0 0 24px' }}>Definí el nivel requerido para participar en este juego.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {options.map(({ key, desc }) => (
+            <button key={key} onClick={() => setLevel(key)} style={{
+              padding: '18px 22px', textAlign: 'left', cursor: 'pointer',
+              border: `2px solid ${level === key ? 'var(--black)' : 'var(--grey-200)'}`,
+              background: level === key ? 'var(--black)' : '#fff',
+              color: level === key ? '#fff' : 'var(--black)',
+              transition: 'all 0.12s',
+            }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>{LEVEL_LABEL[key]}</div>
+              <div style={{ fontSize: 12, color: level === key ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{desc}</div>
+            </button>
+          ))}
+        </div>
+        <NavBtns onBack={back} onNext={next} disabled={!level} />
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 2 — PLAYERS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  if (step === 2) {
+    const canContinue = filledSlots.length >= 2;
+
+    return (
+      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+        <Steps current={2} />
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Jugadores</h2>
+        <p style={{ color: 'var(--grey-400)', fontSize: 13, margin: '0 0 24px' }}>Mínimo 4, máximo 12. Los slots vacíos generan un QR para invitar.</p>
+
+        {/* Slot count */}
+        <div style={card}>
+          <label style={lbl}>Total de jugadores (siempre en pares)</label>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            {[4, 6, 8, 10, 12].map(n => {
+              const tooFew = n < filledSlots.length;
+              return (
+                <button key={n} onClick={() => !tooFew && setSlotCount(n)} disabled={tooFew}
+                  style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: tooFew ? 'not-allowed' : 'pointer', border: `2px solid ${slots.length === n ? 'var(--black)' : 'var(--grey-200)'}`, background: slots.length === n ? 'var(--black)' : tooFew ? 'var(--grey-50)' : '#fff', color: slots.length === n ? '#fff' : tooFew ? 'var(--grey-300)' : 'var(--black)' }}>
+                  {n}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+            {slots.length} jugadores · {slots.length / 2} parejas
+            {hasQR && ` · ${emptyCount} slot${emptyCount > 1 ? 's' : ''} vacío${emptyCount > 1 ? 's' : ''} → QR`}
+          </div>
+        </div>
+
+        {/* Slot grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+          {slots.map((p, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', border: `1px solid ${p ? 'var(--grey-200)' : 'var(--grey-100)'}`, background: p ? '#fff' : 'var(--grey-50)' }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', background: p ? (p.registered ? 'var(--court-blue)' : 'var(--grey-400)') : 'var(--grey-200)' }}>
+                {p ? initials(p.name) : i + 1}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {p
+                  ? <>
+                    <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                    <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.registered ? `#${p.ranking} · ${LEVEL_BODY_LABEL[p.level]}` : 'Invitado'}</div>
+                  </>
+                  : <div style={{ fontSize: 12, color: 'var(--grey-300)', fontStyle: 'italic' }}>Slot vacío (QR)</div>
+                }
+              </div>
+              {p && <button onClick={() => removeSlot(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--grey-300)', padding: 0 }}>×</button>}
+            </div>
+          ))}
+        </div>
+
+        {/* Add player */}
+        <div style={card}>
+          <div style={sectionTitle}>Agregar jugador</div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+            {([['friends', 'Mis Amistades'], ['platform', 'Buscar jugador'], ['new', 'Nuevo jugador']] as const).map(([mode, label]) => (
+              <button key={mode} onClick={() => { setSearchMode(searchMode === mode ? null : mode); setSearchQuery(''); }}
+                style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', border: `1px solid ${searchMode === mode ? 'var(--black)' : 'var(--grey-200)'}`, background: searchMode === mode ? 'var(--black)' : '#fff', color: searchMode === mode ? '#fff' : 'var(--grey-500)', cursor: 'pointer' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {(searchMode === 'friends' || searchMode === 'platform') && (
+            <div>
+              <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                placeholder={searchMode === 'friends' ? 'Buscar en amistades…' : 'Buscar por nombre…'} style={inp} />
+              <div style={{ borderLeft: '1px solid var(--grey-200)', borderRight: '1px solid var(--grey-200)', borderBottom: '1px solid var(--grey-200)' }}>
+                {(searchQuery.trim()
+                  ? searchResults.filter(levelFilter)
+                  : searchMode === 'friends' ? FRIENDS.filter(p => !slots.some(s => s?.id === p.id)).filter(levelFilter) : []
+                ).map(p => (
+                  <button key={p.id} onClick={() => addToSlot(p)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '9px 12px', textAlign: 'left', background: 'none', border: 'none', borderBottom: '1px solid var(--grey-100)', cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff' }}>{initials(p.name)}</div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
+                        <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>#{p.ranking}</div>
+                      </div>
+                    </div>
+                    <span className="chip" style={{ fontSize: 9 }}>{LEVEL_BODY_LABEL[p.level]}</span>
+                  </button>
+                ))}
+                {searchQuery.trim() && searchResults.filter(levelFilter).length === 0 && (
+                  <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--grey-400)' }}>No se encontraron jugadores.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {searchMode === 'new' && (
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div><label style={lbl}>Nombre</label><input type="text" value={newFirst} onChange={e => setNewFirst(e.target.value)} placeholder="Nombre" style={inp} /></div>
+                <div><label style={lbl}>Apellido</label><input type="text" value={newLast} onChange={e => setNewLast(e.target.value)} placeholder="Apellido" style={inp} /></div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={lbl}>Email (para invitación)</label>
+                <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@ejemplo.com" style={inp} />
+              </div>
+              <button onClick={addNewPlayer} disabled={!newFirst.trim() && !newLast.trim()}
+                style={{ padding: '9px 20px', background: (newFirst.trim() || newLast.trim()) ? 'var(--black)' : 'var(--grey-200)', color: (newFirst.trim() || newLast.trim()) ? '#fff' : 'var(--grey-400)', border: 'none', cursor: (newFirst.trim() || newLast.trim()) ? 'pointer' : 'not-allowed', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Agregar jugador
+              </button>
+            </div>
+          )}
+        </div>
+
+        {hasQR && (
+          <div style={{ padding: '11px 16px', background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.3)', fontSize: 12, color: 'var(--grey-500)', marginBottom: 8 }}>
+            <strong style={{ color: 'var(--black)' }}>QR automático:</strong> {emptyCount} slot{emptyCount > 1 ? 's' : ''} vacío{emptyCount > 1 ? 's' : ''} → se generará QR al crear el juego.
           </div>
         )}
-        <div style={{ display: 'flex', gap: 12 }}>
-          <button onClick={() => setSubmitted(false)} className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }}>Editar juego</button>
-          <a href="/dashboard/player" className="btn btn-primary btn-sm" style={{ borderRadius: 0 }}>Ir al inicio</a>
+
+        <NavBtns onBack={back} onNext={() => { initTeams(); next(); }} disabled={!canContinue} />
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 3 — PAIR TYPE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  if (step === 3) {
+    const assignedIds = new Set(teams.flat().filter(Boolean).map(p => p!.id));
+    const unassigned  = filledSlots.filter(p => !assignedIds.has(p.id));
+
+    return (
+      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+        <Steps current={3} />
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Tipo de Pareja</h2>
+        <p style={{ color: 'var(--grey-400)', fontSize: 13, margin: '0 0 24px' }}>¿Las parejas son fijas o rotan durante el juego?</p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+          {([
+            { key: 'fixed'    as PairType, title: 'Pareja Fija',          desc: 'Los equipos se mantienen todo el juego. Vos armás las parejas manualmente.' },
+            { key: 'exchange' as PairType, title: 'Intercambio de Pareja', desc: 'El sistema rota los compañeros automáticamente después de cada ronda.' },
+          ]).map(({ key, title, desc }) => (
+            <button key={key} onClick={() => setPairType(key)} style={{
+              padding: '20px', textAlign: 'left', cursor: 'pointer',
+              border: `2px solid ${pairType === key ? 'var(--black)' : 'var(--grey-200)'}`,
+              background: pairType === key ? 'var(--black)' : '#fff',
+              color: pairType === key ? '#fff' : 'var(--black)', transition: 'all 0.12s',
+            }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, textTransform: 'uppercase', marginBottom: 8 }}>{title}</div>
+              <div style={{ fontSize: 12, color: pairType === key ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)', lineHeight: 1.5 }}>{desc}</div>
+            </button>
+          ))}
+        </div>
+
+        {/* Fixed: team builder */}
+        {pairType === 'fixed' && (
+          <div style={card}>
+            <div style={sectionTitle}>Armar equipos — {teams.length} parejas</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
+              {teams.map((team, ti) => (
+                <div key={ti} style={{ border: '1px solid var(--grey-200)', padding: '12px 14px' }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Pareja {ti + 1}</div>
+                  {[0, 1].map(si => (
+                    <div key={si} style={{ padding: '7px 10px', marginBottom: 5, background: team[si] ? 'var(--grey-50)' : 'var(--grey-100)', border: '1px dashed var(--grey-200)', fontSize: 12, color: team[si] ? 'var(--black)' : 'var(--grey-400)', minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>{team[si] ? team[si]!.name : `Jugador ${si + 1}`}</span>
+                      {team[si] && (
+                        <button onClick={() => assignToTeam(team[si]!, ti, si)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--grey-300)', padding: 0 }}>×</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            {unassigned.length > 0 && (
+              <>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Sin asignar — clic en P# para asignar</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {unassigned.map(p => (
+                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 12 }}>
+                      <span style={{ fontWeight: 500 }}>{p.name}</span>
+                      {teams.map((team, ti) => team.some(s => s === null) && (
+                        <button key={ti} onClick={() => assignToTeam(p, ti, team[0] === null ? 0 : 1)}
+                          style={{ padding: '1px 7px', fontSize: 10, fontWeight: 700, border: '1px solid var(--grey-300)', background: 'transparent', cursor: 'pointer', color: 'var(--grey-500)' }}>
+                          P{ti + 1}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {unassigned.length === 0 && filledSlots.length > 0 && (
+              <div style={{ fontSize: 12, color: 'var(--turf-green)', fontWeight: 600 }}>✓ Todos los jugadores asignados.</div>
+            )}
+          </div>
+        )}
+
+        {/* Exchange: info */}
+        {pairType === 'exchange' && (
+          <div style={{ padding: '18px 20px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)' }}>
+            <div style={{ fontSize: 13, color: 'var(--grey-600)', lineHeight: 1.6, marginBottom: 10 }}>
+              {level === 'all'
+                ? '🎯 Nivel mixto: el sistema emparejará al jugador con mejor ranking con el de peor ranking para equilibrar cada pareja.'
+                : '🎲 Nivel homogéneo: el sistema asignará las parejas aleatoriamente en cada ronda.'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
+              Al finalizar cada ronda de sets, el sistema preguntará "¿Continúa el Juego Rápido?" y armará la nueva rotación automáticamente.
+            </div>
+          </div>
+        )}
+
+        <NavBtns onBack={back} onNext={next} disabled={!pairType} />
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 4 — GAME CONFIG
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  if (step === 4) {
+    return (
+      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+        <Steps current={4} />
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Configuración del Juego</h2>
+        <p style={{ color: 'var(--grey-400)', fontSize: 13, margin: '0 0 24px' }}>¿Cómo se jugarán los sets y cómo se lleva el marcador?</p>
+
+        {/* Sets per round */}
+        <div style={card}>
+          <label style={lbl}>Sets por ronda (antes de rotar equipos)</label>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+            {[1, 2, 3].map(n => (
+              <button key={n} onClick={() => setSetsPerRound(n)}
+                style={{ flex: 1, padding: '18px', border: `2px solid ${setsPerRound === n ? 'var(--black)' : 'var(--grey-200)'}`, background: setsPerRound === n ? 'var(--black)' : '#fff', color: setsPerRound === n ? '#fff' : 'var(--black)', cursor: 'pointer', textAlign: 'center' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 700, lineHeight: 1 }}>{n}</div>
+                <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4, color: setsPerRound === n ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>Set{n > 1 ? 's' : ''}</div>
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--grey-400)', lineHeight: 1.5 }}>
+            Después de cada ronda de {setsPerRound} set{setsPerRound > 1 ? 's' : ''}, el sistema registrará los scores y preguntará si continúa el juego para hacer la rotación.
+          </div>
+        </div>
+
+        {/* Score type selector */}
+        <div style={card}>
+          <label style={lbl}>Tipo de Score</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 18 }}>
+            {([
+              { key: 'traditional' as ScoreType, title: 'Tradicional', desc: '0, 15, 30, 40 — conteo clásico de pádel/tenis.' },
+              { key: 'points'      as ScoreType, title: 'Por Puntos',  desc: 'Cuenta de puntos simples hasta un objetivo (estilo Americano).' },
+            ]).map(({ key, title, desc }) => (
+              <button key={key} onClick={() => setScoreType(key)} style={{
+                padding: '16px', textAlign: 'left', cursor: 'pointer',
+                border: `2px solid ${scoreType === key ? 'var(--black)' : 'var(--grey-200)'}`,
+                background: scoreType === key ? 'var(--black)' : '#fff',
+                color: scoreType === key ? '#fff' : 'var(--black)', transition: 'all 0.12s',
+              }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase', marginBottom: 5 }}>{title}</div>
+                <div style={{ fontSize: 11, color: scoreType === key ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.4 }}>{desc}</div>
+              </button>
+            ))}
+          </div>
+
+          {scoreType === 'traditional' && (
+            <div>
+              <label style={lbl}>Regla de Deuce / Ventaja</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(['traditional', 'gold', 'silver', 'ipf'] as DeuceRule[]).map(rule => (
+                  <button key={rule} onClick={() => setDeuceRule(rule)} style={{
+                    padding: '12px 16px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 12,
+                    border: `1px solid ${deuceRule === rule ? 'var(--black)' : 'var(--grey-200)'}`,
+                    background: deuceRule === rule ? 'var(--grey-900)' : '#fff',
+                    color: deuceRule === rule ? '#fff' : 'var(--black)',
+                  }}>
+                    <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${deuceRule === rule ? 'var(--neon)' : 'var(--grey-300)'}`, background: deuceRule === rule ? 'var(--neon)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{DEUCE_LABEL[rule]}</div>
+                      <div style={{ fontSize: 11, color: deuceRule === rule ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.5 }}>{DEUCE_DESC[rule]}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {scoreType === 'points' && (
+            <div>
+              <label style={lbl}>Puntaje objetivo</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                {[4, 8, 12, 16, 20, 24, 28, 32].map(n => (
+                  <button key={n} onClick={() => setPointTarget(n)}
+                    style={{ width: 58, height: 48, border: `2px solid ${pointTarget === n ? 'var(--black)' : 'var(--grey-200)'}`, background: pointTarget === n ? 'var(--black)' : '#fff', color: pointTarget === n ? '#fff' : 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, cursor: 'pointer' }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>El primer equipo en llegar a {pointTarget} puntos gana el set.</div>
+            </div>
+          )}
+        </div>
+
+        <NavBtns onBack={back} onNext={next} nextLabel="Ver resumen →" />
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 5 — CONFIRMATION
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  if (step === 5) {
+    const scoreDesc = scoreType === 'traditional'
+      ? `Tradicional · ${DEUCE_LABEL[deuceRule]}`
+      : `Por Puntos · objetivo ${pointTarget} pts`;
+
+    return (
+      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 28px' }}>Resumen del Juego</h2>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)', marginBottom: 20 }}>
+          {[
+            { label: 'Fecha y hora',      value: `${date} · ${time}` },
+            { label: 'Club',              value: `${selectedClub?.name}, ${city}, ${country}` },
+            { label: 'Nivel',             value: level ? LEVEL_LABEL[level] : '–' },
+            { label: 'Jugadores',         value: `${slots.length} total · ${filledSlots.length} confirmados · ${emptyCount} por confirmar` },
+            { label: 'Tipo de pareja',    value: pairType === 'fixed' ? 'Pareja Fija' : 'Intercambio de Pareja' },
+            { label: 'Sets por ronda',    value: `${setsPerRound} set${setsPerRound > 1 ? 's' : ''}` },
+            { label: 'Score',             value: scoreDesc },
+          ].map(row => (
+            <div key={row.label} style={{ background: '#fff', padding: '13px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', flexShrink: 0 }}>{row.label}</span>
+              <span style={{ fontSize: 13, fontWeight: 500, textAlign: 'right' }}>{row.value}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ ...card, marginBottom: 20 }}>
+          <div style={sectionTitle}>Jugadores ({filledSlots.length}/{slots.length})</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {slots.map((p, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--grey-50)' }}>
+                <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', background: p ? (p.registered ? 'var(--court-blue)' : 'var(--grey-400)') : 'var(--grey-200)' }}>
+                  {p ? initials(p.name) : '?'}
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: p ? 'var(--black)' : 'var(--grey-300)' }}>{p ? p.name : 'Por confirmar (QR)'}</div>
+                  {p?.email && <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.email}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {hasQR && (
+          <div style={{ background: 'var(--grey-900)', color: '#fff', padding: '20px 24px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 20 }}>
+            <div style={{ width: 64, height: 64, background: 'rgba(214,255,0,0.1)', border: '1px solid rgba(214,255,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 24 }}>⬛</div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', color: 'var(--neon)', marginBottom: 5 }}>QR del Juego</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>
+                {emptyCount} slot{emptyCount > 1 ? 's' : ''} vacío{emptyCount > 1 ? 's' : ''}. Se generará el código al crear el juego para completar los jugadores faltantes.
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <button onClick={back} style={{ padding: '11px 24px', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, background: 'transparent', cursor: 'pointer', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>← Atrás</button>
+          <button onClick={() => setStep(99)} style={{ padding: '11px 32px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            ✓ Crear Juego Rápido
+          </button>
         </div>
       </div>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SUCCESS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function reset() {
+    setStep(0); setDate(''); setTime(''); setCountry(''); setCity(''); setClubId('');
+    setLevel(null); setSlots([null, null, null, null]); setSearchMode(null);
+    setPairType(null); setTeams([]); setSetsPerRound(1);
+    setScoreType('traditional'); setDeuceRule('gold'); setPointTarget(16);
+  }
+
+  const code = `JR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
   return (
-    <div style={{ padding: '40px 40px 80px', maxWidth: 820 }}>
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Jugadores</div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>CREAR JUEGO RÁPIDO</h1>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-        {/* ── INFORMACIÓN BÁSICA ── */}
-        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '24px' }}>
-          <SectionTitle>Información básica</SectionTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <label style={labelStyle}>Fecha</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Hora</label>
-              <input type="time" value={time} onChange={e => setTime(e.target.value)} style={inputStyle} />
-            </div>
-          </div>
+    <div style={{ padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 480, textAlign: 'center' }}>
+      <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--turf-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 28, color: '#fff', marginBottom: 20 }}>✓</div>
+      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, textTransform: 'uppercase', margin: '0 0 10px' }}>¡Juego Creado!</h2>
+      <p style={{ color: 'var(--grey-500)', marginBottom: 28, maxWidth: 400, fontSize: 14, lineHeight: 1.6 }}>
+        {hasQR ? 'Compartí el QR para que los jugadores faltantes se unan.' : 'Todos los jugadores están confirmados. ¡A jugar!'}
+      </p>
+      {hasQR && (
+        <div style={{ background: 'var(--grey-900)', padding: '24px', marginBottom: 24, display: 'inline-block' }}>
+          <div style={{ width: 120, height: 120, background: 'var(--grey-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--grey-400)', fontWeight: 600 }}>QR Code</div>
+          <div style={{ marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 600, letterSpacing: '0.12em' }}>{code}</div>
         </div>
-
-        {/* ── CLUB ── */}
-        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '24px' }}>
-          <SectionTitle>Club</SectionTitle>
-          <div style={{ position: 'relative' }}>
-            <label style={labelStyle}>Buscar club por ciudad o nombre</label>
-            {selectedClub ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--neon)', background: 'rgba(214,255,0,0.04)' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{selectedClub.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{selectedClub.city}, {selectedClub.country}</div>
-                </div>
-                <button onClick={() => { setSelectedClub(null); setClubSearch(''); }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--grey-400)', lineHeight: 1 }}>×</button>
-              </div>
-            ) : (
-              <>
-                <input
-                  type="text" value={clubSearch}
-                  onChange={e => { setClubSearch(e.target.value); setShowClubDropdown(true); }}
-                  onFocus={() => setShowClubDropdown(true)}
-                  placeholder="Ej: Buenos Aires, Club Barrio Norte…"
-                  style={inputStyle}
-                />
-                {showClubDropdown && clubSearch.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#fff', border: '1px solid var(--grey-200)', borderTop: 'none', maxHeight: 200, overflowY: 'auto' }}>
-                    {filteredClubs.length > 0 ? filteredClubs.map(c => (
-                      <button key={c.id} onClick={() => { setSelectedClub(c); setShowClubDropdown(false); setClubSearch(''); }}
-                        style={{ display: 'block', width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--grey-100)' }}>
-                        <div style={{ fontWeight: 500, fontSize: 13 }}>{c.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{c.city}, {c.country}</div>
-                      </button>
-                    )) : (
-                      <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--grey-400)' }}>No se encontraron clubes.</div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* ── EQUIPOS Y JUGADORES ── */}
-        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '24px' }}>
-          <SectionTitle>Equipos y jugadores</SectionTitle>
-          <div style={{ marginBottom: 20 }}>
-            <label style={labelStyle}>Número de equipos (máx. 6)</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[2, 3, 4, 5, 6].map(n => (
-                <button key={n} onClick={() => setNumTeams(n)}
-                  style={{
-                    width: 44, height: 44, border: `1px solid ${numTeams === n ? 'var(--black)' : 'var(--grey-200)'}`,
-                    background: numTeams === n ? 'var(--black)' : '#fff',
-                    color: numTeams === n ? '#fff' : 'var(--black)',
-                    fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, cursor: 'pointer',
-                  }}>
-                  {n}
-                </button>
-              ))}
-            </div>
-            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--grey-400)' }}>
-              {numTeams} equipos × 2 jugadores = {maxPlayers} jugadores en total
-            </div>
-          </div>
-
-          {/* Player search */}
-          <label style={labelStyle}>Agregar jugadores ({selectedPlayers.length}/{maxPlayers})</label>
-          {canAddPlayer && (
-            <div style={{ position: 'relative', marginBottom: 12 }}>
-              <input
-                type="text" value={playerSearch}
-                onChange={e => { setPlayerSearch(e.target.value); setShowPlayerDropdown(true); }}
-                onFocus={() => setShowPlayerDropdown(true)}
-                placeholder="Buscar jugador registrado…"
-                style={inputStyle}
-              />
-              {showPlayerDropdown && playerSearch.length > 0 && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#fff', border: '1px solid var(--grey-200)', borderTop: 'none', maxHeight: 200, overflowY: 'auto' }}>
-                  {filteredPlayers.length > 0 ? filteredPlayers.map(p => (
-                    <button key={p.id} onClick={() => addPlayer(p, 1)}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid var(--grey-100)' }}>
-                      <span style={{ fontWeight: 500, fontSize: 13 }}>{p.name}</span>
-                      <span className="chip" style={{ fontSize: 9 }}>{p.level}</span>
-                    </button>
-                  )) : (
-                    <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--grey-400)' }}>No se encontraron jugadores.</div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Selected players */}
-          {selectedPlayers.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-              {selectedPlayers.map((p) => (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: p.registered ? 'var(--court-blue)' : 'var(--grey-300)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                      {p.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
-                      <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.registered ? p.level : 'Invitado – pendiente confirmación'}</div>
-                    </div>
-                  </div>
-                  <button onClick={() => removePlayer(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--grey-400)', lineHeight: 1 }}>×</button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Invite new player */}
-          <div style={{ padding: '16px', background: 'var(--grey-50)', border: '1px dashed var(--grey-300)' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>
-              Invitar jugador no registrado
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'flex-end' }}>
-              <div>
-                <label style={{ ...labelStyle, marginBottom: 4 }}>Nombre</label>
-                <input type="text" value={inviteName} onChange={e => setInviteName(e.target.value)} placeholder="Nombre completo" style={{ ...inputStyle, padding: '8px 10px' }} />
-              </div>
-              <div>
-                <label style={{ ...labelStyle, marginBottom: 4 }}>Email (opcional)</label>
-                <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="email@ejemplo.com" style={{ ...inputStyle, padding: '8px 10px' }} />
-              </div>
-              <button onClick={addInvite} disabled={!inviteName.trim() || !canAddPlayer}
-                style={{ padding: '9px 16px', background: inviteName.trim() && canAddPlayer ? 'var(--black)' : 'var(--grey-200)', color: inviteName.trim() && canAddPlayer ? '#fff' : 'var(--grey-400)', border: 'none', cursor: inviteName.trim() && canAddPlayer ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
-                Invitar
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── TIPO DE JUEGO ── */}
-        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '24px' }}>
-          <SectionTitle>Tipo de juego y puntuación</SectionTitle>
-
-          <div style={{ marginBottom: 20, border: '1px solid var(--grey-200)', display: 'inline-flex' }}>
-            {(['sets', 'points'] as ScoreType[]).map(st => (
-              <button key={st} onClick={() => setScoreType(st)}
-                style={{ padding: '9px 20px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', background: scoreType === st ? 'var(--black)' : '#fff', color: scoreType === st ? '#fff' : 'var(--grey-500)', transition: 'all 0.12s' }}>
-                {st === 'sets' ? 'Sets' : 'Puntaje'}
-              </button>
-            ))}
-          </div>
-
-          {scoreType === 'sets' ? (
-            <div>
-              <label style={labelStyle}>Cantidad de sets</label>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-                {SET_OPTIONS.map(n => (
-                  <button key={n} onClick={() => setNumSets(n)}
-                    style={{ width: 56, height: 44, border: `1px solid ${numSets === n ? 'var(--black)' : 'var(--grey-200)'}`, background: numSets === n ? 'var(--black)' : '#fff', color: numSets === n ? '#fff' : 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, cursor: 'pointer' }}>
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div>
-              <label style={labelStyle}>Puntaje objetivo</label>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-                {POINT_OPTIONS.map(n => (
-                  <button key={n} onClick={() => setPointTarget(n)}
-                    style={{ width: 56, height: 44, border: `1px solid ${pointTarget === n ? 'var(--black)' : 'var(--grey-200)'}`, background: pointTarget === n ? 'var(--black)' : '#fff', color: pointTarget === n ? '#fff' : 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, cursor: 'pointer' }}>
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label style={labelStyle}>Tie-break (puntos)</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {TIEBREAK_OPTIONS.map(n => (
-                <button key={n} onClick={() => setTiebreak(n)}
-                  style={{ width: 56, height: 44, border: `1px solid ${tiebreak === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tiebreak === n ? 'var(--black)' : '#fff', color: tiebreak === n ? '#fff' : 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, cursor: 'pointer' }}>
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ── NIVEL Y NOTAS ── */}
-        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '24px' }}>
-          <SectionTitle>Nivel y configuración</SectionTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <div>
-              <label style={labelStyle}>Nivel</label>
-              <select value={level} onChange={e => setLevel(e.target.value)} style={selectStyle}>
-                <option>Todos</option>
-                <option>Principiante</option>
-                <option>Intermedio</option>
-                <option>Avanzado</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Visibilidad</label>
-              <div style={{ display: 'flex', border: '1px solid var(--grey-200)' }}>
-                {(['public', 'private'] as Visibility[]).map(v => (
-                  <button key={v} onClick={() => setVisibility(v)}
-                    style={{ flex: 1, padding: '10px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', background: visibility === v ? 'var(--black)' : '#fff', color: visibility === v ? '#fff' : 'var(--grey-500)' }}>
-                    {v === 'public' ? '🌐 Público' : '🔒 Privado'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {visibility === 'public' && (
-            <div style={{ padding: '12px 16px', background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.3)', fontSize: 12, color: 'var(--grey-500)', marginBottom: 16 }}>
-              <strong style={{ color: 'var(--black)' }}>Juego público:</strong> se generará un código QR para compartir. Cualquier jugador puede unirse hasta completar los cupos.
-            </div>
-          )}
-          {visibility === 'private' && (
-            <div style={{ padding: '12px 16px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 12, color: 'var(--grey-500)', marginBottom: 16 }}>
-              <strong style={{ color: 'var(--black)' }}>Juego privado:</strong> debés completar todos los jugadores antes de poder iniciar el juego.
-              {selectedPlayers.length < maxPlayers && (
-                <span style={{ color: '#ee0005', display: 'block', marginTop: 4 }}>
-                  Faltan {maxPlayers - selectedPlayers.length} jugador(es) para completar el cupo.
-                </span>
-              )}
-            </div>
-          )}
-
-          <div>
-            <label style={labelStyle}>Notas adicionales</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="Ej: Traer pelotas, entrada por calle Av. Corrientes…"
-              rows={3}
-              style={{ ...inputStyle, resize: 'vertical' as const }} />
-          </div>
-        </div>
-
-        {/* Submit */}
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-          <a href="/dashboard/player" style={{ padding: '12px 24px', border: '1px solid var(--grey-200)', fontSize: 13, fontWeight: 600, textDecoration: 'none', color: 'var(--grey-500)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            Cancelar
-          </a>
-          <button
-            onClick={() => setSubmitted(true)}
-            disabled={!date || !time || !selectedClub}
-            style={{
-              padding: '12px 32px', background: date && time && selectedClub ? 'var(--black)' : 'var(--grey-200)',
-              color: date && time && selectedClub ? '#fff' : 'var(--grey-400)',
-              border: 'none', cursor: date && time && selectedClub ? 'pointer' : 'not-allowed',
-              fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
-            }}>
-            Crear juego rápido
-          </button>
-        </div>
+      )}
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button onClick={reset} style={{ padding: '10px 20px', border: '1px solid var(--grey-200)', fontSize: 11, fontWeight: 600, background: 'transparent', cursor: 'pointer', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Nuevo juego</button>
+        <a href="/dashboard/player" style={{ padding: '10px 24px', background: 'var(--black)', color: '#fff', fontSize: 11, fontWeight: 700, textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Ir al inicio</a>
       </div>
     </div>
   );
