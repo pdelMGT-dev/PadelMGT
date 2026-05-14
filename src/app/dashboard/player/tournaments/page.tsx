@@ -12,15 +12,29 @@ const tournaments = [
   { name: 'Copa Federación', format: 'Knockout', date: '28 May 2026', club: 'Arena Nacional', city: 'Buenos Aires', partner: '–', pos: null, total: 64, pts: null, status: 'upcoming' },
 ];
 
-const filters = ['Todos', 'Próximos', 'Finalizados'];
+const selectStyle: React.CSSProperties = {
+  padding: '7px 32px 7px 12px',
+  fontSize: 12, fontWeight: 600, border: '1px solid var(--grey-200)',
+  background: '#fff', cursor: 'pointer', appearance: 'none' as const,
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239E9EA0'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+  color: 'var(--black)',
+};
 
 export default function PlayerTournamentsPage() {
-  const [filter, setFilter] = useState('Todos');
+  const [estado, setEstado] = useState('Todos');
+  const [formato, setFormato] = useState('Todos los formatos');
+  const [ciudad, setCiudad] = useState('Todas las ciudades');
 
-  const filtered = tournaments.filter((t) =>
-    filter === 'Todos' ? true :
-    filter === 'Próximos' ? t.status === 'upcoming' : t.status === 'completed'
-  );
+  const filtered = tournaments.filter((t) => {
+    const estadoOk = estado === 'Todos'
+      || (estado === 'Próximos' ? t.status === 'upcoming' : t.status === 'completed');
+    const formatoOk = formato === 'Todos los formatos' || t.format === formato;
+    const ciudadOk = ciudad === 'Todas las ciudades' || t.city === ciudad;
+    return estadoOk && formatoOk && ciudadOk;
+  });
+
+  const hasFilters = estado !== 'Todos' || formato !== 'Todos los formatos' || ciudad !== 'Todas las ciudades';
 
   return (
     <div style={{ padding: '40px 40px 80px' }}>
@@ -44,11 +58,34 @@ export default function PlayerTournamentsPage() {
         ))}
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        {filters.map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`pill-tab${filter === f ? ' active' : ''}`}>{f}</button>
-        ))}
+      {/* Dropdown filters */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
+        <select value={estado} onChange={e => setEstado(e.target.value)} style={selectStyle}>
+          <option>Todos</option>
+          <option>Próximos</option>
+          <option>Finalizados</option>
+        </select>
+        <select value={formato} onChange={e => setFormato(e.target.value)} style={selectStyle}>
+          <option>Todos los formatos</option>
+          <option>Americano</option>
+          <option>Mexicano</option>
+          <option>Round Robin</option>
+          <option>Knockout</option>
+          <option>Swiss</option>
+        </select>
+        <select value={ciudad} onChange={e => setCiudad(e.target.value)} style={selectStyle}>
+          <option>Todas las ciudades</option>
+          <option>Buenos Aires</option>
+          <option>Rosario</option>
+          <option>Córdoba</option>
+          <option>Santiago</option>
+        </select>
+        {hasFilters && (
+          <button onClick={() => { setEstado('Todos'); setFormato('Todos los formatos'); setCiudad('Todas las ciudades'); }}
+            style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, border: '1px solid var(--grey-200)', background: 'transparent', cursor: 'pointer', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Limpiar ×
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -88,6 +125,13 @@ export default function PlayerTournamentsPage() {
                 </td>
               </tr>
             ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--grey-400)', fontSize: 13 }}>
+                  No hay torneos con los filtros seleccionados.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

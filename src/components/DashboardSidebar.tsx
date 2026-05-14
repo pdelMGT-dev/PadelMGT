@@ -15,11 +15,13 @@ const roleLabels: Record<Role, string> = {
 const navItems: Record<Role, { href: string; label: string; icon: string }[]> = {
   player: [
     { href: '/dashboard/player', label: 'Inicio', icon: '◈' },
+    { href: '/dashboard/player/quick-game', label: 'Juego Rápido', icon: '⚡' },
     { href: '/dashboard/player/tournaments', label: 'Mis Torneos', icon: '◉' },
     { href: '/dashboard/player/matches', label: 'Mis Partidos', icon: '◎' },
+    { href: '/dashboard/player/clubs', label: 'Mis Clubes (3)', icon: '◑' },
     { href: '/dashboard/player/ranking', label: 'Mi Ranking', icon: '△' },
     { href: '/dashboard/player/calendar', label: 'Calendario', icon: '▦' },
-    { href: '/dashboard/player/friends', label: 'Amistades', icon: '◑' },
+    { href: '/dashboard/player/friends', label: 'Amistades', icon: '◌' },
   ],
   club: [
     { href: '/dashboard/club', label: 'Panel del Club', icon: '◈' },
