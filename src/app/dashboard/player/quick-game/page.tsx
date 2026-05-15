@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -194,15 +194,34 @@ export default function QuickGamePage() {
 
   // ── View + game list ──────────────────────────────────────────────────────
   const [view, setView]         = useState<'dashboard' | 'wizard'>('dashboard');
-  const [games, setGames]       = useState<QuickGame[]>(MOCK_GAMES);
+  const [games, setGames]       = useState<QuickGame[]>(() => {
+    if (typeof window === 'undefined') return MOCK_GAMES;
+    try { const s = localStorage.getItem('qg_games'); return s ? JSON.parse(s) : MOCK_GAMES; } catch { return MOCK_GAMES; }
+  });
   const [newGameCode, setNewGameCode] = useState('');
   const [qrGame, setQrGame]     = useState<QuickGame | null>(null);
   const [copied, setCopied]     = useState(false);
+  const [notification, setNotification] = useState<{ type: string; message: string } | null>(null);
+  const [joinedToast, setJoinedToast]   = useState<string | null>(null);
+
+  // Sync games to localStorage whenever they change
+  useEffect(() => { try { localStorage.setItem('qg_games', JSON.stringify(games)); } catch {} }, [games]);
+
+  // Read notification + cancelled game from localStorage on mount
+  useEffect(() => {
+    try {
+      const n = localStorage.getItem('qg_notification');
+      if (n) { setNotification(JSON.parse(n)); localStorage.removeItem('qg_notification'); }
+      const cancelledId = localStorage.getItem('qg_cancelled');
+      if (cancelledId) { setGames(prev => prev.filter(g => g.id !== cancelledId)); localStorage.removeItem('qg_cancelled'); }
+    } catch {}
+  }, []);
 
   // ── Wizard step ───────────────────────────────────────────────────────────
   const [step, setStep] = useState(0);
 
   // INICIO
+  const [gameName, setGameName] = useState('');
   const [date, setDate]       = useState('');
   const [time, setTime]       = useState('');
   const [country, setCountry] = useState('');
@@ -347,7 +366,7 @@ export default function QuickGamePage() {
     const newGame: QuickGame = {
       id: `g-${Date.now()}`,
       code,
-      name: selectedClub ? `Juego en ${selectedClub.name}` : 'Juego Rápido',
+      name: gameName.trim() || (selectedClub ? `Juego en ${selectedClub.name}` : 'Juego Rápido'),
       date: date || '–',
       time: time || '–',
       club: selectedClub?.name || '–',
@@ -363,7 +382,7 @@ export default function QuickGamePage() {
   }
 
   function resetWizard() {
-    setStep(0); setDate(''); setTime(''); setCountry(''); setCity(''); setClubId('');
+    setStep(0); setGameName(''); setDate(''); setTime(''); setCountry(''); setCity(''); setClubId('');
     setLevel(null); setSlots([CREATOR, null, null, null]); setSearchMode(null);
     setPairType(null); setTeams([]); setSetsPerRound(1);
     setScoreType('traditional'); setGamesPerSet(6); setTiebreak(7);
@@ -392,6 +411,28 @@ export default function QuickGamePage() {
 
     return (
       <div style={{ padding: '40px 40px 80px' }}>
+
+        {/* Notification Banner */}
+        {notification && (
+          <div style={{ marginBottom: 24, padding: '14px 20px', background: notification.type === 'cancelled' ? '#fef2f2' : '#f0fdf4', border: `1px solid ${notification.type === 'cancelled' ? '#fecaca' : '#bbf7d0'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <span style={{ fontSize: 16 }}>{notification.type === 'cancelled' ? '🔕' : '✓'}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: notification.type === 'cancelled' ? '#dc2626' : 'var(--turf-green)' }}>{notification.message}</span>
+            </div>
+            <button onClick={() => setNotification(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--grey-400)', padding: 0 }}>×</button>
+          </div>
+        )}
+
+        {/* Joined toast */}
+        {joinedToast && (
+          <div style={{ marginBottom: 24, padding: '14px 20px', background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <span style={{ fontSize: 16 }}>🎾</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--turf-green)' }}>{joinedToast}</span>
+            </div>
+            <button onClick={() => setJoinedToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--grey-400)', padding: 0 }}>×</button>
+          </div>
+        )}
 
         {/* QR Share Modal */}
         {qrGame && (
@@ -584,10 +625,13 @@ export default function QuickGamePage() {
                   <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 8 }}>jugadores</div>
                   <button
                     onClick={() => {
+                      const alreadyJoined = games.some(existingGame => existingGame.id === `n-${g.id}`);
+                      if (alreadyJoined) { setJoinedToast(`Ya estás en "${g.name}". Lo encontrarás en Mis Juegos Activos.`); setTimeout(() => setJoinedToast(null), 4000); return; }
                       const code = `JR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
                       const joined: QuickGame = { id: `n-${g.id}`, code, name: g.name, date: g.time.includes('Hoy') ? '15 May 2026' : g.time.includes('Mañana') ? '16 May 2026' : '20 May 2026', time: g.time.replace(/^(Hoy|Mañana|Sábado)\s/, ''), club: g.club, city: '', levelLabel: g.level, players: g.players + 1, maxPlayers: g.max, pairType: 'exchange', status: 'created' };
                       setGames(prev => [joined, ...prev]);
-                      window.location.href = `/dashboard/player/quick-game/n-${g.id}`;
+                      setJoinedToast(`¡Te uniste a "${g.name}"! Aparece en Mis Juegos Activos.`);
+                      setTimeout(() => setJoinedToast(null), 4000);
                     }}
                     style={{ padding: '7px 16px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Unirse</button>
                 </div>
@@ -646,6 +690,18 @@ export default function QuickGamePage() {
     return (
       <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
         <WizardHeader onBack={goToDashboard} />
+
+        <div style={card}>
+          <div style={secTitle}>Nombre del juego</div>
+          <label style={lbl}>Nombre</label>
+          <input
+            type="text"
+            value={gameName}
+            onChange={e => setGameName(e.target.value)}
+            placeholder={selectedClub ? `Juego en ${selectedClub.name}` : 'Ej: Express del Martes, Open Mixto…'}
+            style={inp}
+          />
+        </div>
 
         <div style={card}>
           <div style={secTitle}>Fecha y hora</div>

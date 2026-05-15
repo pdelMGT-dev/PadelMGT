@@ -2,16 +2,20 @@
 
 import Link from 'next/link';
 import { use, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type GameStatus = 'created' | 'starting_soon' | 'live' | 'finished';
 type PairType   = 'fixed' | 'exchange';
+type ScoreType  = 'points' | 'traditional';
+type Level      = 'all' | 'beginner' | 'intermediate' | 'advanced';
 
-type PlayerEntry = {
+type MockPlayer = {
   id: string;
   name: string;
-  isMe?: boolean;
+  ranking: number;
+  isCreator?: boolean;
 };
 
 type GameDetail = {
@@ -23,78 +27,66 @@ type GameDetail = {
   club: string;
   city: string;
   levelLabel: string;
+  level: Level;
   pairType: PairType;
   scoreConfig: string;
   status: GameStatus;
-  players: PlayerEntry[];
+  initialPlayerIds: string[];
 };
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
+
+const MOCK_PLAYERS: MockPlayer[] = [
+  { id: 'me', name: 'Diego García',    ranking: 47, isCreator: true },
+  { id: 'p1', name: 'Ana Rodríguez',   ranking: 34 },
+  { id: 'p2', name: 'Marcos Herrera',  ranking: 12 },
+  { id: 'p3', name: 'Carlos Vargas',   ranking: 89 },
+  { id: 'p4', name: 'Sofía López',     ranking: 56 },
+  { id: 'p5', name: 'Diego Fernández', ranking: 45 },
+];
+
+const FRIENDS: MockPlayer[] = MOCK_PLAYERS.filter(p => !p.isCreator);
 
 const GAMES: Record<string, GameDetail> = {
   g1: {
     id: 'g1', code: 'JR-2026-3841', name: 'Express Nocturno',
     date: '2026-05-14', time: '20:00', club: 'Padel Arena', city: 'Buenos Aires',
-    levelLabel: 'Todos', pairType: 'exchange', scoreConfig: 'Por Puntos · 16 pts',
+    levelLabel: 'Todos', level: 'all', pairType: 'exchange',
+    scoreConfig: 'Por Puntos · 16 pts',
     status: 'live',
-    players: [
-      { id: 'me', name: 'Diego García', isMe: true },
-      { id: 'f1', name: 'Ana Rodríguez' },
-      { id: 'f2', name: 'Marcos Herrera' },
-      { id: 'f3', name: 'Carlos Vargas' },
-    ],
+    initialPlayerIds: ['me', 'p1', 'p2', 'p3'],
   },
   g2: {
     id: 'g2', code: 'JR-2026-5519', name: 'Juego Rápido Tarde',
     date: '2026-05-15', time: '17:00', club: 'Club Barrio Norte', city: 'Buenos Aires',
-    levelLabel: 'Intermedio', pairType: 'exchange', scoreConfig: 'Tradicional · 6 games/set',
+    levelLabel: 'Intermedio', level: 'intermediate', pairType: 'exchange',
+    scoreConfig: 'Tradicional · 6 games/set',
     status: 'starting_soon',
-    players: [
-      { id: 'me', name: 'Diego García', isMe: true },
-      { id: 'f1', name: 'Ana Rodríguez' },
-      { id: 'f4', name: 'Sofía López' },
-      { id: 'f6', name: 'Diego Fernández' },
-    ],
+    initialPlayerIds: ['me', 'p1', 'p4', 'p5'],
   },
   g3: {
     id: 'g3', code: 'JR-2026-4827', name: 'Juego del Sábado',
     date: '2026-05-20', time: '11:00', club: 'Club Barrio Norte', city: 'Buenos Aires',
-    levelLabel: 'Intermedio', pairType: 'fixed', scoreConfig: 'Por Puntos · 16 pts',
+    levelLabel: 'Intermedio', level: 'intermediate', pairType: 'fixed',
+    scoreConfig: 'Por Puntos · 16 pts',
     status: 'created',
-    players: [
-      { id: 'me', name: 'Diego García', isMe: true },
-      { id: 'f1', name: 'Ana Rodríguez' },
-    ],
+    initialPlayerIds: ['me', 'p2'],
   },
   g4: {
     id: 'g4', code: 'JR-2026-2234', name: 'Americano Viernes',
     date: '2026-05-08', time: '19:00', club: 'Padel Arena', city: 'Buenos Aires',
-    levelLabel: 'Avanzado', pairType: 'exchange', scoreConfig: 'Por Puntos · 16 pts',
+    levelLabel: 'Avanzado', level: 'advanced', pairType: 'exchange',
+    scoreConfig: 'Por Puntos · 16 pts',
     status: 'finished',
-    players: [
-      { id: 'me', name: 'Diego García', isMe: true },
-      { id: 'f1', name: 'Ana Rodríguez' },
-      { id: 'f2', name: 'Marcos Herrera' },
-      { id: 'f3', name: 'Carlos Vargas' },
-      { id: 'f4', name: 'Sofía López' },
-      { id: 'f5', name: 'Laura Torres' },
-      { id: 'f6', name: 'Diego Fernández' },
-      { id: 'p7', name: 'Pedro Morales' },
-    ],
+    initialPlayerIds: ['me', 'p1', 'p2', 'p3', 'p4', 'p5'],
   },
   g5: {
     id: 'g5', code: 'JR-2026-1198', name: 'Express del Club',
     date: '2026-05-02', time: '10:00', club: 'Club La Cantera', city: 'Córdoba',
-    levelLabel: 'Todos', pairType: 'exchange', scoreConfig: 'Por Puntos · 12 pts',
+    levelLabel: 'Todos', level: 'all', pairType: 'exchange',
+    scoreConfig: 'Por Puntos · 12 pts',
     status: 'finished',
-    players: [
-      { id: 'me', name: 'Diego García', isMe: true },
-      { id: 'f1', name: 'Ana Rodríguez' },
-      { id: 'f2', name: 'Marcos Herrera' },
-      { id: 'f3', name: 'Carlos Vargas' },
-      { id: 'f4', name: 'Sofía López' },
-      { id: 'f5', name: 'Laura Torres' },
-    ],
+    initialPlayerIds: ['me', 'p1', 'p2', 'p3', 'p4', 'p5'],
   },
 };
 
@@ -106,6 +98,36 @@ const STATUS_INFO: Record<GameStatus, { label: string; color: string }> = {
   live:          { label: 'En Vivo',     color: 'var(--turf-green)' },
   finished:      { label: 'Finalizado',  color: 'var(--grey-400)'   },
 };
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function parseScoreConfig(scoreConfig: string): {
+  scoreType: ScoreType;
+  gamesPerSet: number;
+  tiebreak: number;
+  deuce: string;
+  targetPoints: number;
+} {
+  const isPorPuntos = scoreConfig.startsWith('Por Puntos');
+  const pointsMatch = scoreConfig.match(/(\d+)\s*pts/);
+  const gamesMatch  = scoreConfig.match(/(\d+)\s*games\/set/);
+  return {
+    scoreType:    isPorPuntos ? 'points' : 'traditional',
+    gamesPerSet:  gamesMatch  ? parseInt(gamesMatch[1],  10) : 6,
+    tiebreak:     7,
+    deuce:        'advantage',
+    targetPoints: pointsMatch ? parseInt(pointsMatch[1], 10) : 16,
+  };
+}
+
+function initials(name: string) {
+  return name
+    .split(' ')
+    .slice(0, 2)
+    .map(w => w[0])
+    .join('')
+    .toUpperCase();
+}
 
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
@@ -128,7 +150,7 @@ const inpDisabled: React.CSSProperties = {
   cursor: 'not-allowed',
 };
 
-const label: React.CSSProperties = {
+const labelStyle: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 700,
   letterSpacing: '0.14em',
@@ -154,19 +176,61 @@ const secTitle: React.CSSProperties = {
   borderBottom: '1px solid var(--grey-100)',
 };
 
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+function PlayerAvatar({ name, isCreator }: { name: string; isCreator?: boolean }) {
+  return (
+    <div style={{
+      width: 32, height: 32, borderRadius: '50%',
+      background: isCreator ? 'var(--neon)' : 'var(--grey-100)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 11, fontWeight: 700,
+      color: isCreator ? 'var(--black)' : 'var(--grey-500)',
+      flexShrink: 0,
+    }}>
+      {initials(name)}
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function QuickGameEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const game = GAMES[id];
+  const router  = useRouter();
+  const game    = GAMES[id];
 
-  // Editable state
-  const [gameName, setGameName]   = useState(game?.name ?? '');
-  const [gameDate, setGameDate]   = useState(game?.date ?? '');
-  const [gameTime, setGameTime]   = useState(game?.time ?? '');
-  const [players, setPlayers]     = useState<PlayerEntry[]>(game?.players ?? []);
-  const [saved, setSaved]         = useState(false);
-  const [cancelled, setCancelled] = useState(false);
+  // Resolve initial players from ids
+  const initialPlayers = (game?.initialPlayerIds ?? [])
+    .map(pid => MOCK_PLAYERS.find(p => p.id === pid))
+    .filter((p): p is MockPlayer => p !== undefined);
+
+  // Parse score config for defaults
+  const parsed = game ? parseScoreConfig(game.scoreConfig) : {
+    scoreType: 'points' as ScoreType,
+    gamesPerSet: 6,
+    tiebreak: 7,
+    deuce: 'advantage',
+    targetPoints: 16,
+  };
+
+  // ── Editable state ───────────────────────────────────────────────────────────
+  const [gameName,     setGameName]     = useState(game?.name  ?? '');
+  const [gameDate,     setGameDate]     = useState(game?.date  ?? '');
+  const [gameTime,     setGameTime]     = useState(game?.time  ?? '');
+  const [players,      setPlayers]      = useState<MockPlayer[]>(initialPlayers);
+  const [scoreType,    setScoreType]    = useState<ScoreType>(parsed.scoreType);
+  const [gamesPerSet,  setGamesPerSet]  = useState(parsed.gamesPerSet);
+  const [tiebreak,     setTiebreak]     = useState<7 | 10>(parsed.tiebreak === 10 ? 10 : 7);
+  const [deuce,        setDeuce]        = useState(parsed.deuce);
+  const [targetPoints, setTargetPoints] = useState(parsed.targetPoints);
+  const [pairType,     setPairType]     = useState<PairType>(game?.pairType ?? 'exchange');
+  const [level,        setLevel]        = useState<Level>(game?.level ?? 'all');
+
+  // ── Player panel state ───────────────────────────────────────────────────────
+  const [addPanelOpen,  setAddPanelOpen]  = useState(false);
+  const [addTab,        setAddTab]        = useState<'friends' | 'search'>('friends');
+  const [searchQuery,   setSearchQuery]   = useState('');
 
   if (!game) {
     return (
@@ -179,55 +243,56 @@ export default function QuickGameEditPage({ params }: { params: Promise<{ id: st
     );
   }
 
-  const si        = STATUS_INFO[game.status];
+  const si         = STATUS_INFO[game.status];
   const isLive     = game.status === 'live';
   const isFinished = game.status === 'finished';
   const isEditable = game.status === 'created' || game.status === 'starting_soon';
+
+  // ── Player helpers ───────────────────────────────────────────────────────────
 
   function removePlayer(pid: string) {
     setPlayers(prev => prev.filter(p => p.id !== pid));
   }
 
-  function handleAddPlayer() {
-    const newId = `new-${Date.now()}`;
-    setPlayers(prev => [...prev, { id: newId, name: 'Nuevo Jugador' }]);
+  function addPlayer(player: MockPlayer) {
+    if (!players.find(p => p.id === player.id)) {
+      setPlayers(prev => [...prev, player]);
+    }
+    setAddPanelOpen(false);
+    setSearchQuery('');
   }
 
+  const currentIds = new Set(players.map(p => p.id));
+
+  const filteredFriends = FRIENDS.filter(f => !currentIds.has(f.id));
+
+  const filteredSearch = searchQuery.trim().length > 0
+    ? MOCK_PLAYERS.filter(
+        p => !currentIds.has(p.id) &&
+             p.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : [];
+
+  // ── Actions ──────────────────────────────────────────────────────────────────
+
   function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    localStorage.setItem(
+      'qg_notification',
+      JSON.stringify({ type: 'updated', message: `Juego "${gameName}" actualizado correctamente.` })
+    );
+    router.push('/dashboard/player/quick-game');
   }
 
   function handleCancel() {
-    setCancelled(true);
-  }
-
-  // ── Cancelled state ──────────────────────────────────────────────────────────
-  if (cancelled) {
-    return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 960 }}>
-        <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', padding: '20px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 20 }}>✕</span>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#b91c1c' }}>
-              Juego cancelado
-            </div>
-            <div style={{ fontSize: 12, color: '#ef4444', marginTop: 4 }}>
-              El juego "{game.name}" fue cancelado.
-            </div>
-          </div>
-        </div>
-        <Link
-          href="/dashboard/player/quick-game"
-          style={{ fontSize: 12, color: 'var(--grey-500)', textDecoration: 'none', fontWeight: 600, letterSpacing: '0.04em' }}
-        >
-          ← Volver a Mis Juegos Rápidos
-        </Link>
-      </div>
+    localStorage.setItem(
+      'qg_notification',
+      JSON.stringify({ type: 'cancelled', message: `El juego "${game.name}" fue cancelado. Los jugadores fueron notificados.` })
     );
+    localStorage.setItem('qg_cancelled', game.id);
+    router.push('/dashboard/player/quick-game');
   }
 
-  // ── Main render ──────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: '40px 40px 80px', maxWidth: 960 }}>
 
@@ -260,10 +325,9 @@ export default function QuickGameEditPage({ params }: { params: Promise<{ id: st
           GESTIONAR JUEGO
         </h1>
 
-        {/* Editable game name */}
         {isEditable ? (
           <div style={{ maxWidth: 480 }}>
-            <span style={label}>Nombre del juego</span>
+            <span style={labelStyle}>Nombre del juego</span>
             <input
               type="text"
               value={gameName}
@@ -308,97 +372,330 @@ export default function QuickGameEditPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* Editable form — created / starting_soon */}
+      {/* ── Editable form — created / starting_soon ───────────────────────────── */}
       {isEditable && (
-        <div style={{ marginBottom: 36 }}>
-          <div style={secTitle}>Configuración</div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, maxWidth: 640 }}>
-            <div style={fieldGroup}>
-              <span style={label}>Fecha</span>
-              <input
-                type="date"
-                value={gameDate}
-                onChange={e => setGameDate(e.target.value)}
-                style={inp}
-              />
-            </div>
-            <div style={fieldGroup}>
-              <span style={label}>Hora</span>
-              <input
-                type="time"
-                value={gameTime}
-                onChange={e => setGameTime(e.target.value)}
-                style={inp}
-              />
+        <>
+          {/* Date / Time */}
+          <div style={{ marginBottom: 36 }}>
+            <div style={secTitle}>Fecha y hora</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 480 }}>
+              <div style={fieldGroup}>
+                <span style={labelStyle}>Fecha</span>
+                <input
+                  type="date"
+                  value={gameDate}
+                  onChange={e => setGameDate(e.target.value)}
+                  style={inp}
+                />
+              </div>
+              <div style={fieldGroup}>
+                <span style={labelStyle}>Hora</span>
+                <input
+                  type="time"
+                  value={gameTime}
+                  onChange={e => setGameTime(e.target.value)}
+                  style={inp}
+                />
+              </div>
             </div>
           </div>
 
-          {/* Players list */}
-          <div style={secTitle}>Jugadores ({players.length})</div>
+          {/* Score config */}
+          <div style={{ marginBottom: 36 }}>
+            <div style={secTitle}>Configuración de score</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16, maxWidth: 480 }}>
-            {players.map(p => (
-              <div
-                key={p.id}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  background: p.isMe ? 'rgba(214,255,0,0.05)' : '#fff',
-                  border: `1px solid ${p.isMe ? 'rgba(214,255,0,0.3)' : 'var(--grey-200)'}`,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
-                    {p.name.charAt(0)}
+              {/* Score type */}
+              <div style={fieldGroup}>
+                <span style={labelStyle}>Tipo de score</span>
+                <select
+                  value={scoreType}
+                  onChange={e => setScoreType(e.target.value as ScoreType)}
+                  style={inp}
+                >
+                  <option value="traditional">Tradicional</option>
+                  <option value="points">Por Puntos</option>
+                </select>
+              </div>
+
+              {scoreType === 'traditional' && (
+                <>
+                  <div style={fieldGroup}>
+                    <span style={labelStyle}>Games por set</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={12}
+                      value={gamesPerSet}
+                      onChange={e => setGamesPerSet(parseInt(e.target.value, 10) || 6)}
+                      style={inp}
+                    />
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: p.isMe ? 700 : 500, color: 'var(--black)' }}>{p.name}</span>
-                  {p.isMe && (
-                    <span style={{ fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px', fontWeight: 700 }}>TÚ</span>
+                  <div style={fieldGroup}>
+                    <span style={labelStyle}>Tiebreak a</span>
+                    <select
+                      value={tiebreak}
+                      onChange={e => setTiebreak(parseInt(e.target.value, 10) as 7 | 10)}
+                      style={inp}
+                    >
+                      <option value={7}>7</option>
+                      <option value={10}>10</option>
+                    </select>
+                  </div>
+                  <div style={fieldGroup}>
+                    <span style={labelStyle}>Deuce</span>
+                    <select
+                      value={deuce}
+                      onChange={e => setDeuce(e.target.value)}
+                      style={inp}
+                    >
+                      <option value="advantage">Ventaja</option>
+                      <option value="gold">Punto de Oro</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {scoreType === 'points' && (
+                <div style={fieldGroup}>
+                  <span style={labelStyle}>Puntos objetivo</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={targetPoints}
+                    onChange={e => setTargetPoints(parseInt(e.target.value, 10) || 16)}
+                    style={inp}
+                  />
+                </div>
+              )}
+
+              {/* Pair type */}
+              <div style={fieldGroup}>
+                <span style={labelStyle}>Parejas / Rotación</span>
+                <select
+                  value={pairType}
+                  onChange={e => setPairType(e.target.value as PairType)}
+                  style={inp}
+                >
+                  <option value="fixed">Parejas fijas</option>
+                  <option value="exchange">Rotación</option>
+                </select>
+              </div>
+
+              {/* Level */}
+              <div style={fieldGroup}>
+                <span style={labelStyle}>Nivel</span>
+                <select
+                  value={level}
+                  onChange={e => setLevel(e.target.value as Level)}
+                  style={inp}
+                >
+                  <option value="all">All</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermedio</option>
+                  <option value="advanced">Avanzado</option>
+                </select>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Player management */}
+          <div style={{ marginBottom: 36 }}>
+            <div style={secTitle}>Jugadores ({players.length})</div>
+
+            {/* Player list */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16, maxWidth: 480 }}>
+              {players.map(p => (
+                <div
+                  key={p.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    background: p.isCreator ? 'rgba(214,255,0,0.05)' : '#fff',
+                    border: `1px solid ${p.isCreator ? 'rgba(214,255,0,0.3)' : 'var(--grey-200)'}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <PlayerAvatar name={p.name} isCreator={p.isCreator} />
+                    <span style={{ fontSize: 13, fontWeight: p.isCreator ? 700 : 500, color: 'var(--black)' }}>
+                      {p.name}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>#{p.ranking}</span>
+                    {p.isCreator && (
+                      <span style={{ fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px', fontWeight: 700 }}>
+                        TÚ
+                      </span>
+                    )}
+                  </div>
+                  {!p.isCreator && (
+                    <button
+                      onClick={() => removePlayer(p.id)}
+                      aria-label={`Eliminar a ${p.name}`}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--grey-400)', lineHeight: 1, padding: '2px 6px', display: 'flex', alignItems: 'center' }}
+                    >
+                      ×
+                    </button>
                   )}
                 </div>
-                {!p.isMe && (
-                  <button
-                    onClick={() => removePlayer(p.id)}
-                    aria-label={`Eliminar a ${p.name}`}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--grey-400)', lineHeight: 1, padding: '2px 4px', display: 'flex', alignItems: 'center' }}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <button
-            onClick={handleAddPlayer}
-            style={{ padding: '9px 20px', background: '#fff', color: 'var(--black)', border: '1px dashed var(--grey-300)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: 8 }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Agregar jugador
-          </button>
-        </div>
+            {/* Add player trigger */}
+            <button
+              onClick={() => setAddPanelOpen(prev => !prev)}
+              style={{
+                padding: '9px 20px',
+                background: addPanelOpen ? 'var(--grey-50)' : '#fff',
+                color: 'var(--black)',
+                border: '1px dashed var(--grey-300)',
+                cursor: 'pointer',
+                fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                display: 'flex', alignItems: 'center', gap: 8,
+                maxWidth: 480,
+                width: '100%',
+                boxSizing: 'border-box',
+              }}
+            >
+              <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
+              {addPanelOpen ? 'Cerrar panel' : 'Agregar jugador'}
+            </button>
+
+            {/* Add player panel */}
+            {addPanelOpen && (
+              <div style={{
+                border: '1px solid var(--grey-200)',
+                background: '#fff',
+                maxWidth: 480,
+                marginTop: 8,
+              }}>
+                {/* Tabs */}
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--grey-200)' }}>
+                  {(['friends', 'search'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => { setAddTab(tab); setSearchQuery(''); }}
+                      style={{
+                        flex: 1,
+                        padding: '10px 12px',
+                        background: addTab === tab ? 'var(--neon)' : 'var(--grey-50)',
+                        color: 'var(--black)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.1em',
+                        fontFamily: 'var(--font-body)',
+                        borderBottom: addTab === tab ? '2px solid var(--black)' : '2px solid transparent',
+                      }}
+                    >
+                      {tab === 'friends' ? 'Mis Amistades' : 'Buscar en plataforma'}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ padding: '16px' }}>
+                  {addTab === 'friends' && (
+                    filteredFriends.length === 0 ? (
+                      <p style={{ fontSize: 12, color: 'var(--grey-400)', margin: 0 }}>
+                        Todos tus amigos ya están en el juego.
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {filteredFriends.map(f => (
+                          <div
+                            key={f.id}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)' }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <PlayerAvatar name={f.name} />
+                              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--black)' }}>{f.name}</span>
+                              <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>#{f.ranking}</span>
+                            </div>
+                            <button
+                              onClick={() => addPlayer(f)}
+                              style={{ padding: '5px 14px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'var(--font-body)' }}
+                            >
+                              Agregar
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  )}
+
+                  {addTab === 'search' && (
+                    <>
+                      <input
+                        type="text"
+                        placeholder="Buscar jugador por nombre..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        style={{ ...inp, marginBottom: 12 }}
+                        autoFocus
+                      />
+                      {searchQuery.trim().length === 0 ? (
+                        <p style={{ fontSize: 12, color: 'var(--grey-400)', margin: 0 }}>
+                          Ingresá un nombre para buscar.
+                        </p>
+                      ) : filteredSearch.length === 0 ? (
+                        <p style={{ fontSize: 12, color: 'var(--grey-400)', margin: 0 }}>
+                          No se encontraron jugadores.
+                        </p>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {filteredSearch.map(f => (
+                            <div
+                              key={f.id}
+                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)' }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <PlayerAvatar name={f.name} />
+                                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--black)' }}>{f.name}</span>
+                                <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>#{f.ranking}</span>
+                              </div>
+                              <button
+                                onClick={() => addPlayer(f)}
+                                style={{ padding: '5px 14px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'var(--font-body)' }}
+                              >
+                                Agregar
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
-      {/* Read-only fields shown for live/finished */}
+      {/* ── Read-only player list — live / finished ───────────────────────────── */}
       {(isLive || isFinished) && (
         <div style={{ marginBottom: 36 }}>
-          <div style={secTitle}>Jugadores ({game.players.length})</div>
+          <div style={secTitle}>Jugadores ({initialPlayers.length})</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 480, marginBottom: 24 }}>
-            {game.players.map(p => (
+            {initialPlayers.map(p => (
               <div
                 key={p.id}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '10px 14px',
-                  background: p.isMe ? 'rgba(214,255,0,0.05)' : 'var(--grey-50)',
-                  border: `1px solid ${p.isMe ? 'rgba(214,255,0,0.3)' : 'var(--grey-100)'}`,
+                  background: p.isCreator ? 'rgba(214,255,0,0.05)' : 'var(--grey-50)',
+                  border: `1px solid ${p.isCreator ? 'rgba(214,255,0,0.3)' : 'var(--grey-100)'}`,
                 }}
               >
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
-                  {p.name.charAt(0)}
-                </div>
-                <span style={{ fontSize: 13, fontWeight: p.isMe ? 700 : 500, color: isFinished ? 'var(--grey-500)' : 'var(--black)' }}>{p.name}</span>
-                {p.isMe && (
+                <PlayerAvatar name={p.name} isCreator={p.isCreator} />
+                <span style={{ fontSize: 13, fontWeight: p.isCreator ? 700 : 500, color: isFinished ? 'var(--grey-500)' : 'var(--black)' }}>
+                  {p.name}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>#{p.ranking}</span>
+                {p.isCreator && (
                   <span style={{ fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px', fontWeight: 700 }}>TÚ</span>
                 )}
               </div>
@@ -407,36 +704,37 @@ export default function QuickGameEditPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* Read-only config: all statuses */}
+      {/* ── Game config section ───────────────────────────────────────────────── */}
       <div style={{ marginBottom: 36 }}>
         <div style={secTitle}>Configuración del juego</div>
 
+        {/* Code + pair type + score — always read-only */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 20, maxWidth: 640 }}>
           {[
-            { label: 'Código',        value: game.code },
+            { label: 'Código',         value: game.code },
             { label: 'Tipo de pareja', value: game.pairType === 'exchange' ? 'Intercambio' : 'Pareja Fija' },
             { label: 'Score',          value: game.scoreConfig },
           ].map(item => (
             <div key={item.label} style={{ background: 'var(--grey-50)', padding: '14px 16px' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6 }}>{item.label}</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--grey-600)', fontFamily: item.label === 'Código' ? 'var(--font-body)' : undefined }}>{item.value}</div>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6 }}>
+                {item.label}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--grey-600)', fontFamily: item.label === 'Código' ? 'var(--font-body)' : undefined }}>
+                {item.value}
+              </div>
             </div>
           ))}
         </div>
 
-        {/* Club / Level — also read-only */}
+        {/* Club / City — read-only in all cases */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 640 }}>
           <div style={fieldGroup}>
-            <span style={label}>Club</span>
+            <span style={labelStyle}>Club</span>
             <input type="text" value={game.club} readOnly style={inpDisabled} />
           </div>
           <div style={fieldGroup}>
-            <span style={label}>Ciudad</span>
+            <span style={labelStyle}>Ciudad</span>
             <input type="text" value={game.city} readOnly style={inpDisabled} />
-          </div>
-          <div style={fieldGroup}>
-            <span style={label}>Nivel</span>
-            <input type="text" value={game.levelLabel} readOnly style={inpDisabled} />
           </div>
         </div>
       </div>
@@ -462,15 +760,11 @@ export default function QuickGameEditPage({ params }: { params: Promise<{ id: st
           Guardar cambios
         </button>
 
-        {saved && (
-          <span style={{ fontSize: 12, color: 'var(--turf-green)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-            ✓ Cambios guardados
-          </span>
-        )}
-
         {(isLive || isFinished) && (
           <span style={{ fontSize: 12, color: 'var(--grey-400)', fontStyle: 'italic' }}>
-            {isFinished ? 'El juego finalizado no se puede editar.' : 'No se puede editar mientras el juego está en curso.'}
+            {isFinished
+              ? 'El juego finalizado no se puede editar.'
+              : 'No se puede editar mientras el juego está en curso.'}
           </span>
         )}
       </div>
