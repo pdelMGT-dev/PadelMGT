@@ -3,13 +3,15 @@
 import Link from 'next/link';
 import { useState } from 'react';
 
+const TOURNAMENT_DETAIL_ID = 'da05effb-cada-4351-8946-b27ecf0c4961';
+
 const tournaments = [
-  { name: 'Americano Barrio Norte', format: 'Americano', date: '11 May 2026', club: 'Club Barrio Norte', city: 'Buenos Aires', partner: 'Ana R.', pos: 2, total: 8, pts: 120, status: 'completed' },
-  { name: 'Liga Premier LATAM – J8', format: 'Round Robin', date: '08 May 2026', club: 'Sede Central', city: 'Buenos Aires', partner: 'Ana R.', pos: 3, total: 12, pts: 90, status: 'completed' },
-  { name: 'Open Knockout Mayo', format: 'Knockout', date: '04 May 2026', club: 'Padel Arena', city: 'Rosario', partner: 'Marcos H.', pos: 1, total: 16, pts: 200, status: 'completed' },
-  { name: 'Mexicano del Club', format: 'Mexicano', date: '17 May 2026', club: 'Club La Cantera', city: 'Córdoba', partner: '–', pos: null, total: 8, pts: null, status: 'upcoming' },
-  { name: 'Swiss Open Santiago', format: 'Swiss', date: '25 May 2026', club: 'Padel Santiago', city: 'Santiago', partner: '–', pos: null, total: 32, pts: null, status: 'upcoming' },
-  { name: 'Copa Federación', format: 'Knockout', date: '28 May 2026', club: 'Arena Nacional', city: 'Buenos Aires', partner: '–', pos: null, total: 64, pts: null, status: 'upcoming' },
+  { name: 'Americano Barrio Norte', format: 'Americano',   date: '11 May 2026', club: 'Club Barrio Norte', city: 'Buenos Aires', partner: 'Ana R.',    pos: 2, total: 8,  pts: 120, status: 'completed', href: `/tournaments/detail/${TOURNAMENT_DETAIL_ID}` },
+  { name: 'Liga Premier LATAM – J8', format: 'Round Robin', date: '08 May 2026', club: 'Sede Central',     city: 'Buenos Aires', partner: 'Ana R.',    pos: 3, total: 12, pts: 90,  status: 'completed', href: `/tournaments/detail/${TOURNAMENT_DETAIL_ID}` },
+  { name: 'Open Knockout Mayo',      format: 'Knockout',    date: '04 May 2026', club: 'Padel Arena',      city: 'Rosario',      partner: 'Marcos H.', pos: 1, total: 16, pts: 200, status: 'completed', href: `/tournaments/detail/${TOURNAMENT_DETAIL_ID}` },
+  { name: 'Mexicano del Club',       format: 'Mexicano',    date: '17 May 2026', club: 'Club La Cantera',  city: 'Córdoba',      partner: '–',         pos: null, total: 8,  pts: null, status: 'upcoming',  href: '/tournaments' },
+  { name: 'Swiss Open Santiago',     format: 'Swiss',       date: '25 May 2026', club: 'Padel Santiago',  city: 'Santiago',     partner: '–',         pos: null, total: 32, pts: null, status: 'upcoming',  href: '/tournaments' },
+  { name: 'Copa Federación',         format: 'Knockout',    date: '28 May 2026', club: 'Arena Nacional',  city: 'Buenos Aires', partner: '–',         pos: null, total: 64, pts: null, status: 'upcoming',  href: '/tournaments' },
 ];
 
 const selectStyle: React.CSSProperties = {
@@ -101,11 +103,12 @@ export default function PlayerTournamentsPage() {
               <th style={{ textAlign: 'center' }}>Posición</th>
               <th style={{ textAlign: 'center' }}>Puntos</th>
               <th>Estado</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((t, i) => (
-              <tr key={i}>
+              <tr key={i} style={{ cursor: 'pointer' }} onClick={() => { window.location.href = t.href; }}>
                 <td style={{ paddingLeft: 24, fontWeight: 600, fontSize: 14 }}>{t.name}</td>
                 <td><span className="chip" style={{ fontSize: 10 }}>{t.format}</span></td>
                 <td style={{ fontSize: 12, color: 'var(--grey-500)' }}>{t.date}</td>
@@ -123,11 +126,14 @@ export default function PlayerTournamentsPage() {
                     : <span className="badge badge-soon">Próximo</span>
                   }
                 </td>
+                <td>
+                  <Link href={t.href} className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }} onClick={e => e.stopPropagation()}>Ver →</Link>
+                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--grey-400)', fontSize: 13 }}>
+                <td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--grey-400)', fontSize: 13 }}>
                   No hay torneos con los filtros seleccionados.
                 </td>
               </tr>

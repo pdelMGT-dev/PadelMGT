@@ -1,18 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 const friends = [
-  { name: 'Ana Rodríguez', city: 'Buenos Aires', ranking: '#52', pts: 1740, tournaments: 20, wins: 14, mutualTournaments: 5, lastMatch: '11 May', lastResult: 'V' },
-  { name: 'Carlos Vega', city: 'Buenos Aires', ranking: '#38', pts: 2100, tournaments: 24, wins: 18, mutualTournaments: 3, lastMatch: '08 May', lastResult: 'D' },
-  { name: 'Marcos Herrera', city: 'Córdoba', ranking: '#61', pts: 1540, tournaments: 18, wins: 10, mutualTournaments: 4, lastMatch: '04 May', lastResult: 'V' },
-  { name: 'Sofía López', city: 'Rosario', ranking: '#29', pts: 2480, tournaments: 26, wins: 20, mutualTournaments: 2, lastMatch: '27 Abr', lastResult: 'D' },
-  { name: 'Lucía Torres', city: 'Mendoza', ranking: '#74', pts: 1320, tournaments: 15, wins: 9, mutualTournaments: 1, lastMatch: '20 Abr', lastResult: 'V' },
+  { id: 1, slug: 'ana-rodriguez', name: 'Ana Rodríguez', city: 'Buenos Aires', ranking: '#52', pts: 1740, tournaments: 20, wins: 14, mutualTournaments: 5, lastMatch: '11 May', lastResult: 'V' },
+  { id: 2, slug: 'carlos-vega', name: 'Carlos Vega', city: 'Buenos Aires', ranking: '#38', pts: 2100, tournaments: 24, wins: 18, mutualTournaments: 3, lastMatch: '08 May', lastResult: 'D' },
+  { id: 3, slug: 'marcos-herrera', name: 'Marcos Herrera', city: 'Córdoba', ranking: '#61', pts: 1540, tournaments: 18, wins: 10, mutualTournaments: 4, lastMatch: '04 May', lastResult: 'V' },
+  { id: 4, slug: 'sofia-lopez', name: 'Sofía López', city: 'Rosario', ranking: '#29', pts: 2480, tournaments: 26, wins: 20, mutualTournaments: 2, lastMatch: '27 Abr', lastResult: 'D' },
+  { id: 5, slug: 'lucia-torres', name: 'Lucía Torres', city: 'Mendoza', ranking: '#74', pts: 1320, tournaments: 15, wins: 9, mutualTournaments: 1, lastMatch: '20 Abr', lastResult: 'V' },
 ];
 
 const requests = [
-  { name: 'Pedro Méndez', city: 'Buenos Aires', ranking: '#55', mutuals: 3 },
-  { name: 'Valentina Cruz', city: 'Córdoba', ranking: '#43', mutuals: 2 },
+  { id: 6, slug: 'pedro-mendez', name: 'Pedro Méndez', city: 'Buenos Aires', ranking: '#55', mutuals: 3 },
+  { id: 7, slug: 'valentina-cruz', name: 'Valentina Cruz', city: 'Córdoba', ranking: '#43', mutuals: 2 },
 ];
 
 const suggestions = [
@@ -24,11 +25,35 @@ const suggestions = [
 
 export default function PlayerFriendsPage() {
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'friends' | 'requests' | 'search'>('friends');
+  const [tab, setTab] = useState<'friends' | 'requests' | 'search' | 'rejected'>('friends');
+  const [friendsList, setFriendsList] = useState(friends);
+  const [requestsList, setRequestsList] = useState(requests);
+  const [rejectedList, setRejectedList] = useState<typeof requests>([]);
 
-  const filtered = friends.filter((f) =>
+  const filtered = friendsList.filter((f) =>
     f.name.toLowerCase().includes(search.toLowerCase()) || f.city.toLowerCase().includes(search.toLowerCase())
   );
+
+  function acceptRequest(person: typeof requests[number]) {
+    setRequestsList((prev) => prev.filter((r) => r.id !== person.id));
+    setFriendsList((prev) => [
+      ...prev,
+      { id: person.id, slug: person.slug, name: person.name, city: person.city, ranking: person.ranking, pts: 0, tournaments: 0, wins: 0, mutualTournaments: 0, lastMatch: '–', lastResult: 'V' },
+    ]);
+  }
+
+  function rejectRequest(person: typeof requests[number]) {
+    setRequestsList((prev) => prev.filter((r) => r.id !== person.id));
+    setRejectedList((prev) => [...prev, person]);
+  }
+
+  function acceptRejected(person: typeof requests[number]) {
+    setRejectedList((prev) => prev.filter((r) => r.id !== person.id));
+    setFriendsList((prev) => [
+      ...prev,
+      { id: person.id, slug: person.slug, name: person.name, city: person.city, ranking: person.ranking, pts: 0, tournaments: 0, wins: 0, mutualTournaments: 0, lastMatch: '–', lastResult: 'V' },
+    ]);
+  }
 
   return (
     <div style={{ padding: '40px 40px 80px' }}>
@@ -40,8 +65,8 @@ export default function PlayerFriendsPage() {
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
         {[
-          { label: 'Amigos', value: String(friends.length) },
-          { label: 'Solicitudes', value: String(requests.length) },
+          { label: 'Amigos', value: String(friendsList.length) },
+          { label: 'Solicitudes', value: String(requestsList.length) },
           { label: 'Sugerencias', value: String(suggestions.length) },
         ].map((s) => (
           <div key={s.label} style={{ background: '#fff', padding: '20px 24px' }}>
@@ -54,11 +79,18 @@ export default function PlayerFriendsPage() {
       {/* Tabs + search */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div style={{ display: 'flex', gap: 8 }}>
-          {(['friends', 'requests', 'search'] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={`pill-tab${tab === t ? ' active' : ''}`}>
-              {t === 'friends' ? `Mis amigos (${friends.length})` : t === 'requests' ? `Solicitudes (${requests.length})` : 'Buscar jugadores'}
-            </button>
-          ))}
+          <button onClick={() => setTab('friends')} className={`pill-tab${tab === 'friends' ? ' active' : ''}`}>
+            {`Mis amigos (${friendsList.length})`}
+          </button>
+          <button onClick={() => setTab('requests')} className={`pill-tab${tab === 'requests' ? ' active' : ''}`}>
+            {`Solicitudes (${requestsList.length})`}
+          </button>
+          <button onClick={() => setTab('search')} className={`pill-tab${tab === 'search' ? ' active' : ''}`}>
+            Buscar jugadores
+          </button>
+          <button onClick={() => setTab('rejected')} className={`pill-tab${tab === 'rejected' ? ' active' : ''}`}>
+            {rejectedList.length > 0 ? `Rechazados (${rejectedList.length})` : 'Rechazados'}
+          </button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: '1px solid var(--grey-200)', padding: '10px 16px', minWidth: 240 }}>
           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ color: 'var(--grey-400)', flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -92,9 +124,9 @@ export default function PlayerFriendsPage() {
                   <span style={{ fontWeight: 700, color: f.lastResult === 'V' ? 'var(--turf-green)' : '#ee0005' }}>{f.lastResult}</span>
                 </div>
               </div>
-              <button style={{ background: 'none', border: '1px solid var(--grey-200)', padding: '6px 14px', cursor: 'pointer', fontSize: 12, color: 'var(--grey-500)', flexShrink: 0 }}>
+              <Link href={`/profile/${f.slug}`} style={{ background: 'none', border: '1px solid var(--grey-200)', padding: '6px 14px', cursor: 'pointer', fontSize: 12, color: 'var(--grey-500)', flexShrink: 0, textDecoration: 'none', display: 'inline-block' }}>
                 Ver perfil
-              </button>
+              </Link>
             </div>
           ))}
         </div>
@@ -103,8 +135,8 @@ export default function PlayerFriendsPage() {
       {/* Requests */}
       {tab === 'requests' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-          {requests.map((r) => (
-            <div key={r.name} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
+          {requestsList.map((r) => (
+            <div key={r.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
               <div style={{ width: 48, height: 48, background: 'var(--grey-100)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--black)', flexShrink: 0 }}>
                 {r.name.split(' ').map(w => w[0]).join('')}
               </div>
@@ -113,8 +145,8 @@ export default function PlayerFriendsPage() {
                 <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{r.ranking} · {r.city} · {r.mutuals} amigos en común</div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-primary btn-sm" style={{ borderRadius: 0 }}>Aceptar</button>
-                <button className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }}>Rechazar</button>
+                <button className="btn btn-primary btn-sm" style={{ borderRadius: 0 }} onClick={() => acceptRequest(r)}>Aceptar</button>
+                <button className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }} onClick={() => rejectRequest(r)}>Rechazar</button>
               </div>
             </div>
           ))}
@@ -139,6 +171,26 @@ export default function PlayerFriendsPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Rejected */}
+      {tab === 'rejected' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+          {rejectedList.map((r) => (
+            <div key={r.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div style={{ width: 48, height: 48, background: 'var(--grey-100)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--black)', flexShrink: 0 }}>
+                {r.name.split(' ').map(w => w[0]).join('')}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{r.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{r.ranking} · {r.city} · {r.mutuals} amigos en común</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary btn-sm" style={{ borderRadius: 0 }} onClick={() => acceptRejected(r)}>Aceptar</button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

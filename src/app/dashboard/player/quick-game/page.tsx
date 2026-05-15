@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useMemo } from 'react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -195,6 +196,8 @@ export default function QuickGamePage() {
   const [view, setView]         = useState<'dashboard' | 'wizard'>('dashboard');
   const [games, setGames]       = useState<QuickGame[]>(MOCK_GAMES);
   const [newGameCode, setNewGameCode] = useState('');
+  const [qrGame, setQrGame]     = useState<QuickGame | null>(null);
+  const [copied, setCopied]     = useState(false);
 
   // ── Wizard step ───────────────────────────────────────────────────────────
   const [step, setStep] = useState(0);
@@ -381,8 +384,68 @@ export default function QuickGamePage() {
     const pendingQR     = activeGames.filter(g => g.players < g.maxPlayers);
     const wins          = finishedGames.filter(g => g.won).length;
 
+    function copyCode(code: string) {
+      navigator.clipboard.writeText(code).catch(() => {});
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+
     return (
       <div style={{ padding: '40px 40px 80px' }}>
+
+        {/* QR Share Modal */}
+        {qrGame && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+            onClick={() => setQrGame(null)}>
+            <div style={{ background: '#fff', width: '100%', maxWidth: 420, padding: '32px' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 4 }}>Invitar jugadores</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, textTransform: 'uppercase' }}>{qrGame.name}</div>
+                </div>
+                <button onClick={() => setQrGame(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', padding: 0, lineHeight: 1 }}>×</button>
+              </div>
+
+              {/* QR visual */}
+              <div style={{ background: 'var(--grey-900)', padding: '24px', textAlign: 'center', marginBottom: 20 }}>
+                <div style={{ width: 120, height: 120, background: 'var(--grey-700)', margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--grey-400)', fontWeight: 600 }}>QR Code</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '0.12em' }}>{qrGame.code}</div>
+              </div>
+
+              {/* Share options */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 4 }}>Compartir con</div>
+
+                {/* Friends */}
+                <button style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                  <span style={{ fontSize: 18 }}>👥</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>Enviar a Mis Amistades</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Seleccioná amigos registrados para notificarles</div>
+                  </div>
+                </button>
+
+                {/* Search players */}
+                <button style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                  <span style={{ fontSize: 18 }}>🔍</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>Buscar y enviar a jugadores</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Buscá jugadores en la plataforma por nombre</div>
+                  </div>
+                </button>
+
+                {/* Copy code/link */}
+                <button onClick={() => copyCode(qrGame.code)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', border: `1px solid ${copied ? 'var(--turf-green)' : 'var(--grey-200)'}`, background: copied ? 'rgba(0,200,100,0.05)' : '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                  <span style={{ fontSize: 18 }}>{copied ? '✓' : '📋'}</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: copied ? 'var(--turf-green)' : 'var(--black)' }}>{copied ? '¡Copiado!' : 'Copiar código / link'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Pegalo en WhatsApp, Instagram o cualquier medio</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40, flexWrap: 'wrap', gap: 16 }}>
@@ -425,7 +488,7 @@ export default function QuickGamePage() {
                 const empty = g.maxPlayers - g.players;
                 return (
                   <div key={g.id} style={{ background: '#fff', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
-                    <div style={{ width: 48, height: 48, background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>⬛</div>
+                    <button onClick={() => setQrGame(g)} style={{ width: 48, height: 48, background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0, cursor: 'pointer', title: 'Ver QR e invitar' } as React.CSSProperties}>⬛</button>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 2 }}>{g.name}</div>
                       <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{g.date} · {g.time} · {g.club}, {g.city}</div>
@@ -485,9 +548,12 @@ export default function QuickGamePage() {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                         <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', background: 'rgba(124,58,237,0.08)', color: '#7c3aed', letterSpacing: '0.08em' }}>{g.code}</span>
-                        <button style={{ padding: '7px 16px', background: isLive ? 'var(--turf-green)' : 'var(--grey-100)', color: isLive ? '#fff' : 'var(--grey-600)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        <Link
+                          href={isLive ? `/dashboard/player/quick-game/${g.id}` : `/dashboard/player/quick-game/${g.id}/edit`}
+                          style={{ padding: '7px 16px', background: isLive ? 'var(--turf-green)' : 'var(--grey-100)', color: isLive ? '#fff' : 'var(--grey-600)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}
+                        >
                           {isLive ? 'Ver Partido' : 'Gestionar'}
-                        </button>
+                        </Link>
                       </div>
                     </div>
                   </div>
@@ -516,7 +582,14 @@ export default function QuickGamePage() {
                     {g.players}<span style={{ fontSize: 13, color: 'var(--grey-400)', fontFamily: 'var(--font-body)', fontWeight: 400 }}>/{g.max}</span>
                   </div>
                   <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 8 }}>jugadores</div>
-                  <button style={{ padding: '7px 16px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Unirse</button>
+                  <button
+                    onClick={() => {
+                      const code = `JR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+                      const joined: QuickGame = { id: `n-${g.id}`, code, name: g.name, date: g.time.includes('Hoy') ? '15 May 2026' : g.time.includes('Mañana') ? '16 May 2026' : '20 May 2026', time: g.time.replace(/^(Hoy|Mañana|Sábado)\s/, ''), club: g.club, city: '', levelLabel: g.level, players: g.players + 1, maxPlayers: g.max, pairType: 'exchange', status: 'created' };
+                      setGames(prev => [joined, ...prev]);
+                      window.location.href = `/dashboard/player/quick-game/n-${g.id}`;
+                    }}
+                    style={{ padding: '7px 16px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Unirse</button>
                 </div>
               </div>
             ))}
@@ -551,7 +624,9 @@ export default function QuickGamePage() {
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: '12px 16px', fontSize: 10, fontWeight: 700, color: '#7c3aed', letterSpacing: '0.08em' }}>{g.code}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <Link href={`/dashboard/player/quick-game/${g.id}`} style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', letterSpacing: '0.08em', textDecoration: 'none', cursor: 'pointer' }}>{g.code}</Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

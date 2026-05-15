@@ -54,7 +54,7 @@ export default function PlayerClubsPage() {
                     {club.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>{club.name}</div>
+                    <Link href={`/clubs/${club.id}`} style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', textDecoration: 'none', color: 'var(--black)' }}>{club.name}</Link>
                     <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{club.city}, {club.country}</div>
                   </div>
                 </div>
@@ -80,6 +80,9 @@ export default function PlayerClubsPage() {
                   <div style={{ fontSize: 10, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginTop: 2 }}>Torneos próx.</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <Link href={`/clubs/${club.id}`} className="btn btn-primary btn-sm" style={{ borderRadius: 0, textAlign: 'center' }}>
+                    Ver club →
+                  </Link>
                   <Link href={`/tournaments?club=${club.id}`} className="btn btn-secondary btn-sm" style={{ borderRadius: 0, textAlign: 'center' }}>
                     Ver torneos
                   </Link>

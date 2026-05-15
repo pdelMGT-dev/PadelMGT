@@ -1,158 +1,226 @@
-import Link from 'next/link';
-import { Trophy, Users, TrendingUp, MapPin, QrCode, Star, Activity, Calendar } from 'lucide-react';
+'use client';
 
-const mockProfile = {
-  id: 'carlos-garcia',
-  name: 'Carlos García',
-  country: 'Spain',
-  city: 'Madrid',
-  ranking: 42,
-  points: 1850,
-  level: 'Intermediate',
-  joinedYear: '2023',
-  club: 'Padel Madrid Central',
+import Link from 'next/link';
+import { use } from 'react';
+
+const PROFILES: Record<string, {
+  name: string; city: string; country: string; ranking: number;
+  points: number; level: string; joinedYear: string; club: string;
+  matches: number; wins: number; tournaments: number;
+  recentMatches: { date: string; partner: string; opponents: string; score: string; result: 'W' | 'L'; tournament: string }[];
+  bestResult: string; streak: string; favouriteFormat: string;
+}> = {
+  'ana-rodriguez': {
+    name: 'Ana Rodríguez', city: 'Buenos Aires', country: 'Argentina',
+    ranking: 52, points: 1740, level: 'Intermedio', joinedYear: '2023', club: 'Club Barrio Norte',
+    matches: 38, wins: 24, tournaments: 20,
+    recentMatches: [
+      { date: '11 May 2026', partner: 'Diego G.', opponents: 'Marcos H. / Carlos V.', score: '6-4', result: 'W', tournament: 'Americano Barrio Norte' },
+      { date: '08 May 2026', partner: 'Sofía L.', opponents: 'Laura T. / Diego F.', score: '4-6', result: 'L', tournament: 'Liga Premier LATAM' },
+      { date: '04 May 2026', partner: 'Diego G.', opponents: 'Pedro M. / Isabel B.', score: '6-2', result: 'W', tournament: 'Open Knockout Mayo' },
+    ],
+    bestResult: '1er lugar', streak: '3 victorias', favouriteFormat: 'Americano',
+  },
+  'carlos-vega': {
+    name: 'Carlos Vega', city: 'Buenos Aires', country: 'Argentina',
+    ranking: 38, points: 2100, level: 'Avanzado', joinedYear: '2022', club: 'Padel Arena',
+    matches: 52, wins: 38, tournaments: 24,
+    recentMatches: [
+      { date: '08 May 2026', partner: 'Pedro M.', opponents: 'Diego G. / Marcos H.', score: '16-14', result: 'W', tournament: 'Express Nocturno' },
+      { date: '04 May 2026', partner: 'Isabel B.', opponents: 'Diego G. / Ana R.',   score: '8-16',  result: 'L', tournament: 'Open Knockout Mayo' },
+    ],
+    bestResult: '2do lugar', streak: '2 victorias', favouriteFormat: 'Mexicano',
+  },
+  'marcos-herrera': {
+    name: 'Marcos Herrera', city: 'Córdoba', country: 'Argentina',
+    ranking: 61, points: 1540, level: 'Avanzado', joinedYear: '2023', club: 'Club La Cantera',
+    matches: 32, wins: 18, tournaments: 18,
+    recentMatches: [
+      { date: '04 May 2026', partner: 'Diego G.', opponents: 'Carlos V. / Pedro M.', score: '6-4', result: 'W', tournament: 'Open Knockout Mayo' },
+    ],
+    bestResult: '1er lugar', streak: '1 victoria', favouriteFormat: 'Knockout',
+  },
+  'sofia-lopez': {
+    name: 'Sofía López', city: 'Rosario', country: 'Argentina',
+    ranking: 29, points: 2480, level: 'Avanzado', joinedYear: '2022', club: 'Club Barrio Norte',
+    matches: 60, wins: 44, tournaments: 26,
+    recentMatches: [
+      { date: '08 May 2026', partner: 'Laura T.', opponents: 'Ana R. / Diego G.', score: '6-4', result: 'W', tournament: 'Liga Premier LATAM' },
+    ],
+    bestResult: '1er lugar', streak: '4 victorias', favouriteFormat: 'Round Robin',
+  },
+  'lucia-torres': {
+    name: 'Lucía Torres', city: 'Mendoza', country: 'Argentina',
+    ranking: 74, points: 1320, level: 'Intermedio', joinedYear: '2024', club: 'Club Deportivo Sur',
+    matches: 24, wins: 14, tournaments: 15,
+    recentMatches: [
+      { date: '20 Abr 2026', partner: 'Ana R.', opponents: 'Sofía L. / Diego G.', score: '10-16', result: 'L', tournament: 'Liga Premier LATAM' },
+    ],
+    bestResult: '3er lugar', streak: '2 victorias', favouriteFormat: 'Americano',
+  },
+  'pedro-mendez': {
+    name: 'Pedro Méndez', city: 'Buenos Aires', country: 'Argentina',
+    ranking: 55, points: 1660, level: 'Intermedio', joinedYear: '2023', club: 'Padel Arena',
+    matches: 28, wins: 16, tournaments: 14,
+    recentMatches: [],
+    bestResult: '2do lugar', streak: '1 victoria', favouriteFormat: 'Americano',
+  },
+  'valentina-cruz': {
+    name: 'Valentina Cruz', city: 'Córdoba', country: 'Argentina',
+    ranking: 43, points: 1920, level: 'Avanzado', joinedYear: '2023', club: 'Club La Cantera',
+    matches: 41, wins: 28, tournaments: 20,
+    recentMatches: [],
+    bestResult: '1er lugar', streak: '3 victorias', favouriteFormat: 'Mexicano',
+  },
 };
 
-const recentMatches = [
-  { date: '2026-04-26', partner: 'Ana M.', opponents: 'Luis R. / Sara P.', score: '16-12', result: 'W', tournament: 'Madrid Spring Americano' },
-  { date: '2026-04-24', partner: 'Pedro J.', opponents: 'Juan C. / Elena V.', score: '10-16', result: 'L', tournament: 'Madrid Spring Americano' },
-  { date: '2026-04-20', partner: 'Maria L.', opponents: 'Diego F. / Isabel B.', score: '16-14', result: 'W', tournament: 'Club Night' },
-];
+const FALLBACK = {
+  name: 'Jugador', city: '–', country: '–', ranking: 0, points: 0,
+  level: '–', joinedYear: '–', club: '–', matches: 0, wins: 0, tournaments: 0,
+  recentMatches: [], bestResult: '–', streak: '–', favouriteFormat: '–',
+};
 
-interface Props {
-  params: Promise<{ id: string }>;
-}
+interface Props { params: Promise<{ id: string }> }
 
-export default async function PlayerProfilePage({ params }: Props) {
-  const { id } = await params;
+export default function PlayerProfilePage({ params }: Props) {
+  const { id } = use(params);
+  const p = PROFILES[id] ?? FALLBACK;
+  const initials = p.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+  const winRate = p.matches > 0 ? Math.round((p.wins / p.matches) * 100) : 0;
 
   return (
     <div>
-      {/* Profile Header */}
-      <section className="bg-slate-900 text-white py-12 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-            <div className="flex items-center gap-6">
-              <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center text-3xl font-bold">
-                CG
+      {/* Profile header */}
+      <div style={{ background: '#0a0a0a', padding: '56px 48px 48px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', fontWeight: 600, marginBottom: 24 }}>
+            <Link href="/ranking" style={{ color: 'rgba(255,255,255,0.35)', textDecoration: 'none' }}>Jugadores</Link>
+            {' / '}
+            <span style={{ color: 'rgba(255,255,255,0.7)' }}>{p.name}</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 28, flexWrap: 'wrap' }}>
+            {/* Avatar */}
+            <div style={{ width: 80, height: 80, background: 'var(--court-blue)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+              {initials}
+            </div>
+
+            {/* Info */}
+            <div style={{ flex: 1 }}>
+              <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 600, color: '#fff', textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 8px' }}>{p.name}</h1>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
+                {p.city}, {p.country} · {p.club}
               </div>
-              <div>
-                <h1 className="text-3xl font-bold">{mockProfile.name}</h1>
-                <div className="flex items-center gap-2 text-slate-400 mt-1">
-                  <MapPin className="w-4 h-4" />
-                  {mockProfile.city}, {mockProfile.country} · {mockProfile.club}
-                </div>
-                <div className="flex items-center gap-3 mt-3">
-                  <span className="bg-green-500/20 text-green-400 text-sm px-3 py-1 rounded-full">{mockProfile.level}</span>
-                  <span className="text-slate-500 text-sm">Member since {mockProfile.joinedYear}</span>
-                </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <span className="chip" style={{ fontSize: 11, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', border: 'none' }}>{p.level}</span>
+                <span className="chip" style={{ fontSize: 11, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', border: 'none' }}>Desde {p.joinedYear}</span>
+                <span className="chip" style={{ fontSize: 11, background: 'rgba(214,255,0,0.15)', color: 'var(--neon)', border: 'none' }}>🤝 Amigo</span>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="bg-slate-800 rounded-xl p-4 text-center">
-                <div className="text-2xl font-bold text-amber-400">#{mockProfile.ranking}</div>
-                <div className="text-xs text-slate-400">Ranking</div>
+
+            {/* Ranking + points */}
+            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', flexShrink: 0 }}>
+              <div style={{ padding: '20px 28px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 700, color: '#f5a623', lineHeight: 1 }}>#{p.ranking}</div>
+                <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', fontWeight: 600, marginTop: 6 }}>Ranking</div>
               </div>
-              <div className="bg-slate-800 rounded-xl p-4 text-center">
-                <div className="text-2xl font-bold text-green-400">{mockProfile.points.toLocaleString()}</div>
-                <div className="text-xs text-slate-400">Points</div>
-              </div>
-              <div className="bg-slate-800 rounded-xl p-5 flex flex-col items-center">
-                <QrCode className="w-10 h-10 text-green-400 mb-1" />
-                <p className="text-xs text-slate-400">Invite</p>
+              <div style={{ padding: '20px 28px', textAlign: 'center' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 700, color: 'var(--turf-green)', lineHeight: 1 }}>{p.points.toLocaleString()}</div>
+                <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', fontWeight: 600, marginTop: 6 }}>Puntos</div>
               </div>
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {/* Content */}
+      <section style={{ padding: '48px 48px 96px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 300px', gap: 40, alignItems: 'start' }}>
+
+          {/* Main column */}
+          <div>
+            {/* Stats bar */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 40 }}>
               {[
-                { label: 'Matches', value: '47', icon: <Activity className="w-5 h-5 text-blue-500" /> },
-                { label: 'Wins', value: '32', icon: <Trophy className="w-5 h-5 text-amber-500" /> },
-                { label: 'Win Rate', value: '68%', icon: <TrendingUp className="w-5 h-5 text-green-500" /> },
-                { label: 'Tournaments', value: '12', icon: <Calendar className="w-5 h-5 text-purple-500" /> },
-              ].map((stat) => (
-                <div key={stat.label} className="bg-white rounded-xl border border-slate-200 p-4 text-center">
-                  <div className="flex justify-center mb-2">{stat.icon}</div>
-                  <div className="text-2xl font-bold text-slate-900">{stat.value}</div>
-                  <div className="text-xs text-slate-400">{stat.label}</div>
+                { label: 'Partidos', value: String(p.matches) },
+                { label: 'Victorias', value: String(p.wins) },
+                { label: 'Win Rate', value: `${winRate}%`, color: winRate >= 50 ? 'var(--turf-green)' : 'var(--black)' },
+                { label: 'Torneos', value: String(p.tournaments) },
+              ].map(s => (
+                <div key={s.label} style={{ background: '#fff', padding: '20px 24px' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 600, color: (s as any).color || 'var(--black)', lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginTop: 6 }}>{s.label}</div>
                 </div>
               ))}
             </div>
 
-            {/* Recent Matches */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100">
-                <h2 className="text-lg font-bold text-slate-900">Recent Matches</h2>
-              </div>
-              <div className="divide-y divide-slate-50">
-                {recentMatches.map((match, i) => (
-                  <div key={i} className="px-6 py-4 flex items-center gap-4">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                      match.result === 'W' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {match.result}
+            {/* Recent matches */}
+            <div>
+              <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 700, marginBottom: 16 }}>Partidos Recientes</div>
+              {p.recentMatches.length === 0 ? (
+                <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '32px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
+                  Sin partidos recientes.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+                  {p.recentMatches.map((m, i) => (
+                    <div key={i} style={{ background: '#fff', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: '#fff', background: m.result === 'W' ? 'var(--turf-green)' : '#ee0005' }}>
+                        {m.result}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.tournament}</div>
+                        <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Con {m.partner} vs {m.opponents}</div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: m.result === 'W' ? 'var(--turf-green)' : '#ee0005' }}>{m.score}</div>
+                        <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{m.date}</div>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-800 text-sm">{match.tournament}</p>
-                      <p className="text-xs text-slate-500">w/ {match.partner} vs {match.opponents}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className={`font-bold text-sm ${match.result === 'W' ? 'text-green-600' : 'text-red-500'}`}>{match.score}</p>
-                      <p className="text-xs text-slate-400">{match.date}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Invite via QR */}
-            <div className="bg-slate-900 text-white rounded-2xl p-6 text-center">
-              <h3 className="font-bold text-lg mb-3">Challenge to a Match</h3>
-              <div className="bg-white rounded-xl p-6 flex items-center justify-center mb-3">
-                <QrCode className="w-24 h-24 text-slate-900" />
-              </div>
-              <p className="text-slate-400 text-sm mb-4">Scan to challenge {mockProfile.name.split(' ')[0]} to a game</p>
-              <button className="w-full bg-green-500 hover:bg-green-400 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors">
-                Send Challenge
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Challenge / QR */}
+            <div style={{ background: 'var(--black)', padding: '28px', color: '#fff', textAlign: 'center' }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 700, marginBottom: 10 }}>Invitar a jugar</div>
+              <div style={{ width: 100, height: 100, background: 'rgba(255,255,255,0.08)', margin: '0 auto 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>QR</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 16, lineHeight: 1.5 }}>Escaneá para retar a {p.name.split(' ')[0]} a un juego</div>
+              <button style={{ width: '100%', padding: '10px', background: 'var(--neon)', color: 'var(--black)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Enviar Desafío
               </button>
             </div>
 
-            {/* Career Summary */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-6">
-              <h3 className="font-bold text-slate-900 mb-4">Career Summary</h3>
-              <div className="space-y-3 text-sm">
+            {/* Career summary */}
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '24px' }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 700, marginBottom: 16 }}>Resumen de Carrera</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                 {[
-                  { label: 'Club', value: mockProfile.club },
-                  { label: 'Best Result', value: '1st Place' },
-                  { label: 'Current Streak', value: '3 wins' },
-                  { label: 'Favourite Format', value: 'Americano' },
-                  { label: 'Member Since', value: mockProfile.joinedYear },
-                ].map((item) => (
-                  <div key={item.label} className="flex justify-between">
-                    <span className="text-slate-500">{item.label}</span>
-                    <span className="font-semibold text-slate-800">{item.value}</span>
+                  { label: 'Club',           value: p.club },
+                  { label: 'Mejor resultado', value: p.bestResult },
+                  { label: 'Racha actual',   value: p.streak },
+                  { label: 'Formato favorito', value: p.favouriteFormat },
+                  { label: 'Miembro desde',  value: p.joinedYear },
+                ].map(item => (
+                  <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--grey-100)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>{item.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>{item.value}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Add Friend */}
-            <button className="w-full flex items-center justify-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-4 py-3 rounded-xl font-semibold transition-colors">
-              <Users className="w-5 h-5" />
-              Add as Friend
-            </button>
+            {/* Back */}
+            <Link href="/dashboard/player/friends" style={{ display: 'block', textAlign: 'center', padding: '11px', fontSize: 11, fontWeight: 600, textDecoration: 'none', color: 'var(--grey-500)', border: '1px solid var(--grey-200)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              ← Volver a Amistades
+            </Link>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
