@@ -50,6 +50,9 @@ const mockUser: Record<Role, { name: string; sub: string; initials: string }> = 
   federation: { name: 'Federación Argentina', sub: '380 clubes · 9 países', initials: 'FA' },
 };
 
+// In production this comes from the auth token/session
+const IS_SUPER_ADMIN = false;
+
 export default function DashboardSidebar() {
   const pathname = usePathname();
 
@@ -75,23 +78,25 @@ export default function DashboardSidebar() {
         <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 17, textTransform: 'uppercase', color: '#fff', letterSpacing: '-0.01em' }}>PadelMGT</span>
       </Link>
 
-      {/* Role switcher */}
-      <div style={{ padding: '0 12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
-          {(Object.keys(roleLabels) as Role[]).map((role) => (
-            <Link key={role} href={`/dashboard/${role}`}
-              style={{
-                padding: '6px 4px', textAlign: 'center', textDecoration: 'none',
-                background: activeRole === role ? 'var(--neon)' : 'rgba(255,255,255,0.05)',
-                color: activeRole === role ? '#000' : 'rgba(255,255,255,0.45)',
-                fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
-                transition: 'all 0.15s',
-              }}>
-              {roleLabels[role]}
-            </Link>
-          ))}
+      {/* Role switcher — only visible to Super Admin */}
+      {IS_SUPER_ADMIN && (
+        <div style={{ padding: '0 12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+            {(Object.keys(roleLabels) as Role[]).map((role) => (
+              <Link key={role} href={`/dashboard/${role}`}
+                style={{
+                  padding: '6px 4px', textAlign: 'center', textDecoration: 'none',
+                  background: activeRole === role ? 'var(--neon)' : 'rgba(255,255,255,0.05)',
+                  color: activeRole === role ? '#000' : 'rgba(255,255,255,0.45)',
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  transition: 'all 0.15s',
+                }}>
+                {roleLabels[role]}
+              </Link>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
