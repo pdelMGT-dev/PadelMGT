@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useMemo } from 'react';
+import { createTournament as storeSaveTournament } from '@/lib/game-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -126,6 +127,7 @@ export default function PlayerTournamentsPage() {
   // ── Wizard state ──────────────────────────────────────────────────────────
   const [step, setStep] = useState(0);
   const [newTCode, setNewTCode] = useState('');
+  const [newTId,   setNewTId]   = useState('');
 
   // Step 0
   const [tName,  setTName]  = useState('');
@@ -195,11 +197,29 @@ export default function PlayerTournamentsPage() {
   }
 
   function createTournament() {
-    const code = `T-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    setNewTCode(code);
     const fmtLabel = tFormat ? FORMAT_INFO[tFormat].label + (FORMAT_INFO[tFormat].hasVariants ? ` ${tModalidad === 'parejas' ? 'Parejas' : 'Individual'}${tMixto ? ' Mixto' : ''}` : '') : '–';
-    setTournaments(prev => [{
+    const players = filledSlots.map(f => ({ id: f.id, name: f.name, ranking: f.ranking, isCreator: false }));
+    const scoreConfig = fmtInfo?.scoreType === 'points'
+      ? { type: 'points' as const, target: tPtTarget }
+      : { type: 'traditional' as const, setsPerMatch: tSets, gamesPerSet: tGames, tiebreak: tTiebreak, deuce: tDeuce };
+    const saved = storeSaveTournament({
       name: tName || `Torneo ${fmtLabel}`,
+      date: tDate,
+      time: tTime,
+      club: selectedClub?.name || '–',
+      city: selectedClub?.city || '–',
+      format: tFormat ?? 'americano',
+      pairType: tModalidad === 'parejas' ? 'parejas' : 'individual',
+      mixto: tMixto,
+      scoreConfig,
+      maxPlayers: tPlayers,
+      courts: tCourts,
+      players,
+    });
+    setNewTCode(saved.code);
+    setNewTId(saved.id);
+    setTournaments(prev => [{
+      name: saved.name,
       format: fmtLabel,
       date: tDate ? new Date(tDate).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }) : '–',
       club: selectedClub?.name || '–',
@@ -209,7 +229,7 @@ export default function PlayerTournamentsPage() {
       total: tPlayers,
       pts: null,
       status: 'upcoming',
-      href: '/tournaments',
+      href: `/dashboard/player/tournaments/${saved.id}`,
     }, ...prev]);
     setStep(99);
   }
@@ -219,6 +239,7 @@ export default function PlayerTournamentsPage() {
     setTFormat(null); setTModalidad('individual'); setTMixto(false);
     setTPlayers(8); setTCourts(2); setTPtTarget(16); setTSets(1); setTGames(6); setTTiebreak(7); setTDeuce('oro');
     setSlots([null, null, null, null]); setSearchMode(null); setSearchQuery(''); setFriendSel(new Set());
+    setNewTCode(''); setNewTId('');
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -528,12 +549,15 @@ export default function PlayerTournamentsPage() {
             ))}
           </div>
 
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-            <button onClick={() => { resetWizard(); setView('dashboard'); }} className="btn btn-primary btn-sm" style={{ borderRadius: 0 }}>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link href={`/dashboard/player/tournaments/${newTId}`} className="btn btn-primary btn-sm" style={{ borderRadius: 0 }}>
+              Gestionar torneo →
+            </Link>
+            <button onClick={() => { resetWizard(); setView('dashboard'); }} className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }}>
               Ver Mis Torneos
             </button>
-            <button onClick={() => { resetWizard(); setStep(0); }} className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }}>
-              Crear otro torneo
+            <button onClick={() => { resetWizard(); setStep(0); }} style={{ padding: '8px 20px', background: 'none', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-500)' }}>
+              Crear otro
             </button>
           </div>
         </div>
