@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getGameByCode } from '@/lib/game-store';
+import { getGameByCode, saveGame } from '@/lib/game-store';
 import type { ActiveGame, GameStatus, ScoreConfig } from '@/lib/game-engine';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -44,6 +44,11 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
     return getGameByCode(code);
   });
 
+  const [joinName, setJoinName] = useState('');
+  const [showJoin, setShowJoin] = useState(false);
+  const [joined, setJoined] = useState(false);
+  const [joinError, setJoinError] = useState('');
+
   // Poll every 5 seconds for live updates (localStorage simulation of real-time)
   useEffect(() => {
     const load = () => setGame(getGameByCode(code));
@@ -66,6 +71,21 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
   const isLive     = game.status === 'live';
   const isFinished = game.status === 'finished';
   const isPending  = game.status === 'created' || game.status === 'starting_soon';
+  const canJoin    = isPending && game.players.length < game.maxPlayers && !joined;
+
+  function handleJoin() {
+    const name = joinName.trim();
+    if (!name) { setJoinError('Ingresá tu nombre para unirte.'); return; }
+    if (!game) return;
+    const newPlayer = { id: `guest-${Date.now()}`, name, ranking: 0, isCreator: false };
+    const updated: ActiveGame = { ...game, players: [...game.players, newPlayer] };
+    saveGame(updated);
+    setGame(updated);
+    setJoined(true);
+    setShowJoin(false);
+    setJoinName('');
+    setJoinError('');
+  }
 
   const activeRound = game.rounds.find(r => r.status === 'active') ?? null;
   const doneRounds  = game.rounds.filter(r => r.status === 'completed');
@@ -112,17 +132,57 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
           </div>
         </div>
 
-        {/* Pending state */}
+        {/* Joined toast */}
+        {joined && (
+          <div style={{ background: 'var(--turf-green)', color: '#fff', padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span>✓</span>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>¡Te uniste al juego! El organizador recibirá tu confirmación.</span>
+          </div>
+        )}
+
+        {/* Pending state + join */}
         {isPending && (
           <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '32px', textAlign: 'center', marginBottom: 32 }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>⏳</div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 8 }}>
               El juego aún no comenzó
             </div>
-            <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>
+            <div style={{ fontSize: 13, color: 'var(--grey-400)', marginBottom: canJoin ? 20 : 0 }}>
               {game.date} a las {game.time} · {game.players.length}/{game.maxPlayers} jugadores confirmados
             </div>
-            {isLive && <div style={{ marginTop: 12, fontSize: 12, color: 'var(--grey-400)' }}>Esta página se actualiza automáticamente.</div>}
+            {canJoin && !showJoin && (
+              <button
+                onClick={() => setShowJoin(true)}
+                style={{ padding: '12px 28px', background: 'var(--turf-green)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+              >
+                Unirme a este juego →
+              </button>
+            )}
+            {showJoin && (
+              <div style={{ marginTop: 20, textAlign: 'left', maxWidth: 360, margin: '20px auto 0' }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 8 }}>
+                  Tu nombre
+                </label>
+                <input
+                  type="text"
+                  value={joinName}
+                  onChange={e => { setJoinName(e.target.value); setJoinError(''); }}
+                  onKeyDown={e => e.key === 'Enter' && handleJoin()}
+                  placeholder="Ej: María García"
+                  autoFocus
+                  style={{ display: 'block', width: '100%', padding: '12px 14px', border: '1px solid var(--grey-200)', fontSize: 14, outline: 'none', background: '#fff', boxSizing: 'border-box', marginBottom: 8 }}
+                />
+                {joinError && <div style={{ fontSize: 12, color: '#e53e3e', marginBottom: 8 }}>{joinError}</div>}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={handleJoin} style={{ flex: 1, padding: '12px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Confirmar →
+                  </button>
+                  <button onClick={() => { setShowJoin(false); setJoinError(''); }} style={{ padding: '12px 16px', background: '#fff', color: 'var(--grey-500)', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

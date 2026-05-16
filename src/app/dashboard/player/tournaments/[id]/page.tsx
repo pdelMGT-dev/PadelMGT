@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   getGame,
   saveGame,
@@ -73,6 +74,7 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
   const [toast, setToast] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   useEffect(() => {
     if (game?.code) setShareUrl(`${window.location.origin}/tournament/${game.code}`);
@@ -267,17 +269,38 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
         ))}
       </div>
 
-      {/* Share link */}
+      {/* Share link + QR */}
       {shareUrl && (
-        <div style={{ background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: '14px 20px', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', flexShrink: 0 }}>Enlace público</div>
-          <code style={{ fontSize: 12, color: 'var(--grey-600)', flex: 1, wordBreak: 'break-all' }}>{shareUrl}</code>
-          <button onClick={handleCopy} style={{ padding: '7px 16px', background: copied ? 'var(--turf-green)' : 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
-            {copied ? '✓ Copiado' : 'Copiar'}
-          </button>
-          <Link href={`/tournament/${game.code}`} target="_blank" style={{ padding: '7px 16px', border: '1px solid var(--grey-300)', color: 'var(--grey-600)', textDecoration: 'none', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
-            Ver público →
-          </Link>
+        <div style={{ background: 'var(--grey-50)', border: '1px solid var(--grey-200)', marginBottom: 28 }}>
+          <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', flexShrink: 0 }}>Enlace público</div>
+            <code style={{ fontSize: 12, color: 'var(--grey-600)', flex: 1, wordBreak: 'break-all' }}>{shareUrl}</code>
+            <button onClick={handleCopy} style={{ padding: '7px 16px', background: copied ? 'var(--turf-green)' : 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
+              {copied ? '✓ Copiado' : 'Copiar'}
+            </button>
+            <button onClick={() => setShowQR(v => !v)} style={{ padding: '7px 16px', border: '1px solid var(--grey-300)', background: showQR ? 'var(--black)' : '#fff', color: showQR ? '#fff' : 'var(--grey-600)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
+              QR
+            </button>
+            <Link href={`/tournament/${game.code}`} target="_blank" style={{ padding: '7px 16px', border: '1px solid var(--grey-300)', color: 'var(--grey-600)', textDecoration: 'none', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
+              Ver público →
+            </Link>
+          </div>
+          {showQR && (
+            <div style={{ borderTop: '1px solid var(--grey-200)', padding: '24px 20px', display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+              <QRCodeSVG value={shareUrl} size={160} bgColor="#ffffff" fgColor="#000000" level="M" />
+              <div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 6 }}>
+                  Escaneá para seguir el torneo
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--grey-400)', marginBottom: 12 }}>
+                  Compartí el QR para que los jugadores y el público vean los resultados en tiempo real.
+                </div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, letterSpacing: '0.06em', color: '#7c3aed' }}>
+                  {game.code}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

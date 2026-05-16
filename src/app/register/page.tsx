@@ -4,33 +4,9 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface MockUser {
-  id: string;
-  email: string;
-  password: string;
-  name: string;
-  role: 'player' | 'club_admin';
-}
-
-const MOCK_USERS: MockUser[] = [
-  {
-    id: 'mock-1',
-    email: 'demo@padelmgt.com',
-    password: 'demo123',
-    name: 'Diego García',
-    role: 'player',
-  },
-  {
-    id: 'mock-2',
-    email: 'admin@padelmgt.com',
-    password: 'admin123',
-    name: 'Club San Telmo',
-    role: 'club_admin',
-  },
-];
-
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -39,17 +15,19 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
 
-    const user = MOCK_USERS.find(
-      (u) => u.email === email && u.password === password
-    );
-
-    if (!user) {
-      setError('Email o contraseña incorrectos.');
+    if (password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres.');
       return;
     }
 
-    const session = { id: user.id, name: user.name, email: user.email, role: user.role };
-    localStorage.setItem('padelmgt_user', JSON.stringify(session));
+    const user = {
+      id: crypto.randomUUID(),
+      name,
+      email,
+      role: 'player' as const,
+    };
+
+    localStorage.setItem('padelmgt_user', JSON.stringify(user));
     router.push('/dashboard/player/quick-game');
   }
 
@@ -93,13 +71,27 @@ export default function LoginPage() {
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
         <div style={{ background: '#fff', width: '100%', maxWidth: 480, padding: '48px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
           <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 36, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 8px', color: 'var(--black)' }}>
-            Iniciar sesión
+            Crear cuenta
           </h1>
           <p style={{ fontSize: 14, color: 'var(--grey-500)', margin: '0 0 36px' }}>
-            Accede a tu cuenta de PadelMGT
+            Únete a PadelMGT y empieza a jugar
           </p>
 
           <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom: 20 }}>
+              <label htmlFor="name" style={labelStyle}>Nombre completo</label>
+              <input
+                id="name"
+                type="text"
+                autoComplete="name"
+                placeholder="Diego García"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                style={inputStyle}
+              />
+            </div>
+
             <div style={{ marginBottom: 20 }}>
               <label htmlFor="email" style={labelStyle}>Email</label>
               <input
@@ -119,8 +111,8 @@ export default function LoginPage() {
               <input
                 id="password"
                 type="password"
-                autoComplete="current-password"
-                placeholder="Tu contraseña"
+                autoComplete="new-password"
+                placeholder="Mínimo 6 caracteres"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -136,14 +128,14 @@ export default function LoginPage() {
               className="btn btn-primary"
               style={{ width: '100%', borderRadius: 0, padding: '14px', fontSize: 14 }}
             >
-              Entrar
+              Crear cuenta
             </button>
           </form>
 
           <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--grey-500)', marginTop: 24 }}>
-            ¿No tienes cuenta?{' '}
-            <Link href="/register" style={{ color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>
-              Crear cuenta
+            ¿Ya tienes cuenta?{' '}
+            <Link href="/login" style={{ color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>
+              Iniciar sesión
             </Link>
           </p>
         </div>
