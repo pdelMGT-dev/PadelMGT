@@ -1,4 +1,9 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { getAllGames } from '@/lib/game-store';
+import type { ActiveGame } from '@/lib/game-engine';
 
 const stats = [
   { label: 'Torneos jugados', value: '24', delta: '+3 este mes' },
@@ -29,6 +34,29 @@ const friends = [
 ];
 
 export default function PlayerHomePage() {
+  const [nextGame, setNextGame] = useState<ActiveGame | null>(null);
+
+  useEffect(() => {
+    const games = getAllGames();
+    const upcoming = games.find(g => g.status !== 'finished');
+    setNextGame(upcoming ?? null);
+  }, []);
+
+  const gameHref = nextGame
+    ? (['americano', 'mexicano'].includes(nextGame.format)
+        ? `/dashboard/player/quick-game/${nextGame.id}`
+        : `/dashboard/player/tournaments/${nextGame.id}`)
+    : '/dashboard/player/tournaments';
+
+  const displayGame = nextGame ? {
+    name: nextGame.name,
+    date: `${nextGame.date} · ${nextGame.time}`,
+    club: nextGame.club,
+    city: nextGame.city,
+    format: nextGame.format,
+    spots: `${nextGame.players.length} / ${nextGame.maxPlayers} jugadores`,
+  } : upcomingTournament;
+
   return (
     <div style={{ padding: '40px 40px 80px' }}>
       {/* Header */}
@@ -54,18 +82,18 @@ export default function PlayerHomePage() {
         {/* Próximo torneo */}
         <div style={{ background: 'var(--black)', padding: '32px' }}>
           <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 700, marginBottom: 12 }}>Próximo Torneo</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: '#fff', marginBottom: 8 }}>{upcomingTournament.name}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: '#fff', marginBottom: 8 }}>{displayGame.name}</div>
           <div style={{ display: 'flex', gap: 20, fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 24 }}>
-            <span>{upcomingTournament.date}</span>
+            <span>{displayGame.date}</span>
             <span>·</span>
-            <span>{upcomingTournament.club}, {upcomingTournament.city}</span>
+            <span>{displayGame.club}, {displayGame.city}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-            <span className="chip" style={{ fontSize: 10, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', border: 'none' }}>{upcomingTournament.format}</span>
-            <span className="chip" style={{ fontSize: 10, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', border: 'none' }}>{upcomingTournament.spots}</span>
+            <span className="chip" style={{ fontSize: 10, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', border: 'none' }}>{displayGame.format}</span>
+            <span className="chip" style={{ fontSize: 10, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', border: 'none' }}>{displayGame.spots}</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Link href="/dashboard/player/tournaments" className="btn btn-sm" style={{ background: 'var(--neon)', color: 'var(--black)', borderRadius: 0, fontWeight: 700 }}>Ver detalles</Link>
+            <Link href={gameHref} className="btn btn-sm" style={{ background: 'var(--neon)', color: 'var(--black)', borderRadius: 0, fontWeight: 700 }}>Ver detalles</Link>
             <Link href="/dashboard/player/calendar" className="btn btn-sm" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 0 }}>Mi calendario</Link>
           </div>
         </div>

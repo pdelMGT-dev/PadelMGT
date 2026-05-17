@@ -1,13 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useMemo } from 'react';
-import { createTournament as storeSaveTournament } from '@/lib/game-store';
+import { useState, useMemo, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
+import { createTournament as storeSaveTournament, getAllGames } from '@/lib/game-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type FormatKey = 'americano' | 'mexicano' | 'round_robin' | 'team_league' | 'knockout' | 'world_cup';
 type Modalidad = 'individual' | 'parejas';
+
+type TournamentItem = {
+  name: string; format: string; date: string; club: string; city: string;
+  partner: string; pos: number | null; total: number; pts: number | null;
+  status: string; href: string;
+};
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 
@@ -38,13 +45,13 @@ const FRIENDS = [
 ];
 type Friend = typeof FRIENDS[0];
 
-const initialTournaments = [
+const initialTournaments: TournamentItem[] = [
   { name: 'Americano Barrio Norte', format: 'Americano',   date: '11 May 2026', club: 'Club Barrio Norte', city: 'Buenos Aires', partner: 'Ana R.',    pos: 2,    total: 8,  pts: 120, status: 'completed', href: `/tournaments/detail/${TOURNAMENT_DETAIL_ID}` },
   { name: 'Liga Premier LATAM – J8', format: 'Round Robin', date: '08 May 2026', club: 'Sede Central',     city: 'Buenos Aires', partner: 'Ana R.',    pos: 3,    total: 12, pts: 90,  status: 'completed', href: `/tournaments/detail/${TOURNAMENT_DETAIL_ID}` },
   { name: 'Open Knockout Mayo',      format: 'Knockout',    date: '04 May 2026', club: 'Padel Arena',      city: 'Rosario',      partner: 'Marcos H.', pos: 1,    total: 16, pts: 200, status: 'completed', href: `/tournaments/detail/${TOURNAMENT_DETAIL_ID}` },
-  { name: 'Mexicano del Club',       format: 'Mexicano',    date: '17 May 2026', club: 'Club La Cantera',  city: 'Córdoba',      partner: '–',         pos: null, total: 8,  pts: null, status: 'upcoming',  href: '/tournaments' },
-  { name: 'Swiss Open Santiago',     format: 'Swiss',       date: '25 May 2026', club: 'Padel Santiago',   city: 'Santiago',     partner: '–',         pos: null, total: 32, pts: null, status: 'upcoming',  href: '/tournaments' },
-  { name: 'Copa Federación',         format: 'Knockout',    date: '28 May 2026', club: 'Arena Nacional',   city: 'Buenos Aires', partner: '–',         pos: null, total: 64, pts: null, status: 'upcoming',  href: '/tournaments' },
+  { name: 'Mexicano del Club',       format: 'Mexicano',    date: '17 May 2026', club: 'Club La Cantera',  city: 'Córdoba',      partner: '–',         pos: null, total: 8,  pts: null, status: 'upcoming',  href: '/dashboard/player/tournaments' },
+  { name: 'Swiss Open Santiago',     format: 'Swiss',       date: '25 May 2026', club: 'Padel Santiago',   city: 'Santiago',     partner: '–',         pos: null, total: 32, pts: null, status: 'upcoming',  href: '/dashboard/player/tournaments' },
+  { name: 'Copa Federación',         format: 'Knockout',    date: '28 May 2026', club: 'Arena Nacional',   city: 'Buenos Aires', partner: '–',         pos: null, total: 64, pts: null, status: 'upcoming',  href: '/dashboard/player/tournaments' },
 ];
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -118,11 +125,37 @@ export default function PlayerTournamentsPage() {
   const [formato, setFormato] = useState('Todos los formatos');
   const [ciudad,  setCiudad]  = useState('Todas las ciudades');
 
-  // Tournament list (can grow when user creates)
-  const [tournaments, setTournaments] = useState(initialTournaments);
+  // Tournament list — seeded from store on mount, grows when user creates
+  const [tournaments, setTournaments] = useState<TournamentItem[]>(initialTournaments);
+
+  // QR share state for success screen
+  const [copied, setCopied] = useState(false);
 
   // View mode
   const [view, setView] = useState<'dashboard' | 'wizard'>('dashboard');
+
+  // Load real games from store on mount and after creation
+  useEffect(() => {
+    const storeTournaments = getAllGames().map(g => ({
+      name: g.name,
+      format: g.format.charAt(0).toUpperCase() + g.format.slice(1).replace('_', ' '),
+      date: g.date,
+      club: g.club,
+      city: g.city,
+      partner: '–',
+      pos: null,
+      total: g.maxPlayers,
+      pts: null,
+      status: g.status === 'finished' ? 'completed' : 'upcoming',
+      href: ['americano', 'mexicano'].includes(g.format)
+        ? `/dashboard/player/quick-game/${g.id}`
+        : `/dashboard/player/tournaments/${g.id}`,
+    }));
+    // Merge: store games first, then static history (deduplicated by name)
+    const names = new Set(storeTournaments.map(t => t.name));
+    const historical = initialTournaments.filter(t => !names.has(t.name));
+    setTournaments([...storeTournaments, ...historical]);
+  }, []);
 
   // ── Wizard state ──────────────────────────────────────────────────────────
   const [step, setStep] = useState(0);
@@ -218,19 +251,26 @@ export default function PlayerTournamentsPage() {
     });
     setNewTCode(saved.code);
     setNewTId(saved.id);
-    setTournaments(prev => [{
-      name: saved.name,
-      format: fmtLabel,
-      date: tDate ? new Date(tDate).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }) : '–',
-      club: selectedClub?.name || '–',
-      city: selectedClub?.city || '–',
+    setCopied(false);
+    // Re-sync entire list from store so all pages stay current
+    const storeTournaments = getAllGames().map(g => ({
+      name: g.name,
+      format: g.format.charAt(0).toUpperCase() + g.format.slice(1).replace('_', ' '),
+      date: g.date,
+      club: g.club,
+      city: g.city,
       partner: '–',
       pos: null,
-      total: tPlayers,
+      total: g.maxPlayers,
       pts: null,
-      status: 'upcoming',
-      href: `/dashboard/player/tournaments/${saved.id}`,
-    }, ...prev]);
+      status: g.status === 'finished' ? 'completed' : 'upcoming',
+      href: ['americano', 'mexicano'].includes(g.format)
+        ? `/dashboard/player/quick-game/${g.id}`
+        : `/dashboard/player/tournaments/${g.id}`,
+    }));
+    const names = new Set(storeTournaments.map(t => t.name));
+    const historical = initialTournaments.filter(t => !names.has(t.name));
+    setTournaments([...storeTournaments, ...historical]);
     setStep(99);
   }
 
@@ -529,7 +569,32 @@ export default function PlayerTournamentsPage() {
           <div style={{ background: 'var(--black)', padding: '28px', color: '#fff', textAlign: 'center', marginBottom: 16 }}>
             <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 700, marginBottom: 8 }}>Código del torneo</div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, letterSpacing: '0.08em', color: '#fff', marginBottom: 4 }}>{newTCode}</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Compartí este código con los jugadores para que se inscriban</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>Compartí este código con los jugadores para que se inscriban</div>
+
+            {/* QR code */}
+            <div style={{ display: 'inline-block', background: '#fff', padding: 12, marginBottom: 16 }}>
+              <QRCodeSVG
+                value={typeof window !== 'undefined' ? `${window.location.origin}/tournament/${newTCode}` : `https://padelmgt.com/tournament/${newTCode}`}
+                size={140} bgColor="#ffffff" fgColor="#000000" level="M"
+              />
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>Escaneá el QR para acceder al torneo</div>
+
+            {/* Share URL + copy */}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ background: 'rgba(255,255,255,0.08)', padding: '8px 14px', fontSize: 11, fontFamily: 'monospace', color: 'rgba(255,255,255,0.6)', wordBreak: 'break-all' }}>
+                {typeof window !== 'undefined' ? `${window.location.origin}/tournament/${newTCode}` : `padelmgt.com/tournament/${newTCode}`}
+              </div>
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/tournament/${newTCode}`;
+                  navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+                }}
+                style={{ padding: '8px 16px', background: copied ? 'var(--turf-green)' : 'var(--neon)', color: 'var(--black)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}
+              >
+                {copied ? '✓ Copiado' : 'Copiar enlace'}
+              </button>
+            </div>
           </div>
 
           <div style={{ border: '1px solid var(--grey-200)', padding: '20px 24px', marginBottom: 24 }}>
