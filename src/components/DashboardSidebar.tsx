@@ -22,6 +22,7 @@ const navItems: Record<Role, { href: string; label: string; icon: string }[]> = 
     { href: '/dashboard/player/ranking', label: 'Mi Ranking', icon: '△' },
     { href: '/dashboard/player/calendar', label: 'Calendario', icon: '▦' },
     { href: '/dashboard/player/friends', label: 'Amistades', icon: '◌' },
+    { href: '/dashboard/player/profile', label: 'Mi Perfil', icon: '◎' },
   ],
   club: [
     { href: '/dashboard/club', label: 'Panel del Club', icon: '◈' },
@@ -142,7 +143,7 @@ export default function DashboardSidebar() {
 
       {/* User */}
       <div style={{ padding: '14px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <Link href={activeRole === 'player' ? '/dashboard/player/profile' : '#'} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, textDecoration: 'none' }}>
           <div style={{ width: 36, height: 36, background: 'var(--court-blue)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
             {user.initials}
           </div>
@@ -150,7 +151,7 @@ export default function DashboardSidebar() {
             <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.sub}</div>
           </div>
-        </div>
+        </Link>
         <Link href="/login" style={{ display: 'block', textAlign: 'center', padding: '7px', fontSize: 11, color: 'rgba(255,255,255,0.35)', textDecoration: 'none', border: '1px solid rgba(255,255,255,0.08)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>
           Cerrar Sesión
         </Link>
