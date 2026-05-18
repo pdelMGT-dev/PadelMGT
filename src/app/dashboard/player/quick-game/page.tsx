@@ -182,6 +182,7 @@ export default function QuickGamePage() {
   // ── View + game list ──────────────────────────────────────────────────────
   const [view, setView]         = useState<'dashboard' | 'wizard'>('dashboard');
   const [games, setGames]       = useState<ActiveGame[]>([]);
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string } | null>(null);
   const [newGameCode, setNewGameCode] = useState('');
   const [qrGame, setQrGame]     = useState<ActiveGame | null>(null);
   const [copied, setCopied]     = useState(false);
@@ -196,6 +197,8 @@ export default function QuickGamePage() {
   useEffect(() => {
     reloadGames();
     try {
+      const u = localStorage.getItem('padelmgt_user');
+      if (u) setCurrentUser(JSON.parse(u));
       const n = localStorage.getItem('qg_notification');
       if (n) { setNotification(JSON.parse(n)); localStorage.removeItem('qg_notification'); }
       const cancelledId = localStorage.getItem('qg_cancelled');
@@ -407,7 +410,12 @@ export default function QuickGamePage() {
     const activeGames   = games.filter(g => ['draft', 'created', 'starting_soon', 'live'].includes(g.status));
     const finishedGames = games.filter(g => g.status === 'finished');
     const pendingQR     = activeGames.filter(g => g.players.length < g.maxPlayers);
-    const wins          = 0; // computed in Part D from standings
+    const wins = currentUser
+      ? finishedGames.filter(g => {
+          const idx = g.standings.findIndex(s => s.playerId === currentUser.id);
+          return idx === 0;
+        }).length
+      : 0;
 
     function copyCode(code: string) {
       navigator.clipboard.writeText(code).catch(() => {});
@@ -665,7 +673,19 @@ export default function QuickGamePage() {
                     <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--grey-400)' }}>{g.club}, {g.city}</td>
                     <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--grey-400)', textAlign: 'center' }}>{g.players.length}</td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>—</span>
+                      {(() => {
+                        if (!currentUser || g.standings.length === 0) return <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>—</span>;
+                        const idx = g.standings.findIndex(s => s.playerId === currentUser.id);
+                        if (idx === -1) return <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>—</span>;
+                        const pos = idx + 1;
+                        const total = g.standings.length;
+                        const isFirst = pos === 1;
+                        return (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: isFirst ? 'var(--turf-green)' : 'var(--grey-400)' }}>
+                            {isFirst ? '▲ ' : ''}#{pos} de {total}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <Link href={`/dashboard/player/quick-game/${g.id}`} style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', letterSpacing: '0.08em', textDecoration: 'none', cursor: 'pointer' }}>{g.code}</Link>

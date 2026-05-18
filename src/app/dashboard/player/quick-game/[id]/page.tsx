@@ -11,7 +11,7 @@ import {
   startNextRound as engineStartNextRound,
   isGameFinished,
 } from '@/lib/game-store';
-import { isRoundComplete } from '@/lib/game-engine';
+import { isRoundComplete, calculateStandings } from '@/lib/game-engine';
 import type { ActiveGame, GameStatus, ScoreConfig } from '@/lib/game-engine';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -261,6 +261,50 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     });
   }
 
+  // Post-game editing state
+  const [editResultsOpen, setEditResultsOpen] = useState(false);
+  const [editScores, setEditScores] = useState<Record<string, { p1: string; p2: string }>>({});
+
+  function handleEditScoreChange(roundNum: number, courtNum: number, team: 'p1' | 'p2', val: string) {
+    const key = `${roundNum}-${courtNum}`;
+    setEditScores(prev => {
+      const cur = prev[key] ?? { p1: '', p2: '' };
+      if (isPointsMode && ptTarget !== null) {
+        const n = parseInt(val, 10);
+        if (!isNaN(n) && n >= 0 && n <= ptTarget) {
+          return { ...prev, [key]: team === 'p1' ? { p1: val, p2: String(ptTarget - n) } : { p1: String(ptTarget - n), p2: val } };
+        }
+      }
+      return { ...prev, [key]: { ...cur, [team]: val } };
+    });
+  }
+
+  function handleSaveEditedResults() {
+    if (!game) return;
+    let updated = { ...game, rounds: game.rounds.map(r => ({ ...r, courts: r.courts.map(c => ({ ...c })) })) };
+    for (const [key, scores] of Object.entries(editScores)) {
+      const [rStr, cStr] = key.split('-');
+      const rNum = parseInt(rStr, 10);
+      const cNum = parseInt(cStr, 10);
+      const p1 = parseInt(scores.p1, 10);
+      const p2 = parseInt(scores.p2, 10);
+      if (isNaN(p1) || isNaN(p2)) continue;
+      const round = updated.rounds.find(r => r.num === rNum);
+      if (!round) continue;
+      const court = round.courts.find(c => c.courtNum === cNum);
+      if (!court) continue;
+      court.pair1Score = p1;
+      court.pair2Score = p2;
+      court.status = 'completed';
+    }
+    updated.standings = calculateStandings(updated);
+    saveGame(updated);
+    setGame(updated);
+    setEditScores({});
+    setEditResultsOpen(false);
+    showToast('Resultados actualizados.');
+  }
+
   // suppress unused warning — currentUser may be used for future gating
   void currentUser;
 
@@ -278,9 +322,70 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
       {/* Finished banner */}
       {isFinished && (
-        <div style={{ background: 'var(--turf-green)', color: '#fff', padding: '14px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 18 }}>✓</span>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Juego finalizado</span>
+        <div style={{ background: 'var(--turf-green)', color: '#fff', padding: '14px 24px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18 }}>✓</span>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Juego finalizado</span>
+          </div>
+          <button
+            onClick={() => { setEditResultsOpen(v => !v); setEditScores({}); }}
+            style={{ padding: '6px 14px', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+          >
+            {editResultsOpen ? 'Cancelar edición' : 'Editar resultados'}
+          </button>
+        </div>
+      )}
+
+      {/* Post-game score editing (creator only, when finished) */}
+      {isFinished && editResultsOpen && game.rounds.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 24 }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--grey-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Editar resultados del juego</span>
+            <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>Modificá los scores y guardá para recalcular la clasificación</span>
+          </div>
+          <div style={{ padding: '20px' }}>
+            {game.rounds.filter(r => r.status === 'completed').map(round => (
+              <div key={round.num} style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 10 }}>Ronda {round.num}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {round.courts.map(court => {
+                    const key = `${round.num}-${court.courtNum}`;
+                    const cur = editScores[key] ?? { p1: String(court.pair1Score ?? ''), p2: String(court.pair2Score ?? '') };
+                    return (
+                      <div key={court.courtNum} style={{ border: '1px solid var(--grey-200)', overflow: 'hidden' }}>
+                        <div style={{ background: 'var(--grey-50)', padding: '6px 14px', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
+                          Cancha {court.courtNum}
+                        </div>
+                        {[
+                          { pids: court.pair1, val: cur.p1, team: 'p1' as const },
+                          { pids: court.pair2, val: cur.p2, team: 'p2' as const },
+                        ].map((row, ti) => (
+                          <div key={ti} style={{ display: 'grid', gridTemplateColumns: '1fr 80px', borderTop: ti === 0 ? 'none' : '1px solid var(--grey-100)' }}>
+                            <div style={{ padding: '10px 14px', borderRight: '1px solid var(--grey-100)', fontSize: 12, fontWeight: 500, color: 'var(--black)' }}>
+                              {row.pids.map(pid => getName(pid)).join(' / ')}
+                            </div>
+                            <input
+                              type="number" min={0}
+                              value={row.val}
+                              onChange={e => handleEditScoreChange(round.num, court.courtNum, row.team, e.target.value)}
+                              placeholder="–"
+                              style={{ width: '100%', textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, border: 'none', outline: 'none', background: 'transparent', padding: '8px 0', color: 'var(--black)', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={handleSaveEditedResults}
+              style={{ width: '100%', padding: '12px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}
+            >
+              Guardar y recalcular clasificación →
+            </button>
+          </div>
         </div>
       )}
 

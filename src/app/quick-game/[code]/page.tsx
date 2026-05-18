@@ -285,6 +285,59 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
           </div>
         )}
 
+        {/* Finished — final standings */}
+        {isFinished && (
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ background: 'var(--black)', color: '#fff', padding: '20px 24px', marginBottom: 1 }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 700, marginBottom: 6 }}>Juego Finalizado</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>{game.name}</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>{game.date} · {game.club}, {game.city}</div>
+            </div>
+            {game.standings.length > 0 ? (
+              <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--grey-100)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Clasificación Final</span>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--grey-50)', borderBottom: '2px solid var(--grey-200)' }}>
+                      {['Pos', 'Jugador', 'W', 'Pts', 'PJ', '+/−'].map(h => (
+                        <th key={h} style={{ padding: '10px 14px', textAlign: h === 'Pos' ? 'center' : 'left', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {game.standings.map((s, i) => {
+                      const isMe = currentUser != null && s.playerId === currentUser.id;
+                      return (
+                        <tr key={s.playerId} style={{ borderBottom: '1px solid var(--grey-100)', background: isMe ? 'rgba(214,255,0,0.06)' : i % 2 === 0 ? '#fff' : 'var(--grey-50)' }}>
+                          <td style={{ padding: '12px 14px', textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: i === 0 ? '#d4a017' : i === 1 ? 'var(--grey-400)' : i === 2 ? '#cd7f32' : 'var(--grey-300)' }}>
+                            {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                          </td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={{ fontSize: 13, fontWeight: isMe ? 700 : 500 }}>{s.playerName}</span>
+                            {isMe && <span style={{ marginLeft: 8, fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px', fontWeight: 700 }}>TÚ</span>}
+                          </td>
+                          <td style={{ padding: '12px 14px', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600 }}>{s.wins}</td>
+                          <td style={{ padding: '12px 14px', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>{s.pts}</td>
+                          <td style={{ padding: '12px 14px', fontSize: 12, color: 'var(--grey-400)' }}>{s.played}</td>
+                          <td style={{ padding: '12px 14px', fontSize: 12, fontWeight: 600, color: s.diff >= 0 ? 'var(--turf-green)' : '#e53e3e' }}>
+                            {s.diff >= 0 ? '+' : ''}{s.diff}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '32px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
+                No hay datos de clasificación disponibles.
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Live round */}
         {isLive && activeRound && (
           <div style={{ marginBottom: 36 }}>
