@@ -26,13 +26,13 @@ const MY_CLUBS = [
   { id: 'c3', name: 'Club La Cantera',   city: 'Córdoba',      courts: 8  },
 ];
 
-const FORMAT_INFO: Record<FormatKey, { label: string; icon: string; desc: string; hasVariants: boolean; scoreType: 'points' | 'sets' }> = {
-  americano:    { label: 'Americano',   icon: '🔄', desc: 'Rotación de parejas, puntos acumulados individuales.',       hasVariants: true,  scoreType: 'points' },
-  mexicano:     { label: 'Mexicano',    icon: '⚡', desc: 'Rotación dinámica según posición en el ranking del torneo.', hasVariants: true,  scoreType: 'points' },
-  round_robin:  { label: 'Round Robin', icon: '🔁', desc: 'Todos contra todos en un mismo grupo.',                      hasVariants: false, scoreType: 'sets'   },
-  team_league:  { label: 'Team League', icon: '🏆', desc: 'Liga por equipos con jornadas semanales.',                   hasVariants: false, scoreType: 'sets'   },
-  knockout:     { label: 'Knockout',    icon: '⚔️', desc: 'Eliminación directa, un perdedor queda afuera.',             hasVariants: false, scoreType: 'sets'   },
-  world_cup:    { label: 'World Cup',   icon: '🌍', desc: 'Fase de grupos seguida de eliminatorias directas.',          hasVariants: false, scoreType: 'sets'   },
+const FORMAT_INFO: Record<FormatKey, { label: string; desc: string; hasVariants: boolean; scoreType: 'points' | 'sets' }> = {
+  americano:    { label: 'Americano',   desc: 'Rotación de parejas, puntos acumulados individuales.',       hasVariants: true,  scoreType: 'points' },
+  mexicano:     { label: 'Mexicano',    desc: 'Rotación dinámica según posición en el ranking del torneo.', hasVariants: true,  scoreType: 'points' },
+  round_robin:  { label: 'Round Robin', desc: 'Todos contra todos en un mismo grupo.',                      hasVariants: false, scoreType: 'sets'   },
+  team_league:  { label: 'Team League', desc: 'Liga por equipos con jornadas semanales.',                   hasVariants: false, scoreType: 'sets'   },
+  knockout:     { label: 'Knockout',    desc: 'Eliminación directa, un perdedor queda afuera.',             hasVariants: false, scoreType: 'sets'   },
+  world_cup:    { label: 'World Cup',   desc: 'Fase de grupos seguida de eliminatorias directas.',          hasVariants: false, scoreType: 'sets'   },
 };
 
 const FRIENDS = [
@@ -167,6 +167,8 @@ export default function PlayerTournamentsPage() {
   const [tDate,  setTDate]  = useState('');
   const [tTime,  setTTime]  = useState('');
   const [tClubId, setTClubId] = useState('');
+  const [tCustomClubName, setTCustomClubName] = useState('');
+  const [tCustomCity,     setTCustomCity]     = useState('');
 
   // Step 1
   const [tFormat,    setTFormat]    = useState<FormatKey | null>(null);
@@ -188,7 +190,9 @@ export default function PlayerTournamentsPage() {
 
   // ── Wizard helpers ────────────────────────────────────────────────────────
 
-  const selectedClub = MY_CLUBS.find(c => c.id === tClubId) ?? null;
+  const selectedClub = tClubId === 'other'
+    ? { id: 'other', name: tCustomClubName, city: tCustomCity, courts: 0 }
+    : (MY_CLUBS.find(c => c.id === tClubId) ?? null);
   const fmtInfo      = tFormat ? FORMAT_INFO[tFormat] : null;
   const filledSlots  = slots.filter((s): s is Friend => s !== null);
 
@@ -227,6 +231,14 @@ export default function PlayerTournamentsPage() {
     const res: (Friend | null)[] = [...filled];
     while (res.length < n) res.push(null);
     setSlots(res.slice(0, n));
+  }
+
+  function goToStep2() {
+    const filled = slots.filter(Boolean) as Friend[];
+    const resized: (Friend | null)[] = [...filled];
+    while (resized.length < tPlayers) resized.push(null);
+    setSlots(resized.slice(0, tPlayers));
+    setStep(2);
   }
 
   function createTournament() {
@@ -276,6 +288,7 @@ export default function PlayerTournamentsPage() {
 
   function resetWizard() {
     setStep(0); setTName(''); setTDate(''); setTTime(''); setTClubId('');
+    setTCustomClubName(''); setTCustomCity('');
     setTFormat(null); setTModalidad('individual'); setTMixto(false);
     setTPlayers(8); setTCourts(2); setTPtTarget(16); setTSets(1); setTGames(6); setTTiebreak(7); setTDeuce('oro');
     setSlots([null, null, null, null]); setSearchMode(null); setSearchQuery(''); setFriendSel(new Set());
@@ -290,7 +303,7 @@ export default function PlayerTournamentsPage() {
 
     // ── STEP 0: INFO BÁSICA ────────────────────────────────────────────────
     if (step === 0) {
-      const ok = tDate && tTime && tClubId;
+      const ok = tDate && tTime && tClubId && (tClubId !== 'other' || tCustomClubName.trim() !== '');
       return (
         <div style={{ padding: '40px 40px 80px', maxWidth: 660 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
@@ -328,6 +341,25 @@ export default function PlayerTournamentsPage() {
                   {tClubId === c.id && <span style={{ color: 'var(--neon)', fontSize: 18, fontWeight: 700 }}>✓</span>}
                 </button>
               ))}
+              <button onClick={() => setTClubId('other')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', border: `2px ${tClubId === 'other' ? 'solid var(--black)' : 'dashed var(--grey-300)'}`, background: tClubId === 'other' ? 'var(--black)' : '#fff', cursor: 'pointer' }}>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', color: tClubId === 'other' ? '#fff' : 'var(--black)' }}>Otro / Pista privada</div>
+                  <div style={{ fontSize: 11, color: tClubId === 'other' ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', marginTop: 2 }}>Indicá el nombre y ciudad a continuación</div>
+                </div>
+                {tClubId === 'other' && <span style={{ color: 'var(--neon)', fontSize: 18, fontWeight: 700 }}>✓</span>}
+              </button>
+              {tClubId === 'other' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, padding: '16px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)' }}>
+                  <div>
+                    <label style={lbl}>Nombre de la sede *</label>
+                    <input type="text" value={tCustomClubName} onChange={e => setTCustomClubName(e.target.value)} placeholder="Ej: Pista del barrio…" style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Ciudad (opcional)</label>
+                    <input type="text" value={tCustomCity} onChange={e => setTCustomCity(e.target.value)} placeholder="Ej: Mendoza…" style={inp} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -359,7 +391,6 @@ export default function PlayerTournamentsPage() {
                 const active = tFormat === fk;
                 return (
                   <button key={fk} onClick={() => setTFormat(fk)} style={{ padding: '16px', border: `2px solid ${active ? 'var(--black)' : 'var(--grey-200)'}`, background: active ? 'var(--black)' : '#fff', cursor: 'pointer', textAlign: 'left' }}>
-                    <div style={{ fontSize: 24, marginBottom: 6 }}>{f.icon}</div>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', color: active ? '#fff' : 'var(--black)', marginBottom: 4 }}>{f.label}</div>
                     <div style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)', lineHeight: 1.4 }}>{f.desc}</div>
                   </button>
@@ -439,7 +470,7 @@ export default function PlayerTournamentsPage() {
             </div>
           )}
 
-          <NavBtns onBack={() => setStep(0)} onNext={() => setStep(2)} nextLabel="Paso 3: Jugadores →" disabled={!ok} />
+          <NavBtns onBack={() => setStep(0)} onNext={goToStep2} nextLabel="Paso 3: Jugadores →" disabled={!ok} />
         </div>
       );
     }
@@ -457,17 +488,6 @@ export default function PlayerTournamentsPage() {
 
           <Steps current={2} />
 
-          {/* Slot count */}
-          <div style={card}>
-            <div style={secTitle}>Capacidad</div>
-            <label style={lbl}>Cupos totales</label>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {[4, 6, 8, 10, 12, 16, 24, 32].map(n => (
-                <button key={n} onClick={() => setSlotCount(n)} style={{ padding: '7px 14px', border: `2px solid ${slots.length === n ? 'var(--black)' : 'var(--grey-200)'}`, background: slots.length === n ? 'var(--black)' : '#fff', color: slots.length === n ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>{n}</button>
-              ))}
-            </div>
-          </div>
-
           {/* Player slots */}
           <div style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -479,19 +499,48 @@ export default function PlayerTournamentsPage() {
               )}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-              {slots.map((s, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: `1px solid ${s ? 'var(--grey-200)' : 'var(--grey-100)'}`, background: s ? '#fff' : 'var(--grey-50)' }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: s ? 'var(--court-blue)' : 'var(--grey-200)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                    {s ? s.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2) : '?'}
+            {tModalidad === 'parejas' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 16 }}>
+                {Array.from({ length: Math.ceil(slots.length / 2) }, (_, pi) => (
+                  <div key={pi} style={{ border: '1px solid var(--grey-200)', padding: '16px' }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--court-blue)', marginBottom: 10 }}>
+                      Pareja {pi + 1}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[0, 1].map(offset => {
+                        const idx = pi * 2 + offset;
+                        const s = slots[idx];
+                        return (
+                          <div key={offset} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', border: `1px solid ${s ? 'var(--grey-200)' : 'var(--grey-100)'}`, background: s ? '#fff' : 'var(--grey-50)' }}>
+                            <div style={{ width: 28, height: 28, borderRadius: '50%', background: s ? 'var(--court-blue)' : 'var(--grey-200)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                              {s ? s.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2) : '?'}
+                            </div>
+                            <div style={{ flex: 1, fontSize: 13 }}>
+                              {s ? <><span style={{ fontWeight: 600 }}>{s.name}</span><span style={{ fontSize: 11, color: 'var(--grey-400)', marginLeft: 8 }}>#{s.ranking}</span></> : <span style={{ color: 'var(--grey-400)' }}>Jugador {offset + 1}</span>}
+                            </div>
+                            {s && <button onClick={() => removeSlot(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 16, lineHeight: 1, padding: '2px 4px' }}>×</button>}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div style={{ flex: 1, fontSize: 13 }}>
-                    {s ? <><span style={{ fontWeight: 600 }}>{s.name}</span><span style={{ fontSize: 11, color: 'var(--grey-400)', marginLeft: 8 }}>#{s.ranking}</span></> : <span style={{ color: 'var(--grey-400)' }}>Slot vacío — compartir código</span>}
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {slots.map((s, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: `1px solid ${s ? 'var(--grey-200)' : 'var(--grey-100)'}`, background: s ? '#fff' : 'var(--grey-50)' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: s ? 'var(--court-blue)' : 'var(--grey-200)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                      {s ? s.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2) : '?'}
+                    </div>
+                    <div style={{ flex: 1, fontSize: 13 }}>
+                      {s ? <><span style={{ fontWeight: 600 }}>{s.name}</span><span style={{ fontSize: 11, color: 'var(--grey-400)', marginLeft: 8 }}>#{s.ranking}</span></> : <span style={{ color: 'var(--grey-400)' }}>Slot vacío — compartir código</span>}
+                    </div>
+                    {s && <button onClick={() => removeSlot(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 16, lineHeight: 1, padding: '2px 4px' }}>×</button>}
                   </div>
-                  {s && <button onClick={() => removeSlot(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 16, lineHeight: 1, padding: '2px 4px' }}>×</button>}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             {/* Add player triggers */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

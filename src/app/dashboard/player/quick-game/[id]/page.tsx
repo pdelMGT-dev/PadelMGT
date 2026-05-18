@@ -148,6 +148,35 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     showToast(`Ronda ${next.currentRound} iniciada`);
   }
 
+  const isPointsMode = game.scoreConfig.type === 'points';
+  const ptTarget = isPointsMode ? (game.scoreConfig as { type: 'points'; target: number }).target : null;
+
+  function handleP1Change(key: string, val: string) {
+    setScoreInputs(prev => {
+      const current = prev[key] ?? { p1: '', p2: '' };
+      if (isPointsMode && ptTarget !== null) {
+        const n = parseInt(val, 10);
+        if (!isNaN(n) && n >= 0 && n <= ptTarget) {
+          return { ...prev, [key]: { p1: val, p2: String(ptTarget - n) } };
+        }
+      }
+      return { ...prev, [key]: { ...current, p1: val } };
+    });
+  }
+
+  function handleP2Change(key: string, val: string) {
+    setScoreInputs(prev => {
+      const current = prev[key] ?? { p1: '', p2: '' };
+      if (isPointsMode && ptTarget !== null) {
+        const n = parseInt(val, 10);
+        if (!isNaN(n) && n >= 0 && n <= ptTarget) {
+          return { ...prev, [key]: { p1: String(ptTarget - n), p2: val } };
+        }
+      }
+      return { ...prev, [key]: { ...current, p2: val } };
+    });
+  }
+
   function handleCopy() {
     if (!shareUrl) return;
     navigator.clipboard.writeText(shareUrl).then(() => {
@@ -331,70 +360,66 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               const inputs   = scoreInputs[key] ?? { p1: '', p2: '' };
 
               return (
-                <div
-                  key={court.courtNum}
-                  style={{ background: '#fff', border: `2px solid ${isDone ? 'var(--grey-200)' : 'var(--turf-green)'}`, padding: '20px 24px' }}
-                >
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 14 }}>
-                    Cancha {court.courtNum}
+                <div key={court.courtNum} style={{ background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 12, overflow: 'hidden' }}>
+
+                  {/* Header bar */}
+                  <div style={{ background: isDone ? 'var(--grey-800, #1a1a1a)' : 'var(--black)', color: '#fff', padding: '8px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Cancha {court.courtNum}</span>
+                    {isDone
+                      ? <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neon)', letterSpacing: '0.12em' }}>✓ COMPLETADO</span>
+                      : <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--turf-green)', letterSpacing: '0.12em' }}>● EN JUEGO</span>
+                    }
                   </div>
 
-                  {/* Matchup */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-                    <div>
-                      {court.pair1.map(pid => (
-                        <div key={pid} style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{getName(pid)}</div>
-                      ))}
+                  {/* Team rows */}
+                  {[
+                    { pids: court.pair1, score: court.pair1Score, inputKey: 'p1', isWinner: isDone && (court.pair1Score ?? 0) > (court.pair2Score ?? 0) },
+                    { pids: court.pair2, score: court.pair2Score, inputKey: 'p2', isWinner: isDone && (court.pair2Score ?? 0) > (court.pair1Score ?? 0) },
+                  ].map((team, ti) => (
+                    <div key={ti} style={{
+                      display: 'grid', gridTemplateColumns: '1fr 88px',
+                      borderBottom: ti === 0 ? '2px solid var(--grey-100)' : 'none',
+                      background: isDone && team.isWinner ? 'rgba(40,167,69,0.04)' : '#fff',
+                    }}>
+                      {/* Player names */}
+                      <div style={{ padding: '14px 16px', borderRight: '1px solid var(--grey-100)' }}>
+                        {team.pids.map(pid => (
+                          <div key={pid} style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.5, color: isDone && !team.isWinner ? 'var(--grey-400)' : 'var(--black)' }}>
+                            {getName(pid)}
+                          </div>
+                        ))}
+                      </div>
+                      {/* Score column */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 8px' }}>
+                        {isDone ? (
+                          <span style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 700, color: team.isWinner ? 'var(--turf-green)' : 'var(--grey-300)', lineHeight: 1 }}>
+                            {team.score ?? 0}
+                          </span>
+                        ) : (
+                          <input
+                            type="number" min={0} max={999}
+                            value={inputs[team.inputKey as 'p1' | 'p2']}
+                            onChange={e => team.inputKey === 'p1'
+                              ? handleP1Change(key, e.target.value)
+                              : handleP2Change(key, e.target.value)
+                            }
+                            placeholder="–"
+                            style={{ width: '100%', textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, border: 'none', borderBottom: '2px solid var(--grey-200)', outline: 'none', padding: '4px 0', background: 'transparent', color: 'var(--black)' }}
+                          />
+                        )}
+                      </div>
                     </div>
-                    <div style={{ textAlign: 'center' }}>
-                      {isDone ? (
-                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em' }}>
-                          <span style={{ color: (court.pair1Score ?? 0) > (court.pair2Score ?? 0) ? 'var(--turf-green)' : 'var(--grey-400)' }}>{court.pair1Score}</span>
-                          <span style={{ color: 'var(--grey-300)', margin: '0 6px' }}>–</span>
-                          <span style={{ color: (court.pair2Score ?? 0) > (court.pair1Score ?? 0) ? 'var(--turf-green)' : 'var(--grey-400)' }}>{court.pair2Score}</span>
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--grey-300)', letterSpacing: '0.04em' }}>VS</span>
-                      )}
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      {court.pair2.map(pid => (
-                        <div key={pid} style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{getName(pid)}</div>
-                      ))}
-                    </div>
-                  </div>
+                  ))}
 
-                  {/* Score input */}
-                  {!isDone ? (
-                    <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
-                        Registrar score:
-                      </span>
-                      <input
-                        type="number" min={0} max={999}
-                        value={inputs.p1}
-                        onChange={e => setScoreInputs(prev => ({ ...prev, [key]: { ...(prev[key] ?? { p1: '', p2: '' }), p1: e.target.value } }))}
-                        placeholder="0"
-                        style={{ ...inp, width: 72, textAlign: 'center', padding: '8px 10px' }}
-                      />
-                      <span style={{ color: 'var(--grey-400)', fontWeight: 700 }}>–</span>
-                      <input
-                        type="number" min={0} max={999}
-                        value={inputs.p2}
-                        onChange={e => setScoreInputs(prev => ({ ...prev, [key]: { ...(prev[key] ?? { p1: '', p2: '' }), p2: e.target.value } }))}
-                        placeholder="0"
-                        style={{ ...inp, width: 72, textAlign: 'center', padding: '8px 10px' }}
-                      />
+                  {/* Register button (only when not done) */}
+                  {!isDone && (
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid var(--grey-100)' }}>
                       <button
                         onClick={() => handleRegister(activeRound.num, court.courtNum)}
-                        style={{ padding: '9px 20px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}
+                        style={{ width: '100%', padding: '10px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}
                       >
-                        Registrar
+                        Registrar resultado →
                       </button>
-                    </div>
-                  ) : (
-                    <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 10, fontSize: 11, color: 'var(--turf-green)', fontWeight: 600 }}>
-                      ✓ Score registrado
                     </div>
                   )}
                 </div>
