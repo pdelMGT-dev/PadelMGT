@@ -14,6 +14,30 @@ import {
 import { isRoundComplete, calculateStandings } from '@/lib/game-engine';
 import type { ActiveGame, GameStatus, ScoreConfig } from '@/lib/game-engine';
 
+type JoinRequest = {
+  id: string;
+  gameId: string;
+  playerId: string;
+  playerName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+};
+
+function loadJoinRequests(gameId: string): JoinRequest[] {
+  try {
+    const all: JoinRequest[] = JSON.parse(localStorage.getItem('padelmgt_join_requests') || '[]');
+    return all.filter(r => r.gameId === gameId);
+  } catch { return []; }
+}
+
+function updateJoinRequest(id: string, status: 'approved' | 'rejected') {
+  try {
+    const all: JoinRequest[] = JSON.parse(localStorage.getItem('padelmgt_join_requests') || '[]');
+    const updated = all.map(r => r.id === id ? { ...r, status } : r);
+    localStorage.setItem('padelmgt_join_requests', JSON.stringify(updated));
+  } catch {}
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const STATUS_INFO: Record<GameStatus, { label: string; color: string }> = {
@@ -94,6 +118,20 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   // Add player state
   const [addPlayerName, setAddPlayerName] = useState('');
+
+  // Join requests
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
+
+  function refreshRequests() {
+    if (game) setJoinRequests(loadJoinRequests(game.id));
+  }
+
+  useEffect(() => {
+    refreshRequests();
+    const interval = setInterval(refreshRequests, 4000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.id]);
 
   useEffect(() => {
     if (game?.code) setShareUrl(`${window.location.origin}/quick-game/${game.code}`);
@@ -196,6 +234,23 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     saveGame(updated);
     setGame(updated);
     showToast('Spots ajustados.');
+  }
+
+  function handleApproveRequest(req: JoinRequest) {
+    if (!game || game.players.length >= game.maxPlayers) return;
+    const newPlayer = { id: req.playerId, name: req.playerName, ranking: 0, isCreator: false };
+    const updated = { ...game, players: [...game.players, newPlayer] };
+    saveGame(updated);
+    setGame(updated);
+    updateJoinRequest(req.id, 'approved');
+    setJoinRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved' } : r));
+    showToast(`${req.playerName} aprobado.`);
+  }
+
+  function handleRejectRequest(req: JoinRequest) {
+    updateJoinRequest(req.id, 'rejected');
+    setJoinRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'rejected' } : r));
+    showToast(`Solicitud de ${req.playerName} rechazada.`);
   }
 
   function handleRegister(roundNum: number, courtNum: number) {
@@ -550,6 +605,48 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 Iniciar Juego →
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Join requests panel (pending game only) */}
+      {isPending && joinRequests.filter(r => r.status === 'pending').length > 0 && (
+        <div style={{ background: '#fff', border: '2px solid #7c3aed', marginBottom: 24 }}>
+          <div style={{ background: 'rgba(124,58,237,0.06)', padding: '14px 20px', borderBottom: '1px solid rgba(124,58,237,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7c3aed', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#7c3aed' }}>
+                Solicitudes de unión ({joinRequests.filter(r => r.status === 'pending').length})
+              </span>
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>El jugador está esperando tu respuesta</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {joinRequests.filter(r => r.status === 'pending').map(req => (
+              <div key={req.id} style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: '1px solid var(--grey-100)' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--black)', marginBottom: 2 }}>{req.playerName}</div>
+                  <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+                    {new Date(req.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} · {game.players.length}/{game.maxPlayers} slots usados
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <button
+                    onClick={() => handleApproveRequest(req)}
+                    disabled={game.players.length >= game.maxPlayers}
+                    style={{ padding: '8px 18px', background: game.players.length < game.maxPlayers ? 'var(--turf-green)' : 'var(--grey-200)', color: game.players.length < game.maxPlayers ? '#fff' : 'var(--grey-400)', border: 'none', cursor: game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+                  >
+                    {game.players.length >= game.maxPlayers ? 'Sin slots' : 'Aprobar'}
+                  </button>
+                  <button
+                    onClick={() => handleRejectRequest(req)}
+                    style={{ padding: '8px 14px', background: '#fff', border: '1px solid #fca5a5', color: '#dc2626', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+                  >
+                    Rechazar
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

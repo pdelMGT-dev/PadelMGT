@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useMemo, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { createQuickGame, getAllGames } from '@/lib/game-store';
 import type { ActiveGame, GamePlayer as EnginePlayer, ScoreConfig } from '@/lib/game-engine';
 
@@ -417,8 +418,12 @@ export default function QuickGamePage() {
         }).length
       : 0;
 
+    function gameShareUrl(code: string) {
+      return `${window.location.origin}/quick-game/${code}`;
+    }
+
     function copyCode(code: string) {
-      navigator.clipboard.writeText(code).catch(() => {});
+      navigator.clipboard.writeText(gameShareUrl(code)).catch(() => {});
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -463,8 +468,11 @@ export default function QuickGamePage() {
 
               {/* QR visual */}
               <div style={{ background: 'var(--grey-900)', padding: '24px', textAlign: 'center', marginBottom: 20 }}>
-                <div style={{ width: 120, height: 120, background: 'var(--grey-700)', margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--grey-400)', fontWeight: 600 }}>QR Code</div>
+                <div style={{ background: '#fff', display: 'inline-block', padding: 8, marginBottom: 12 }}>
+                  <QRCodeSVG value={gameShareUrl(qrGame.code)} size={120} bgColor="#ffffff" fgColor="#000000" level="M" />
+                </div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '0.12em' }}>{qrGame.code}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 4, wordBreak: 'break-all' }}>{gameShareUrl(qrGame.code)}</div>
               </div>
 
               {/* Share options */}
@@ -493,7 +501,7 @@ export default function QuickGamePage() {
                 <button onClick={() => copyCode(qrGame.code)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', border: `1px solid ${copied ? 'var(--turf-green)' : 'var(--grey-200)'}`, background: copied ? 'rgba(0,200,100,0.05)' : '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
                   <span style={{ fontSize: 18 }}>{copied ? '✓' : '📋'}</span>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: copied ? 'var(--turf-green)' : 'var(--black)' }}>{copied ? '¡Copiado!' : 'Copiar código / link'}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: copied ? 'var(--turf-green)' : 'var(--black)' }}>{copied ? '¡Link copiado!' : 'Copiar link de invitación'}</div>
                     <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Pegalo en WhatsApp, Instagram o cualquier medio</div>
                   </div>
                 </button>

@@ -5,6 +5,22 @@ import Link from 'next/link';
 import { getGameByCode, saveGame } from '@/lib/game-store';
 import type { ActiveGame, GameStatus, ScoreConfig } from '@/lib/game-engine';
 
+type JoinRequest = {
+  id: string;
+  gameId: string;
+  playerId: string;
+  playerName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+};
+
+function loadRequests(): JoinRequest[] {
+  try { return JSON.parse(localStorage.getItem('padelmgt_join_requests') || '[]'); } catch { return []; }
+}
+function saveRequests(reqs: JoinRequest[]) {
+  try { localStorage.setItem('padelmgt_join_requests', JSON.stringify(reqs)); } catch {}
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const STATUS_INFO: Record<GameStatus, { label: string; color: string; dot?: boolean }> = {
@@ -54,6 +70,7 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
   const [showJoin, setShowJoin] = useState(false);
   const [joined, setJoined] = useState(false);
   const [joinError, setJoinError] = useState('');
+  const [myRequest, setMyRequest] = useState<JoinRequest | null>(null);
 
   // Read current user from localStorage on mount
   useEffect(() => {
@@ -66,9 +83,21 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
     }
   }, []);
 
-  // Poll every 5 seconds for live updates (localStorage simulation of real-time)
+  // Poll every 5 seconds for live updates + request status refresh
   useEffect(() => {
-    const load = () => setGame(getGameByCode(code));
+    const load = () => {
+      setGame(getGameByCode(code));
+      // Refresh own request status
+      setCurrentUser(prev => {
+        if (prev) {
+          const reqs = loadRequests();
+          const g = getGameByCode(code);
+          const req = g ? reqs.find(r => r.gameId === g.id && r.playerId === prev.id) ?? null : null;
+          setMyRequest(req);
+        }
+        return prev;
+      });
+    };
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
@@ -92,7 +121,8 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
   // Detect whether the current user is already in the game
   const alreadyInGame = currentUser != null && game.players.some(p => p.id === currentUser.id);
 
-  const canJoin = isPending && game.players.length < game.maxPlayers && !joined && !alreadyInGame;
+  const hasRequest = myRequest !== null;
+  const canJoin = isPending && game.players.length < game.maxPlayers && !joined && !alreadyInGame && !hasRequest;
 
   // Determine if a player is in the game (either just joined this session or was already there)
   const playerIsInGame = joined || alreadyInGame;
@@ -108,29 +138,25 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
 
   function handleJoin() {
     if (!game) return;
+    const name = currentUser ? currentUser.name : joinName.trim();
+    const pid  = currentUser ? currentUser.id : `guest-${Date.now()}`;
+    if (!name) { setJoinError('Ingresá tu nombre para unirte.'); return; }
 
-    if (currentUser) {
-      // Logged-in user joins with their existing id and name
-      const newPlayer = { id: currentUser.id, name: currentUser.name, ranking: 0, isCreator: false };
-      const updated: ActiveGame = { ...game, players: [...game.players, newPlayer] };
-      saveGame(updated);
-      setGame(updated);
-      setJoined(true);
-      setShowJoin(false);
-      setJoinError('');
-    } else {
-      // Guest flow
-      const name = joinName.trim();
-      if (!name) { setJoinError('Ingresá tu nombre para unirte.'); return; }
-      const newPlayer = { id: `guest-${Date.now()}`, name, ranking: 0, isCreator: false };
-      const updated: ActiveGame = { ...game, players: [...game.players, newPlayer] };
-      saveGame(updated);
-      setGame(updated);
-      setJoined(true);
-      setShowJoin(false);
-      setJoinName('');
-      setJoinError('');
-    }
+    const req: JoinRequest = {
+      id: crypto.randomUUID(),
+      gameId: game.id,
+      playerId: pid,
+      playerName: name,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+    const reqs = loadRequests();
+    saveRequests([...reqs, req]);
+    setMyRequest(req);
+    setJoined(true);
+    setShowJoin(false);
+    setJoinName('');
+    setJoinError('');
   }
 
   function handleLeave() {
@@ -189,11 +215,23 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
           </div>
         </div>
 
-        {/* Joined toast */}
-        {joined && (
+        {/* Request sent / approved / rejected feedback */}
+        {myRequest?.status === 'approved' && (
           <div style={{ background: 'var(--turf-green)', color: '#fff', padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span>✓</span>
-            <span style={{ fontWeight: 600, fontSize: 13 }}>¡Te uniste al juego! El organizador recibirá tu confirmación.</span>
+            <span style={{ fontSize: 18 }}>✓</span>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>¡Solicitud aprobada! Estás en el juego.</span>
+          </div>
+        )}
+        {myRequest?.status === 'rejected' && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18 }}>✗</span>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>Tu solicitud fue rechazada por el organizador.</span>
+          </div>
+        )}
+        {(joined || myRequest?.status === 'pending') && !myRequest?.status?.match(/approved|rejected/) && (
+          <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18 }}>⏳</span>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>Solicitud enviada — esperando aprobación del organizador.</span>
           </div>
         )}
 
