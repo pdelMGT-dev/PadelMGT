@@ -34,6 +34,11 @@ const secTitle: React.CSSProperties = {
   borderBottom: '1px solid var(--grey-100)',
 };
 
+interface CurrentUser {
+  id: string;
+  name: string;
+}
+
 // ── Public view component ──────────────────────────────────────────────────────
 
 export default function PublicQuickGamePage({ params }: { params: Promise<{ code: string }> }) {
@@ -44,10 +49,22 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
     return getGameByCode(code);
   });
 
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [joinName, setJoinName] = useState('');
   const [showJoin, setShowJoin] = useState(false);
   const [joined, setJoined] = useState(false);
   const [joinError, setJoinError] = useState('');
+
+  // Read current user from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('padelmgt_user');
+      const parsed: CurrentUser | null = JSON.parse(raw || 'null');
+      setCurrentUser(parsed);
+    } catch {
+      setCurrentUser(null);
+    }
+  }, []);
 
   // Poll every 5 seconds for live updates (localStorage simulation of real-time)
   useEffect(() => {
@@ -71,20 +88,60 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
   const isLive     = game.status === 'live';
   const isFinished = game.status === 'finished';
   const isPending  = game.status === 'created' || game.status === 'starting_soon';
-  const canJoin    = isPending && game.players.length < game.maxPlayers && !joined;
+
+  // Detect whether the current user is already in the game
+  const alreadyInGame = currentUser != null && game.players.some(p => p.id === currentUser.id);
+
+  const canJoin = isPending && game.players.length < game.maxPlayers && !joined && !alreadyInGame;
+
+  // Determine if a player is in the game (either just joined this session or was already there)
+  const playerIsInGame = joined || alreadyInGame;
+
+  // Find the current player's isCreator flag (if they are in the game)
+  const playerEntry = currentUser != null
+    ? game.players.find(p => p.id === currentUser.id)
+    : null;
+  const isCreator = playerEntry?.isCreator === true;
+
+  // canLeave: pending game, player is in game, player is not the creator
+  const canLeave = isPending && playerIsInGame && !isCreator;
 
   function handleJoin() {
-    const name = joinName.trim();
-    if (!name) { setJoinError('Ingresá tu nombre para unirte.'); return; }
     if (!game) return;
-    const newPlayer = { id: `guest-${Date.now()}`, name, ranking: 0, isCreator: false };
-    const updated: ActiveGame = { ...game, players: [...game.players, newPlayer] };
+
+    if (currentUser) {
+      // Logged-in user joins with their existing id and name
+      const newPlayer = { id: currentUser.id, name: currentUser.name, ranking: 0, isCreator: false };
+      const updated: ActiveGame = { ...game, players: [...game.players, newPlayer] };
+      saveGame(updated);
+      setGame(updated);
+      setJoined(true);
+      setShowJoin(false);
+      setJoinError('');
+    } else {
+      // Guest flow
+      const name = joinName.trim();
+      if (!name) { setJoinError('Ingresá tu nombre para unirte.'); return; }
+      const newPlayer = { id: `guest-${Date.now()}`, name, ranking: 0, isCreator: false };
+      const updated: ActiveGame = { ...game, players: [...game.players, newPlayer] };
+      saveGame(updated);
+      setGame(updated);
+      setJoined(true);
+      setShowJoin(false);
+      setJoinName('');
+      setJoinError('');
+    }
+  }
+
+  function handleLeave() {
+    if (!game || !currentUser) return;
+    const updated: ActiveGame = {
+      ...game,
+      players: game.players.filter(p => p.id !== currentUser.id),
+    };
     saveGame(updated);
     setGame(updated);
-    setJoined(true);
-    setShowJoin(false);
-    setJoinName('');
-    setJoinError('');
+    setJoined(false);
   }
 
   const activeRound = game.rounds.find(r => r.status === 'active') ?? null;
@@ -147,10 +204,38 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 8 }}>
               El juego aún no comenzó
             </div>
-            <div style={{ fontSize: 13, color: 'var(--grey-400)', marginBottom: canJoin ? 20 : 0 }}>
+            <div style={{ fontSize: 13, color: 'var(--grey-400)', marginBottom: canJoin || alreadyInGame ? 20 : 0 }}>
               {game.date} a las {game.time} · {game.players.length}/{game.maxPlayers} jugadores confirmados
             </div>
-            {canJoin && !showJoin && (
+
+            {/* Already-in badge */}
+            {alreadyInGame && !joined && (
+              <div style={{
+                display: 'inline-block',
+                padding: '8px 20px',
+                background: 'rgba(40,167,69,0.1)',
+                border: '1px solid rgba(40,167,69,0.3)',
+                color: 'var(--turf-green)',
+                fontSize: 13,
+                fontWeight: 700,
+                marginBottom: canLeave ? 16 : 0,
+              }}>
+                Ya estás en este juego ✓
+              </div>
+            )}
+
+            {/* Join button for logged-in user (not already in game) */}
+            {canJoin && currentUser && !showJoin && (
+              <button
+                onClick={handleJoin}
+                style={{ padding: '12px 28px', background: 'var(--turf-green)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+              >
+                Unirme como {currentUser.name} →
+              </button>
+            )}
+
+            {/* Join button for guest (not logged in, not already in game) */}
+            {canJoin && !currentUser && !showJoin && (
               <button
                 onClick={() => setShowJoin(true)}
                 style={{ padding: '12px 28px', background: 'var(--turf-green)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
@@ -158,7 +243,9 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
                 Unirme a este juego →
               </button>
             )}
-            {showJoin && (
+
+            {/* Guest name input form */}
+            {showJoin && !currentUser && (
               <div style={{ marginTop: 20, textAlign: 'left', maxWidth: 360, margin: '20px auto 0' }}>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 8 }}>
                   Tu nombre
@@ -181,6 +268,18 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
                     Cancelar
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Leave button */}
+            {canLeave && (
+              <div style={{ marginTop: 16 }}>
+                <button
+                  onClick={handleLeave}
+                  style={{ padding: '10px 22px', background: '#fff8f8', border: '1px solid #feb2b2', color: '#c53030', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                >
+                  Salirse del juego
+                </button>
               </div>
             )}
           </div>

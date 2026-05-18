@@ -46,6 +46,11 @@ const inp: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
+const lbl: React.CSSProperties = {
+  display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
+  textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6,
+};
+
 const secTitle: React.CSSProperties = {
   fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700,
   color: 'var(--grey-400)', marginBottom: 16, paddingBottom: 10,
@@ -72,9 +77,37 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
 
+  // User detection
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; role: string } | null>(null);
+  useEffect(() => {
+    try { const u = localStorage.getItem('padelmgt_user'); if (u) setCurrentUser(JSON.parse(u)); } catch {}
+  }, []);
+
+  // Inline edit state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editTime, setEditTime] = useState('');
+  const [editClub, setEditClub] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editIsCustomLoc, setEditIsCustomLoc] = useState(false);
+
+  // Add player state
+  const [addPlayerName, setAddPlayerName] = useState('');
+
   useEffect(() => {
     if (game?.code) setShareUrl(`${window.location.origin}/quick-game/${game.code}`);
   }, [game?.code]);
+
+  // Initialize edit fields when game loads
+  useEffect(() => {
+    if (!game) return;
+    setEditName(game.name);
+    setEditDate(game.date);
+    setEditTime(game.time);
+    setEditClub(game.club);
+    setEditCity(game.city);
+  }, [game?.id]);
 
   if (!game) {
     return (
@@ -91,7 +124,8 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const isLive     = game.status === 'live';
   const isFinished = game.status === 'finished';
   const isPending  = game.status === 'created' || game.status === 'starting_soon';
-  const canStart   = isPending && game.players.length >= 4;
+  const canStart   = isPending && game.players.length >= 4 && game.players.length === game.maxPlayers;
+  const emptySlots = Math.max(0, game.maxPlayers - game.players.length);
 
   const activeRound = game.rounds.find(r => r.status === 'active') ?? null;
   const doneRounds  = game.rounds.filter(r => r.status === 'completed');
@@ -120,6 +154,48 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     saveGame(started);
     setGame(started);
     showToast('¡Juego iniciado!');
+  }
+
+  function handleSaveEdits() {
+    if (!game) return;
+    const updated: ActiveGame = {
+      ...game,
+      name: editName.trim() || game.name,
+      date: editDate || game.date,
+      time: editTime || game.time,
+      club: editClub.trim() || game.club,
+      city: editCity.trim() || game.city,
+    };
+    saveGame(updated);
+    setGame(updated);
+    setEditOpen(false);
+    showToast('Juego actualizado.');
+  }
+
+  function handleAddPlayer() {
+    if (!addPlayerName.trim() || !game || game.players.length >= game.maxPlayers) return;
+    const newP = { id: `manual-${Date.now()}`, name: addPlayerName.trim(), ranking: 0, isCreator: false };
+    const updated = { ...game, players: [...game.players, newP] };
+    saveGame(updated);
+    setGame(updated);
+    setAddPlayerName('');
+    showToast(`${newP.name} agregado.`);
+  }
+
+  function handleRemovePlayer(pid: string) {
+    if (!game) return;
+    const updated = { ...game, players: game.players.filter(p => p.id !== pid) };
+    saveGame(updated);
+    setGame(updated);
+    showToast('Jugador eliminado.');
+  }
+
+  function handleTrimSlots() {
+    if (!game) return;
+    const updated = { ...game, maxPlayers: game.players.length };
+    saveGame(updated);
+    setGame(updated);
+    showToast('Spots ajustados.');
   }
 
   function handleRegister(roundNum: number, courtNum: number) {
@@ -185,6 +261,9 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     });
   }
 
+  // suppress unused warning — currentUser may be used for future gating
+  void currentUser;
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -214,14 +293,6 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
           <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', background: 'rgba(124,58,237,0.09)', color: '#7c3aed', letterSpacing: '0.08em' }}>
             {game.code}
           </span>
-          {!isFinished && (
-            <Link
-              href={`/dashboard/player/quick-game/${id}/edit`}
-              style={{ padding: '8px 18px', background: 'var(--black)', color: '#fff', textDecoration: 'none', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', display: 'inline-block' }}
-            >
-              Gestionar
-            </Link>
-          )}
         </div>
       </div>
 
@@ -291,6 +362,57 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
+      {/* Inline edit section (only when pending) */}
+      {isPending && (
+        <div style={{ border: '1px solid var(--grey-200)', background: '#fff', marginBottom: 24 }}>
+          {/* Toggle header */}
+          <button onClick={() => setEditOpen(v => !v)} style={{ width: '100%', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Editar detalles del juego</span>
+            <span style={{ fontSize: 16, color: 'var(--grey-400)' }}>{editOpen ? '−' : '+'}</span>
+          </button>
+
+          {editOpen && (
+            <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--grey-100)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
+                <div>
+                  <label style={lbl}>Nombre del juego</label>
+                  <input value={editName} onChange={e => setEditName(e.target.value)} style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>Fecha</label>
+                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>Hora</label>
+                  <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} style={inp} />
+                </div>
+              </div>
+
+              {/* Location */}
+              <div style={{ marginTop: 12 }}>
+                <label style={lbl}>Ubicación</label>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <button onClick={() => setEditIsCustomLoc(false)} style={{ padding: '7px 14px', border: `2px solid ${!editIsCustomLoc ? 'var(--black)' : 'var(--grey-200)'}`, background: !editIsCustomLoc ? 'var(--black)' : '#fff', color: !editIsCustomLoc ? '#fff' : 'var(--grey-600)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Club registrado</button>
+                  <button onClick={() => setEditIsCustomLoc(true)} style={{ padding: '7px 14px', border: `2px solid ${editIsCustomLoc ? 'var(--black)' : 'var(--grey-200)'}`, background: editIsCustomLoc ? 'var(--black)' : '#fff', color: editIsCustomLoc ? '#fff' : 'var(--grey-600)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Otro / Pista privada</button>
+                </div>
+                {editIsCustomLoc ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <input value={editClub} onChange={e => setEditClub(e.target.value)} placeholder="Nombre del lugar" style={inp} />
+                    <input value={editCity} onChange={e => setEditCity(e.target.value)} placeholder="Ciudad" style={inp} />
+                  </div>
+                ) : (
+                  <input value={editClub} onChange={e => setEditClub(e.target.value)} placeholder="Nombre del club" style={inp} />
+                )}
+              </div>
+
+              <button onClick={handleSaveEdits} style={{ marginTop: 16, padding: '10px 24px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Guardar cambios ✓
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Pending / Start panel */}
       {isPending && (
         <div style={{ background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: '24px', marginBottom: 32, display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
@@ -309,6 +431,11 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 <strong style={{ color: '#7c3aed' }}>{game.code}</strong>
               )}
             </div>
+            {isPending && emptySlots > 0 && (
+              <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#92400e' }}>
+                <strong>{emptySlots} slot{emptySlots > 1 ? 's' : ''} vacío{emptySlots > 1 ? 's' : ''}</strong> — Agregá jugadores o reducí los spots antes de iniciar.
+              </div>
+            )}
             {canStart && (
               <button
                 onClick={handleStartGame}
@@ -321,17 +448,53 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      {/* Players list (when pending) */}
-      {isPending && game.players.length > 0 && (
+      {/* Player management section (when pending) */}
+      {isPending && (
         <div style={{ marginBottom: 32 }}>
-          <div style={secTitle}>Jugadores ({game.players.length}/{game.maxPlayers})</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={secTitle}>Jugadores ({game.players.length}/{game.maxPlayers})</div>
+            {emptySlots > 0 && (
+              <button onClick={handleTrimSlots} style={{ padding: '5px 12px', background: '#fff', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)' }}>
+                Reducir spots a {game.players.length}
+              </button>
+            )}
+          </div>
+
+          {/* Player chips */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
             {game.players.map(p => (
-              <div key={p.id} style={{ padding: '8px 14px', background: '#fff', border: '1px solid var(--grey-200)', fontSize: 13, fontWeight: p.isCreator ? 700 : 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {p.name}
+              <div key={p.id} style={{ padding: '8px 12px', background: '#fff', border: '1px solid var(--grey-200)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: p.isCreator ? 700 : 500 }}>{p.name}</span>
                 {p.isCreator && <span style={{ fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 5px', fontWeight: 700 }}>ORG</span>}
+                {!p.isCreator && (
+                  <button onClick={() => handleRemovePlayer(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 14, lineHeight: 1, padding: '0 2px' }}>×</button>
+                )}
               </div>
             ))}
+            {/* Empty slots */}
+            {Array.from({ length: emptySlots }, (_, i) => (
+              <div key={`empty-${i}`} style={{ padding: '8px 12px', background: 'var(--grey-50)', border: '1px dashed var(--grey-300)', fontSize: 12, color: 'var(--grey-400)' }}>
+                Slot vacío
+              </div>
+            ))}
+          </div>
+
+          {/* Add player input */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={addPlayerName}
+              onChange={e => setAddPlayerName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddPlayer()}
+              placeholder="Nombre del jugador..."
+              style={{ ...inp, maxWidth: 280 }}
+            />
+            <button
+              onClick={handleAddPlayer}
+              disabled={!addPlayerName.trim() || game.players.length >= game.maxPlayers}
+              style={{ padding: '10px 20px', background: addPlayerName.trim() && game.players.length < game.maxPlayers ? 'var(--black)' : 'var(--grey-200)', color: addPlayerName.trim() && game.players.length < game.maxPlayers ? '#fff' : 'var(--grey-400)', border: 'none', cursor: addPlayerName.trim() && game.players.length < game.maxPlayers ? 'pointer' : 'default', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+            >
+              + Agregar
+            </button>
           </div>
         </div>
       )}
