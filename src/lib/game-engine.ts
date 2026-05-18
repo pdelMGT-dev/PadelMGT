@@ -99,6 +99,7 @@ export interface ActiveGame {
   rounds: GameRound[];
   currentRound: number;  // 0 = not started, 1+ = current round number
   standings: Standing[];
+  levelLabel?: string;        // display label for level filter used at creation
   bracket?: KnockoutBracket; // for knockout/world_cup
   groups?: GroupStage;        // for world_cup
   isCreator?: boolean;        // set by UI when rendering for creator

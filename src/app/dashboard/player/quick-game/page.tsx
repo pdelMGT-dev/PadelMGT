@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useState, useMemo, useEffect } from 'react';
+import { createQuickGame, getAllGames } from '@/lib/game-store';
+import type { ActiveGame, GamePlayer as EnginePlayer, ScoreConfig } from '@/lib/game-engine';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -14,14 +16,6 @@ type PlayerLevel  = 'beginner' | 'intermediate' | 'advanced';
 
 type Club = { id: string; name: string; courts: number };
 type Player = { id: string; name: string; ranking: number; level: PlayerLevel; registered: boolean; email?: string };
-
-type QuickGame = {
-  id: string; code: string; name: string;
-  date: string; time: string; club: string; city: string;
-  levelLabel: string; players: number; maxPlayers: number;
-  pairType: PairType; status: GameStatus;
-  result?: string; won?: boolean;
-};
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
@@ -74,13 +68,6 @@ const NEARBY_GAMES = [
   { id: 'n3', name: 'Open Mixto Sábado',      host: 'Pedro M.',   level: 'Intermedio', players: 8, max: 12, time: 'Sábado 10:00', club: 'Club Deportivo Sur', distance: '2.1 km' },
 ];
 
-const MOCK_GAMES: QuickGame[] = [
-  { id: 'g1', code: 'JR-2026-3841', name: 'Express Nocturno',   date: '14 May 2026', time: '20:00', club: 'Padel Arena',       city: 'Buenos Aires', levelLabel: 'Todos',      players: 4, maxPlayers: 4, pairType: 'exchange', status: 'live' },
-  { id: 'g2', code: 'JR-2026-5519', name: 'Juego Rápido Tarde', date: '15 May 2026', time: '17:00', club: 'Club Barrio Norte', city: 'Buenos Aires', levelLabel: 'Intermedio', players: 4, maxPlayers: 4, pairType: 'exchange', status: 'starting_soon' },
-  { id: 'g3', code: 'JR-2026-4827', name: 'Juego del Sábado',   date: '20 May 2026', time: '11:00', club: 'Club Barrio Norte', city: 'Buenos Aires', levelLabel: 'Intermedio', players: 2, maxPlayers: 4, pairType: 'fixed',    status: 'created' },
-  { id: 'g4', code: 'JR-2026-2234', name: 'Americano Viernes',  date: '8 May 2026',  time: '19:00', club: 'Padel Arena',       city: 'Buenos Aires', levelLabel: 'Avanzado',   players: 8, maxPlayers: 8, pairType: 'exchange', status: 'finished', result: '3–1', won: true },
-  { id: 'g5', code: 'JR-2026-1198', name: 'Express del Club',   date: '2 May 2026',  time: '10:00', club: 'Club La Cantera',   city: 'Córdoba',      levelLabel: 'Todos',      players: 6, maxPlayers: 6, pairType: 'exchange', status: 'finished', result: '1–2', won: false },
-];
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 
@@ -194,27 +181,27 @@ export default function QuickGamePage() {
 
   // ── View + game list ──────────────────────────────────────────────────────
   const [view, setView]         = useState<'dashboard' | 'wizard'>('dashboard');
-  const [games, setGames]       = useState<QuickGame[]>(() => {
-    if (typeof window === 'undefined') return MOCK_GAMES;
-    try { const s = localStorage.getItem('qg_games'); return s ? JSON.parse(s) : MOCK_GAMES; } catch { return MOCK_GAMES; }
-  });
+  const [games, setGames]       = useState<ActiveGame[]>([]);
   const [newGameCode, setNewGameCode] = useState('');
-  const [qrGame, setQrGame]     = useState<QuickGame | null>(null);
+  const [qrGame, setQrGame]     = useState<ActiveGame | null>(null);
   const [copied, setCopied]     = useState(false);
   const [notification, setNotification] = useState<{ type: string; message: string } | null>(null);
   const [joinedToast, setJoinedToast]   = useState<string | null>(null);
 
-  // Sync games to localStorage whenever they change
-  useEffect(() => { try { localStorage.setItem('qg_games', JSON.stringify(games)); } catch {} }, [games]);
+  function reloadGames() {
+    setGames(getAllGames().filter(g => ['americano', 'mexicano'].includes(g.format)));
+  }
 
-  // Read notification + cancelled game from localStorage on mount
+  // Load games from store on mount, handle notifications and cancelled games
   useEffect(() => {
+    reloadGames();
     try {
       const n = localStorage.getItem('qg_notification');
       if (n) { setNotification(JSON.parse(n)); localStorage.removeItem('qg_notification'); }
       const cancelledId = localStorage.getItem('qg_cancelled');
-      if (cancelledId) { setGames(prev => prev.filter(g => g.id !== cancelledId)); localStorage.removeItem('qg_cancelled'); }
+      if (cancelledId) { reloadGames(); localStorage.removeItem('qg_cancelled'); }
     } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Wizard step ───────────────────────────────────────────────────────────
@@ -222,6 +209,7 @@ export default function QuickGamePage() {
 
   // INICIO
   const [gameName, setGameName] = useState('');
+  const [format, setFormat]   = useState<'americano' | 'mexicano'>('americano');
   const [date, setDate]       = useState('');
   const [time, setTime]       = useState('');
   const [country, setCountry] = useState('');
@@ -364,28 +352,43 @@ export default function QuickGamePage() {
   // ── Wizard lifecycle ──────────────────────────────────────────────────────
 
   function createGame() {
-    const code = `JR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    setNewGameCode(code);
-    const newGame: QuickGame = {
-      id: `g-${Date.now()}`,
-      code,
+    const enginePlayers: EnginePlayer[] = filledSlots.map(p => ({
+      id: p.id,
+      name: p.name,
+      ranking: p.ranking,
+      isCreator: p.id === 'me',
+    }));
+
+    const scoreConfig: ScoreConfig = scoreType === 'points'
+      ? { type: 'points', target: pointTarget }
+      : { type: 'traditional', setsPerMatch: setsPerRound, gamesPerSet, tiebreak, deuce: deuceRule === 'traditional' ? 'ventaja' : 'oro' };
+
+    const enginePairType = (pairType === 'fixed') ? 'parejas' : 'individual';
+    const courts = Math.max(1, Math.floor(slots.length / 4));
+
+    const newGame = createQuickGame({
       name: gameName.trim() || (isCustomLoc ? `Juego en ${customClub.trim()}` : selectedClub ? `Juego en ${selectedClub.name}` : 'Juego Rápido'),
       date: date || '–',
       time: time || '–',
       club: isCustomLoc ? customClub.trim() : (selectedClub?.name || '–'),
       city: isCustomLoc ? customCity.trim() : (city || '–'),
-      levelLabel: level ? LEVEL_LABEL[level] : 'Todos',
-      players: filledSlots.length,
+      format,
+      pairType: enginePairType,
+      mixto: false,
+      scoreConfig,
       maxPlayers: slots.length,
-      pairType: pairType || 'exchange',
-      status: 'created',
-    };
-    setGames(prev => [newGame, ...prev]);
+      courts,
+      players: enginePlayers,
+      levelLabel: level ? LEVEL_LABEL[level] : 'Todos',
+    });
+
+    setNewGameCode(newGame.code);
+    reloadGames();
     setStep(99);
   }
 
   function resetWizard() {
-    setStep(0); setGameName(''); setDate(''); setTime(''); setCountry(''); setCity(''); setClubId(''); setCustomClub(''); setCustomCity('');
+    setStep(0); setGameName(''); setFormat('americano'); setDate(''); setTime(''); setCountry(''); setCity(''); setClubId(''); setCustomClub(''); setCustomCity('');
     setLevel(null); setSlots([CREATOR, null, null, null]); setSearchMode(null);
     setPairType(null); setTeams([]); setSetsPerRound(1);
     setScoreType('traditional'); setGamesPerSet(6); setTiebreak(7);
@@ -403,8 +406,8 @@ export default function QuickGamePage() {
   if (view === 'dashboard') {
     const activeGames   = games.filter(g => ['draft', 'created', 'starting_soon', 'live'].includes(g.status));
     const finishedGames = games.filter(g => g.status === 'finished');
-    const pendingQR     = activeGames.filter(g => g.players < g.maxPlayers);
-    const wins          = finishedGames.filter(g => g.won).length;
+    const pendingQR     = activeGames.filter(g => g.players.length < g.maxPlayers);
+    const wins          = 0; // computed in Part D from standings
 
     function copyCode(code: string) {
       navigator.clipboard.writeText(code).catch(() => {});
@@ -529,7 +532,8 @@ export default function QuickGamePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
               {pendingQR.map(g => {
                 const si = STATUS_INFO[g.status];
-                const empty = g.maxPlayers - g.players;
+                const pCount = g.players.length;
+                const empty = g.maxPlayers - pCount;
                 return (
                   <div key={g.id} style={{ background: '#fff', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
                     <button onClick={() => setQrGame(g)} style={{ width: 48, height: 48, background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0, cursor: 'pointer', title: 'Ver QR e invitar' } as React.CSSProperties}>⬛</button>
@@ -537,7 +541,7 @@ export default function QuickGamePage() {
                       <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 2 }}>{g.name}</div>
                       <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{g.date} · {g.time} · {g.club}, {g.city}</div>
                       <div style={{ fontSize: 11, color: '#7c3aed', fontWeight: 600, marginTop: 3 }}>
-                        {g.players}/{g.maxPlayers} jugadores · {empty} slot{empty > 1 ? 's' : ''} vacío{empty > 1 ? 's' : ''}
+                        {pCount}/{g.maxPlayers} jugadores · {empty} slot{empty > 1 ? 's' : ''} vacío{empty > 1 ? 's' : ''}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -581,19 +585,19 @@ export default function QuickGamePage() {
                     <div style={{ fontSize: 12, color: 'var(--grey-400)', lineHeight: 1.7 }}>
                       {g.date} · {g.time}<br />
                       {g.club}, {g.city}<br />
-                      {g.levelLabel} · {g.pairType === 'fixed' ? 'Pareja Fija' : 'Intercambio'}
+                      {g.levelLabel ?? 'Todos'} · {g.pairType === 'parejas' ? 'Pareja Fija' : 'Intercambio'}
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                       <div>
                         <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, lineHeight: 1 }}>
-                          {g.players}<span style={{ fontSize: 13, color: 'var(--grey-400)', fontFamily: 'var(--font-body)', fontWeight: 400 }}>/{g.maxPlayers}</span>
+                          {g.players.length}<span style={{ fontSize: 13, color: 'var(--grey-400)', fontFamily: 'var(--font-body)', fontWeight: 400 }}>/{g.maxPlayers}</span>
                         </div>
                         <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', fontWeight: 600 }}>jugadores</div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                         <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', background: 'rgba(124,58,237,0.08)', color: '#7c3aed', letterSpacing: '0.08em' }}>{g.code}</span>
                         <Link
-                          href={isLive ? `/dashboard/player/quick-game/${g.id}` : `/dashboard/player/quick-game/${g.id}/edit`}
+                          href={`/dashboard/player/quick-game/${g.id}`}
                           style={{ padding: '7px 16px', background: isLive ? 'var(--turf-green)' : 'var(--grey-100)', color: isLive ? '#fff' : 'var(--grey-600)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}
                         >
                           {isLive ? 'Ver Partido' : 'Gestionar'}
@@ -628,12 +632,8 @@ export default function QuickGamePage() {
                   <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 8 }}>jugadores</div>
                   <button
                     onClick={() => {
-                      const alreadyJoined = games.some(existingGame => existingGame.id === `n-${g.id}`);
-                      if (alreadyJoined) { setJoinedToast(`Ya estás en "${g.name}". Lo encontrarás en Mis Juegos Activos.`); setTimeout(() => setJoinedToast(null), 4000); return; }
-                      const code = `JR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-                      const joined: QuickGame = { id: `n-${g.id}`, code, name: g.name, date: g.time.includes('Hoy') ? '15 May 2026' : g.time.includes('Mañana') ? '16 May 2026' : '20 May 2026', time: g.time.replace(/^(Hoy|Mañana|Sábado)\s/, ''), club: g.club, city: '', levelLabel: g.level, players: g.players + 1, maxPlayers: g.max, pairType: 'exchange', status: 'created' };
-                      setGames(prev => [joined, ...prev]);
-                      setJoinedToast(`¡Te uniste a "${g.name}"! Aparece en Mis Juegos Activos.`);
+                      // Nearby games are mock data; real join flow is via QR (Part E)
+                      setJoinedToast(`Solicitud enviada para "${g.name}". El creador debe aprobarla.`);
                       setTimeout(() => setJoinedToast(null), 4000);
                     }}
                     style={{ padding: '7px 16px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Unirse</button>
@@ -663,13 +663,9 @@ export default function QuickGamePage() {
                     <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600 }}>{g.name}</td>
                     <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--grey-400)' }}>{g.date}</td>
                     <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--grey-400)' }}>{g.club}, {g.city}</td>
-                    <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--grey-400)', textAlign: 'center' }}>{g.players}</td>
+                    <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--grey-400)', textAlign: 'center' }}>{g.players.length}</td>
                     <td style={{ padding: '12px 16px' }}>
-                      {g.result && (
-                        <span style={{ fontSize: 13, fontWeight: 700, color: g.won ? 'var(--turf-green)' : 'var(--grey-400)' }}>
-                          {g.won ? '▲ ' : '▼ '}{g.result}
-                        </span>
-                      )}
+                      <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>—</span>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <Link href={`/dashboard/player/quick-game/${g.id}`} style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', letterSpacing: '0.08em', textDecoration: 'none', cursor: 'pointer' }}>{g.code}</Link>
@@ -704,6 +700,25 @@ export default function QuickGamePage() {
             placeholder={isCustomLoc && customClub ? `Juego en ${customClub}` : selectedClub ? `Juego en ${selectedClub.name}` : 'Ej: Express del Martes, Open Mixto…'}
             style={inp}
           />
+        </div>
+
+        <div style={card}>
+          <div style={secTitle}>Formato</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {([
+              { key: 'americano' as const, label: 'Americano', desc: 'Parejas cambian cada ronda, todos juegan contra todos.' },
+              { key: 'mexicano' as const, label: 'Mexicano', desc: 'Parejas y rivales se asignan según la clasificación.' },
+            ] as const).map(f => (
+              <button
+                key={f.key}
+                onClick={() => setFormat(f.key)}
+                style={{ padding: '14px 16px', border: `2px solid ${format === f.key ? 'var(--black)' : 'var(--grey-200)'}`, background: format === f.key ? 'var(--black)' : '#fff', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, color: format === f.key ? '#fff' : 'var(--black)', marginBottom: 4 }}>{f.label}</div>
+                <div style={{ fontSize: 11, color: format === f.key ? 'rgba(255,255,255,0.6)' : 'var(--grey-400)', lineHeight: 1.4 }}>{f.desc}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div style={card}>

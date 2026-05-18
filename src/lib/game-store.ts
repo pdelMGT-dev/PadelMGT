@@ -339,6 +339,7 @@ export function createQuickGame(params: {
   maxPlayers: number;
   courts: number;
   players: GamePlayer[];
+  levelLabel?: string;
 }): ActiveGame {
   const game: ActiveGame = {
     id: generateId(),
@@ -359,6 +360,7 @@ export function createQuickGame(params: {
     rounds: [],
     currentRound: 0,
     standings: [],
+    levelLabel: params.levelLabel,
   };
   saveGame(game);
   return game;

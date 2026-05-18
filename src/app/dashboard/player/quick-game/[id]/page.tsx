@@ -314,6 +314,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         {[
           game.date, game.time, game.club, game.city,
           formatLabel(game.format),
+          game.levelLabel ?? null,
           game.pairType === 'parejas' ? 'Parejas Fijas' : 'Individual',
           game.mixto ? 'Mixto' : null,
           scoreConfigLabel(game.scoreConfig),
