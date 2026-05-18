@@ -11,8 +11,24 @@ import {
   startNextRound as engineStartNextRound,
   isGameFinished,
 } from '@/lib/game-store';
-import { isRoundComplete } from '@/lib/game-engine';
+import { isRoundComplete, calculateStandings } from '@/lib/game-engine';
 import type { ActiveGame, GameStatus, ScoreConfig, KnockoutMatch } from '@/lib/game-engine';
+
+// ── Join request helpers ───────────────────────────────────────────────────────
+
+type JoinRequest = {
+  id: string; gameId: string; playerId: string;
+  playerName: string; status: 'pending' | 'approved' | 'rejected'; createdAt: string;
+};
+function loadJoinRequests(gameId: string): JoinRequest[] {
+  try { return (JSON.parse(localStorage.getItem('padelmgt_join_requests') || '[]') as JoinRequest[]).filter(r => r.gameId === gameId); } catch { return []; }
+}
+function updateJoinRequest(id: string, status: 'approved' | 'rejected') {
+  try {
+    const all: JoinRequest[] = JSON.parse(localStorage.getItem('padelmgt_join_requests') || '[]');
+    localStorage.setItem('padelmgt_join_requests', JSON.stringify(all.map(r => r.id === id ? { ...r, status } : r)));
+  } catch {}
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -76,9 +92,51 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
 
+  // User detection
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string } | null>(null);
+  useEffect(() => {
+    try { const u = localStorage.getItem('padelmgt_user'); if (u) setCurrentUser(JSON.parse(u)); } catch {}
+  }, []);
+
+  // Inline edit state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editTime, setEditTime] = useState('');
+  const [editClub, setEditClub] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editIsCustomLoc, setEditIsCustomLoc] = useState(false);
+
+  // Add player state
+  const [addPlayerName, setAddPlayerName] = useState('');
+
+  // Join requests
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
+
+  // Post-game editing
+  const [editResultsOpen, setEditResultsOpen] = useState(false);
+  const [editScores, setEditScores] = useState<Record<string, { p1: string; p2: string }>>({});
+
   useEffect(() => {
     if (game?.code) setShareUrl(`${window.location.origin}/tournament/${game.code}`);
   }, [game?.code]);
+
+  // Init edit fields when game loads
+  useEffect(() => {
+    if (!game) return;
+    setEditName(game.name); setEditDate(game.date); setEditTime(game.time);
+    setEditClub(game.club); setEditCity(game.city);
+  }, [game?.id]);
+
+  // Poll join requests every 4s
+  useEffect(() => {
+    if (!game) return;
+    const load = () => setJoinRequests(loadJoinRequests(game.id));
+    load();
+    const iv = setInterval(load, 4000);
+    return () => clearInterval(iv);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.id]);
 
   if (!game) {
     return (
@@ -95,7 +153,8 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
   const isLive     = game.status === 'live';
   const isFinished = game.status === 'finished';
   const isPending  = game.status === 'created' || game.status === 'starting_soon';
-  const canStart   = isPending && game.players.length >= 4;
+  const emptySlots = Math.max(0, game.maxPlayers - game.players.length);
+  const canStart   = isPending && game.players.length >= 4 && game.players.length === game.maxPlayers;
   const roundBased = isRoundBased(game.format);
 
   const activeRound = game.rounds.find(r => r.status === 'active') ?? null;
@@ -236,6 +295,75 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
     navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
   }
 
+  function handleSaveEdits() {
+    if (!game) return;
+    const updated: ActiveGame = { ...game, name: editName.trim() || game.name, date: editDate || game.date, time: editTime || game.time, club: editIsCustomLoc ? editClub.trim() : (editClub.trim() || game.club), city: editIsCustomLoc ? editCity.trim() : (editCity.trim() || game.city) };
+    saveGame(updated); setGame(updated); setEditOpen(false); showToast('Torneo actualizado.');
+  }
+
+  function handleAddPlayer() {
+    if (!addPlayerName.trim() || !game || game.players.length >= game.maxPlayers) return;
+    const newP = { id: `manual-${Date.now()}`, name: addPlayerName.trim(), ranking: 0, isCreator: false };
+    const updated = { ...game, players: [...game.players, newP] };
+    saveGame(updated); setGame(updated); setAddPlayerName(''); showToast(`${newP.name} agregado.`);
+  }
+
+  function handleRemovePlayer(pid: string) {
+    if (!game) return;
+    const updated = { ...game, players: game.players.filter(p => p.id !== pid) };
+    saveGame(updated); setGame(updated); showToast('Jugador eliminado.');
+  }
+
+  function handleTrimSlots() {
+    if (!game) return;
+    const updated = { ...game, maxPlayers: game.players.length };
+    saveGame(updated); setGame(updated); showToast('Spots ajustados.');
+  }
+
+  function handleApproveRequest(req: JoinRequest) {
+    if (!game || game.players.length >= game.maxPlayers) return;
+    const newP = { id: req.playerId, name: req.playerName, ranking: 0, isCreator: false };
+    const updated = { ...game, players: [...game.players, newP] };
+    saveGame(updated); setGame(updated);
+    updateJoinRequest(req.id, 'approved');
+    setJoinRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved' } : r));
+    showToast(`${req.playerName} aprobado.`);
+  }
+
+  function handleRejectRequest(req: JoinRequest) {
+    updateJoinRequest(req.id, 'rejected');
+    setJoinRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'rejected' } : r));
+    showToast(`Solicitud de ${req.playerName} rechazada.`);
+  }
+
+  function handleEditScoreChange(roundNum: number, courtNum: number, team: 'p1' | 'p2', val: string) {
+    const key = `${roundNum}-${courtNum}`;
+    setEditScores(prev => {
+      const cur = prev[key] ?? { p1: '', p2: '' };
+      if (isPointsMode && ptTarget !== null) {
+        const n = parseInt(val, 10);
+        if (!isNaN(n) && n >= 0 && n <= ptTarget) return { ...prev, [key]: team === 'p1' ? { p1: val, p2: String(ptTarget - n) } : { p1: String(ptTarget - n), p2: val } };
+      }
+      return { ...prev, [key]: { ...cur, [team]: val } };
+    });
+  }
+
+  function handleSaveEditedResults() {
+    if (!game) return;
+    let updated = { ...game, rounds: game.rounds.map(r => ({ ...r, courts: r.courts.map(c => ({ ...c })) })) };
+    for (const [key, scores] of Object.entries(editScores)) {
+      const [rStr, cStr] = key.split('-');
+      const round = updated.rounds.find(r => r.num === parseInt(rStr, 10));
+      const court = round?.courts.find(c => c.courtNum === parseInt(cStr, 10));
+      if (!court) continue;
+      const p1 = parseInt(scores.p1, 10); const p2 = parseInt(scores.p2, 10);
+      if (isNaN(p1) || isNaN(p2)) continue;
+      court.pair1Score = p1; court.pair2Score = p2; court.status = 'completed';
+    }
+    updated.standings = calculateStandings(updated);
+    saveGame(updated); setGame(updated); setEditScores({}); setEditResultsOpen(false); showToast('Resultados actualizados.');
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -250,9 +378,53 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
 
       {/* Finished banner */}
       {isFinished && (
-        <div style={{ background: 'var(--turf-green)', color: '#fff', padding: '14px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span>✓</span>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Torneo finalizado</span>
+        <div style={{ background: 'var(--turf-green)', color: '#fff', padding: '14px 24px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18 }}>✓</span>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Torneo finalizado</span>
+          </div>
+          {roundBased && (
+            <button onClick={() => { setEditResultsOpen(v => !v); setEditScores({}); }} style={{ padding: '6px 14px', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              {editResultsOpen ? 'Cancelar edición' : 'Editar resultados'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Post-game score editing (round-based only) */}
+      {isFinished && editResultsOpen && game.rounds.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 24 }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--grey-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Editar resultados</span>
+            <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>Modificá los scores y guardá para recalcular la clasificación</span>
+          </div>
+          <div style={{ padding: '20px' }}>
+            {game.rounds.filter(r => r.status === 'completed').map(round => (
+              <div key={round.num} style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 10 }}>Ronda {round.num}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {round.courts.map(court => {
+                    const key = `${round.num}-${court.courtNum}`;
+                    const cur = editScores[key] ?? { p1: String(court.pair1Score ?? ''), p2: String(court.pair2Score ?? '') };
+                    return (
+                      <div key={court.courtNum} style={{ border: '1px solid var(--grey-200)', overflow: 'hidden' }}>
+                        <div style={{ background: 'var(--grey-50)', padding: '6px 14px', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Cancha {court.courtNum}</div>
+                        {[{ pids: court.pair1, val: cur.p1, team: 'p1' as const }, { pids: court.pair2, val: cur.p2, team: 'p2' as const }].map((row, ti) => (
+                          <div key={ti} style={{ display: 'grid', gridTemplateColumns: '1fr 80px', borderTop: ti === 0 ? 'none' : '1px solid var(--grey-100)' }}>
+                            <div style={{ padding: '10px 14px', borderRight: '1px solid var(--grey-100)', fontSize: 12, fontWeight: 500 }}>{row.pids.map(pid => getName(pid)).join(' / ')}</div>
+                            <input type="number" min={0} value={row.val} onChange={e => handleEditScoreChange(round.num, court.courtNum, row.team, e.target.value)} placeholder="–" style={{ width: '100%', textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, border: 'none', outline: 'none', background: 'transparent', padding: '8px 0', color: 'var(--black)', boxSizing: 'border-box' }} />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            <button onClick={handleSaveEditedResults} style={{ width: '100%', padding: '12px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Guardar y recalcular clasificación →
+            </button>
+          </div>
         </div>
       )}
 
@@ -333,6 +505,47 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
+      {/* Inline edit (pending only) */}
+      {isPending && (
+        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 28 }}>
+          <button onClick={() => setEditOpen(v => !v)} style={{ width: '100%', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Editar información del torneo</span>
+            <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>{editOpen ? '▲' : '▼'}</span>
+          </button>
+          {editOpen && (
+            <div style={{ padding: '20px', borderTop: '1px solid var(--grey-100)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6 }}>Nombre</div>
+                  <input value={editName} onChange={e => setEditName(e.target.value)} style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6 }}>Fecha</div>
+                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6 }}>Hora</div>
+                  <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6 }}>Club / Sede</div>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                    {(['Club fijo', 'Otro / Pista privada'] as const).map((lbl, i) => (
+                      <button key={i} onClick={() => setEditIsCustomLoc(i === 1)} style={{ flex: 1, padding: '6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', border: '1px solid var(--grey-200)', cursor: 'pointer', background: editIsCustomLoc === (i === 1) ? 'var(--black)' : '#fff', color: editIsCustomLoc === (i === 1) ? '#fff' : 'var(--grey-500)' }}>{lbl}</button>
+                    ))}
+                  </div>
+                  <input value={editClub} onChange={e => setEditClub(e.target.value)} placeholder={editIsCustomLoc ? 'Nombre del lugar' : 'Club'} style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none', boxSizing: 'border-box', marginBottom: editIsCustomLoc ? 6 : 0 }} />
+                  {editIsCustomLoc && <input value={editCity} onChange={e => setEditCity(e.target.value)} placeholder="Ciudad" style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none', boxSizing: 'border-box' }} />}
+                </div>
+              </div>
+              <button onClick={handleSaveEdits} style={{ padding: '10px 24px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                Guardar cambios →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Pending / Start panel */}
       {isPending && (
         <div style={{ background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: '24px', marginBottom: 32, display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
@@ -349,6 +562,14 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
                 : `${game.players.length} de ${game.maxPlayers} jugadores. Compartí el código `}
               {!canStart && <strong style={{ color: '#7c3aed' }}>{game.code}</strong>}
             </div>
+            {!canStart && emptySlots > 0 && (
+              <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.25)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13 }}>⚠</span>
+                <span style={{ fontSize: 12, color: '#b45309', fontWeight: 600 }}>
+                  Faltan {emptySlots} jugador{emptySlots !== 1 ? 'es' : ''} para completar el torneo
+                </span>
+              </div>
+            )}
             {canStart && (
               <button onClick={handleStart} style={{ padding: '12px 28px', background: 'var(--turf-green)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 Iniciar Torneo →
@@ -358,18 +579,66 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
+      {/* Join requests panel */}
+      {isPending && joinRequests.filter(r => r.status === 'pending').length > 0 && (
+        <div style={{ background: '#fff', border: '2px solid #7c3aed', marginBottom: 20 }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(124,58,237,0.15)', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7c3aed', display: 'inline-block' }} />
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#7c3aed' }}>
+              Solicitudes pendientes ({joinRequests.filter(r => r.status === 'pending').length})
+            </span>
+          </div>
+          <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {joinRequests.filter(r => r.status === 'pending').map(req => (
+              <div key={req.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'rgba(124,58,237,0.04)', border: '1px solid rgba(124,58,237,0.12)' }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{req.playerName}</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => handleApproveRequest(req)} disabled={game.players.length >= game.maxPlayers} style={{ padding: '6px 14px', background: 'var(--turf-green)', color: '#fff', border: 'none', cursor: game.players.length >= game.maxPlayers ? 'not-allowed' : 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: game.players.length >= game.maxPlayers ? 0.5 : 1 }}>
+                    Aprobar
+                  </button>
+                  <button onClick={() => handleRejectRequest(req)} style={{ padding: '6px 14px', background: 'transparent', color: '#e53e3e', border: '1px solid #e53e3e', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Rechazar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Players list */}
       {(isPending || game.players.length > 0) && (
         <div style={{ marginBottom: 32 }}>
           <div style={secTitle}>Jugadores ({game.players.length}/{game.maxPlayers})</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: isPending ? 12 : 0 }}>
             {game.players.map(p => (
-              <div key={p.id} style={{ padding: '8px 14px', background: '#fff', border: '1px solid var(--grey-200)', fontSize: 13, fontWeight: p.isCreator ? 700 : 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div key={p.id} style={{ padding: '8px 14px', background: '#fff', border: '1px solid var(--grey-200)', fontSize: 13, fontWeight: p.isCreator ? 700 : 500, display: 'flex', alignItems: 'center', gap: 8 }}>
                 {p.name}
                 {p.isCreator && <span style={{ fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 5px', fontWeight: 700 }}>ORG</span>}
+                {isPending && !p.isCreator && (
+                  <button onClick={() => handleRemovePlayer(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 16, lineHeight: 1, padding: '0 2px' }} title="Eliminar">×</button>
+                )}
+              </div>
+            ))}
+            {isPending && Array.from({ length: emptySlots }).map((_, i) => (
+              <div key={`empty-${i}`} style={{ padding: '8px 14px', border: '1px dashed var(--grey-300)', fontSize: 12, color: 'var(--grey-300)', background: 'transparent' }}>
+                Spot libre
               </div>
             ))}
           </div>
+          {isPending && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              <input value={addPlayerName} onChange={e => setAddPlayerName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPlayer()} placeholder="Nombre del jugador" style={{ flex: 1, minWidth: 180, padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none' }} />
+              <button onClick={handleAddPlayer} disabled={!addPlayerName.trim() || game.players.length >= game.maxPlayers} style={{ padding: '9px 20px', background: 'var(--black)', color: '#fff', border: 'none', cursor: !addPlayerName.trim() || game.players.length >= game.maxPlayers ? 'not-allowed' : 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: !addPlayerName.trim() || game.players.length >= game.maxPlayers ? 0.5 : 1 }}>
+                + Agregar
+              </button>
+              {emptySlots > 0 && game.players.length >= 4 && (
+                <button onClick={handleTrimSlots} style={{ padding: '9px 20px', background: 'transparent', color: 'var(--grey-500)', border: '1px solid var(--grey-300)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Reducir spots →
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
