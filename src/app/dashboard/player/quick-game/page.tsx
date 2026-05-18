@@ -839,7 +839,7 @@ export default function QuickGamePage() {
   // ══════════════════════════════════════════════════════════════════════════
 
   if (step === 2) {
-    const canContinue     = filledSlots.length >= 2;
+    const canContinue     = true; // creator can proceed with any number of players (including 0)
     const availableFriends = FRIENDS.filter(f => !slots.some(s => s?.id === f.id)).filter(levelFilter);
     const canAddMore      = slots.some(s => s === null);
     const freeSlots       = slots.filter(s => s === null).length;
@@ -850,7 +850,7 @@ export default function QuickGamePage() {
         <WizardHeader onBack={goToDashboard} />
         <Steps current={2} />
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Jugadores</h2>
-        <p style={{ color: 'var(--grey-400)', fontSize: 13, margin: '0 0 24px' }}>Mínimo 4, máximo 12. Slots vacíos generan QR de invitación.</p>
+        <p style={{ color: 'var(--grey-400)', fontSize: 13, margin: '0 0 24px' }}>Podés dejar todos los slots vacíos y agregar jugadores desde la gestión del juego. Los slots vacíos generan QR de invitación.</p>
 
         {/* Slot count */}
         <div style={card}>

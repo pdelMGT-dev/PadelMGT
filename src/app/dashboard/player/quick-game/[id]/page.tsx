@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useMemo, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   getGame,
@@ -12,7 +12,29 @@ import {
   isGameFinished,
 } from '@/lib/game-store';
 import { isRoundComplete, calculateStandings } from '@/lib/game-engine';
-import type { ActiveGame, GameStatus, ScoreConfig } from '@/lib/game-engine';
+import type { ActiveGame, GameStatus, ScoreConfig, GamePlayer } from '@/lib/game-engine';
+
+// ── Mock data (replace with API) ───────────────────────────────────────────────
+
+type MockPlayer = { id: string; name: string; ranking: number };
+const FRIENDS_MOCK: MockPlayer[] = [
+  { id: 'f1', name: 'Ana Rodríguez',   ranking: 34  },
+  { id: 'f2', name: 'Marcos Herrera',  ranking: 12  },
+  { id: 'f3', name: 'Carlos Vargas',   ranking: 89  },
+  { id: 'f4', name: 'Sofía López',     ranking: 56  },
+  { id: 'f5', name: 'Laura Torres',    ranking: 101 },
+  { id: 'f6', name: 'Diego Fernández', ranking: 45  },
+];
+const ALL_PLAYERS_MOCK: MockPlayer[] = [
+  ...FRIENDS_MOCK,
+  { id: 'p7',  name: 'Pedro Morales', ranking: 8  },
+  { id: 'p8',  name: 'Isabel Bravo',  ranking: 23 },
+  { id: 'p9',  name: 'Juan Castro',   ranking: 67 },
+  { id: 'p10', name: 'Elena Vidal',   ranking: 78 },
+  { id: 'p11', name: 'Raúl Ortega',   ranking: 15 },
+  { id: 'p12', name: 'Marta Fuentes', ranking: 92 },
+];
+function initials(name: string) { return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(); }
 
 type JoinRequest = {
   id: string;
@@ -116,8 +138,28 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const [editCity, setEditCity] = useState('');
   const [editIsCustomLoc, setEditIsCustomLoc] = useState(false);
 
-  // Add player state
-  const [addPlayerName, setAddPlayerName] = useState('');
+  // Extended config edit
+  const [editFormat, setEditFormat] = useState<'americano' | 'mexicano'>('americano');
+  const [editScoreType, setEditScoreType] = useState<'traditional' | 'points'>('traditional');
+  const [editSetsPerRound, setEditSetsPerRound] = useState(1);
+  const [editGamesPerSet, setEditGamesPerSet] = useState(6);
+  const [editTiebreak, setEditTiebreak] = useState(7);
+  const [editPointTarget, setEditPointTarget] = useState(16);
+  const [editMaxPlayers, setEditMaxPlayers] = useState(8);
+
+  // Add player mode
+  const [addMode, setAddMode] = useState<'self' | 'friends' | 'search' | 'new' | null>(null);
+  const [addSearchQ, setAddSearchQ] = useState('');
+  const [addFriendSel, setAddFriendSel] = useState<Set<string>>(new Set());
+  const [addNewFirst, setAddNewFirst] = useState('');
+  const [addNewLast, setAddNewLast] = useState('');
+  const [addNewEmail, setAddNewEmail] = useState('');
+
+  // D&D pair reordering
+  const [pairsMode, setPairsMode] = useState(false);
+  const [pairPlayers, setPairPlayers] = useState<GamePlayer[]>([]);
+  const [dndSrc, setDndSrc] = useState<number | null>(null);
+  const [dndOver, setDndOver] = useState<number | null>(null);
 
   // Join requests
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
@@ -145,6 +187,19 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     setEditTime(game.time);
     setEditClub(game.club);
     setEditCity(game.city);
+    setEditFormat(game.format as 'americano' | 'mexicano');
+    const sc = game.scoreConfig;
+    if (sc.type === 'points') {
+      setEditScoreType('points');
+      setEditPointTarget(sc.target ?? 16);
+    } else {
+      setEditScoreType('traditional');
+      setEditSetsPerRound(sc.setsPerMatch ?? 1);
+      setEditGamesPerSet(sc.gamesPerSet ?? 6);
+      setEditTiebreak(sc.tiebreak ?? 7);
+    }
+    setEditMaxPlayers(game.maxPlayers);
+    setPairPlayers(game.players);
   }, [game?.id]);
 
   if (!game) {
@@ -172,9 +227,21 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const gameComplete        = isGameFinished(game);
 
   const hasMoreRounds = !gameComplete && activeRoundComplete && (
-    game.format === 'mexicano' ||                          // mexicano generates on demand
+    game.format === 'mexicano' ||
     game.rounds.some(r => r.num > (activeRound?.num ?? 0) && r.status === 'pending')
   );
+
+  // Derived for add-player panel
+  const selfInGame       = currentUser ? game.players.some(p => p.id === currentUser.id) : true;
+  const availableFriends = FRIENDS_MOCK.filter(f => !game.players.some(gp => gp.id === f.id));
+  const searchResults    = useMemo(() => {
+    if (!addSearchQ.trim()) return [];
+    const q = addSearchQ.toLowerCase();
+    return ALL_PLAYERS_MOCK.filter(p =>
+      p.name.toLowerCase().includes(q) && !game.players.some(gp => gp.id === p.id)
+    ).slice(0, 6);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addSearchQ, game.players]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -196,13 +263,21 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   function handleSaveEdits() {
     if (!game) return;
+    const newScoreConfig: ScoreConfig = editScoreType === 'points'
+      ? { type: 'points', target: editPointTarget }
+      : { type: 'traditional', setsPerMatch: editSetsPerRound, gamesPerSet: editGamesPerSet, tiebreak: editTiebreak, deuce: 'oro' };
+    const safeMax = Math.max(game.players.length, editMaxPlayers);
     const updated: ActiveGame = {
       ...game,
       name: editName.trim() || game.name,
       date: editDate || game.date,
       time: editTime || game.time,
-      club: editClub.trim() || game.club,
-      city: editCity.trim() || game.city,
+      club: editIsCustomLoc ? (editClub.trim() || game.club) : (editClub.trim() || game.club),
+      city: editIsCustomLoc ? (editCity.trim() || game.city) : (editCity.trim() || game.city),
+      format: editFormat,
+      scoreConfig: newScoreConfig,
+      maxPlayers: safeMax,
+      courts: Math.max(1, Math.floor(safeMax / 4)),
     };
     saveGame(updated);
     setGame(updated);
@@ -210,14 +285,52 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     showToast('Juego actualizado.');
   }
 
-  function handleAddPlayer() {
-    if (!addPlayerName.trim() || !game || game.players.length >= game.maxPlayers) return;
-    const newP = { id: `manual-${Date.now()}`, name: addPlayerName.trim(), ranking: 0, isCreator: false };
-    const updated = { ...game, players: [...game.players, newP] };
+  // ── Player management helpers ──────────────────────────────────────────────
+
+  function addPlayerToGame(p: GamePlayer) {
+    if (!game || game.players.length >= game.maxPlayers) return;
+    const updated = { ...game, players: [...game.players, p] };
     saveGame(updated);
     setGame(updated);
-    setAddPlayerName('');
-    showToast(`${newP.name} agregado.`);
+    setPairPlayers(updated.players);
+    showToast(`${p.name} agregado.`);
+  }
+
+  function handleAddSelf() {
+    if (!currentUser || !game) return;
+    if (game.players.some(p => p.id === currentUser.id)) return;
+    addPlayerToGame({ id: currentUser.id, name: currentUser.name, ranking: 0, isCreator: false });
+    setAddMode(null);
+  }
+
+  function handleAddFriends() {
+    if (!game) return;
+    const toAdd = FRIENDS_MOCK.filter(f => addFriendSel.has(f.id) && !game.players.some(gp => gp.id === f.id));
+    let updated = { ...game };
+    for (const f of toAdd) {
+      if (updated.players.length >= updated.maxPlayers) break;
+      updated = { ...updated, players: [...updated.players, { id: f.id, name: f.name, ranking: f.ranking, isCreator: false }] };
+    }
+    saveGame(updated);
+    setGame(updated);
+    setPairPlayers(updated.players);
+    setAddFriendSel(new Set());
+    setAddMode(null);
+    showToast(`${toAdd.length} jugador${toAdd.length !== 1 ? 'es' : ''} agregado${toAdd.length !== 1 ? 's' : ''}.`);
+  }
+
+  function handleAddFromSearch(p: MockPlayer) {
+    addPlayerToGame({ id: p.id, name: p.name, ranking: p.ranking, isCreator: false });
+    setAddSearchQ('');
+    setAddMode(null);
+  }
+
+  function handleAddNewPlayer() {
+    const name = `${addNewFirst.trim()} ${addNewLast.trim()}`.trim();
+    if (!name) return;
+    addPlayerToGame({ id: `manual-${Date.now()}`, name, ranking: 0, isCreator: false });
+    setAddNewFirst(''); setAddNewLast(''); setAddNewEmail('');
+    setAddMode(null);
   }
 
   function handleRemovePlayer(pid: string) {
@@ -225,6 +338,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     const updated = { ...game, players: game.players.filter(p => p.id !== pid) };
     saveGame(updated);
     setGame(updated);
+    setPairPlayers(updated.players);
     showToast('Jugador eliminado.');
   }
 
@@ -236,12 +350,34 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     showToast('Spots ajustados.');
   }
 
+  // ── D&D pair reordering ────────────────────────────────────────────────────
+
+  function handlePairDrop(toIdx: number) {
+    if (dndSrc === null || dndSrc === toIdx) return;
+    const next = [...pairPlayers];
+    const temp = next[dndSrc];
+    next[dndSrc] = next[toIdx];
+    next[toIdx] = temp;
+    setPairPlayers(next);
+    setDndSrc(null);
+    setDndOver(null);
+  }
+
+  function handleSavePairs() {
+    const updated = { ...game!, players: pairPlayers };
+    saveGame(updated);
+    setGame(updated);
+    setPairsMode(false);
+    showToast('Parejas actualizadas.');
+  }
+
   function handleApproveRequest(req: JoinRequest) {
     if (!game || game.players.length >= game.maxPlayers) return;
     const newPlayer = { id: req.playerId, name: req.playerName, ranking: 0, isCreator: false };
     const updated = { ...game, players: [...game.players, newPlayer] };
     saveGame(updated);
     setGame(updated);
+    setPairPlayers(updated.players);
     updateJoinRequest(req.id, 'approved');
     setJoinRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved' } : r));
     showToast(`${req.playerName} aprobado.`);
@@ -359,9 +495,6 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     setEditResultsOpen(false);
     showToast('Resultados actualizados.');
   }
-
-  // suppress unused warning — currentUser may be used for future gating
-  void currentUser;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -526,16 +659,18 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       {/* Inline edit section (only when pending) */}
       {isPending && (
         <div style={{ border: '1px solid var(--grey-200)', background: '#fff', marginBottom: 24 }}>
-          {/* Toggle header */}
           <button onClick={() => setEditOpen(v => !v)} style={{ width: '100%', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Editar detalles del juego</span>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Editar configuración del juego</span>
             <span style={{ fontSize: 16, color: 'var(--grey-400)' }}>{editOpen ? '−' : '+'}</span>
           </button>
 
           {editOpen && (
             <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--grey-100)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
-                <div>
+
+              {/* Logística */}
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', margin: '18px 0 10px' }}>Logística</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ gridColumn: '1 / -1' }}>
                   <label style={lbl}>Nombre del juego</label>
                   <input value={editName} onChange={e => setEditName(e.target.value)} style={inp} />
                 </div>
@@ -548,13 +683,11 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                   <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} style={inp} />
                 </div>
               </div>
-
-              {/* Location */}
-              <div style={{ marginTop: 12 }}>
+              <div style={{ marginTop: 10 }}>
                 <label style={lbl}>Ubicación</label>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                  <button onClick={() => setEditIsCustomLoc(false)} style={{ padding: '7px 14px', border: `2px solid ${!editIsCustomLoc ? 'var(--black)' : 'var(--grey-200)'}`, background: !editIsCustomLoc ? 'var(--black)' : '#fff', color: !editIsCustomLoc ? '#fff' : 'var(--grey-600)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Club registrado</button>
-                  <button onClick={() => setEditIsCustomLoc(true)} style={{ padding: '7px 14px', border: `2px solid ${editIsCustomLoc ? 'var(--black)' : 'var(--grey-200)'}`, background: editIsCustomLoc ? 'var(--black)' : '#fff', color: editIsCustomLoc ? '#fff' : 'var(--grey-600)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Otro / Pista privada</button>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <button onClick={() => setEditIsCustomLoc(false)} style={{ padding: '6px 12px', border: `2px solid ${!editIsCustomLoc ? 'var(--black)' : 'var(--grey-200)'}`, background: !editIsCustomLoc ? 'var(--black)' : '#fff', color: !editIsCustomLoc ? '#fff' : 'var(--grey-600)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Club registrado</button>
+                  <button onClick={() => setEditIsCustomLoc(true)} style={{ padding: '6px 12px', border: `2px solid ${editIsCustomLoc ? 'var(--black)' : 'var(--grey-200)'}`, background: editIsCustomLoc ? 'var(--black)' : '#fff', color: editIsCustomLoc ? '#fff' : 'var(--grey-600)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Otro / Privado</button>
                 </div>
                 {editIsCustomLoc ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -566,7 +699,90 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 )}
               </div>
 
-              <button onClick={handleSaveEdits} style={{ marginTop: 16, padding: '10px 24px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              {/* Formato */}
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', margin: '20px 0 10px' }}>Formato</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['americano', 'mexicano'] as const).map(f => (
+                  <button key={f} onClick={() => setEditFormat(f)} style={{ flex: 1, padding: '12px', border: `2px solid ${editFormat === f ? 'var(--black)' : 'var(--grey-200)'}`, background: editFormat === f ? 'var(--black)' : '#fff', color: editFormat === f ? '#fff' : 'var(--black)', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'capitalize' }}>
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Score */}
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', margin: '20px 0 10px' }}>Score</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                {([{ k: 'traditional', l: 'Tradicional' }, { k: 'points', l: 'Por Puntos' }] as const).map(({ k, l }) => (
+                  <button key={k} onClick={() => setEditScoreType(k)} style={{ flex: 1, padding: '12px', border: `2px solid ${editScoreType === k ? 'var(--black)' : 'var(--grey-200)'}`, background: editScoreType === k ? 'var(--black)' : '#fff', color: editScoreType === k ? '#fff' : 'var(--black)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {editScoreType === 'traditional' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={lbl}>Sets por ronda</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {[1, 2, 3].map(n => (
+                        <button key={n} onClick={() => setEditSetsPerRound(n)} style={{ flex: 1, padding: '8px', border: `2px solid ${editSetsPerRound === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editSetsPerRound === n ? 'var(--black)' : '#fff', color: editSetsPerRound === n ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={lbl}>Games por set</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {[2, 4, 6].map(n => (
+                        <button key={n} onClick={() => setEditGamesPerSet(n)} style={{ flex: 1, padding: '8px', border: `2px solid ${editGamesPerSet === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editGamesPerSet === n ? 'var(--black)' : '#fff', color: editGamesPerSet === n ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={lbl}>Tie-break (puntos)</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {[7, 10].map(n => (
+                        <button key={n} onClick={() => setEditTiebreak(n)} style={{ flex: 1, padding: '8px', border: `2px solid ${editTiebreak === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editTiebreak === n ? 'var(--black)' : '#fff', color: editTiebreak === n ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {editScoreType === 'points' && (
+                <div>
+                  <label style={lbl}>Puntos objetivo</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[12, 16, 20, 24].map(n => (
+                      <button key={n} onClick={() => setEditPointTarget(n)} style={{ flex: 1, padding: '10px', border: `2px solid ${editPointTarget === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editPointTarget === n ? 'var(--black)' : '#fff', color: editPointTarget === n ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700 }}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Capacidad */}
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', margin: '20px 0 10px' }}>Capacidad</div>
+              <label style={lbl}>Máx. jugadores (canchas = max/4)</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[4, 6, 8, 10, 12].map(n => {
+                  const tooFew = n < game.players.length;
+                  return (
+                    <button key={n} onClick={() => !tooFew && setEditMaxPlayers(n)} disabled={tooFew} style={{ flex: 1, padding: '10px', border: `2px solid ${editMaxPlayers === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editMaxPlayers === n ? 'var(--black)' : tooFew ? 'var(--grey-50)' : '#fff', color: editMaxPlayers === n ? '#fff' : tooFew ? 'var(--grey-300)' : 'var(--black)', cursor: tooFew ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700 }}>
+                      {n}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--grey-400)' }}>
+                {editMaxPlayers} jugadores · {Math.max(1, Math.floor(editMaxPlayers / 4))} cancha{Math.max(1, Math.floor(editMaxPlayers / 4)) !== 1 ? 's' : ''}
+              </div>
+
+              <button onClick={handleSaveEdits} style={{ marginTop: 20, padding: '11px 28px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 Guardar cambios ✓
               </button>
             </div>
@@ -654,51 +870,226 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       {/* Player management section (when pending) */}
       {isPending && (
         <div style={{ marginBottom: 32 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={secTitle}>Jugadores ({game.players.length}/{game.maxPlayers})</div>
-            {emptySlots > 0 && (
-              <button onClick={handleTrimSlots} style={{ padding: '5px 12px', background: '#fff', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)' }}>
-                Reducir spots a {game.players.length}
-              </button>
-            )}
+
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div style={{ ...secTitle, marginBottom: 0, paddingBottom: 0, borderBottom: 'none' }}>
+              Jugadores ({game.players.length}/{game.maxPlayers})
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {game.pairType === 'parejas' && game.players.length >= 2 && (
+                <button onClick={() => { setPairsMode(v => !v); setPairPlayers(game.players); }} style={{ padding: '5px 12px', background: pairsMode ? 'var(--black)' : '#fff', color: pairsMode ? '#fff' : 'var(--grey-500)', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  {pairsMode ? '× Cerrar D&D' : '⠿ Ordenar Parejas'}
+                </button>
+              )}
+              {emptySlots > 0 && !pairsMode && (
+                <button onClick={handleTrimSlots} style={{ padding: '5px 12px', background: '#fff', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)' }}>
+                  Ajustar a {game.players.length}
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Player chips */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-            {game.players.map(p => (
-              <div key={p.id} style={{ padding: '8px 12px', background: '#fff', border: '1px solid var(--grey-200)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontWeight: p.isCreator ? 700 : 500 }}>{p.name}</span>
-                {p.isCreator && <span style={{ fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 5px', fontWeight: 700 }}>ORG</span>}
-                {!p.isCreator && (
+          {/* D&D Pairs mode */}
+          {pairsMode && game.pairType === 'parejas' ? (
+            <div style={{ border: '1px solid var(--grey-200)', background: '#fff', marginBottom: 12 }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--grey-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
+                  Arrastrá para reorganizar parejas — par 1 = slot 1+2, par 2 = slot 3+4…
+                </span>
+                <button onClick={handleSavePairs} style={{ padding: '7px 18px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Confirmar ✓
+                </button>
+              </div>
+              <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                {Array.from({ length: Math.floor(pairPlayers.length / 2) }, (_, pi) => (
+                  <div key={pi} style={{ border: '1px solid var(--grey-200)', padding: '10px 12px' }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6 }}>
+                      Pareja {pi + 1}
+                    </div>
+                    {[0, 1].map(si => {
+                      const idx = pi * 2 + si;
+                      const p   = pairPlayers[idx];
+                      const over = dndOver === idx;
+                      if (!p) return null;
+                      return (
+                        <div
+                          key={si}
+                          draggable
+                          onDragStart={() => setDndSrc(idx)}
+                          onDragOver={e => { e.preventDefault(); setDndOver(idx); }}
+                          onDragLeave={() => setDndOver(null)}
+                          onDrop={e => { e.preventDefault(); handlePairDrop(idx); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', marginBottom: 4, border: over ? '2px dashed #7c3aed' : '1px dashed var(--grey-200)', background: over ? 'rgba(124,58,237,0.05)' : dndSrc === idx ? 'rgba(0,0,0,0.04)' : 'var(--grey-50)', cursor: 'grab', userSelect: 'none' }}
+                        >
+                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: p.isCreator ? 'var(--black)' : 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                            {initials(p.name)}
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 500, flex: 1 }}>{p.name}</span>
+                          {p.isCreator && <span style={{ fontSize: 8, background: 'var(--neon)', color: 'var(--black)', padding: '1px 4px', fontWeight: 700 }}>ORG</span>}
+                          <span style={{ fontSize: 10, color: 'var(--grey-300)' }}>⠿</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+                {/* Unpaired players (odd count) */}
+                {pairPlayers.length % 2 !== 0 && (() => {
+                  const lastIdx = pairPlayers.length - 1;
+                  const p = pairPlayers[lastIdx];
+                  const over = dndOver === lastIdx;
+                  return (
+                    <div style={{ border: '1px solid var(--grey-200)', padding: '10px 12px' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6 }}>Sin pareja</div>
+                      <div
+                        draggable
+                        onDragStart={() => setDndSrc(lastIdx)}
+                        onDragOver={e => { e.preventDefault(); setDndOver(lastIdx); }}
+                        onDragLeave={() => setDndOver(null)}
+                        onDrop={e => { e.preventDefault(); handlePairDrop(lastIdx); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', border: over ? '2px dashed #7c3aed' : '1px dashed var(--grey-200)', background: 'var(--grey-50)', cursor: 'grab', userSelect: 'none' }}
+                      >
+                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: '#fff' }}>{initials(p.name)}</div>
+                        <span style={{ fontSize: 12, fontWeight: 500 }}>{p.name}</span>
+                        <span style={{ fontSize: 10, color: 'var(--grey-300)', marginLeft: 'auto' }}>⠿</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          ) : (
+            /* Normal chips view */
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+              {game.players.map(p => (
+                <div key={p.id} style={{ padding: '8px 12px', background: '#fff', border: '1px solid var(--grey-200)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: p.isCreator ? 'var(--black)' : 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                    {initials(p.name)}
+                  </div>
+                  <span style={{ fontWeight: p.isCreator ? 700 : 500 }}>{p.name}</span>
+                  {p.isCreator && <span style={{ fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 5px', fontWeight: 700 }}>ORG</span>}
                   <button onClick={() => handleRemovePlayer(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 14, lineHeight: 1, padding: '0 2px' }}>×</button>
-                )}
-              </div>
-            ))}
-            {/* Empty slots */}
-            {Array.from({ length: emptySlots }, (_, i) => (
-              <div key={`empty-${i}`} style={{ padding: '8px 12px', background: 'var(--grey-50)', border: '1px dashed var(--grey-300)', fontSize: 12, color: 'var(--grey-400)' }}>
-                Slot vacío
-              </div>
-            ))}
-          </div>
+                </div>
+              ))}
+              {Array.from({ length: emptySlots }, (_, i) => (
+                <div key={`empty-${i}`} style={{ padding: '8px 12px', background: 'var(--grey-50)', border: '1px dashed var(--grey-300)', fontSize: 12, color: 'var(--grey-400)' }}>
+                  Slot vacío
+                </div>
+              ))}
+            </div>
+          )}
 
-          {/* Add player input */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              value={addPlayerName}
-              onChange={e => setAddPlayerName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddPlayer()}
-              placeholder="Nombre del jugador..."
-              style={{ ...inp, maxWidth: 280 }}
-            />
-            <button
-              onClick={handleAddPlayer}
-              disabled={!addPlayerName.trim() || game.players.length >= game.maxPlayers}
-              style={{ padding: '10px 20px', background: addPlayerName.trim() && game.players.length < game.maxPlayers ? 'var(--black)' : 'var(--grey-200)', color: addPlayerName.trim() && game.players.length < game.maxPlayers ? '#fff' : 'var(--grey-400)', border: 'none', cursor: addPlayerName.trim() && game.players.length < game.maxPlayers ? 'pointer' : 'default', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
-            >
-              + Agregar
-            </button>
-          </div>
+          {/* Add player panel (always visible when there are empty slots or pairsMode is off) */}
+          {!pairsMode && (
+            <div style={{ border: '1px solid var(--grey-200)', background: '#fff' }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--grey-100)' }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 10 }}>Agregar jugador</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {/* Agregarme — only when creator not in game */}
+                  {!selfInGame && currentUser && (
+                    <button onClick={handleAddSelf} disabled={game.players.length >= game.maxPlayers} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', border: '1px solid var(--black)', background: 'var(--black)', color: '#fff', cursor: game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed', opacity: game.players.length >= game.maxPlayers ? 0.5 : 1 }}>
+                      + Agregarme
+                    </button>
+                  )}
+                  {(['friends', 'search', 'new'] as const).map(mode => {
+                    const labels = { friends: 'Mis Amistades', search: 'Buscar', new: 'Nuevo jugador' };
+                    return (
+                      <button key={mode} onClick={() => setAddMode(addMode === mode ? null : mode)} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', border: `1px solid ${addMode === mode ? 'var(--black)' : 'var(--grey-200)'}`, background: addMode === mode ? 'var(--black)' : '#fff', color: addMode === mode ? '#fff' : 'var(--grey-500)', cursor: 'pointer' }}>
+                        {labels[mode]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Friends tab */}
+              {addMode === 'friends' && (
+                <div style={{ padding: '12px 16px' }}>
+                  {availableFriends.length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'var(--grey-400)', padding: '4px 0' }}>Todos tus amigos ya están en el juego.</div>
+                  ) : (
+                    <>
+                      {availableFriends.map(f => {
+                        const checked = addFriendSel.has(f.id);
+                        return (
+                          <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--grey-100)', cursor: 'pointer', background: checked ? 'rgba(214,255,0,0.04)' : 'transparent' }}>
+                            <input type="checkbox" checked={checked} onChange={() => setAddFriendSel(prev => { const n = new Set(prev); if (n.has(f.id)) n.delete(f.id); else n.add(f.id); return n; })} style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--black)' }} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                              <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff' }}>{initials(f.name)}</div>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 500 }}>{f.name}</div>
+                                <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>#{f.ranking}</div>
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+                        <button onClick={handleAddFriends} disabled={addFriendSel.size === 0 || game.players.length >= game.maxPlayers} style={{ padding: '8px 20px', background: addFriendSel.size > 0 && game.players.length < game.maxPlayers ? 'var(--black)' : 'var(--grey-200)', color: addFriendSel.size > 0 && game.players.length < game.maxPlayers ? '#fff' : 'var(--grey-400)', border: 'none', cursor: addFriendSel.size > 0 && game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          Agregar {addFriendSel.size > 0 ? `(${addFriendSel.size})` : ''} →
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Search tab */}
+              {addMode === 'search' && (
+                <div style={{ padding: '12px 16px' }}>
+                  <input type="text" value={addSearchQ} onChange={e => setAddSearchQ(e.target.value)} placeholder="Buscar por nombre…" style={{ ...inp, marginBottom: 0 }} />
+                  {searchResults.length > 0 && (
+                    <div style={{ border: '1px solid var(--grey-200)', borderTop: 'none' }}>
+                      {searchResults.map(p => (
+                        <button key={p.id} onClick={() => handleAddFromSearch(p)} disabled={game.players.length >= game.maxPlayers} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '9px 12px', textAlign: 'left', background: 'none', border: 'none', borderBottom: '1px solid var(--grey-100)', cursor: game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff' }}>{initials(p.name)}</div>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
+                              <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>#{p.ranking}</div>
+                            </div>
+                          </div>
+                          <span style={{ fontSize: 10, color: 'var(--grey-400)', fontWeight: 600 }}>+ Agregar</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {addSearchQ.trim() && searchResults.length === 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--grey-400)', padding: '8px 0' }}>No se encontraron jugadores.</div>
+                  )}
+                </div>
+              )}
+
+              {/* New player tab */}
+              {addMode === 'new' && (
+                <div style={{ padding: '12px 16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                    <div>
+                      <label style={lbl}>Nombre</label>
+                      <input type="text" value={addNewFirst} onChange={e => setAddNewFirst(e.target.value)} placeholder="Nombre" style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Apellido</label>
+                      <input type="text" value={addNewLast} onChange={e => setAddNewLast(e.target.value)} placeholder="Apellido" style={inp} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={lbl}>Email (para invitación)</label>
+                    <input type="email" value={addNewEmail} onChange={e => setAddNewEmail(e.target.value)} placeholder="email@ejemplo.com" style={inp} />
+                  </div>
+                  <button onClick={handleAddNewPlayer} disabled={!addNewFirst.trim() && !addNewLast.trim()} style={{ padding: '9px 22px', background: (addNewFirst.trim() || addNewLast.trim()) && game.players.length < game.maxPlayers ? 'var(--black)' : 'var(--grey-200)', color: (addNewFirst.trim() || addNewLast.trim()) && game.players.length < game.maxPlayers ? '#fff' : 'var(--grey-400)', border: 'none', cursor: (addNewFirst.trim() || addNewLast.trim()) && game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Agregar jugador
+                  </button>
+                </div>
+              )}
+
+              {game.players.length >= game.maxPlayers && (
+                <div style={{ padding: '10px 16px', borderTop: '1px solid var(--grey-100)', fontSize: 11, color: 'var(--grey-400)', fontStyle: 'italic' }}>
+                  Juego completo. Para agregar más jugadores, aumentá la capacidad en "Editar configuración".
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
