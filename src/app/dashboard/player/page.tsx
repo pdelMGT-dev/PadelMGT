@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
 
+type CurrentUser = { id: string; name: string; role: string };
+
 const stats = [
   { label: 'Torneos jugados', value: '24', delta: '+3 este mes' },
   { label: 'Victorias', value: '16', delta: '67% win rate' },
@@ -33,14 +35,36 @@ const friends = [
   { name: 'Marcos Herrera', ranking: '#61', activity: 'Nuevo ranking personal' },
 ];
 
+const STATUS_LABEL: Record<string, string> = {
+  created: 'Inscripto',
+  starting_soon: 'Por comenzar',
+  live: 'En juego',
+};
+
 export default function PlayerHomePage() {
   const [nextGame, setNextGame] = useState<ActiveGame | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [myActiveGames, setMyActiveGames] = useState<ActiveGame[]>([]);
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem('padelmgt_user');
+      if (raw) setCurrentUser(JSON.parse(raw));
+    } catch {}
     const games = getAllGames();
     const upcoming = games.find(g => g.status !== 'finished');
     setNextGame(upcoming ?? null);
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const games = getAllGames();
+    const active = games.filter(g =>
+      g.status !== 'finished' &&
+      g.players.some(p => p.id === currentUser.id)
+    );
+    setMyActiveGames(active);
+  }, [currentUser]);
 
   const gameHref = nextGame
     ? (['americano', 'mexicano'].includes(nextGame.format)
@@ -77,6 +101,44 @@ export default function PlayerHomePage() {
           </div>
         ))}
       </div>
+
+      {/* Mis Juegos Activos */}
+      {myActiveGames.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 24 }}>
+          <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--grey-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)' }}>Mis Juegos Activos</div>
+            <Link href="/dashboard/player/quick-game" style={{ fontSize: 12, color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Ver todos →</Link>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {myActiveGames.map((g) => {
+              const href = ['americano', 'mexicano'].includes(g.format)
+                ? `/dashboard/player/quick-game/${g.id}`
+                : `/dashboard/player/tournaments/${g.id}`;
+              const isCreator = g.players.some(p => p.id === currentUser?.id && p.isCreator);
+              const statusColor = g.status === 'live' ? 'var(--turf-green)' : g.status === 'starting_soon' ? 'var(--neon)' : 'var(--grey-400)';
+              return (
+                <div key={g.id} style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--grey-100)', gap: 16 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--black)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.name}</span>
+                      {isCreator && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--neon)', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.08em', flexShrink: 0 }}>CREADOR</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{g.date} · {g.time} · {g.club}, {g.city}</div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: statusColor }}>{STATUS_LABEL[g.status] ?? g.status}</span>
+                      <span style={{ fontSize: 9, color: 'var(--grey-400)' }}>·</span>
+                      <span style={{ fontSize: 9, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{g.players.length}/{g.maxPlayers} jugadores</span>
+                    </div>
+                  </div>
+                  <Link href={href} className="btn btn-sm" style={{ background: 'var(--black)', color: '#fff', borderRadius: 0, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {isCreator ? 'Gestionar →' : 'Ver juego →'}
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, marginBottom: 24 }}>
         {/* Próximo torneo */}
