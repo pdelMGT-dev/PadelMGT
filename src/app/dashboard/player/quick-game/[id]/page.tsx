@@ -139,7 +139,6 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const [editIsCustomLoc, setEditIsCustomLoc] = useState(false);
 
   // Extended config edit
-  const [editFormat, setEditFormat] = useState<'americano' | 'mexicano'>('americano');
   const [editScoreType, setEditScoreType] = useState<'traditional' | 'points'>('traditional');
   const [editSetsPerRound, setEditSetsPerRound] = useState(1);
   const [editGamesPerSet, setEditGamesPerSet] = useState(6);
@@ -154,6 +153,9 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const [addNewFirst, setAddNewFirst] = useState('');
   const [addNewLast, setAddNewLast] = useState('');
   const [addNewEmail, setAddNewEmail] = useState('');
+
+  // Set-by-set score inputs (traditional mode): key = `${roundNum}-${courtNum}`
+  const [setInputs, setSetInputs] = useState<Record<string, { p1: string; p2: string }>>({});
 
   // D&D pair reordering
   const [pairsMode, setPairsMode] = useState(false);
@@ -187,7 +189,6 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     setEditTime(game.time);
     setEditClub(game.club);
     setEditCity(game.city);
-    setEditFormat(game.format as 'americano' | 'mexicano');
     const sc = game.scoreConfig;
     if (sc.type === 'points') {
       setEditScoreType('points');
@@ -274,7 +275,6 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       time: editTime || game.time,
       club: editIsCustomLoc ? (editClub.trim() || game.club) : (editClub.trim() || game.club),
       city: editIsCustomLoc ? (editCity.trim() || game.city) : (editCity.trim() || game.city),
-      format: editFormat,
       scoreConfig: newScoreConfig,
       maxPlayers: safeMax,
       courts: Math.max(1, Math.floor(safeMax / 4)),
@@ -369,6 +369,65 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     setGame(updated);
     setPairsMode(false);
     showToast('Parejas actualizadas.');
+  }
+
+  // ── Traditional set-by-set score registration ─────────────────────────────
+
+  function handleRegisterSet(roundNum: number, courtNum: number) {
+    if (!game) return;
+    const key = `${roundNum}-${courtNum}`;
+    const inp = setInputs[key] ?? { p1: '0', p2: '0' };
+    const p1n = Math.max(0, parseInt(inp.p1 || '0', 10));
+    const p2n = Math.max(0, parseInt(inp.p2 || '0', 10));
+    const setsPerMatch = game.scoreConfig.setsPerMatch ?? 3;
+    const setsToWin = Math.ceil(setsPerMatch / 2);
+
+    const updatedRounds = game.rounds.map(r => {
+      if (r.num !== roundNum) return r;
+      return {
+        ...r,
+        courts: r.courts.map(c => {
+          if (c.courtNum !== courtNum) return c;
+          const newSets = [...(c.sets ?? []), { p1: p1n, p2: p2n }];
+          const p1Won = newSets.filter(s => s.p1 > s.p2).length;
+          const p2Won = newSets.filter(s => s.p2 > s.p1).length;
+          const matchDone = p1Won >= setsToWin || p2Won >= setsToWin || newSets.length >= setsPerMatch;
+          return {
+            ...c,
+            sets: newSets,
+            pair1Score: matchDone ? p1Won : c.pair1Score,
+            pair2Score: matchDone ? p2Won : c.pair2Score,
+            status: matchDone ? 'completed' as const : 'pending' as const,
+          };
+        }),
+        status: (() => {
+          const updated = r.courts.map(c => {
+            if (c.courtNum !== courtNum) return c;
+            const newSets = [...(c.sets ?? []), { p1: p1n, p2: p2n }];
+            const p1Won = newSets.filter(s => s.p1 > s.p2).length;
+            const p2Won = newSets.filter(s => s.p2 > s.p1).length;
+            const matchDone = p1Won >= setsToWin || p2Won >= setsToWin || newSets.length >= setsPerMatch;
+            return { ...c, status: matchDone ? 'completed' as const : 'pending' as const };
+          });
+          return updated.every(c => c.status === 'completed') ? 'completed' as const : r.status;
+        })(),
+      };
+    });
+
+    const base: ActiveGame = { ...game, rounds: updatedRounds };
+    const withStandings: ActiveGame = { ...base, standings: calculateStandings(base) };
+    const allDone = withStandings.rounds.every(r => r.status === 'completed');
+    const final: ActiveGame = { ...withStandings, status: allDone ? 'finished' : withStandings.status };
+
+    saveGame(final);
+    setGame(final);
+    setSetInputs(prev => { const n = { ...prev }; delete n[key]; return n; });
+
+    const round = final.rounds.find(r => r.num === roundNum);
+    if (round && isRoundComplete(round)) {
+      if (isGameFinished(final)) showToast('¡Juego finalizado! Ver clasificación final.');
+      else showToast('Ronda completa — podés iniciar la siguiente.');
+    }
   }
 
   function handleApproveRequest(req: JoinRequest) {
@@ -697,16 +756,6 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 ) : (
                   <input value={editClub} onChange={e => setEditClub(e.target.value)} placeholder="Nombre del club" style={inp} />
                 )}
-              </div>
-
-              {/* Formato */}
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', margin: '20px 0 10px' }}>Formato</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {(['americano', 'mexicano'] as const).map(f => (
-                  <button key={f} onClick={() => setEditFormat(f)} style={{ flex: 1, padding: '12px', border: `2px solid ${editFormat === f ? 'var(--black)' : 'var(--grey-200)'}`, background: editFormat === f ? 'var(--black)' : '#fff', color: editFormat === f ? '#fff' : 'var(--black)', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'capitalize' }}>
-                    {f.charAt(0).toUpperCase() + f.slice(1)}
-                  </button>
-                ))}
               </div>
 
               {/* Score */}
@@ -1093,10 +1142,12 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      {/* Active round — score entry */}
-      {isLive && activeRound && !activeRoundComplete && (
+      {/* Active round — IPF scoreboard */}
+      {isLive && activeRound && (
         <div style={{ marginBottom: 36 }}>
-          <div style={secTitle}>Ronda Actual — Ronda {activeRound.num}</div>
+          <div style={secTitle}>
+            Ronda {activeRound.num} — {activeRoundComplete ? 'Completada' : 'En Juego'}
+          </div>
 
           {/* Resting players */}
           {activeRound.resting.length > 0 && (
@@ -1110,73 +1161,166 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {activeRound.courts.map(court => {
-              const key = `${activeRound.num}-${court.courtNum}`;
-              const isDone   = court.status === 'completed';
-              const inputs   = scoreInputs[key] ?? { p1: '', p2: '' };
+              const key          = `${activeRound.num}-${court.courtNum}`;
+              const isDone       = court.status === 'completed';
+              const isTraditional = game.scoreConfig.type === 'traditional';
+              const setsPerMatch = game.scoreConfig.setsPerMatch ?? 3;
+              const completedSets = court.sets ?? [];
+              const currentSetNum = completedSets.length + 1;
+              const curSetInp    = setInputs[key] ?? { p1: '', p2: '' };
+              const ptInputs     = scoreInputs[key] ?? { p1: '', p2: '' };
+
+              const p1IsWinner = isDone && (court.pair1Score ?? 0) > (court.pair2Score ?? 0);
+              const p2IsWinner = isDone && (court.pair2Score ?? 0) > (court.pair1Score ?? 0);
+
+              // Column layout: names | SET1…N | GAME
+              const setColW  = 56;
+              const gameColW = 80;
+              const cols     = isTraditional
+                ? `1fr ${Array(setsPerMatch).fill(`${setColW}px`).join(' ')} ${gameColW}px`
+                : '1fr 100px';
 
               return (
-                <div key={court.courtNum} style={{ background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 12, overflow: 'hidden' }}>
+                <div key={court.courtNum} style={{ border: '1px solid var(--grey-200)', overflow: 'hidden' }}>
 
-                  {/* Header bar */}
-                  <div style={{ background: isDone ? 'var(--grey-800, #1a1a1a)' : 'var(--black)', color: '#fff', padding: '8px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase' }}>Cancha {court.courtNum}</span>
+                  {/* Header */}
+                  <div style={{ background: isDone ? '#1a1a1a' : 'var(--black)', color: '#fff', padding: '9px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                      Cancha {court.courtNum}
+                    </span>
                     {isDone
-                      ? <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neon)', letterSpacing: '0.12em' }}>✓ COMPLETADO</span>
-                      : <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--turf-green)', letterSpacing: '0.12em' }}>● EN JUEGO</span>
+                      ? <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neon)', letterSpacing: '0.14em' }}>✓ COMPLETADO</span>
+                      : <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--turf-green)', letterSpacing: '0.14em' }}>● EN JUEGO</span>
                     }
+                  </div>
+
+                  {/* Column headers */}
+                  <div style={{ display: 'grid', gridTemplateColumns: cols, background: '#1a1a2e', color: 'rgba(255,255,255,0.6)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ padding: '6px 14px', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}></div>
+                    {isTraditional
+                      ? Array.from({ length: setsPerMatch }, (_, si) => (
+                          <div key={si} style={{ padding: '6px 4px', textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: si < completedSets.length ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)' }}>
+                            SET {si + 1}
+                          </div>
+                        ))
+                      : null
+                    }
+                    <div style={{ padding: '6px 4px', textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--neon)' }}>
+                      {isTraditional ? 'GAME' : 'PUNTOS'}
+                    </div>
                   </div>
 
                   {/* Team rows */}
                   {[
-                    { pids: court.pair1, score: court.pair1Score, inputKey: 'p1', isWinner: isDone && (court.pair1Score ?? 0) > (court.pair2Score ?? 0) },
-                    { pids: court.pair2, score: court.pair2Score, inputKey: 'p2', isWinner: isDone && (court.pair2Score ?? 0) > (court.pair1Score ?? 0) },
+                    { pids: court.pair1, side: 'p1' as const, isWinner: p1IsWinner, score: court.pair1Score },
+                    { pids: court.pair2, side: 'p2' as const, isWinner: p2IsWinner, score: court.pair2Score },
                   ].map((team, ti) => (
                     <div key={ti} style={{
-                      display: 'grid', gridTemplateColumns: '1fr 88px',
-                      borderBottom: ti === 0 ? '2px solid var(--grey-100)' : 'none',
+                      display: 'grid', gridTemplateColumns: cols,
+                      borderTop: ti === 0 ? 'none' : '1px solid var(--grey-200)',
                       background: isDone && team.isWinner ? 'rgba(40,167,69,0.04)' : '#fff',
+                      minHeight: 64,
                     }}>
-                      {/* Player names */}
-                      <div style={{ padding: '14px 16px', borderRight: '1px solid var(--grey-100)' }}>
+                      {/* Names */}
+                      <div style={{ padding: '12px 14px', borderRight: '1px solid var(--grey-100)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                         {team.pids.map(pid => (
-                          <div key={pid} style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.5, color: isDone && !team.isWinner ? 'var(--grey-400)' : 'var(--black)' }}>
+                          <div key={pid} style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.6, color: isDone && !team.isWinner ? 'var(--grey-400)' : 'var(--black)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
                             {getName(pid)}
                           </div>
                         ))}
                       </div>
-                      {/* Score column */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 8px' }}>
+
+                      {/* SET columns (traditional only) */}
+                      {isTraditional && Array.from({ length: setsPerMatch }, (_, si) => {
+                        const set = completedSets[si];
+                        const v = set ? set[team.side] : null;
+                        const other = set ? set[team.side === 'p1' ? 'p2' : 'p1'] : null;
+                        const won = v !== null && other !== null && v > other;
+                        return (
+                          <div key={si} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid var(--grey-100)', background: set && won ? 'rgba(40,167,69,0.05)' : 'transparent' }}>
+                            {set ? (
+                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: won ? 'var(--turf-green)' : 'var(--grey-400)' }}>
+                                {v}
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: 18, color: 'var(--grey-200)' }}>—</span>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* GAME / PUNTOS column */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDone ? 'transparent' : 'rgba(214,255,0,0.05)' }}>
                         {isDone ? (
-                          <span style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 700, color: team.isWinner ? 'var(--turf-green)' : 'var(--grey-300)', lineHeight: 1 }}>
+                          <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, color: team.isWinner ? 'var(--turf-green)' : 'var(--grey-300)' }}>
                             {team.score ?? 0}
                           </span>
-                        ) : (
+                        ) : isTraditional ? (
+                          /* Current set input */
                           <input
-                            type="number" min={0} max={999}
-                            value={inputs[team.inputKey as 'p1' | 'p2']}
-                            onChange={e => team.inputKey === 'p1'
-                              ? handleP1Change(key, e.target.value)
-                              : handleP2Change(key, e.target.value)
-                            }
-                            placeholder="–"
-                            style={{ width: '100%', textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, border: 'none', borderBottom: '2px solid var(--grey-200)', outline: 'none', padding: '4px 0', background: 'transparent', color: 'var(--black)' }}
+                            type="number" min={0} max={99}
+                            inputMode="numeric"
+                            value={team.side === 'p1' ? curSetInp.p1 : curSetInp.p2}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setSetInputs(prev => ({
+                                ...prev,
+                                [key]: team.side === 'p1'
+                                  ? { ...prev[key] ?? { p1: '', p2: '' }, p1: val }
+                                  : { ...prev[key] ?? { p1: '', p2: '' }, p2: val },
+                              }));
+                            }}
+                            placeholder="—"
+                            style={{ width: 60, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, border: 'none', borderBottom: `2px solid var(--neon)`, outline: 'none', padding: '4px 0', background: 'transparent', color: 'var(--black)', boxSizing: 'border-box' }}
+                          />
+                        ) : (
+                          /* Points mode input with auto-calc */
+                          <input
+                            type="number" min={0}
+                            inputMode="numeric"
+                            value={team.side === 'p1' ? ptInputs.p1 : ptInputs.p2}
+                            onChange={e => team.side === 'p1' ? handleP1Change(key, e.target.value) : handleP2Change(key, e.target.value)}
+                            placeholder="—"
+                            style={{ width: 70, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, border: 'none', borderBottom: `2px solid var(--neon)`, outline: 'none', padding: '4px 0', background: 'transparent', color: 'var(--black)', boxSizing: 'border-box' }}
                           />
                         )}
                       </div>
                     </div>
                   ))}
 
-                  {/* Register button (only when not done) */}
+                  {/* Action footer */}
                   {!isDone && (
-                    <div style={{ padding: '12px 16px', borderTop: '1px solid var(--grey-100)' }}>
-                      <button
-                        onClick={() => handleRegister(activeRound.num, court.courtNum)}
-                        style={{ width: '100%', padding: '10px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}
-                      >
-                        Registrar resultado →
-                      </button>
+                    <div style={{ padding: '10px 14px', borderTop: '1px solid var(--grey-100)', background: 'var(--grey-50)' }}>
+                      {isTraditional ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                          <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+                            {completedSets.length > 0
+                              ? `${completedSets.map((s, i) => `Set ${i+1}: ${s.p1}–${s.p2}`).join(' · ')} · ingresando Set ${currentSetNum}`
+                              : `Ingresá los games del Set ${currentSetNum}`
+                            }
+                          </span>
+                          <button
+                            onClick={() => handleRegisterSet(activeRound.num, court.courtNum)}
+                            style={{ padding: '9px 20px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', flexShrink: 0 }}
+                          >
+                            Registrar Set {currentSetNum} →
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                          <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+                            {game.scoreConfig.target ? `Meta: ${game.scoreConfig.target} pts · auto-calcula el equipo contrario` : 'Ingresá los puntos'}
+                          </span>
+                          <button
+                            onClick={() => handleRegister(activeRound.num, court.courtNum)}
+                            style={{ padding: '9px 20px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', flexShrink: 0 }}
+                          >
+                            Registrar →
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

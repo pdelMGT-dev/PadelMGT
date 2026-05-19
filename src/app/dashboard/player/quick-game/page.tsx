@@ -213,14 +213,12 @@ export default function QuickGamePage() {
 
   // INICIO
   const [gameName, setGameName] = useState('');
-  const [format, setFormat]   = useState<'americano' | 'mexicano'>('americano');
   const [date, setDate]       = useState('');
   const [time, setTime]       = useState('');
   const [country, setCountry] = useState('');
   const [city, setCity]       = useState('');
   const [clubId, setClubId]   = useState('');
   const [customClub, setCustomClub] = useState('');
-  const [customCity, setCustomCity] = useState('');
 
   // Step 1
   const [level, setLevel] = useState<Level | null>(null);
@@ -370,13 +368,16 @@ export default function QuickGamePage() {
     const enginePairType = (pairType === 'fixed') ? 'parejas' : 'individual';
     const courts = Math.max(1, Math.floor(slots.length / 4));
 
+    // Derive format: fixed pairs → americano (pre-generated rounds); intercambio mixed level → mexicano (ranking-based)
+    const derivedFormat: 'americano' | 'mexicano' = enginePairType === 'individual' && level === 'all' ? 'mexicano' : 'americano';
+
     const newGame = createQuickGame({
       name: gameName.trim() || (isCustomLoc ? `Juego en ${customClub.trim()}` : selectedClub ? `Juego en ${selectedClub.name}` : 'Juego Rápido'),
       date: date || '–',
       time: time || '–',
       club: isCustomLoc ? customClub.trim() : (selectedClub?.name || '–'),
-      city: isCustomLoc ? customCity.trim() : (city || '–'),
-      format,
+      city: city || '–',
+      format: derivedFormat,
       pairType: enginePairType,
       mixto: false,
       scoreConfig,
@@ -392,7 +393,7 @@ export default function QuickGamePage() {
   }
 
   function resetWizard() {
-    setStep(0); setGameName(''); setFormat('americano'); setDate(''); setTime(''); setCountry(''); setCity(''); setClubId(''); setCustomClub(''); setCustomCity('');
+    setStep(0); setGameName(''); setDate(''); setTime(''); setCountry(''); setCity(''); setClubId(''); setCustomClub('');
     setLevel(null); setSlots([CREATOR, null, null, null]); setSearchMode(null);
     setPairType(null); setTeams([]); setSetsPerRound(1);
     setScoreType('traditional'); setGamesPerSet(6); setTiebreak(7);
@@ -713,7 +714,7 @@ export default function QuickGamePage() {
   // ══════════════════════════════════════════════════════════════════════════
 
   if (step === 0) {
-    const ok = date && time && country && city && clubId && (!isCustomLoc || (customClub.trim() && customCity.trim()));
+    const ok = date && time && country && city && clubId && (!isCustomLoc || customClub.trim());
     return (
       <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
         <WizardHeader onBack={goToDashboard} />
@@ -728,25 +729,6 @@ export default function QuickGamePage() {
             placeholder={isCustomLoc && customClub ? `Juego en ${customClub}` : selectedClub ? `Juego en ${selectedClub.name}` : 'Ej: Express del Martes, Open Mixto…'}
             style={inp}
           />
-        </div>
-
-        <div style={card}>
-          <div style={secTitle}>Formato</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {([
-              { key: 'americano' as const, label: 'Americano', desc: 'Parejas cambian cada ronda, todos juegan contra todos.' },
-              { key: 'mexicano' as const, label: 'Mexicano', desc: 'Parejas y rivales se asignan según la clasificación.' },
-            ] as const).map(f => (
-              <button
-                key={f.key}
-                onClick={() => setFormat(f.key)}
-                style={{ padding: '14px 16px', border: `2px solid ${format === f.key ? 'var(--black)' : 'var(--grey-200)'}`, background: format === f.key ? 'var(--black)' : '#fff', cursor: 'pointer', textAlign: 'left' }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 700, color: format === f.key ? '#fff' : 'var(--black)', marginBottom: 4 }}>{f.label}</div>
-                <div style={{ fontSize: 11, color: format === f.key ? 'rgba(255,255,255,0.6)' : 'var(--grey-400)', lineHeight: 1.4 }}>{f.desc}</div>
-              </button>
-            ))}
-          </div>
         </div>
 
         <div style={card}>
@@ -778,7 +760,7 @@ export default function QuickGamePage() {
           {city && clubs.length > 0 && (
             <div>
               <label style={lbl}>Club</label>
-              <select value={clubId} onChange={e => { setClubId(e.target.value); if (e.target.value !== '__custom__') { setCustomClub(''); setCustomCity(''); } }} style={sel}>
+              <select value={clubId} onChange={e => { setClubId(e.target.value); if (e.target.value !== '__custom__') setCustomClub(''); }} style={sel}>
                 <option value="">Seleccioná un club</option>
                 {clubs.map(c => <option key={c.id} value={c.id}>{c.name} · {c.courts} canchas</option>)}
                 <option value="__custom__">Otro / Pista privada</option>
@@ -786,15 +768,9 @@ export default function QuickGamePage() {
             </div>
           )}
           {isCustomLoc && (
-            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <div>
-                <label style={lbl}>Nombre del lugar *</label>
-                <input type="text" value={customClub} onChange={e => setCustomClub(e.target.value)} placeholder="Ej: Cancha de Lucas" style={inp} />
-              </div>
-              <div>
-                <label style={lbl}>Ciudad *</label>
-                <input type="text" value={customCity} onChange={e => setCustomCity(e.target.value)} placeholder="Ej: Buenos Aires" style={inp} />
-              </div>
+            <div style={{ marginTop: 12 }}>
+              <label style={lbl}>Nombre del lugar *</label>
+              <input type="text" value={customClub} onChange={e => setCustomClub(e.target.value)} placeholder="Ej: Cancha de Lucas, Club privado…" style={inp} />
             </div>
           )}
         </div>
@@ -1238,7 +1214,7 @@ export default function QuickGamePage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)', marginBottom: 20 }}>
           {[
             { label: 'Fecha y hora',   value: `${date} · ${time}` },
-            { label: 'Club',           value: isCustomLoc ? `${customClub}, ${customCity}` : `${selectedClub?.name}, ${city}, ${country}` },
+            { label: 'Club',           value: isCustomLoc ? customClub : `${selectedClub?.name}, ${city}, ${country}` },
             { label: 'Nivel',          value: level ? LEVEL_LABEL[level] : '–' },
             { label: 'Jugadores',      value: `${slots.length} total · ${filledSlots.length} confirmados · ${emptyCount} por confirmar` },
             { label: 'Tipo de pareja', value: pairType === 'fixed' ? 'Pareja Fija' : 'Intercambio de Pareja' },

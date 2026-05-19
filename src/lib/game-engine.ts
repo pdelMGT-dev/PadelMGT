@@ -40,6 +40,7 @@ export interface CourtMatch {
   pair2: string[];     // player ids (1 or 2 players)
   pair1Score: number | null;
   pair2Score: number | null;
+  sets?: Array<{ p1: number; p2: number }>; // games per set (traditional mode)
   status: 'pending' | 'completed';
 }
 
@@ -649,11 +650,79 @@ export function startNextRound(game: ActiveGame): ActiveGame {
 }
 
 // ---------------------------------------------------------------------------
-// 12. startGame
+// 12. generateFixedPairsRounds — round robin treating player pairs as units
+// ---------------------------------------------------------------------------
+
+export function generateFixedPairsRounds(
+  players: GamePlayer[],
+  numCourts: number,
+): GameRound[] {
+  const pairCount = Math.floor(players.length / 2);
+  if (pairCount < 2) return [];
+
+  // Even up for circle algorithm
+  const n = pairCount % 2 === 0 ? pairCount : pairCount + 1;
+  let idx = Array.from({ length: n }, (_, i) => i);
+  const rounds: GameRound[] = [];
+
+  for (let r = 0; r < n - 1; r++) {
+    const courts: CourtMatch[] = [];
+    const resting: string[] = [];
+
+    for (let i = 0; i + 1 < idx.length; i += 2) {
+      const pi1 = idx[i];
+      const pi2 = idx[i + 1];
+      const isBye1 = pi1 >= pairCount;
+      const isBye2 = pi2 >= pairCount;
+
+      if (isBye1 && !isBye2) {
+        resting.push(players[pi2 * 2].id, players[pi2 * 2 + 1].id);
+      } else if (isBye2 && !isBye1) {
+        resting.push(players[pi1 * 2].id, players[pi1 * 2 + 1].id);
+      } else if (!isBye1 && !isBye2 && courts.length < numCourts) {
+        courts.push({
+          courtNum: courts.length + 1,
+          pair1: [players[pi1 * 2].id, players[pi1 * 2 + 1].id],
+          pair2: [players[pi2 * 2].id, players[pi2 * 2 + 1].id],
+          pair1Score: null,
+          pair2Score: null,
+          status: 'pending',
+        });
+      }
+    }
+
+    rounds.push({ num: r + 1, status: 'pending', courts, resting });
+
+    // Circle rotation: fix index 0, rotate the rest
+    if (idx.length > 2) {
+      const last = idx.pop()!;
+      idx.splice(1, 0, last);
+    }
+  }
+
+  return rounds;
+}
+
+// ---------------------------------------------------------------------------
+// 13. startGame
 // ---------------------------------------------------------------------------
 
 export function startGame(game: ActiveGame): ActiveGame {
   let rounds: GameRound[] = [];
+
+  // Fixed pairs: use pair round-robin instead of individual rotation
+  if (game.pairType === 'parejas' && game.players.length >= 4) {
+    rounds = generateFixedPairsRounds(game.players, game.courts).map((r, i) =>
+      i === 0 ? { ...r, status: 'active' as const } : r,
+    );
+    return {
+      ...game,
+      status: 'live',
+      rounds,
+      currentRound: 1,
+      standings: calculateStandings({ ...game, rounds: [] }),
+    };
+  }
 
   if (game.format === 'americano' || game.format === 'round_robin' || game.format === 'team_league') {
     rounds = generateAmericanoRounds(game.players, game.courts).map((r, i) =>
