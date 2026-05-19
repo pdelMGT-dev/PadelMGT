@@ -1,15 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
-type Role = 'player' | 'club' | 'league' | 'federation';
+type Role = 'player' | 'club' | 'league' | 'federation' | 'super_admin';
 
 const roleLabels: Record<Role, string> = {
   player: 'Jugador',
   club: 'Club',
   league: 'Liga',
   federation: 'Federación',
+  super_admin: 'Super Admin',
 };
 
 const navItems: Record<Role, { href: string; label: string; icon: string }[]> = {
@@ -42,29 +44,70 @@ const navItems: Record<Role, { href: string; label: string; icon: string }[]> = 
     { href: '/dashboard/federation/tournaments', label: 'Torneos Sancionados', icon: '◉' },
     { href: '/dashboard/federation/clubs', label: 'Clubes Afiliados', icon: '◑' },
   ],
+  super_admin: [
+    { href: '/dashboard/super-admin', label: 'Panel General', icon: '◈' },
+    { href: '/dashboard/player', label: 'Vista Jugador', icon: '◎' },
+    { href: '/dashboard/club', label: 'Vista Club', icon: '◑' },
+    { href: '/dashboard/league', label: 'Vista Liga', icon: '▦' },
+    { href: '/dashboard/federation', label: 'Vista Federación', icon: '△' },
+  ],
 };
 
-const mockUser: Record<Role, { name: string; sub: string; initials: string }> = {
-  player: { name: 'Diego García', sub: '#47 · Buenos Aires', initials: 'DG' },
-  club: { name: 'Club La Cantera', sub: '127 miembros · 8 canchas', initials: 'LC' },
-  league: { name: 'Liga Premier LATAM', sub: '12 equipos · Temp. 2026', initials: 'LP' },
-  federation: { name: 'Federación Argentina', sub: '380 clubes · 9 países', initials: 'FA' },
-};
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+}
 
-// In production this comes from the auth token/session
-const IS_SUPER_ADMIN = false;
+interface StoredUser {
+  id: string;
+  name: string;
+  email: string;
+  shortId?: string;
+  role: string;
+  sub?: string;
+}
 
 export default function DashboardSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<StoredUser | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('padelmgt_user');
+      if (raw) setUser(JSON.parse(raw));
+    } catch {}
+  }, []);
 
   const activeRole: Role =
-    pathname.startsWith('/dashboard/club') ? 'club'
+    pathname.startsWith('/dashboard/super-admin') ? 'super_admin'
+    : pathname.startsWith('/dashboard/club') ? 'club'
     : pathname.startsWith('/dashboard/league') ? 'league'
     : pathname.startsWith('/dashboard/federation') ? 'federation'
     : 'player';
 
-  const user = mockUser[activeRole];
+  const isSuperAdmin = user?.role === 'super_admin';
   const nav = navItems[activeRole];
+
+  const displayName = user?.name ?? 'Invitado';
+  const displaySub = user?.sub ?? (user?.email ?? '');
+  const initials = user ? getInitials(user.name) : '?';
+
+  function handleLogout() {
+    localStorage.removeItem('padelmgt_user');
+    router.push('/login');
+  }
+
+  const switchableRoles: { role: Role; label: string }[] = [
+    { role: 'player', label: 'Jugador' },
+    { role: 'club', label: 'Club' },
+    { role: 'league', label: 'Liga' },
+    { role: 'federation', label: 'Fed.' },
+  ];
 
   return (
     <aside style={{
@@ -79,11 +122,14 @@ export default function DashboardSidebar() {
         <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 17, textTransform: 'uppercase', color: '#fff', letterSpacing: '-0.01em' }}>PadelMGT</span>
       </Link>
 
-      {/* Role switcher — only visible to Super Admin */}
-      {IS_SUPER_ADMIN && (
+      {/* Super-admin role switcher */}
+      {isSuperAdmin && (
         <div style={{ padding: '0 12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d97706', fontWeight: 700, marginBottom: 6, paddingLeft: 4 }}>
+            ★ Super Admin
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
-            {(Object.keys(roleLabels) as Role[]).map((role) => (
+            {switchableRoles.map(({ role, label }) => (
               <Link key={role} href={`/dashboard/${role}`}
                 style={{
                   padding: '6px 4px', textAlign: 'center', textDecoration: 'none',
@@ -92,7 +138,7 @@ export default function DashboardSidebar() {
                   fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
                   transition: 'all 0.15s',
                 }}>
-                {roleLabels[role]}
+                {label}
               </Link>
             ))}
           </div>
@@ -105,7 +151,7 @@ export default function DashboardSidebar() {
           {roleLabels[activeRole]}
         </div>
         {nav.map((item) => {
-          const rootHref = `/dashboard/${activeRole}`;
+          const rootHref = `/dashboard/${activeRole === 'super_admin' ? 'super-admin' : activeRole}`;
           const isActive = item.href === rootHref
             ? pathname === rootHref
             : pathname.startsWith(item.href);
@@ -143,18 +189,38 @@ export default function DashboardSidebar() {
 
       {/* User */}
       <div style={{ padding: '14px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <Link href={activeRole === 'player' ? '/dashboard/player/profile' : '#'} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, textDecoration: 'none' }}>
-          <div style={{ width: 36, height: 36, background: 'var(--court-blue)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
-            {user.initials}
+        <Link
+          href={activeRole === 'player' ? '/dashboard/player/profile' : '#'}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, textDecoration: 'none' }}
+        >
+          <div style={{
+            width: 36, height: 36, flexShrink: 0, borderRadius: '50%',
+            background: isSuperAdmin ? '#d97706' : 'var(--court-blue)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: '#fff',
+          }}>
+            {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.sub}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {displayName}
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {displaySub}
+            </div>
           </div>
         </Link>
-        <Link href="/login" style={{ display: 'block', textAlign: 'center', padding: '7px', fontSize: 11, color: 'rgba(255,255,255,0.35)', textDecoration: 'none', border: '1px solid rgba(255,255,255,0.08)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>
+        <button
+          onClick={handleLogout}
+          style={{
+            display: 'block', width: '100%', textAlign: 'center', padding: '7px',
+            fontSize: 11, color: 'rgba(255,255,255,0.35)',
+            border: '1px solid rgba(255,255,255,0.08)', letterSpacing: '0.08em',
+            textTransform: 'uppercase', fontWeight: 600, background: 'transparent', cursor: 'pointer',
+          }}
+        >
           Cerrar Sesión
-        </Link>
+        </button>
       </div>
     </aside>
   );
