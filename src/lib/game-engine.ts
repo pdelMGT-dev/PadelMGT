@@ -32,6 +32,27 @@ export interface GamePlayer {
   name: string;
   ranking: number;
   isCreator: boolean;
+  email?: string;
+  shortId?: string;
+}
+
+export interface InvitedPlayer {
+  id: string;
+  name: string;
+  email?: string;
+  shortId?: string;
+  ranking: number;
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
+  invitedAt: string;
+  isFriend: boolean;
+}
+
+export interface FixedPair {
+  pairIndex: number;
+  player1Id: string;
+  player2Id: string;
+  player1Name: string;
+  player2Name: string;
 }
 
 export interface CourtMatch {
@@ -91,19 +112,25 @@ export interface ActiveGame {
   time: string;
   club: string;
   city: string;
+  country?: string;
+  locationName?: string;      // custom name for "Pista Privada"
   pairType: PairType;
   mixto: boolean;
   scoreConfig: ScoreConfig;
   maxPlayers: number;
   courts: number;
-  players: GamePlayer[];
+  players: GamePlayer[];      // confirmed players (including creator)
+  invitedPlayers: InvitedPlayer[]; // full invitation list with status
+  fixedPairs?: FixedPair[];   // set by creator in 'parejas' mode before start
   rounds: GameRound[];
-  currentRound: number;  // 0 = not started, 1+ = current round number
+  currentRound: number;       // 0 = not started, 1+ = current round number
   standings: Standing[];
   levelLabel?: string;        // display label for level filter used at creation
-  bracket?: KnockoutBracket; // for knockout/world_cup
+  creatorId?: string;         // user ID of the creator
+  bracket?: KnockoutBracket;  // for knockout/world_cup
   groups?: GroupStage;        // for world_cup
   isCreator?: boolean;        // set by UI when rendering for creator
+  cancelledAt?: string;       // ISO date if game was cancelled
 }
 
 export interface GroupStage {

@@ -124,6 +124,7 @@ const g1_round2: import('./game-engine').GameRound = g1_rounds_generated[1]
 
 const g1Base: Omit<ActiveGame, 'standings'> = {
   id: 'g1',
+  invitedPlayers: [],
   code: 'JR-2026-1001',
   name: 'Americano Express',
   format: 'americano',
@@ -148,6 +149,7 @@ const g1: ActiveGame = { ...g1Base, standings: calculateStandings({ ...g1Base, s
 // g2: Americano individual, status='starting_soon', 4 players, 0 rounds
 const g2: ActiveGame = {
   id: 'g2',
+  invitedPlayers: [],
   code: 'JR-2026-1002',
   name: 'Juego del Barrio',
   format: 'americano',
@@ -170,6 +172,7 @@ const g2: ActiveGame = {
 // g3: Americano individual, status='created', 2 players (not enough yet)
 const g3: ActiveGame = {
   id: 'g3',
+  invitedPlayers: [],
   code: 'JR-2026-1003',
   name: 'Rápido Avanzado',
   format: 'americano',
@@ -205,6 +208,7 @@ const g4_r3 = completedRound(3, [
 
 const g4Base: Omit<ActiveGame, 'standings'> = {
   id: 'g4',
+  invitedPlayers: [],
   code: 'JR-2026-0920',
   name: 'Open Mixto',
   format: 'americano',
@@ -332,6 +336,8 @@ export function createQuickGame(params: {
   time: string;
   club: string;
   city: string;
+  country?: string;
+  locationName?: string;
   format: 'americano' | 'mexicano';
   pairType: PairType;
   mixto: boolean;
@@ -339,7 +345,9 @@ export function createQuickGame(params: {
   maxPlayers: number;
   courts: number;
   players: GamePlayer[];
+  invitedPlayers?: import('./game-engine').InvitedPlayer[];
   levelLabel?: string;
+  creatorId?: string;
 }): ActiveGame {
   const game: ActiveGame = {
     id: generateId(),
@@ -351,16 +359,20 @@ export function createQuickGame(params: {
     time: params.time,
     club: params.club,
     city: params.city,
+    country: params.country,
+    locationName: params.locationName,
     pairType: params.pairType,
     mixto: params.mixto,
     scoreConfig: params.scoreConfig,
     maxPlayers: params.maxPlayers,
     courts: params.courts,
     players: params.players,
+    invitedPlayers: params.invitedPlayers ?? [],
     rounds: [],
     currentRound: 0,
     standings: [],
     levelLabel: params.levelLabel,
+    creatorId: params.creatorId,
   };
   saveGame(game);
   return game;
