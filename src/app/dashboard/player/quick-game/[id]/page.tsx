@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useState, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   getGame,
@@ -10,80 +10,46 @@ import {
   startGame as engineStartGame,
   startNextRound as engineStartNextRound,
   isGameFinished,
+  calculateStandings,
 } from '@/lib/game-store';
-import { isRoundComplete, calculateStandings } from '@/lib/game-engine';
-import type { ActiveGame, GameStatus, ScoreConfig, GamePlayer } from '@/lib/game-engine';
+import { isRoundComplete } from '@/lib/game-engine';
+import type { ActiveGame, GamePlayer, InvitedPlayer, FixedPair, ScoreConfig } from '@/lib/game-engine';
+import {
+  getInvitationsForGame,
+  createInvitation,
+  deleteInvitationsForGame,
+} from '@/lib/invitation-store';
+import { searchPlayers, addFriendship, areFriends } from '@/lib/player-store';
+import type { RegisteredPlayer } from '@/lib/player-store';
+import { applyGameRankingResults, getRankingHistoryForGame } from '@/lib/ranking-store';
+import type { RankingEntry } from '@/lib/ranking-store';
 
-// ── Mock data (replace with API) ───────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-type MockPlayer = { id: string; name: string; ranking: number };
-const FRIENDS_MOCK: MockPlayer[] = [
-  { id: 'f1', name: 'Ana Rodríguez',   ranking: 34  },
-  { id: 'f2', name: 'Marcos Herrera',  ranking: 12  },
-  { id: 'f3', name: 'Carlos Vargas',   ranking: 89  },
-  { id: 'f4', name: 'Sofía López',     ranking: 56  },
-  { id: 'f5', name: 'Laura Torres',    ranking: 101 },
-  { id: 'f6', name: 'Diego Fernández', ranking: 45  },
-];
-const ALL_PLAYERS_MOCK: MockPlayer[] = [
-  ...FRIENDS_MOCK,
-  { id: 'p7',  name: 'Pedro Morales', ranking: 8  },
-  { id: 'p8',  name: 'Isabel Bravo',  ranking: 23 },
-  { id: 'p9',  name: 'Juan Castro',   ranking: 67 },
-  { id: 'p10', name: 'Elena Vidal',   ranking: 78 },
-  { id: 'p11', name: 'Raúl Ortega',   ranking: 15 },
-  { id: 'p12', name: 'Marta Fuentes', ranking: 92 },
-];
-function initials(name: string) { return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(); }
+type CurrentUser = { id: string; name: string; email: string; shortId: string; role: string; sub: string };
 
-type JoinRequest = {
-  id: string;
-  gameId: string;
-  playerId: string;
-  playerName: string;
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: string;
-};
-
-function loadJoinRequests(gameId: string): JoinRequest[] {
-  try {
-    const all: JoinRequest[] = JSON.parse(localStorage.getItem('padelmgt_join_requests') || '[]');
-    return all.filter(r => r.gameId === gameId);
-  } catch { return []; }
+function initials(name: string) {
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
 
-function updateJoinRequest(id: string, status: 'approved' | 'rejected') {
-  try {
-    const all: JoinRequest[] = JSON.parse(localStorage.getItem('padelmgt_join_requests') || '[]');
-    const updated = all.map(r => r.id === id ? { ...r, status } : r);
-    localStorage.setItem('padelmgt_join_requests', JSON.stringify(updated));
-  } catch {}
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-const STATUS_INFO: Record<GameStatus, { label: string; color: string }> = {
-  created:       { label: 'Creado',      color: '#7c3aed'           },
-  starting_soon: { label: 'Por Empezar', color: '#f5a623'           },
-  live:          { label: 'En Vivo',     color: 'var(--turf-green)' },
-  finished:      { label: 'Finalizado',  color: 'var(--grey-400)'   },
+const STATUS_INFO: Record<string, { label: string; color: string; bg: string }> = {
+  created:       { label: 'Creado',       color: '#7c3aed', bg: '#f3e8ff' },
+  starting_soon: { label: 'Por Empezar',  color: '#b45309', bg: '#fef3c7' },
+  live:          { label: 'En Vivo',      color: 'var(--turf-green)', bg: '#dcfce7' },
+  finished:      { label: 'Finalizado',   color: 'var(--grey-400)', bg: 'var(--grey-100)' },
+  cancelled:     { label: 'Cancelado',    color: '#ee0005', bg: '#fee2e2' },
 };
 
 function scoreConfigLabel(cfg: ScoreConfig): string {
   if (cfg.type === 'points') return `Por Puntos · ${cfg.target} pts`;
-  return `Tradicional · ${cfg.setsPerMatch ?? 3} sets · ${cfg.gamesPerSet ?? 6} games`;
+  return `Tradicional · ${cfg.setsPerMatch ?? 3} sets`;
 }
 
-function formatLabel(fmt: string): string {
-  const map: Record<string, string> = {
-    americano: 'Americano', mexicano: 'Mexicano',
-    round_robin: 'Round Robin', team_league: 'Team League',
-    knockout: 'Eliminatorio', world_cup: 'World Cup',
-  };
-  return map[fmt] ?? fmt;
-}
-
-// ── Styles ─────────────────────────────────────────────────────────────────────
+const secTitle: React.CSSProperties = {
+  fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700,
+  color: 'var(--grey-400)', marginBottom: 16, paddingBottom: 10,
+  borderBottom: '1px solid var(--grey-100)',
+};
 
 const inp: React.CSSProperties = {
   width: '100%', padding: '10px 12px', fontSize: 13,
@@ -97,13 +63,37 @@ const lbl: React.CSSProperties = {
   textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6,
 };
 
-const secTitle: React.CSSProperties = {
-  fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700,
-  color: 'var(--grey-400)', marginBottom: 16, paddingBottom: 10,
-  borderBottom: '1px solid var(--grey-100)',
-};
+function statusBadge(status: string) {
+  const info = STATUS_INFO[status] ?? STATUS_INFO.created;
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+      padding: '3px 8px', background: info.bg, color: info.color,
+    }}>
+      {info.label}
+    </span>
+  );
+}
 
-// ── Component ──────────────────────────────────────────────────────────────────
+function invStatusBadge(status: InvitedPlayer['status']) {
+  const map: Record<string, { label: string; color: string; bg: string }> = {
+    pending:   { label: 'Pendiente',   color: '#b45309', bg: '#fef3c7' },
+    accepted:  { label: 'Aceptado',    color: '#166534', bg: '#dcfce7' },
+    rejected:  { label: 'Rechazado',   color: '#ee0005', bg: '#fee2e2' },
+    cancelled: { label: 'Cancelado',   color: 'var(--grey-400)', bg: 'var(--grey-100)' },
+  };
+  const m = map[status] ?? map.pending;
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+      padding: '3px 8px', background: m.bg, color: m.color,
+    }}>
+      {m.label}
+    </span>
+  );
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function QuickGameDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -113,75 +103,66 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     return getGame(id);
   });
 
-  useEffect(() => {
-    if (!game) setGame(getGame(id));
-  }, [id, game]);
-
-  const [scoreInputs, setScoreInputs] = useState<Record<string, { p1: string; p2: string }>>({});
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState('');
-  const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [rankingEntries, setRankingEntries] = useState<RankingEntry[]>([]);
 
-  // User detection
-  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; role: string } | null>(null);
-  useEffect(() => {
-    try { const u = localStorage.getItem('padelmgt_user'); if (u) setCurrentUser(JSON.parse(u)); } catch {}
-  }, []);
-
-  // Inline edit state
+  // Edit state
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
   const [editClub, setEditClub] = useState('');
   const [editCity, setEditCity] = useState('');
-  const [editIsCustomLoc, setEditIsCustomLoc] = useState(false);
 
-  // Extended config edit
-  const [editScoreType, setEditScoreType] = useState<'traditional' | 'points'>('traditional');
-  const [editSetsPerRound, setEditSetsPerRound] = useState(1);
-  const [editGamesPerSet, setEditGamesPerSet] = useState(6);
-  const [editTiebreak, setEditTiebreak] = useState(7);
-  const [editPointTarget, setEditPointTarget] = useState(16);
-  const [editMaxPlayers, setEditMaxPlayers] = useState(8);
+  // Cancel confirm modal
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
-  // Add player mode
-  const [addMode, setAddMode] = useState<'self' | 'friends' | 'search' | 'new' | null>(null);
-  const [addSearchQ, setAddSearchQ] = useState('');
-  const [addFriendSel, setAddFriendSel] = useState<Set<string>>(new Set());
-  const [addNewFirst, setAddNewFirst] = useState('');
-  const [addNewLast, setAddNewLast] = useState('');
-  const [addNewEmail, setAddNewEmail] = useState('');
+  // Add/replace player modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
+  const [playerSearchQ, setPlayerSearchQ] = useState('');
+  const [playerSearchResults, setPlayerSearchResults] = useState<RegisteredPlayer[]>([]);
 
-  // Set-by-set score inputs (traditional mode): key = `${roundNum}-${courtNum}`
-  const [setInputs, setSetInputs] = useState<Record<string, { p1: string; p2: string }>>({});
+  // Score inputs (points mode): key = `${roundNum}-${courtNum}`
+  const [scoreInputs, setScoreInputs] = useState<Record<string, { p1: string; p2: string }>>({});
 
-  // D&D pair reordering
-  const [pairsMode, setPairsMode] = useState(false);
-  const [pairPlayers, setPairPlayers] = useState<GamePlayer[]>([]);
-  const [dndSrc, setDndSrc] = useState<number | null>(null);
-  const [dndOver, setDndOver] = useState<number | null>(null);
+  // Fixed pairs assignment (parejas mode)
+  const [pairAssignments, setPairAssignments] = useState<FixedPair[]>([]);
+  const [pairsLocked, setPairsLocked] = useState(false);
 
-  // Join requests
-  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
+  // Load user
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('padelmgt_user');
+      if (raw) setCurrentUser(JSON.parse(raw));
+    } catch {}
+  }, []);
 
-  function refreshRequests() {
-    if (game) setJoinRequests(loadJoinRequests(game.id));
-  }
+  // Load game
+  useEffect(() => {
+    if (!game) setGame(getGame(id));
+  }, [id, game]);
+
+  // Poll for invitation responses every 5s (creator sees status updates)
+  const refreshGame = useCallback(() => {
+    const fresh = getGame(id);
+    if (fresh) setGame(fresh);
+  }, [id]);
 
   useEffect(() => {
-    refreshRequests();
-    const interval = setInterval(refreshRequests, 4000);
+    const interval = setInterval(refreshGame, 5000);
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game?.id]);
+  }, [refreshGame]);
 
+  // Sync shareUrl
   useEffect(() => {
     if (game?.code) setShareUrl(`${window.location.origin}/quick-game/${game.code}`);
   }, [game?.code]);
 
-  // Initialize edit fields when game loads
+  // Init edit fields
   useEffect(() => {
     if (!game) return;
     setEditName(game.name);
@@ -189,19 +170,56 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     setEditTime(game.time);
     setEditClub(game.club);
     setEditCity(game.city);
-    const sc = game.scoreConfig;
-    if (sc.type === 'points') {
-      setEditScoreType('points');
-      setEditPointTarget(sc.target ?? 16);
+  }, [game?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Init pair assignments from game.fixedPairs
+  useEffect(() => {
+    if (!game) return;
+    if (game.fixedPairs && game.fixedPairs.length > 0) {
+      setPairAssignments(game.fixedPairs);
+      setPairsLocked(true);
     } else {
-      setEditScoreType('traditional');
-      setEditSetsPerRound(sc.setsPerMatch ?? 1);
-      setEditGamesPerSet(sc.gamesPerSet ?? 6);
-      setEditTiebreak(sc.tiebreak ?? 7);
+      const numPairs = Math.floor(game.maxPlayers / 2);
+      const confirmedPlayers = getConfirmedPlayers(game);
+      const assignments: FixedPair[] = Array.from({ length: numPairs }, (_, i) => {
+        const existing = game.fixedPairs?.[i];
+        return existing ?? {
+          pairIndex: i,
+          player1Id: confirmedPlayers[i * 2]?.id ?? '',
+          player2Id: confirmedPlayers[i * 2 + 1]?.id ?? '',
+          player1Name: confirmedPlayers[i * 2]?.name ?? '',
+          player2Name: confirmedPlayers[i * 2 + 1]?.name ?? '',
+        };
+      });
+      setPairAssignments(assignments);
     }
-    setEditMaxPlayers(game.maxPlayers);
-    setPairPlayers(game.players);
-  }, [game?.id]);
+  }, [game?.id, game?.players?.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load ranking entries for finished game
+  useEffect(() => {
+    if (game?.status === 'finished') {
+      setRankingEntries(getRankingHistoryForGame(game.id));
+    }
+  }, [game?.status, game?.id]);
+
+  // Search players for invitation modal
+  useEffect(() => {
+    if (!playerSearchQ.trim()) {
+      setPlayerSearchResults([]);
+      return;
+    }
+    const results = searchPlayers(playerSearchQ);
+    const alreadyIn = game?.players.map(p => p.id) ?? [];
+    const alreadyInvited = game?.invitedPlayers.filter(ip => ip.status !== 'cancelled').map(ip => ip.id) ?? [];
+    setPlayerSearchResults(
+      results.filter(r => !alreadyIn.includes(r.id) && !alreadyInvited.includes(r.id)).slice(0, 8)
+    );
+  }, [playerSearchQ, game?.players, game?.invitedPlayers]);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  }
 
   if (!game) {
     return (
@@ -212,72 +230,64 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     );
   }
 
-  // ── Derived state ──────────────────────────────────────────────────────────
+  // ── Role detection ────────────────────────────────────────────────────────
 
-  const si = STATUS_INFO[game.status];
+  const isCreator = !!(currentUser && (
+    currentUser.id === game.creatorId || game.isCreator
+  ));
+
+  // ── Derived state ─────────────────────────────────────────────────────────
+
+  const si = STATUS_INFO[game.status] ?? STATUS_INFO.created;
   const isLive     = game.status === 'live';
   const isFinished = game.status === 'finished';
+  const isCancelled = game.status === 'cancelled' as string;
   const isPending  = game.status === 'created' || game.status === 'starting_soon';
-  const canStart   = isPending && game.players.length >= 4 && game.players.length === game.maxPlayers;
-  const emptySlots = Math.max(0, game.maxPlayers - game.players.length);
+
+  const confirmedCount = game.players.length;
+  const allConfirmed   = confirmedCount === game.maxPlayers;
+
+  function getConfirmedPlayers(g: ActiveGame): GamePlayer[] {
+    return g.players;
+  }
+
+  const pairsFullyAssigned = useMemo(() => {
+    if (game.pairType !== 'parejas') return true;
+    const usedIds = new Set<string>();
+    for (const pa of pairAssignments) {
+      if (!pa.player1Id || !pa.player2Id) return false;
+      if (usedIds.has(pa.player1Id) || usedIds.has(pa.player2Id)) return false;
+      usedIds.add(pa.player1Id);
+      usedIds.add(pa.player2Id);
+    }
+    return usedIds.size === game.maxPlayers;
+  }, [pairAssignments, game.pairType, game.maxPlayers]);
+
+  const canStart = isPending && allConfirmed && (game.pairType !== 'parejas' || (pairsFullyAssigned && pairsLocked));
 
   const activeRound = game.rounds.find(r => r.status === 'active') ?? null;
-  const doneRounds  = game.rounds.filter(r => r.status === 'completed');
-
   const activeRoundComplete = activeRound ? isRoundComplete(activeRound) : false;
-  const gameComplete        = isGameFinished(game);
+  const gameComplete = isGameFinished(game);
 
   const hasMoreRounds = !gameComplete && activeRoundComplete && (
     game.format === 'mexicano' ||
     game.rounds.some(r => r.num > (activeRound?.num ?? 0) && r.status === 'pending')
   );
 
-  // Derived for add-player panel
-  const selfInGame       = currentUser ? game.players.some(p => p.id === currentUser.id) : true;
-  const availableFriends = FRIENDS_MOCK.filter(f => !game.players.some(gp => gp.id === f.id));
-  const searchResults    = useMemo(() => {
-    if (!addSearchQ.trim()) return [];
-    const q = addSearchQ.toLowerCase();
-    return ALL_PLAYERS_MOCK.filter(p =>
-      p.name.toLowerCase().includes(q) && !game.players.some(gp => gp.id === p.id)
-    ).slice(0, 6);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addSearchQ, game.players]);
+  const isPointsMode = game.scoreConfig.type === 'points';
+  const ptTarget = isPointsMode ? (game.scoreConfig.target ?? 24) : null;
 
-  // ── Actions ────────────────────────────────────────────────────────────────
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
-  }
-
-  function getName(pid: string) {
-    return game!.players.find(p => p.id === pid)?.name ?? pid;
-  }
-
-  function handleStartGame() {
-    const started = engineStartGame(game!);
-    saveGame(started);
-    setGame(started);
-    showToast('¡Juego iniciado!');
-  }
+  // ── Actions ───────────────────────────────────────────────────────────────
 
   function handleSaveEdits() {
     if (!game) return;
-    const newScoreConfig: ScoreConfig = editScoreType === 'points'
-      ? { type: 'points', target: editPointTarget }
-      : { type: 'traditional', setsPerMatch: editSetsPerRound, gamesPerSet: editGamesPerSet, tiebreak: editTiebreak, deuce: 'oro' };
-    const safeMax = Math.max(game.players.length, editMaxPlayers);
     const updated: ActiveGame = {
       ...game,
       name: editName.trim() || game.name,
       date: editDate || game.date,
       time: editTime || game.time,
-      club: editIsCustomLoc ? (editClub.trim() || game.club) : (editClub.trim() || game.club),
-      city: editIsCustomLoc ? (editCity.trim() || game.city) : (editCity.trim() || game.city),
-      scoreConfig: newScoreConfig,
-      maxPlayers: safeMax,
-      courts: Math.max(1, Math.floor(safeMax / 4)),
+      club: editClub.trim() || game.club,
+      city: editCity.trim() || game.city,
     };
     saveGame(updated);
     setGame(updated);
@@ -285,197 +295,159 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     showToast('Juego actualizado.');
   }
 
-  // ── Player management helpers ──────────────────────────────────────────────
-
-  function addPlayerToGame(p: GamePlayer) {
-    if (!game || game.players.length >= game.maxPlayers) return;
-    const updated = { ...game, players: [...game.players, p] };
-    saveGame(updated);
-    setGame(updated);
-    setPairPlayers(updated.players);
-    showToast(`${p.name} agregado.`);
-  }
-
-  function handleAddSelf() {
-    if (!currentUser || !game) return;
-    if (game.players.some(p => p.id === currentUser.id)) return;
-    addPlayerToGame({ id: currentUser.id, name: currentUser.name, ranking: 0, isCreator: false });
-    setAddMode(null);
-  }
-
-  function handleAddFriends() {
+  function handleCancelGame() {
     if (!game) return;
-    const toAdd = FRIENDS_MOCK.filter(f => addFriendSel.has(f.id) && !game.players.some(gp => gp.id === f.id));
-    let updated = { ...game };
-    for (const f of toAdd) {
-      if (updated.players.length >= updated.maxPlayers) break;
-      updated = { ...updated, players: [...updated.players, { id: f.id, name: f.name, ranking: f.ranking, isCreator: false }] };
+    const updated: ActiveGame = {
+      ...game,
+      status: 'cancelled' as ActiveGame['status'],
+      cancelledAt: new Date().toISOString(),
+    };
+    // Update all pending invitations to cancelled
+    const invitations = getInvitationsForGame(game.id);
+    for (const inv of invitations) {
+      if (inv.status === 'pending') {
+        // Mark cancelled in invitation store
+        const { respondToInvitation } = require('@/lib/invitation-store');
+        respondToInvitation(inv.id, 'rejected');
+      }
     }
-    saveGame(updated);
-    setGame(updated);
-    setPairPlayers(updated.players);
-    setAddFriendSel(new Set());
-    setAddMode(null);
-    showToast(`${toAdd.length} jugador${toAdd.length !== 1 ? 'es' : ''} agregado${toAdd.length !== 1 ? 's' : ''}.`);
+    // Mark all invited players as cancelled
+    const updatedInvited = (game.invitedPlayers ?? []).map(ip =>
+      ip.status === 'pending' ? { ...ip, status: 'cancelled' as const } : ip
+    );
+    saveGame({ ...updated, invitedPlayers: updatedInvited });
+    setGame({ ...updated, invitedPlayers: updatedInvited });
+    setShowCancelModal(false);
+    showToast('Juego cancelado.');
   }
 
-  function handleAddFromSearch(p: MockPlayer) {
-    addPlayerToGame({ id: p.id, name: p.name, ranking: p.ranking, isCreator: false });
-    setAddSearchQ('');
-    setAddMode(null);
-  }
-
-  function handleAddNewPlayer() {
-    const name = `${addNewFirst.trim()} ${addNewLast.trim()}`.trim();
-    if (!name) return;
-    addPlayerToGame({ id: `manual-${Date.now()}`, name, ranking: 0, isCreator: false });
-    setAddNewFirst(''); setAddNewLast(''); setAddNewEmail('');
-    setAddMode(null);
-  }
-
-  function handleRemovePlayer(pid: string) {
-    if (!game) return;
-    const updated = { ...game, players: game.players.filter(p => p.id !== pid) };
-    saveGame(updated);
-    setGame(updated);
-    setPairPlayers(updated.players);
-    showToast('Jugador eliminado.');
-  }
-
-  function handleTrimSlots() {
-    if (!game) return;
-    const updated = { ...game, maxPlayers: game.players.length };
-    saveGame(updated);
-    setGame(updated);
-    showToast('Spots ajustados.');
-  }
-
-  // ── D&D pair reordering ────────────────────────────────────────────────────
-
-  function handlePairDrop(toIdx: number) {
-    if (dndSrc === null || dndSrc === toIdx) return;
-    const next = [...pairPlayers];
-    const temp = next[dndSrc];
-    next[dndSrc] = next[toIdx];
-    next[toIdx] = temp;
-    setPairPlayers(next);
-    setDndSrc(null);
-    setDndOver(null);
-  }
-
-  function handleSavePairs() {
-    const updated = { ...game!, players: pairPlayers };
-    saveGame(updated);
-    setGame(updated);
-    setPairsMode(false);
-    showToast('Parejas actualizadas.');
-  }
-
-  // ── Traditional set-by-set score registration ─────────────────────────────
-
-  function handleRegisterSet(roundNum: number, courtNum: number) {
-    if (!game) return;
-    const key = `${roundNum}-${courtNum}`;
-    const inp = setInputs[key] ?? { p1: '0', p2: '0' };
-    const p1n = Math.max(0, parseInt(inp.p1 || '0', 10));
-    const p2n = Math.max(0, parseInt(inp.p2 || '0', 10));
-    const setsPerMatch = game.scoreConfig.setsPerMatch ?? 3;
-    const setsToWin = Math.ceil(setsPerMatch / 2);
-
-    const updatedRounds = game.rounds.map(r => {
-      if (r.num !== roundNum) return r;
-      return {
-        ...r,
-        courts: r.courts.map(c => {
-          if (c.courtNum !== courtNum) return c;
-          const newSets = [...(c.sets ?? []), { p1: p1n, p2: p2n }];
-          const p1Won = newSets.filter(s => s.p1 > s.p2).length;
-          const p2Won = newSets.filter(s => s.p2 > s.p1).length;
-          const matchDone = p1Won >= setsToWin || p2Won >= setsToWin || newSets.length >= setsPerMatch;
-          return {
-            ...c,
-            sets: newSets,
-            pair1Score: matchDone ? p1Won : c.pair1Score,
-            pair2Score: matchDone ? p2Won : c.pair2Score,
-            status: matchDone ? 'completed' as const : 'pending' as const,
-          };
-        }),
-        status: (() => {
-          const updated = r.courts.map(c => {
-            if (c.courtNum !== courtNum) return c;
-            const newSets = [...(c.sets ?? []), { p1: p1n, p2: p2n }];
-            const p1Won = newSets.filter(s => s.p1 > s.p2).length;
-            const p2Won = newSets.filter(s => s.p2 > s.p1).length;
-            const matchDone = p1Won >= setsToWin || p2Won >= setsToWin || newSets.length >= setsPerMatch;
-            return { ...c, status: matchDone ? 'completed' as const : 'pending' as const };
-          });
-          return updated.every(c => c.status === 'completed') ? 'completed' as const : r.status;
-        })(),
+  function handleInvitePlayer(player: RegisteredPlayer) {
+    if (!game || !currentUser) return;
+    if (replaceTargetId) {
+      // Replace mode: cancel old invitation, create new
+      const updatedInvited = game.invitedPlayers.map(ip =>
+        ip.id === replaceTargetId ? { ...ip, status: 'cancelled' as const } : ip
+      );
+      const newEntry: InvitedPlayer = {
+        id: player.id,
+        name: player.name,
+        email: player.email,
+        shortId: player.shortId,
+        ranking: player.rankingPoints ?? 1000,
+        status: 'pending',
+        invitedAt: new Date().toISOString(),
+        isFriend: areFriends(currentUser.id, player.id),
       };
-    });
-
-    const base: ActiveGame = { ...game, rounds: updatedRounds };
-    const withStandings: ActiveGame = { ...base, standings: calculateStandings(base) };
-    const allDone = withStandings.rounds.every(r => r.status === 'completed');
-    const final: ActiveGame = { ...withStandings, status: allDone ? 'finished' : withStandings.status };
-
-    saveGame(final);
-    setGame(final);
-    setSetInputs(prev => { const n = { ...prev }; delete n[key]; return n; });
-
-    const round = final.rounds.find(r => r.num === roundNum);
-    if (round && isRoundComplete(round)) {
-      if (isGameFinished(final)) showToast('¡Juego finalizado! Ver clasificación final.');
-      else showToast('Ronda completa — podés iniciar la siguiente.');
+      const updatedGame = { ...game, invitedPlayers: [...updatedInvited, newEntry] };
+      saveGame(updatedGame);
+      setGame(updatedGame);
+      createInvitation({
+        gameId: game.id,
+        gameName: game.name,
+        gameDate: game.date,
+        gameTime: game.time,
+        gameClub: game.club,
+        gameCity: game.city,
+        fromPlayerId: currentUser.id,
+        fromPlayerName: currentUser.name,
+        toPlayerId: player.id,
+        toPlayerName: player.name,
+        toPlayerEmail: player.email,
+      });
+      setReplaceTargetId(null);
+      showToast(`Invitación enviada a ${player.name}`);
+    } else {
+      // Add new invitation
+      const newEntry: InvitedPlayer = {
+        id: player.id,
+        name: player.name,
+        email: player.email,
+        shortId: player.shortId,
+        ranking: player.rankingPoints ?? 1000,
+        status: 'pending',
+        invitedAt: new Date().toISOString(),
+        isFriend: areFriends(currentUser.id, player.id),
+      };
+      const updatedGame = { ...game, invitedPlayers: [...(game.invitedPlayers ?? []), newEntry] };
+      saveGame(updatedGame);
+      setGame(updatedGame);
+      createInvitation({
+        gameId: game.id,
+        gameName: game.name,
+        gameDate: game.date,
+        gameTime: game.time,
+        gameClub: game.club,
+        gameCity: game.city,
+        fromPlayerId: currentUser.id,
+        fromPlayerName: currentUser.name,
+        toPlayerId: player.id,
+        toPlayerName: player.name,
+        toPlayerEmail: player.email,
+      });
+      showToast(`Invitación enviada a ${player.name}`);
     }
+    setShowAddModal(false);
+    setPlayerSearchQ('');
+    setPlayerSearchResults([]);
   }
 
-  function handleApproveRequest(req: JoinRequest) {
-    if (!game || game.players.length >= game.maxPlayers) return;
-    const newPlayer = { id: req.playerId, name: req.playerName, ranking: 0, isCreator: false };
-    const updated = { ...game, players: [...game.players, newPlayer] };
-    saveGame(updated);
-    setGame(updated);
-    setPairPlayers(updated.players);
-    updateJoinRequest(req.id, 'approved');
-    setJoinRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved' } : r));
-    showToast(`${req.playerName} aprobado.`);
+  function handleStartGame() {
+    if (!game) return;
+    let gameToStart = game;
+    if (game.pairType === 'parejas' && pairsFullyAssigned) {
+      // Build players list ordered by pairs for fixed pair rounds
+      const orderedPlayers: GamePlayer[] = [];
+      for (const pa of pairAssignments) {
+        const p1 = game.players.find(p => p.id === pa.player1Id);
+        const p2 = game.players.find(p => p.id === pa.player2Id);
+        if (p1) orderedPlayers.push(p1);
+        if (p2) orderedPlayers.push(p2);
+      }
+      const updatedFixedPairs = pairAssignments;
+      gameToStart = { ...game, players: orderedPlayers, fixedPairs: updatedFixedPairs };
+    }
+    const started = engineStartGame(gameToStart);
+    saveGame(started);
+    setGame(started);
+    showToast('¡Juego iniciado!');
   }
 
-  function handleRejectRequest(req: JoinRequest) {
-    updateJoinRequest(req.id, 'rejected');
-    setJoinRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'rejected' } : r));
-    showToast(`Solicitud de ${req.playerName} rechazada.`);
-  }
-
-  function handleRegister(roundNum: number, courtNum: number) {
+  function handleRegisterScore(roundNum: number, courtNum: number) {
+    if (!game) return;
     const key = `${roundNum}-${courtNum}`;
     const raw = scoreInputs[key] ?? { p1: '', p2: '' };
     const p1 = Math.max(0, parseInt(raw.p1 || '0', 10));
     const p2 = Math.max(0, parseInt(raw.p2 || '0', 10));
-
-    const updated = engineUpdateScore(game!, roundNum, courtNum, p1, p2);
+    const updated = engineUpdateScore(game, roundNum, courtNum, p1, p2);
     saveGame(updated);
     setGame(updated);
     setScoreInputs(prev => { const n = { ...prev }; delete n[key]; return n; });
-
     const round = updated.rounds.find(r => r.num === roundNum);
     if (round && isRoundComplete(round)) {
-      if (isGameFinished(updated)) showToast('¡Juego finalizado! Ver clasificación final.');
-      else showToast('Ronda completa — podés iniciar la siguiente.');
+      if (isGameFinished(updated)) showToast('¡Ronda completa! Podés finalizar el juego.');
+      else showToast('Ronda completa — podés continuar la siguiente.');
     }
   }
 
   function handleNextRound() {
-    const next = engineStartNextRound(game!);
+    if (!game) return;
+    const next = engineStartNextRound(game);
     saveGame(next);
     setGame(next);
     setScoreInputs({});
     showToast(`Ronda ${next.currentRound} iniciada`);
   }
 
-  const isPointsMode = game.scoreConfig.type === 'points';
-  const ptTarget = isPointsMode ? (game.scoreConfig as { type: 'points'; target: number }).target : null;
+  function handleFinishGame() {
+    if (!game) return;
+    const standings = calculateStandings(game);
+    const finished: ActiveGame = { ...game, status: 'finished', standings };
+    saveGame(finished);
+    const entries = applyGameRankingResults(finished);
+    setGame(finished);
+    setRankingEntries(entries);
+    showToast('¡Juego finalizado! Ranking actualizado.');
+  }
 
   function handleP1Change(key: string, val: string) {
     setScoreInputs(prev => {
@@ -503,638 +475,474 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     });
   }
 
-  function handleCopy() {
-    if (!shareUrl) return;
-    navigator.clipboard.writeText(shareUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  function getName(pid: string) {
+    return game?.players.find(p => p.id === pid)?.name ?? pid;
   }
 
-  // Post-game editing state
-  const [editResultsOpen, setEditResultsOpen] = useState(false);
-  const [editScores, setEditScores] = useState<Record<string, { p1: string; p2: string }>>({});
+  function getPairNames(pids: string[]) {
+    return pids.map(pid => getName(pid).split(' ')[0]).join(' / ');
+  }
 
-  function handleEditScoreChange(roundNum: number, courtNum: number, team: 'p1' | 'p2', val: string) {
-    const key = `${roundNum}-${courtNum}`;
-    setEditScores(prev => {
-      const cur = prev[key] ?? { p1: '', p2: '' };
-      if (isPointsMode && ptTarget !== null) {
-        const n = parseInt(val, 10);
-        if (!isNaN(n) && n >= 0 && n <= ptTarget) {
-          return { ...prev, [key]: team === 'p1' ? { p1: val, p2: String(ptTarget - n) } : { p1: String(ptTarget - n), p2: val } };
-        }
+  function updatePairAssignment(idx: number, field: 'player1Id' | 'player2Id', playerId: string) {
+    const player = game?.players.find(p => p.id === playerId);
+    setPairAssignments(prev => prev.map((pa, i) => {
+      if (i !== idx) return pa;
+      if (field === 'player1Id') {
+        return { ...pa, player1Id: playerId, player1Name: player?.name ?? '' };
       }
-      return { ...prev, [key]: { ...cur, [team]: val } };
-    });
+      return { ...pa, player2Id: playerId, player2Name: player?.name ?? '' };
+    }));
   }
 
-  function handleSaveEditedResults() {
+  function handleSavePairs() {
     if (!game) return;
-    let updated = { ...game, rounds: game.rounds.map(r => ({ ...r, courts: r.courts.map(c => ({ ...c })) })) };
-    for (const [key, scores] of Object.entries(editScores)) {
-      const [rStr, cStr] = key.split('-');
-      const rNum = parseInt(rStr, 10);
-      const cNum = parseInt(cStr, 10);
-      const p1 = parseInt(scores.p1, 10);
-      const p2 = parseInt(scores.p2, 10);
-      if (isNaN(p1) || isNaN(p2)) continue;
-      const round = updated.rounds.find(r => r.num === rNum);
-      if (!round) continue;
-      const court = round.courts.find(c => c.courtNum === cNum);
-      if (!court) continue;
-      court.pair1Score = p1;
-      court.pair2Score = p2;
-      court.status = 'completed';
-    }
-    updated.standings = calculateStandings(updated);
+    const updated: ActiveGame = { ...game, fixedPairs: pairAssignments };
     saveGame(updated);
     setGame(updated);
-    setEditScores({});
-    setEditResultsOpen(false);
-    showToast('Resultados actualizados.');
+    setPairsLocked(true);
+    showToast('Parejas guardadas.');
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // Build auto-preview for individual mode (best + worst pairing)
+  const autoPreviewPairs = useMemo(() => {
+    if (game.pairType !== 'individual' || game.players.length < 4) return [];
+    const sorted = [...game.players].sort((a, b) => b.ranking - a.ranking);
+    const pairs: [GamePlayer, GamePlayer][] = [];
+    let lo = sorted.length - 1;
+    for (let hi = 0; hi < Math.floor(sorted.length / 2); hi++, lo--) {
+      pairs.push([sorted[hi], sorted[lo]]);
+    }
+    return pairs;
+  }, [game.players, game.pairType]);
+
+  // ── Render helpers ────────────────────────────────────────────────────────
+
+  const cardStyle: React.CSSProperties = {
+    background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 24, padding: '24px',
+  };
+
+  // ── NON-CREATOR VIEW ──────────────────────────────────────────────────────
+
+  if (!isCreator) {
+    return (
+      <div style={{ padding: '40px 40px 80px', maxWidth: 800 }}>
+        {toast && (
+          <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none' }}>
+            {toast}
+          </div>
+        )}
+
+        <div style={{ marginBottom: 24 }}>
+          <Link href="/dashboard/player/quick-game" style={{ fontSize: 12, color: 'var(--grey-400)', textDecoration: 'none' }}>← Mis juegos</Link>
+        </div>
+
+        {/* Header */}
+        <div style={{ ...cardStyle, borderTop: `3px solid ${si.color}` }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--black)', marginBottom: 8 }}>{game.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 8 }}>Código: <strong>{game.code}</strong></div>
+              <div style={{ fontSize: 13, color: 'var(--grey-500)' }}>{game.date} · {game.time} · {game.club}, {game.city}</div>
+            </div>
+            {statusBadge(game.status)}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{game.format}</span>
+            <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{game.players.length}/{game.maxPlayers} jugadores</span>
+            <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{scoreConfigLabel(game.scoreConfig)}</span>
+          </div>
+        </div>
+
+        {/* Standings / live info */}
+        {(isLive || isFinished) && game.standings.length > 0 && (
+          <div style={cardStyle}>
+            <div style={secTitle}>Clasificación</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
+                  <th style={{ textAlign: 'left', padding: '0 8px 8px 0', fontWeight: 700 }}>Pos</th>
+                  <th style={{ textAlign: 'left', padding: '0 8px 8px 0', fontWeight: 700 }}>Jugador</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>PJ</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>G</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>Pts</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>Dif</th>
+                </tr>
+              </thead>
+              <tbody>
+                {game.standings.map((s, i) => (
+                  <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
+                    <td style={{ padding: '10px 8px 10px 0', fontWeight: 700, color: i === 0 ? 'var(--turf-green)' : 'var(--grey-400)', fontSize: 12 }}>{i + 1}</td>
+                    <td style={{ padding: '10px 8px 10px 0', fontWeight: 600 }}>{s.playerName}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{s.played}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{s.wins}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', fontWeight: 700 }}>{s.pts}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: s.diff >= 0 ? 'var(--turf-green)' : '#ee0005' }}>{s.diff > 0 ? '+' : ''}{s.diff}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Current round (read-only) */}
+        {isLive && activeRound && (
+          <div style={cardStyle}>
+            <div style={secTitle}>Ronda {activeRound.num} — En curso</div>
+            {activeRound.courts.map(court => (
+              <div key={court.courtNum} style={{ padding: '16px 0', borderBottom: '1px solid var(--grey-100)' }}>
+                <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Cancha {court.courtNum}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontWeight: 600 }}>{getPairNames(court.pair1)}</span>
+                  <span style={{ color: 'var(--grey-300)', fontSize: 12 }}>vs</span>
+                  <span style={{ fontWeight: 600 }}>{getPairNames(court.pair2)}</span>
+                  {court.status === 'completed' && (
+                    <span style={{ marginLeft: 'auto', fontSize: 15, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                      {court.pair1Score} – {court.pair2Score}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Players list */}
+        <div style={cardStyle}>
+          <div style={secTitle}>Jugadores ({game.players.length}/{game.maxPlayers})</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {game.players.map(p => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 32, height: 32, background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
+                  {initials(p.name)}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</span>
+                {p.isCreator && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--neon)', padding: '2px 6px', fontWeight: 700 }}>CREADOR</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── CREATOR VIEW ──────────────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: '40px 40px 80px', maxWidth: 960 }}>
-
+    <div style={{ padding: '40px 40px 80px', maxWidth: 900 }}>
       {/* Toast */}
       {toast && (
-        <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 9999, background: 'var(--black)', color: '#fff', padding: '14px 22px', fontSize: 13, fontWeight: 600, boxShadow: '0 4px 20px rgba(0,0,0,0.25)', maxWidth: 360 }}>
+        <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none' }}>
           {toast}
         </div>
       )}
 
-      {/* Finished banner */}
-      {isFinished && (
-        <div style={{ background: 'var(--turf-green)', color: '#fff', padding: '14px 24px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 18 }}>✓</span>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Juego finalizado</span>
-          </div>
-          <button
-            onClick={() => { setEditResultsOpen(v => !v); setEditScores({}); }}
-            style={{ padding: '6px 14px', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
-          >
-            {editResultsOpen ? 'Cancelar edición' : 'Editar resultados'}
-          </button>
-        </div>
-      )}
-
-      {/* Post-game score editing (creator only, when finished) */}
-      {isFinished && editResultsOpen && game.rounds.length > 0 && (
-        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 24 }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--grey-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Editar resultados del juego</span>
-            <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>Modificá los scores y guardá para recalcular la clasificación</span>
-          </div>
-          <div style={{ padding: '20px' }}>
-            {game.rounds.filter(r => r.status === 'completed').map(round => (
-              <div key={round.num} style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 10 }}>Ronda {round.num}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {round.courts.map(court => {
-                    const key = `${round.num}-${court.courtNum}`;
-                    const cur = editScores[key] ?? { p1: String(court.pair1Score ?? ''), p2: String(court.pair2Score ?? '') };
-                    return (
-                      <div key={court.courtNum} style={{ border: '1px solid var(--grey-200)', overflow: 'hidden' }}>
-                        <div style={{ background: 'var(--grey-50)', padding: '6px 14px', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
-                          Cancha {court.courtNum}
-                        </div>
-                        {[
-                          { pids: court.pair1, val: cur.p1, team: 'p1' as const },
-                          { pids: court.pair2, val: cur.p2, team: 'p2' as const },
-                        ].map((row, ti) => (
-                          <div key={ti} style={{ display: 'grid', gridTemplateColumns: '1fr 80px', borderTop: ti === 0 ? 'none' : '1px solid var(--grey-100)' }}>
-                            <div style={{ padding: '10px 14px', borderRight: '1px solid var(--grey-100)', fontSize: 12, fontWeight: 500, color: 'var(--black)' }}>
-                              {row.pids.map(pid => getName(pid)).join(' / ')}
-                            </div>
-                            <input
-                              type="number" min={0}
-                              value={row.val}
-                              onChange={e => handleEditScoreChange(round.num, court.courtNum, row.team, e.target.value)}
-                              placeholder="–"
-                              style={{ width: '100%', textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, border: 'none', outline: 'none', background: 'transparent', padding: '8px 0', color: 'var(--black)', boxSizing: 'border-box' }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            <button
-              onClick={handleSaveEditedResults}
-              style={{ width: '100%', padding: '12px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}
-            >
-              Guardar y recalcular clasificación →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
-        <Link href="/dashboard/player/quick-game" style={{ fontSize: 12, color: 'var(--grey-500)', textDecoration: 'none', fontWeight: 600, letterSpacing: '0.04em' }}>
-          ← Mis Juegos Rápidos
-        </Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', background: 'rgba(124,58,237,0.09)', color: '#7c3aed', letterSpacing: '0.08em' }}>
-            {game.code}
-          </span>
-        </div>
-      </div>
-
-      {/* Header */}
-      <div style={{ marginBottom: 10 }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 10px' }}>
-          {game.name}
-        </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {isLive && (
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--turf-green)', display: 'inline-block', animation: 'pulse 2s infinite', flexShrink: 0 }} />
-          )}
-          <span style={{ fontSize: 12, fontWeight: 700, color: si.color, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{si.label}</span>
-        </div>
-      </div>
-
-      {/* Info row */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 32, fontSize: 12, color: 'var(--grey-500)' }}>
-        {[
-          game.date, game.time, game.club, game.city,
-          formatLabel(game.format),
-          game.levelLabel ?? null,
-          game.pairType === 'parejas' ? 'Parejas Fijas' : 'Individual',
-          game.mixto ? 'Mixto' : null,
-          scoreConfigLabel(game.scoreConfig),
-        ].filter(Boolean).map((item, i) => (
-          <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {i > 0 && <span style={{ color: 'var(--grey-300)' }}>·</span>}
-            {item}
-          </span>
-        ))}
-      </div>
-
-      {/* Share link + QR */}
-      {shareUrl && (
-        <div style={{ background: 'var(--grey-50)', border: '1px solid var(--grey-200)', marginBottom: 28 }}>
-          <div style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', flexShrink: 0 }}>
-              Enlace público
+      {/* Cancel confirm modal */}
+      {showCancelModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', padding: '40px', width: 400, maxWidth: '90vw' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, textTransform: 'uppercase', marginBottom: 12 }}>Cancelar Juego</div>
+            <p style={{ fontSize: 14, color: 'var(--grey-500)', marginBottom: 28, lineHeight: 1.6 }}>
+              ¿Estás seguro? Se notificará a todos los jugadores invitados y el juego no se podrá recuperar.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={handleCancelGame} style={{ flex: 1, padding: '12px', background: '#ee0005', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}>
+                Sí, Cancelar Juego
+              </button>
+              <button onClick={() => setShowCancelModal(false)} style={{ flex: 1, padding: '12px', background: 'var(--grey-100)', color: 'var(--black)', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                Volver
+              </button>
             </div>
-            <code style={{ fontSize: 12, color: 'var(--grey-600)', flex: 1, wordBreak: 'break-all' }}>{shareUrl}</code>
-            <button onClick={handleCopy} style={{ padding: '7px 16px', background: copied ? 'var(--turf-green)' : 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
-              {copied ? '✓ Copiado' : 'Copiar'}
-            </button>
-            <button onClick={() => setShowQR(v => !v)} style={{ padding: '7px 16px', border: '1px solid var(--grey-300)', background: showQR ? 'var(--black)' : '#fff', color: showQR ? '#fff' : 'var(--grey-600)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
-              QR
-            </button>
-            <Link href={`/quick-game/${game.code}`} target="_blank" style={{ padding: '7px 16px', border: '1px solid var(--grey-300)', color: 'var(--grey-600)', textDecoration: 'none', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
-              Ver público →
-            </Link>
           </div>
-          {showQR && (
-            <div style={{ borderTop: '1px solid var(--grey-200)', padding: '24px 20px', display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-              <QRCodeSVG value={shareUrl} size={160} bgColor="#ffffff" fgColor="#000000" level="M" />
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 6 }}>
-                  Escaneá para ver en vivo
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--grey-400)', marginBottom: 12 }}>
-                  Compartí el código QR con los jugadores para que vean los resultados en tiempo real.
-                </div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, letterSpacing: '0.06em', color: '#7c3aed' }}>
-                  {game.code}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Inline edit section (only when pending) */}
-      {isPending && (
-        <div style={{ border: '1px solid var(--grey-200)', background: '#fff', marginBottom: 24 }}>
-          <button onClick={() => setEditOpen(v => !v)} style={{ width: '100%', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Editar configuración del juego</span>
-            <span style={{ fontSize: 16, color: 'var(--grey-400)' }}>{editOpen ? '−' : '+'}</span>
-          </button>
-
-          {editOpen && (
-            <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--grey-100)' }}>
-
-              {/* Logística */}
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', margin: '18px 0 10px' }}>Logística</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={lbl}>Nombre del juego</label>
-                  <input value={editName} onChange={e => setEditName(e.target.value)} style={inp} />
-                </div>
-                <div>
-                  <label style={lbl}>Fecha</label>
-                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} style={inp} />
-                </div>
-                <div>
-                  <label style={lbl}>Hora</label>
-                  <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} style={inp} />
-                </div>
-              </div>
-              <div style={{ marginTop: 10 }}>
-                <label style={lbl}>Ubicación</label>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <button onClick={() => setEditIsCustomLoc(false)} style={{ padding: '6px 12px', border: `2px solid ${!editIsCustomLoc ? 'var(--black)' : 'var(--grey-200)'}`, background: !editIsCustomLoc ? 'var(--black)' : '#fff', color: !editIsCustomLoc ? '#fff' : 'var(--grey-600)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Club registrado</button>
-                  <button onClick={() => setEditIsCustomLoc(true)} style={{ padding: '6px 12px', border: `2px solid ${editIsCustomLoc ? 'var(--black)' : 'var(--grey-200)'}`, background: editIsCustomLoc ? 'var(--black)' : '#fff', color: editIsCustomLoc ? '#fff' : 'var(--grey-600)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Otro / Privado</button>
-                </div>
-                {editIsCustomLoc ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <input value={editClub} onChange={e => setEditClub(e.target.value)} placeholder="Nombre del lugar" style={inp} />
-                    <input value={editCity} onChange={e => setEditCity(e.target.value)} placeholder="Ciudad" style={inp} />
+      {/* Add/Replace player modal */}
+      {showAddModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', padding: '32px', width: 480, maxWidth: '90vw' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, textTransform: 'uppercase', marginBottom: 16 }}>
+              {replaceTargetId ? 'Reemplazar Jugador' : 'Agregar Jugador'}
+            </div>
+            <input
+              style={{ ...inp, marginBottom: 12 }}
+              placeholder="Buscar por nombre, email o #ID..."
+              value={playerSearchQ}
+              onChange={e => setPlayerSearchQ(e.target.value)}
+              autoFocus
+            />
+            {playerSearchResults.length > 0 && (
+              <div style={{ border: '1px solid var(--grey-200)', maxHeight: 320, overflowY: 'auto' }}>
+                {playerSearchResults.map(p => (
+                  <div
+                    key={p.id}
+                    onClick={() => handleInvitePlayer(p)}
+                    style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid var(--grey-100)', display: 'flex', alignItems: 'center', gap: 12 }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--grey-50)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                  >
+                    <div style={{ width: 32, height: 32, background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
+                      {initials(p.name)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p.email} · {p.shortId}</div>
+                    </div>
+                    <span style={{ fontSize: 11, color: 'var(--grey-400)', flexShrink: 0 }}>Rnk #{p.ranking}</span>
                   </div>
-                ) : (
-                  <input value={editClub} onChange={e => setEditClub(e.target.value)} placeholder="Nombre del club" style={inp} />
+                ))}
+              </div>
+            )}
+            {playerSearchQ && playerSearchResults.length === 0 && (
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>No se encontraron jugadores</div>
+            )}
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setShowAddModal(false); setReplaceTargetId(null); setPlayerSearchQ(''); }} style={{ padding: '10px 20px', background: 'var(--grey-100)', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Modal */}
+      {showQR && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', padding: '40px', textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, textTransform: 'uppercase', marginBottom: 20 }}>Compartir Juego</div>
+            <QRCodeSVG value={shareUrl || 'https://padelmgt.com'} size={200} />
+            <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 16, wordBreak: 'break-all' }}>{shareUrl}</div>
+            <button onClick={() => setShowQR(false)} style={{ marginTop: 20, padding: '10px 28px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cerrar</button>
+          </div>
+        </div>
+      )}
+
+      {/* Back nav */}
+      <div style={{ marginBottom: 24 }}>
+        <Link href="/dashboard/player/quick-game" style={{ fontSize: 12, color: 'var(--grey-400)', textDecoration: 'none' }}>← Mis juegos</Link>
+      </div>
+
+      {/* ── HEADER ─────────────────────────────────────────────────────────── */}
+      <div style={{ ...cardStyle, borderTop: `3px solid ${si.color}` }}>
+        {editOpen ? (
+          <div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', marginBottom: 20 }}>Editar Juego</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div>
+                <label style={lbl}>Nombre</label>
+                <input style={inp} value={editName} onChange={e => setEditName(e.target.value)} />
+              </div>
+              <div>
+                <label style={lbl}>Fecha</label>
+                <input style={inp} type="date" value={editDate} onChange={e => setEditDate(e.target.value)} />
+              </div>
+              <div>
+                <label style={lbl}>Hora</label>
+                <input style={inp} type="time" value={editTime} onChange={e => setEditTime(e.target.value)} />
+              </div>
+              <div>
+                <label style={lbl}>Club</label>
+                <input style={inp} value={editClub} onChange={e => setEditClub(e.target.value)} />
+              </div>
+              <div>
+                <label style={lbl}>Ciudad</label>
+                <input style={inp} value={editCity} onChange={e => setEditCity(e.target.value)} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={handleSaveEdits} style={{ padding: '10px 24px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                Guardar
+              </button>
+              <button onClick={() => setEditOpen(false)} style={{ padding: '10px 20px', background: 'var(--grey-100)', border: 'none', fontSize: 13, cursor: 'pointer' }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--black)', marginBottom: 6 }}>{game.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 6 }}>
+                  Código: <strong>{game.code}</strong>
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 4 }}>
+                  {game.date} · {game.time} · {game.club}, {game.city}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
+                {statusBadge(game.status)}
+                {!isCancelled && !isFinished && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setEditOpen(true)}
+                      style={{ padding: '7px 16px', background: 'var(--grey-100)', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--black)' }}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => setShowCancelModal(true)}
+                      style={{ padding: '7px 16px', background: '#ee0005', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#fff', letterSpacing: '0.05em' }}
+                    >
+                      Cancelar Juego
+                    </button>
+                  </div>
                 )}
               </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{game.format}</span>
+              <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{game.pairType === 'parejas' ? 'Pareja Fija' : 'Intercambio'}</span>
+              <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{scoreConfigLabel(game.scoreConfig)}</span>
+              <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{game.courts} cancha{game.courts !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+        )}
+      </div>
 
-              {/* Score */}
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', margin: '20px 0 10px' }}>Score</div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                {([{ k: 'traditional', l: 'Tradicional' }, { k: 'points', l: 'Por Puntos' }] as const).map(({ k, l }) => (
-                  <button key={k} onClick={() => setEditScoreType(k)} style={{ flex: 1, padding: '12px', border: `2px solid ${editScoreType === k ? 'var(--black)' : 'var(--grey-200)'}`, background: editScoreType === k ? 'var(--black)' : '#fff', color: editScoreType === k ? '#fff' : 'var(--black)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-                    {l}
-                  </button>
-                ))}
+      {/* ── SECTION A: Lista Provisional (status == created) ─────────────── */}
+      {isPending && (
+        <div style={cardStyle}>
+          <div style={secTitle}>Lista Provisional de Jugadores</div>
+
+          {/* Counter */}
+          <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--grey-500)' }}>
+            <strong style={{ color: allConfirmed ? 'var(--turf-green)' : 'var(--black)' }}>{confirmedCount}</strong>
+            {' / '}
+            <strong>{game.maxPlayers}</strong>
+            {' jugadores confirmados'}
+            {allConfirmed && (
+              <span style={{ marginLeft: 10, fontSize: 9, background: '#dcfce7', color: '#166534', padding: '2px 8px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                Completo
+              </span>
+            )}
+          </div>
+
+          {/* Creator row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--grey-100)' }}>
+            <div style={{ width: 36, height: 36, background: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+              {currentUser ? initials(currentUser.name) : 'TU'}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{currentUser?.name ?? 'Tú'}</div>
+              <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Creador</div>
+            </div>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 8px', background: '#dcfce7', color: '#166534' }}>
+              Confirmado
+            </span>
+          </div>
+
+          {/* Invited players */}
+          {(game.invitedPlayers ?? []).filter(ip => ip.status !== 'cancelled').map(ip => (
+            <div key={ip.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--grey-100)' }}>
+              <div style={{ width: 36, height: 36, background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
+                {initials(ip.name)}
               </div>
-              {editScoreType === 'traditional' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label style={lbl}>Sets por ronda</label>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {[1, 2, 3].map(n => (
-                        <button key={n} onClick={() => setEditSetsPerRound(n)} style={{ flex: 1, padding: '8px', border: `2px solid ${editSetsPerRound === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editSetsPerRound === n ? 'var(--black)' : '#fff', color: editSetsPerRound === n ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label style={lbl}>Games por set</label>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {[2, 4, 6].map(n => (
-                        <button key={n} onClick={() => setEditGamesPerSet(n)} style={{ flex: 1, padding: '8px', border: `2px solid ${editGamesPerSet === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editGamesPerSet === n ? 'var(--black)' : '#fff', color: editGamesPerSet === n ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label style={lbl}>Tie-break (puntos)</label>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {[7, 10].map(n => (
-                        <button key={n} onClick={() => setEditTiebreak(n)} style={{ flex: 1, padding: '8px', border: `2px solid ${editTiebreak === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editTiebreak === n ? 'var(--black)' : '#fff', color: editTiebreak === n ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{ip.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{ip.email ?? ip.shortId ?? ''}</div>
+              </div>
+              {invStatusBadge(ip.status)}
+              {ip.status === 'rejected' && (
+                <button
+                  onClick={() => { setReplaceTargetId(ip.id); setShowAddModal(true); }}
+                  style={{ padding: '6px 12px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', marginLeft: 8 }}
+                >
+                  Reemplazar
+                </button>
               )}
-              {editScoreType === 'points' && (
-                <div>
-                  <label style={lbl}>Puntos objetivo</label>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {[12, 16, 20, 24].map(n => (
-                      <button key={n} onClick={() => setEditPointTarget(n)} style={{ flex: 1, padding: '10px', border: `2px solid ${editPointTarget === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editPointTarget === n ? 'var(--black)' : '#fff', color: editPointTarget === n ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700 }}>
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+            </div>
+          ))}
 
-              {/* Capacidad */}
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', margin: '20px 0 10px' }}>Capacidad</div>
-              <label style={lbl}>Máx. jugadores (canchas = max/4)</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {[4, 6, 8, 10, 12].map(n => {
-                  const tooFew = n < game.players.length;
-                  return (
-                    <button key={n} onClick={() => !tooFew && setEditMaxPlayers(n)} disabled={tooFew} style={{ flex: 1, padding: '10px', border: `2px solid ${editMaxPlayers === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editMaxPlayers === n ? 'var(--black)' : tooFew ? 'var(--grey-50)' : '#fff', color: editMaxPlayers === n ? '#fff' : tooFew ? 'var(--grey-300)' : 'var(--black)', cursor: tooFew ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700 }}>
-                      {n}
-                    </button>
-                  );
-                })}
-              </div>
-              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--grey-400)' }}>
-                {editMaxPlayers} jugadores · {Math.max(1, Math.floor(editMaxPlayers / 4))} cancha{Math.max(1, Math.floor(editMaxPlayers / 4)) !== 1 ? 's' : ''}
-              </div>
-
-              <button onClick={handleSaveEdits} style={{ marginTop: 20, padding: '11px 28px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Guardar cambios ✓
+          {/* Add player button */}
+          {confirmedCount < game.maxPlayers && (
+            <div style={{ marginTop: 16 }}>
+              <button
+                onClick={() => { setReplaceTargetId(null); setShowAddModal(true); }}
+                style={{ padding: '10px 20px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
+              >
+                + Agregar Jugador
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* Pending / Start panel */}
-      {isPending && (
-        <div style={{ background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: '24px', marginBottom: 32, display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
-          <div style={{ width: 48, height: 48, background: 'rgba(245,166,35,0.12)', border: '1px solid rgba(245,166,35,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
-            {canStart ? '▶' : '⏳'}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 4 }}>
-              {canStart ? 'Listo para empezar' : 'Esperando jugadores'}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--grey-400)', marginBottom: canStart ? 16 : 0 }}>
-              {canStart
-                ? `${game.players.length} jugadores confirmados · ${game.courts} ${game.courts === 1 ? 'cancha' : 'canchas'}`
-                : `${game.players.length} de ${game.maxPlayers} jugadores. Compartí el código `}
-              {!canStart && (
-                <strong style={{ color: '#7c3aed' }}>{game.code}</strong>
-              )}
-            </div>
-            {isPending && emptySlots > 0 && (
-              <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#92400e' }}>
-                <strong>{emptySlots} slot{emptySlots > 1 ? 's' : ''} vacío{emptySlots > 1 ? 's' : ''}</strong> — Agregá jugadores o reducí los spots antes de iniciar.
-              </div>
-            )}
-            {canStart && (
-              <button
-                onClick={handleStartGame}
-                style={{ padding: '12px 28px', background: 'var(--turf-green)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
-              >
-                Iniciar Juego →
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      {/* ── SECTION B: Armar Equipos ──────────────────────────────────────── */}
+      {isPending && allConfirmed && (
+        <div style={cardStyle}>
+          <div style={secTitle}>Armar Equipos</div>
 
-      {/* Join requests panel (pending game only) */}
-      {isPending && joinRequests.filter(r => r.status === 'pending').length > 0 && (
-        <div style={{ background: '#fff', border: '2px solid #7c3aed', marginBottom: 24 }}>
-          <div style={{ background: 'rgba(124,58,237,0.06)', padding: '14px 20px', borderBottom: '1px solid rgba(124,58,237,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7c3aed', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#7c3aed' }}>
-                Solicitudes de unión ({joinRequests.filter(r => r.status === 'pending').length})
-              </span>
-            </div>
-            <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>El jugador está esperando tu respuesta</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {joinRequests.filter(r => r.status === 'pending').map(req => (
-              <div key={req.id} style={{ padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, borderBottom: '1px solid var(--grey-100)' }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--black)', marginBottom: 2 }}>{req.playerName}</div>
-                  <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>
-                    {new Date(req.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} · {game.players.length}/{game.maxPlayers} slots usados
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                  <button
-                    onClick={() => handleApproveRequest(req)}
-                    disabled={game.players.length >= game.maxPlayers}
-                    style={{ padding: '8px 18px', background: game.players.length < game.maxPlayers ? 'var(--turf-green)' : 'var(--grey-200)', color: game.players.length < game.maxPlayers ? '#fff' : 'var(--grey-400)', border: 'none', cursor: game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
-                  >
-                    {game.players.length >= game.maxPlayers ? 'Sin slots' : 'Aprobar'}
-                  </button>
-                  <button
-                    onClick={() => handleRejectRequest(req)}
-                    style={{ padding: '8px 14px', background: '#fff', border: '1px solid #fca5a5', color: '#dc2626', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
-                  >
-                    Rechazar
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Player management section (when pending) */}
-      {isPending && (
-        <div style={{ marginBottom: 32 }}>
-
-          {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <div style={{ ...secTitle, marginBottom: 0, paddingBottom: 0, borderBottom: 'none' }}>
-              Jugadores ({game.players.length}/{game.maxPlayers})
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {game.pairType === 'parejas' && game.players.length >= 2 && (
-                <button onClick={() => { setPairsMode(v => !v); setPairPlayers(game.players); }} style={{ padding: '5px 12px', background: pairsMode ? 'var(--black)' : '#fff', color: pairsMode ? '#fff' : 'var(--grey-500)', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  {pairsMode ? '× Cerrar D&D' : '⠿ Ordenar Parejas'}
-                </button>
-              )}
-              {emptySlots > 0 && !pairsMode && (
-                <button onClick={handleTrimSlots} style={{ padding: '5px 12px', background: '#fff', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)' }}>
-                  Ajustar a {game.players.length}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* D&D Pairs mode */}
-          {pairsMode && game.pairType === 'parejas' ? (
-            <div style={{ border: '1px solid var(--grey-200)', background: '#fff', marginBottom: 12 }}>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--grey-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
-                  Arrastrá para reorganizar parejas — par 1 = slot 1+2, par 2 = slot 3+4…
-                </span>
-                <button onClick={handleSavePairs} style={{ padding: '7px 18px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  Confirmar ✓
-                </button>
-              </div>
-              <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-                {Array.from({ length: Math.floor(pairPlayers.length / 2) }, (_, pi) => (
-                  <div key={pi} style={{ border: '1px solid var(--grey-200)', padding: '10px 12px' }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6 }}>
-                      Pareja {pi + 1}
-                    </div>
-                    {[0, 1].map(si => {
-                      const idx = pi * 2 + si;
-                      const p   = pairPlayers[idx];
-                      const over = dndOver === idx;
-                      if (!p) return null;
-                      return (
-                        <div
-                          key={si}
-                          draggable
-                          onDragStart={() => setDndSrc(idx)}
-                          onDragOver={e => { e.preventDefault(); setDndOver(idx); }}
-                          onDragLeave={() => setDndOver(null)}
-                          onDrop={e => { e.preventDefault(); handlePairDrop(idx); }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', marginBottom: 4, border: over ? '2px dashed #7c3aed' : '1px dashed var(--grey-200)', background: over ? 'rgba(124,58,237,0.05)' : dndSrc === idx ? 'rgba(0,0,0,0.04)' : 'var(--grey-50)', cursor: 'grab', userSelect: 'none' }}
-                        >
-                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: p.isCreator ? 'var(--black)' : 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                            {initials(p.name)}
-                          </div>
-                          <span style={{ fontSize: 12, fontWeight: 500, flex: 1 }}>{p.name}</span>
-                          {p.isCreator && <span style={{ fontSize: 8, background: 'var(--neon)', color: 'var(--black)', padding: '1px 4px', fontWeight: 700 }}>ORG</span>}
-                          <span style={{ fontSize: 10, color: 'var(--grey-300)' }}>⠿</span>
-                        </div>
-                      );
-                    })}
+          {game.pairType === 'individual' ? (
+            <div>
+              <p style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 16, lineHeight: 1.6 }}>
+                Las parejas se asignan automáticamente por ranking al iniciar (mejor + peor para equilibrar). Vista previa:
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {autoPreviewPairs.map((pair, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.1em', textTransform: 'uppercase', width: 56, flexShrink: 0 }}>Pareja {i + 1}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{pair[0].name}</span>
+                    <span style={{ fontSize: 11, color: 'var(--grey-300)' }}>&amp;</span>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{pair[1].name}</span>
                   </div>
                 ))}
-                {/* Unpaired players (odd count) */}
-                {pairPlayers.length % 2 !== 0 && (() => {
-                  const lastIdx = pairPlayers.length - 1;
-                  const p = pairPlayers[lastIdx];
-                  const over = dndOver === lastIdx;
-                  return (
-                    <div style={{ border: '1px solid var(--grey-200)', padding: '10px 12px' }}>
-                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6 }}>Sin pareja</div>
-                      <div
-                        draggable
-                        onDragStart={() => setDndSrc(lastIdx)}
-                        onDragOver={e => { e.preventDefault(); setDndOver(lastIdx); }}
-                        onDragLeave={() => setDndOver(null)}
-                        onDrop={e => { e.preventDefault(); handlePairDrop(lastIdx); }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', border: over ? '2px dashed #7c3aed' : '1px dashed var(--grey-200)', background: 'var(--grey-50)', cursor: 'grab', userSelect: 'none' }}
-                      >
-                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: '#fff' }}>{initials(p.name)}</div>
-                        <span style={{ fontSize: 12, fontWeight: 500 }}>{p.name}</span>
-                        <span style={{ fontSize: 10, color: 'var(--grey-300)', marginLeft: 'auto' }}>⠿</span>
-                      </div>
-                    </div>
-                  );
-                })()}
+              </div>
+              <div style={{ marginTop: 14, fontSize: 12, color: 'var(--grey-400)' }}>
+                Listo — las parejas se asignan automáticamente al iniciar el juego
               </div>
             </div>
           ) : (
-            /* Normal chips view */
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-              {game.players.map(p => (
-                <div key={p.id} style={{ padding: '8px 12px', background: '#fff', border: '1px solid var(--grey-200)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: p.isCreator ? 'var(--black)' : 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                    {initials(p.name)}
-                  </div>
-                  <span style={{ fontWeight: p.isCreator ? 700 : 500 }}>{p.name}</span>
-                  {p.isCreator && <span style={{ fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 5px', fontWeight: 700 }}>ORG</span>}
-                  <button onClick={() => handleRemovePlayer(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 14, lineHeight: 1, padding: '0 2px' }}>×</button>
-                </div>
-              ))}
-              {Array.from({ length: emptySlots }, (_, i) => (
-                <div key={`empty-${i}`} style={{ padding: '8px 12px', background: 'var(--grey-50)', border: '1px dashed var(--grey-300)', fontSize: 12, color: 'var(--grey-400)' }}>
-                  Slot vacío
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Add player panel (always visible when there are empty slots or pairsMode is off) */}
-          {!pairsMode && (
-            <div style={{ border: '1px solid var(--grey-200)', background: '#fff' }}>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--grey-100)' }}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 10 }}>Agregar jugador</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {/* Agregarme — only when creator not in game */}
-                  {!selfInGame && currentUser && (
-                    <button onClick={handleAddSelf} disabled={game.players.length >= game.maxPlayers} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', border: '1px solid var(--black)', background: 'var(--black)', color: '#fff', cursor: game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed', opacity: game.players.length >= game.maxPlayers ? 0.5 : 1 }}>
-                      + Agregarme
-                    </button>
-                  )}
-                  {(['friends', 'search', 'new'] as const).map(mode => {
-                    const labels = { friends: 'Mis Amistades', search: 'Buscar', new: 'Nuevo jugador' };
-                    return (
-                      <button key={mode} onClick={() => setAddMode(addMode === mode ? null : mode)} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', border: `1px solid ${addMode === mode ? 'var(--black)' : 'var(--grey-200)'}`, background: addMode === mode ? 'var(--black)' : '#fff', color: addMode === mode ? '#fff' : 'var(--grey-500)', cursor: 'pointer' }}>
-                        {labels[mode]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Friends tab */}
-              {addMode === 'friends' && (
-                <div style={{ padding: '12px 16px' }}>
-                  {availableFriends.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--grey-400)', padding: '4px 0' }}>Todos tus amigos ya están en el juego.</div>
-                  ) : (
-                    <>
-                      {availableFriends.map(f => {
-                        const checked = addFriendSel.has(f.id);
-                        return (
-                          <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--grey-100)', cursor: 'pointer', background: checked ? 'rgba(214,255,0,0.04)' : 'transparent' }}>
-                            <input type="checkbox" checked={checked} onChange={() => setAddFriendSel(prev => { const n = new Set(prev); if (n.has(f.id)) n.delete(f.id); else n.add(f.id); return n; })} style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--black)' }} />
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                              <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff' }}>{initials(f.name)}</div>
-                              <div>
-                                <div style={{ fontSize: 13, fontWeight: 500 }}>{f.name}</div>
-                                <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>#{f.ranking}</div>
-                              </div>
-                            </div>
-                          </label>
-                        );
-                      })}
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-                        <button onClick={handleAddFriends} disabled={addFriendSel.size === 0 || game.players.length >= game.maxPlayers} style={{ padding: '8px 20px', background: addFriendSel.size > 0 && game.players.length < game.maxPlayers ? 'var(--black)' : 'var(--grey-200)', color: addFriendSel.size > 0 && game.players.length < game.maxPlayers ? '#fff' : 'var(--grey-400)', border: 'none', cursor: addFriendSel.size > 0 && game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                          Agregar {addFriendSel.size > 0 ? `(${addFriendSel.size})` : ''} →
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Search tab */}
-              {addMode === 'search' && (
-                <div style={{ padding: '12px 16px' }}>
-                  <input type="text" value={addSearchQ} onChange={e => setAddSearchQ(e.target.value)} placeholder="Buscar por nombre…" style={{ ...inp, marginBottom: 0 }} />
-                  {searchResults.length > 0 && (
-                    <div style={{ border: '1px solid var(--grey-200)', borderTop: 'none' }}>
-                      {searchResults.map(p => (
-                        <button key={p.id} onClick={() => handleAddFromSearch(p)} disabled={game.players.length >= game.maxPlayers} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '9px 12px', textAlign: 'left', background: 'none', border: 'none', borderBottom: '1px solid var(--grey-100)', cursor: game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff' }}>{initials(p.name)}</div>
-                            <div>
-                              <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
-                              <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>#{p.ranking}</div>
-                            </div>
-                          </div>
-                          <span style={{ fontSize: 10, color: 'var(--grey-400)', fontWeight: 600 }}>+ Agregar</span>
-                        </button>
+            <div>
+              <p style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 16, lineHeight: 1.6 }}>
+                Asigna los jugadores a cada pareja fija. Cada jugador debe aparecer exactamente una vez.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                {pairAssignments.map((pa, idx) => (
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto 1fr', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Pareja {idx + 1}</span>
+                    <select
+                      style={{ ...inp, padding: '8px 10px' }}
+                      value={pa.player1Id}
+                      onChange={e => updatePairAssignment(idx, 'player1Id', e.target.value)}
+                      disabled={pairsLocked}
+                    >
+                      <option value="">— Jugador 1 —</option>
+                      {game.players.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
-                    </div>
-                  )}
-                  {addSearchQ.trim() && searchResults.length === 0 && (
-                    <div style={{ fontSize: 12, color: 'var(--grey-400)', padding: '8px 0' }}>No se encontraron jugadores.</div>
-                  )}
-                </div>
-              )}
-
-              {/* New player tab */}
-              {addMode === 'new' && (
-                <div style={{ padding: '12px 16px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                    <div>
-                      <label style={lbl}>Nombre</label>
-                      <input type="text" value={addNewFirst} onChange={e => setAddNewFirst(e.target.value)} placeholder="Nombre" style={inp} />
-                    </div>
-                    <div>
-                      <label style={lbl}>Apellido</label>
-                      <input type="text" value={addNewLast} onChange={e => setAddNewLast(e.target.value)} placeholder="Apellido" style={inp} />
-                    </div>
+                    </select>
+                    <span style={{ fontSize: 11, color: 'var(--grey-300)', textAlign: 'center' }}>&amp;</span>
+                    <select
+                      style={{ ...inp, padding: '8px 10px' }}
+                      value={pa.player2Id}
+                      onChange={e => updatePairAssignment(idx, 'player2Id', e.target.value)}
+                      disabled={pairsLocked}
+                    >
+                      <option value="">— Jugador 2 —</option>
+                      {game.players.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={lbl}>Email (para invitación)</label>
-                    <input type="email" value={addNewEmail} onChange={e => setAddNewEmail(e.target.value)} placeholder="email@ejemplo.com" style={inp} />
-                  </div>
-                  <button onClick={handleAddNewPlayer} disabled={!addNewFirst.trim() && !addNewLast.trim()} style={{ padding: '9px 22px', background: (addNewFirst.trim() || addNewLast.trim()) && game.players.length < game.maxPlayers ? 'var(--black)' : 'var(--grey-200)', color: (addNewFirst.trim() || addNewLast.trim()) && game.players.length < game.maxPlayers ? '#fff' : 'var(--grey-400)', border: 'none', cursor: (addNewFirst.trim() || addNewLast.trim()) && game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    Agregar jugador
+                ))}
+              </div>
+              {!pairsLocked ? (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button
+                    onClick={handleSavePairs}
+                    disabled={!pairsFullyAssigned}
+                    style={{ padding: '10px 24px', background: pairsFullyAssigned ? 'var(--black)' : 'var(--grey-200)', color: pairsFullyAssigned ? '#fff' : 'var(--grey-400)', border: 'none', fontSize: 12, fontWeight: 700, cursor: pairsFullyAssigned ? 'pointer' : 'not-allowed', letterSpacing: '0.06em' }}
+                  >
+                    Guardar Parejas
                   </button>
+                  {!pairsFullyAssigned && (
+                    <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>Asigna todos los jugadores para continuar</span>
+                  )}
                 </div>
-              )}
-
-              {game.players.length >= game.maxPlayers && (
-                <div style={{ padding: '10px 16px', borderTop: '1px solid var(--grey-100)', fontSize: 11, color: 'var(--grey-400)', fontStyle: 'italic' }}>
-                  Juego completo. Para agregar más jugadores, aumentá la capacidad en "Editar configuración".
+              ) : (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: 'var(--turf-green)', fontWeight: 600 }}>✓ Parejas guardadas</span>
+                  <button onClick={() => setPairsLocked(false)} style={{ padding: '6px 14px', background: 'var(--grey-100)', border: 'none', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>Editar</button>
                 </div>
               )}
             </div>
@@ -1142,302 +950,269 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      {/* Active round — IPF scoreboard */}
-      {isLive && activeRound && (
-        <div style={{ marginBottom: 36 }}>
-          <div style={secTitle}>
-            Ronda {activeRound.num} — {activeRoundComplete ? 'Completada' : 'En Juego'}
+      {/* ── SECTION C: Iniciar Juego ──────────────────────────────────────── */}
+      {isPending && (
+        <div style={{ ...cardStyle, background: canStart ? 'var(--black)' : '#fff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: canStart ? 'var(--neon)' : 'var(--grey-400)', marginBottom: 8 }}>
+                Iniciar Juego
+              </div>
+              {!allConfirmed && (
+                <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>
+                  Faltan {game.maxPlayers - confirmedCount} jugadores para completar el juego
+                </div>
+              )}
+              {allConfirmed && game.pairType === 'parejas' && !pairsLocked && (
+                <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>
+                  Guarda las parejas fijas antes de iniciar
+                </div>
+              )}
+              {canStart && (
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
+                  Todos los jugadores están listos
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleStartGame}
+              disabled={!canStart}
+              style={{
+                padding: '14px 32px', border: 'none', fontSize: 13, fontWeight: 800,
+                letterSpacing: '0.08em', textTransform: 'uppercase', cursor: canStart ? 'pointer' : 'not-allowed',
+                background: canStart ? 'var(--neon)' : 'var(--grey-200)',
+                color: canStart ? 'var(--black)' : 'var(--grey-400)',
+                flexShrink: 0,
+              }}
+            >
+              Iniciar Juego →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── SECTION D: Juego En Vivo ──────────────────────────────────────── */}
+      {isLive && (
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
+            <div style={secTitle}>
+              Juego En Vivo — Ronda {game.currentRound}
+              {game.rounds.length > 0 && ` de ${game.rounds.filter(r => r.status !== 'pending' || r.num <= game.currentRound).length}`}
+            </div>
           </div>
 
-          {/* Resting players */}
-          {activeRound.resting.length > 0 && (
-            <div style={{ marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Descansan:</span>
-              {activeRound.resting.map(pid => (
-                <span key={pid} style={{ fontSize: 12, padding: '3px 10px', border: '1px solid var(--grey-200)', color: 'var(--grey-500)' }}>
-                  {getName(pid)}
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {activeRound.courts.map(court => {
-              const key          = `${activeRound.num}-${court.courtNum}`;
-              const isDone       = court.status === 'completed';
-              const isTraditional = game.scoreConfig.type === 'traditional';
-              const setsPerMatch = game.scoreConfig.setsPerMatch ?? 3;
-              const completedSets = court.sets ?? [];
-              const currentSetNum = completedSets.length + 1;
-              const curSetInp    = setInputs[key] ?? { p1: '', p2: '' };
-              const ptInputs     = scoreInputs[key] ?? { p1: '', p2: '' };
-
-              const p1IsWinner = isDone && (court.pair1Score ?? 0) > (court.pair2Score ?? 0);
-              const p2IsWinner = isDone && (court.pair2Score ?? 0) > (court.pair1Score ?? 0);
-
-              // Column layout: names | SET1…N | GAME
-              const setColW  = 56;
-              const gameColW = 80;
-              const cols     = isTraditional
-                ? `1fr ${Array(setsPerMatch).fill(`${setColW}px`).join(' ')} ${gameColW}px`
-                : '1fr 100px';
-
-              return (
-                <div key={court.courtNum} style={{ border: '1px solid var(--grey-200)', overflow: 'hidden' }}>
-
-                  {/* Header */}
-                  <div style={{ background: isDone ? '#1a1a1a' : 'var(--black)', color: '#fff', padding: '9px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+          {activeRound && (
+            <div>
+              {/* Courts */}
+              {activeRound.courts.map(court => {
+                const key = `${activeRound.num}-${court.courtNum}`;
+                const si = scoreInputs[key] ?? { p1: '', p2: '' };
+                const alreadyDone = court.status === 'completed';
+                return (
+                  <div key={court.courtNum} style={{ marginBottom: 20, padding: 20, border: '1px solid var(--grey-200)', background: alreadyDone ? 'var(--grey-50)' : '#fff' }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 700, marginBottom: 14 }}>
                       Cancha {court.courtNum}
-                    </span>
-                    {isDone
-                      ? <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--neon)', letterSpacing: '0.14em' }}>✓ COMPLETADO</span>
-                      : <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--turf-green)', letterSpacing: '0.14em' }}>● EN JUEGO</span>
-                    }
-                  </div>
-
-                  {/* Column headers */}
-                  <div style={{ display: 'grid', gridTemplateColumns: cols, background: '#1a1a2e', color: 'rgba(255,255,255,0.6)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                    <div style={{ padding: '6px 14px', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}></div>
-                    {isTraditional
-                      ? Array.from({ length: setsPerMatch }, (_, si) => (
-                          <div key={si} style={{ padding: '6px 4px', textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: si < completedSets.length ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)' }}>
-                            SET {si + 1}
-                          </div>
-                        ))
-                      : null
-                    }
-                    <div style={{ padding: '6px 4px', textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--neon)' }}>
-                      {isTraditional ? 'GAME' : 'PUNTOS'}
+                      {alreadyDone && <span style={{ marginLeft: 10, color: 'var(--turf-green)' }}>✓ Completada</span>}
                     </div>
-                  </div>
-
-                  {/* Team rows */}
-                  {[
-                    { pids: court.pair1, side: 'p1' as const, isWinner: p1IsWinner, score: court.pair1Score },
-                    { pids: court.pair2, side: 'p2' as const, isWinner: p2IsWinner, score: court.pair2Score },
-                  ].map((team, ti) => (
-                    <div key={ti} style={{
-                      display: 'grid', gridTemplateColumns: cols,
-                      borderTop: ti === 0 ? 'none' : '1px solid var(--grey-200)',
-                      background: isDone && team.isWinner ? 'rgba(40,167,69,0.04)' : '#fff',
-                      minHeight: 64,
-                    }}>
-                      {/* Names */}
-                      <div style={{ padding: '12px 14px', borderRight: '1px solid var(--grey-100)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                        {team.pids.map(pid => (
-                          <div key={pid} style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.6, color: isDone && !team.isWinner ? 'var(--grey-400)' : 'var(--black)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                            {getName(pid)}
-                          </div>
-                        ))}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 120 }}>
+                        <div style={{ fontSize: 11, color: 'var(--grey-400)', marginBottom: 4 }}>Pareja A</div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{getPairNames(court.pair1)}</div>
                       </div>
-
-                      {/* SET columns (traditional only) */}
-                      {isTraditional && Array.from({ length: setsPerMatch }, (_, si) => {
-                        const set = completedSets[si];
-                        const v = set ? set[team.side] : null;
-                        const other = set ? set[team.side === 'p1' ? 'p2' : 'p1'] : null;
-                        const won = v !== null && other !== null && v > other;
-                        return (
-                          <div key={si} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid var(--grey-100)', background: set && won ? 'rgba(40,167,69,0.05)' : 'transparent' }}>
-                            {set ? (
-                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: won ? 'var(--turf-green)' : 'var(--grey-400)' }}>
-                                {v}
-                              </span>
-                            ) : (
-                              <span style={{ fontSize: 18, color: 'var(--grey-200)' }}>—</span>
-                            )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {alreadyDone ? (
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                            {court.pair1Score} — {court.pair2Score}
                           </div>
-                        );
-                      })}
-
-                      {/* GAME / PUNTOS column */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDone ? 'transparent' : 'rgba(214,255,0,0.05)' }}>
-                        {isDone ? (
-                          <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, color: team.isWinner ? 'var(--turf-green)' : 'var(--grey-300)' }}>
-                            {team.score ?? 0}
-                          </span>
-                        ) : isTraditional ? (
-                          /* Current set input */
-                          <input
-                            type="number" min={0} max={99}
-                            inputMode="numeric"
-                            value={team.side === 'p1' ? curSetInp.p1 : curSetInp.p2}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setSetInputs(prev => ({
-                                ...prev,
-                                [key]: team.side === 'p1'
-                                  ? { ...prev[key] ?? { p1: '', p2: '' }, p1: val }
-                                  : { ...prev[key] ?? { p1: '', p2: '' }, p2: val },
-                              }));
-                            }}
-                            placeholder="—"
-                            style={{ width: 60, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, border: 'none', borderBottom: `2px solid var(--neon)`, outline: 'none', padding: '4px 0', background: 'transparent', color: 'var(--black)', boxSizing: 'border-box' }}
-                          />
                         ) : (
-                          /* Points mode input with auto-calc */
-                          <input
-                            type="number" min={0}
-                            inputMode="numeric"
-                            value={team.side === 'p1' ? ptInputs.p1 : ptInputs.p2}
-                            onChange={e => team.side === 'p1' ? handleP1Change(key, e.target.value) : handleP2Change(key, e.target.value)}
-                            placeholder="—"
-                            style={{ width: 70, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, border: 'none', borderBottom: `2px solid var(--neon)`, outline: 'none', padding: '4px 0', background: 'transparent', color: 'var(--black)', boxSizing: 'border-box' }}
-                          />
+                          <>
+                            <input
+                              type="number"
+                              min="0"
+                              max={ptTarget ?? 100}
+                              value={si.p1}
+                              onChange={e => handleP1Change(key, e.target.value)}
+                              style={{ ...inp, width: 64, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, padding: '8px' }}
+                              placeholder="0"
+                            />
+                            <span style={{ fontSize: 16, color: 'var(--grey-300)', fontWeight: 600 }}>—</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max={ptTarget ?? 100}
+                              value={si.p2}
+                              onChange={e => handleP2Change(key, e.target.value)}
+                              style={{ ...inp, width: 64, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, padding: '8px' }}
+                              placeholder="0"
+                            />
+                          </>
                         )}
                       </div>
+                      <div style={{ flex: 1, minWidth: 120, textAlign: 'right' }}>
+                        <div style={{ fontSize: 11, color: 'var(--grey-400)', marginBottom: 4 }}>Pareja B</div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{getPairNames(court.pair2)}</div>
+                      </div>
                     </div>
-                  ))}
+                    {!alreadyDone && (
+                      <div style={{ marginTop: 14 }}>
+                        <button
+                          onClick={() => handleRegisterScore(activeRound.num, court.courtNum)}
+                          style={{ padding: '9px 22px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
+                        >
+                          Registrar Score
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
-                  {/* Action footer */}
-                  {!isDone && (
-                    <div style={{ padding: '10px 14px', borderTop: '1px solid var(--grey-100)', background: 'var(--grey-50)' }}>
-                      {isTraditional ? (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                          <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>
-                            {completedSets.length > 0
-                              ? `${completedSets.map((s, i) => `Set ${i+1}: ${s.p1}–${s.p2}`).join(' · ')} · ingresando Set ${currentSetNum}`
-                              : `Ingresá los games del Set ${currentSetNum}`
-                            }
-                          </span>
-                          <button
-                            onClick={() => handleRegisterSet(activeRound.num, court.courtNum)}
-                            style={{ padding: '9px 20px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', flexShrink: 0 }}
-                          >
-                            Registrar Set {currentSetNum} →
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                          <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>
-                            {game.scoreConfig.target ? `Meta: ${game.scoreConfig.target} pts · auto-calcula el equipo contrario` : 'Ingresá los puntos'}
-                          </span>
-                          <button
-                            onClick={() => handleRegister(activeRound.num, court.courtNum)}
-                            style={{ padding: '9px 20px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', flexShrink: 0 }}
-                          >
-                            Registrar →
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+              {/* Resting players */}
+              {activeRound.resting.length > 0 && (
+                <div style={{ padding: '12px 16px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)', marginBottom: 16 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>Descansan: </span>
+                  <span style={{ fontSize: 13, color: 'var(--grey-500)' }}>{activeRound.resting.map(pid => getName(pid)).join(', ')}</span>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Round complete — next round button */}
-      {isLive && activeRoundComplete && !gameComplete && (
-        <div style={{ marginBottom: 32, padding: '24px', background: 'rgba(40,167,69,0.06)', border: '1px solid rgba(40,167,69,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 4 }}>
-              Ronda {activeRound?.num} completada
+              )}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>Todos los scores registrados. Podés iniciar la siguiente ronda.</div>
-          </div>
-          {hasMoreRounds && (
-            <button
-              onClick={handleNextRound}
-              style={{ padding: '12px 28px', background: 'var(--turf-green)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}
-            >
-              Siguiente Ronda →
-            </button>
+          )}
+
+          {/* Round actions */}
+          {activeRoundComplete && (
+            <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
+              {hasMoreRounds && (
+                <button
+                  onClick={handleNextRound}
+                  style={{ padding: '12px 28px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
+                >
+                  Continuar Siguiente Ronda →
+                </button>
+              )}
+              <button
+                onClick={handleFinishGame}
+                style={{ padding: '12px 28px', background: gameComplete ? '#ee0005' : 'var(--grey-100)', color: gameComplete ? '#fff' : 'var(--black)', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
+              >
+                Finalizar Juego
+              </button>
+            </div>
           )}
         </div>
       )}
 
-      {/* Standings */}
-      {game.standings.length > 0 && (
-        <div style={{ marginBottom: 36 }}>
-          <div style={secTitle}>Clasificación</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      {/* Live standings */}
+      {isLive && game.standings.length > 0 && (
+        <div style={cardStyle}>
+          <div style={secTitle}>Clasificación Actual</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ background: 'var(--grey-50)', borderBottom: '2px solid var(--grey-200)' }}>
-                {['Pos', 'Jugador', 'Victorias', 'Pts', 'PJ', '+/-'].map(h => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: h === 'Pos' ? 'center' : 'left', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>{h}</th>
-                ))}
+              <tr style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
+                <th style={{ textAlign: 'left', padding: '0 8px 8px 0', fontWeight: 700 }}>Pos</th>
+                <th style={{ textAlign: 'left', padding: '0 8px 8px 0', fontWeight: 700 }}>Jugador</th>
+                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>PJ</th>
+                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>G</th>
+                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>Pts</th>
+                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>Dif</th>
               </tr>
             </thead>
             <tbody>
-              {game.standings.map((s, i) => {
-                const isMe = game.players.find(p => p.id === s.playerId)?.isCreator ?? false;
-                return (
-                  <tr
-                    key={s.playerId}
-                    style={{ borderBottom: '1px solid var(--grey-100)', background: isMe ? 'rgba(214,255,0,0.05)' : i % 2 === 0 ? '#fff' : 'var(--grey-50)' }}
-                  >
-                    <td style={{ padding: '12px 14px', textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: i === 0 ? 'var(--neon)' : 'var(--grey-300)' }}>
-                      {i + 1}
-                    </td>
-                    <td style={{ padding: '12px 14px' }}>
-                      <span style={{ fontSize: 13, fontWeight: isMe ? 700 : 500, color: 'var(--black)' }}>{s.playerName}</span>
-                      {isMe && <span style={{ marginLeft: 8, fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px', fontWeight: 700, verticalAlign: 'middle' }}>TÚ</span>}
-                    </td>
-                    <td style={{ padding: '12px 14px', fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600 }}>{s.wins}</td>
-                    <td style={{ padding: '12px 14px', fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>{s.pts}</td>
-                    <td style={{ padding: '12px 14px', fontSize: 13, color: 'var(--grey-400)' }}>{s.played}</td>
-                    <td style={{ padding: '12px 14px', fontSize: 13, color: s.diff >= 0 ? 'var(--turf-green)' : '#e53e3e', fontWeight: 600 }}>
-                      {s.diff >= 0 ? '+' : ''}{s.diff}
-                    </td>
-                  </tr>
-                );
-              })}
+              {game.standings.map((s, i) => (
+                <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
+                  <td style={{ padding: '10px 8px 10px 0', fontWeight: 700, color: i === 0 ? 'var(--turf-green)' : 'var(--grey-400)', fontSize: 12 }}>{i + 1}</td>
+                  <td style={{ padding: '10px 8px 10px 0', fontWeight: 600 }}>{s.playerName}</td>
+                  <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{s.played}</td>
+                  <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{s.wins}</td>
+                  <td style={{ textAlign: 'center', padding: '10px 8px', fontWeight: 700 }}>{s.pts}</td>
+                  <td style={{ textAlign: 'center', padding: '10px 8px', color: s.diff >= 0 ? 'var(--turf-green)' : '#ee0005' }}>{s.diff > 0 ? '+' : ''}{s.diff}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Round history */}
-      {doneRounds.length > 0 && (
-        <div style={{ marginBottom: 32 }}>
-          <div style={secTitle}>Historial de Rondas</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {doneRounds.map(round => (
-              <div key={round.num}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 8 }}>
-                  Ronda {round.num}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {round.courts.map(court => (
-                    <div
-                      key={court.courtNum}
-                      style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '14px 20px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12 }}
-                    >
-                      <div>
-                        {court.pair1.map(pid => (
-                          <div key={pid} style={{ fontSize: 12, fontWeight: 600 }}>{getName(pid)}</div>
-                        ))}
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        {court.pair1Score !== null ? (
-                          <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700 }}>
-                            <span style={{ color: (court.pair1Score ?? 0) > (court.pair2Score ?? 0) ? 'var(--turf-green)' : 'var(--grey-400)' }}>{court.pair1Score}</span>
-                            <span style={{ color: 'var(--grey-300)', margin: '0 4px' }}>–</span>
-                            <span style={{ color: (court.pair2Score ?? 0) > (court.pair1Score ?? 0) ? 'var(--turf-green)' : 'var(--grey-400)' }}>{court.pair2Score}</span>
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: 11, color: 'var(--grey-300)' }}>–</span>
-                        )}
-                        <div style={{ fontSize: 9, color: 'var(--grey-300)', marginTop: 2, letterSpacing: '0.08em' }}>CANCHA {court.courtNum}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        {court.pair2.map(pid => (
-                          <div key={pid} style={{ fontSize: 12, fontWeight: 600 }}>{getName(pid)}</div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+      {/* ── SECTION E: Juego Finalizado ───────────────────────────────────── */}
+      {isFinished && (
+        <>
+          {/* Final standings */}
+          <div style={cardStyle}>
+            <div style={secTitle}>Clasificación Final</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
+                  <th style={{ textAlign: 'left', padding: '0 8px 12px 0', fontWeight: 700 }}>Pos</th>
+                  <th style={{ textAlign: 'left', padding: '0 8px 12px 0', fontWeight: 700 }}>Jugador</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>PJ</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>G</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>E</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>P</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>Pts</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>Dif</th>
+                </tr>
+              </thead>
+              <tbody>
+                {game.standings.map((s, i) => {
+                  const losses = s.played - s.wins - (s.played - s.wins > 0 ? 0 : 0);
+                  const draws = 0; // approximation
+                  const pLosses = s.played - s.wins - draws;
+                  return (
+                    <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
+                      <td style={{ padding: '12px 8px 12px 0', fontWeight: 800, fontSize: i < 3 ? 15 : 12, color: i === 0 ? 'var(--turf-green)' : i === 1 ? '#b45309' : i === 2 ? '#6b7280' : 'var(--grey-400)' }}>
+                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                      </td>
+                      <td style={{ padding: '12px 8px 12px 0', fontWeight: 600 }}>{s.playerName}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{s.played}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{s.wins}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-400)' }}>{draws}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{Math.max(0, pLosses)}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', fontWeight: 800, fontSize: 15 }}>{s.pts}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: s.diff >= 0 ? 'var(--turf-green)' : '#ee0005', fontWeight: 600 }}>{s.diff > 0 ? '+' : ''}{s.diff}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
 
+          {/* Ranking adjustments */}
+          {rankingEntries.length > 0 && (
+            <div style={cardStyle}>
+              <div style={secTitle}>Ajustes de Ranking</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+                {rankingEntries.map(entry => (
+                  <div key={entry.id} style={{ padding: '16px', border: '1px solid var(--grey-200)', background: entry.result === 'win' ? '#dcfce7' : entry.result === 'loss' ? '#fee2e2' : '#fef3c7' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{entry.playerName}</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, color: entry.delta > 0 ? 'var(--turf-green)' : '#ee0005', letterSpacing: '-0.02em' }}>
+                      {entry.delta > 0 ? '+' : ''}{entry.delta}
+                    </div>
+                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, color: entry.result === 'win' ? '#166534' : entry.result === 'loss' ? '#ee0005' : '#b45309', marginTop: 4 }}>
+                      {entry.result === 'win' ? 'Victoria' : entry.result === 'loss' ? 'Derrota' : 'Empate'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 4 }}>
+                      Total: {entry.newTotal} pts
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Share / history actions */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setShowQR(true)}
+              style={{ padding: '12px 24px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
+            >
+              Compartir QR
+            </button>
+            <Link
+              href="/dashboard/player/quick-game/history"
+              style={{ padding: '12px 24px', background: 'var(--grey-100)', color: 'var(--black)', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+            >
+              Ver Historial →
+            </Link>
+          </div>
+        </>
+      )}
     </div>
   );
 }
