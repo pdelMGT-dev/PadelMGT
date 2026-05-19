@@ -408,6 +408,7 @@ export function createTournament(params: {
     maxPlayers: params.maxPlayers,
     courts: params.courts,
     players: params.players,
+    invitedPlayers: [],
     rounds: [],
     currentRound: 0,
     standings: [],

@@ -2,10 +2,16 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { getAllGames } from '@/lib/game-store';
+import { getAllGames, getGame, saveGame } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
+import {
+  getPendingInvitationsForPlayer,
+  respondToInvitation,
+  type Invitation,
+} from '@/lib/invitation-store';
+import { addFriendship } from '@/lib/player-store';
 
-type CurrentUser = { id: string; name: string; role: string };
+type CurrentUser = { id: string; name: string; email: string; shortId: string; role: string; sub: string };
 
 const stats = [
   { label: 'Torneos jugados', value: '24', delta: '+3 este mes' },
@@ -45,6 +51,13 @@ export default function PlayerHomePage() {
   const [nextGame, setNextGame] = useState<ActiveGame | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [myActiveGames, setMyActiveGames] = useState<ActiveGame[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<Invitation[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  }
 
   useEffect(() => {
     try {
@@ -61,10 +74,68 @@ export default function PlayerHomePage() {
     const games = getAllGames();
     const active = games.filter(g =>
       g.status !== 'finished' &&
-      g.players.some(p => p.id === currentUser.id)
+      (g.creatorId === currentUser.id || g.players.some(p => p.id === currentUser.id))
     );
     setMyActiveGames(active);
+    setPendingInvitations(getPendingInvitationsForPlayer(currentUser.id));
   }, [currentUser]);
+
+  async function handleAccept(inv: Invitation) {
+    if (!currentUser) return;
+    respondToInvitation(inv.id, 'accepted');
+    const game = getGame(inv.gameId);
+    if (game) {
+      const updatedInvitedPlayers = game.invitedPlayers.map(ip =>
+        ip.id === currentUser.id ? { ...ip, status: 'accepted' as const } : ip
+      );
+      const alreadyInPlayers = game.players.some(p => p.id === currentUser.id);
+      const updatedPlayers = alreadyInPlayers
+        ? game.players
+        : [
+            ...game.players,
+            {
+              id: currentUser.id,
+              name: currentUser.name,
+              ranking: 1000,
+              isCreator: false,
+              email: currentUser.email,
+              shortId: currentUser.shortId,
+            },
+          ];
+      const updatedGame = {
+        ...game,
+        invitedPlayers: updatedInvitedPlayers,
+        players: updatedPlayers,
+      };
+      saveGame(updatedGame);
+      if (game.creatorId) {
+        addFriendship(currentUser.id, game.creatorId);
+      }
+      // Refresh active games
+      const games = getAllGames();
+      const active = games.filter(g =>
+        g.status !== 'finished' &&
+        (g.creatorId === currentUser.id || g.players.some(p => p.id === currentUser.id))
+      );
+      setMyActiveGames(active);
+    }
+    setPendingInvitations(prev => prev.filter(i => i.id !== inv.id));
+    showToast(`Aceptaste la invitación a ${inv.gameName}`);
+  }
+
+  function handleReject(inv: Invitation) {
+    if (!currentUser) return;
+    respondToInvitation(inv.id, 'rejected');
+    const game = getGame(inv.gameId);
+    if (game) {
+      const updatedInvitedPlayers = game.invitedPlayers.map(ip =>
+        ip.id === currentUser.id ? { ...ip, status: 'rejected' as const } : ip
+      );
+      saveGame({ ...game, invitedPlayers: updatedInvitedPlayers });
+    }
+    setPendingInvitations(prev => prev.filter(i => i.id !== inv.id));
+    showToast(`Rechazaste la invitación a ${inv.gameName}`);
+  }
 
   const gameHref = nextGame
     ? (['americano', 'mexicano'].includes(nextGame.format)
@@ -83,13 +154,76 @@ export default function PlayerHomePage() {
 
   return (
     <div style={{ padding: '40px 40px 80px' }}>
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--black)', color: '#fff', padding: '12px 24px',
+          fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none',
+          letterSpacing: '0.04em',
+        }}>
+          {toast}
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ marginBottom: 40 }}>
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Bienvenido de vuelta</div>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', lineHeight: 0.95, margin: 0 }}>
-          HOLA,<br /><span style={{ color: 'var(--court-blue)' }}>DIEGO.</span>
+          HOLA,<br /><span style={{ color: 'var(--court-blue)' }}>{currentUser ? currentUser.name.split(' ')[0].toUpperCase() : 'DIEGO'}.</span>
         </h1>
       </div>
+
+      {/* Invitaciones Pendientes */}
+      {pendingInvitations.length > 0 && (
+        <div style={{ background: '#fff', border: '2px solid var(--neon)', marginBottom: 32 }}>
+          <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--grey-200)', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--black)' }}>
+            <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--neon)' }}>
+              Invitaciones Pendientes
+            </div>
+            <span style={{ fontSize: 11, background: 'var(--neon)', color: 'var(--black)', fontWeight: 800, padding: '2px 7px', lineHeight: 1.5 }}>
+              {pendingInvitations.length}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {pendingInvitations.map((inv) => (
+              <div key={inv.id} style={{ padding: '18px 24px', borderBottom: '1px solid var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--black)', marginBottom: 4 }}>{inv.gameName}</div>
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 4 }}>
+                    {inv.gameDate} · {inv.gameTime} · {inv.gameClub}, {inv.gameCity}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--grey-500)' }}>
+                    Invitado por <span style={{ fontWeight: 600, color: 'var(--black)' }}>{inv.fromPlayerName}</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <button
+                    onClick={() => handleAccept(inv)}
+                    style={{
+                      padding: '8px 16px', background: 'var(--turf-green)', color: '#fff',
+                      border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    ✓ Aceptar
+                  </button>
+                  <button
+                    onClick={() => handleReject(inv)}
+                    style={{
+                      padding: '8px 16px', background: '#ee0005', color: '#fff',
+                      border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    ✗ Rechazar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
@@ -114,7 +248,7 @@ export default function PlayerHomePage() {
               const href = ['americano', 'mexicano'].includes(g.format)
                 ? `/dashboard/player/quick-game/${g.id}`
                 : `/dashboard/player/tournaments/${g.id}`;
-              const isCreator = g.players.some(p => p.id === currentUser?.id && p.isCreator);
+              const isCreator = g.creatorId === currentUser?.id || g.players.some(p => p.id === currentUser?.id && p.isCreator);
               const statusColor = g.status === 'live' ? 'var(--turf-green)' : g.status === 'starting_soon' ? 'var(--neon)' : 'var(--grey-400)';
               return (
                 <div key={g.id} style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--grey-100)', gap: 16 }}>
@@ -136,6 +270,11 @@ export default function PlayerHomePage() {
                 </div>
               );
             })}
+          </div>
+          <div style={{ padding: '12px 24px', borderTop: '1px solid var(--grey-100)' }}>
+            <Link href="/dashboard/player/quick-game/history" style={{ fontSize: 12, color: 'var(--grey-400)', textDecoration: 'none', fontWeight: 600 }}>
+              Ver Historial →
+            </Link>
           </div>
         </div>
       )}
