@@ -129,6 +129,10 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   // Score inputs (points mode): key = `${roundNum}-${courtNum}`
   const [scoreInputs, setScoreInputs] = useState<Record<string, { p1: string; p2: string }>>({});
 
+  // Provisional player input
+  const [provName, setProvName] = useState('');
+  const [showProvInput, setShowProvInput] = useState(false);
+
   // Fixed pairs assignment (parejas mode)
   const [pairAssignments, setPairAssignments] = useState<FixedPair[]>([]);
   const [pairsLocked, setPairsLocked] = useState(false);
@@ -235,6 +239,8 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const isCreator = !!(currentUser && (
     currentUser.id === game.creatorId || game.isCreator
   ));
+  const isCoCreator = !!(currentUser && game.coCreatorIds?.includes(currentUser.id));
+  const canManage = isCreator || isCoCreator;
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
@@ -391,6 +397,41 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     setPlayerSearchResults([]);
   }
 
+  function handleToggleCoCreator(playerId: string) {
+    if (!game || !isCreator) return;
+    const current = game.coCreatorIds ?? [];
+    const updated = current.includes(playerId)
+      ? current.filter(id => id !== playerId)
+      : [...current, playerId];
+    const updatedGame = { ...game, coCreatorIds: updated };
+    saveGame(updatedGame);
+    setGame(updatedGame);
+    showToast(updated.includes(playerId) ? 'Co-Creador asignado.' : 'Co-Creador removido.');
+  }
+
+  function handleAddProvisional(name: string) {
+    if (!game || !name.trim()) return;
+    const provId = `prov-${Date.now()}`;
+    const newPlayer: GamePlayer = { id: provId, name: name.trim(), ranking: 0, isCreator: false };
+    const provEntry: InvitedPlayer = {
+      id: provId,
+      name: name.trim(),
+      ranking: 0,
+      status: 'accepted',
+      invitedAt: new Date().toISOString(),
+      isFriend: false,
+      isProvisional: true,
+    };
+    const updatedGame = {
+      ...game,
+      players: [...game.players, newPlayer],
+      invitedPlayers: [...(game.invitedPlayers ?? []), provEntry],
+    };
+    saveGame(updatedGame);
+    setGame(updatedGame);
+    showToast(`"${name.trim()}" agregado como jugador provisional.`);
+  }
+
   function handleStartGame() {
     if (!game) return;
     let gameToStart = game;
@@ -521,9 +562,9 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 24, padding: '24px',
   };
 
-  // ── NON-CREATOR VIEW ──────────────────────────────────────────────────────
+  // ── NON-CREATOR / NON-COMANAGER VIEW ─────────────────────────────────────
 
-  if (!isCreator) {
+  if (!canManage) {
     return (
       <div style={{ padding: '40px 40px 80px', maxWidth: 800 }}>
         {toast && (
@@ -547,7 +588,6 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             {statusBadge(game.status)}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{game.format}</span>
             <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{game.players.length}/{game.maxPlayers} jugadores</span>
             <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{scoreConfigLabel(game.scoreConfig)}</span>
           </div>
@@ -790,7 +830,6 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{game.format}</span>
               <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{game.pairType === 'parejas' ? 'Pareja Fija' : 'Intercambio'}</span>
               <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{scoreConfigLabel(game.scoreConfig)}</span>
               <span style={{ fontSize: 11, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '4px 10px', fontWeight: 600 }}>{game.courts} cancha{game.courts !== 1 ? 's' : ''}</span>
@@ -853,15 +892,60 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             </div>
           ))}
 
-          {/* Add player button */}
+          {/* Add player button + provisional player */}
           {confirmedCount < game.maxPlayers && (
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
               <button
                 onClick={() => { setReplaceTargetId(null); setShowAddModal(true); }}
                 style={{ padding: '10px 20px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
               >
                 + Agregar Jugador
               </button>
+              <button
+                onClick={() => setShowProvInput(v => !v)}
+                style={{ padding: '10px 20px', background: '#fff', color: 'var(--grey-500)', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
+              >
+                + Nombre Provisional
+              </button>
+            </div>
+          )}
+          {showProvInput && confirmedCount < game.maxPlayers && (
+            <div style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                value={provName}
+                onChange={e => setProvName(e.target.value)}
+                placeholder="Nombre del jugador provisional"
+                style={{ flex: 1, padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, outline: 'none', fontFamily: 'var(--font-body)' }}
+              />
+              <button
+                onClick={() => { handleAddProvisional(provName); setProvName(''); setShowProvInput(false); }}
+                disabled={!provName.trim()}
+                style={{ padding: '9px 18px', background: provName.trim() ? 'var(--black)' : 'var(--grey-200)', color: provName.trim() ? '#fff' : 'var(--grey-400)', border: 'none', fontSize: 12, fontWeight: 700, cursor: provName.trim() ? 'pointer' : 'not-allowed' }}
+              >
+                Agregar
+              </button>
+            </div>
+          )}
+          {/* Co-creator assignment */}
+          {isCreator && game.players.filter(p => !p.isCreator).length > 0 && (
+            <div style={{ marginTop: 24, borderTop: '1px solid var(--grey-100)', paddingTop: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>
+                Co-Creadores (pueden ingresar scores)
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {game.players.filter(p => !p.isCreator).map(p => {
+                  const isCo = game.coCreatorIds?.includes(p.id);
+                  return (
+                    <button key={p.id} onClick={() => handleToggleCoCreator(p.id)}
+                      style={{ padding: '7px 14px', border: '1px solid', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase', background: isCo ? 'var(--neon)' : '#fff', color: isCo ? 'var(--black)' : 'var(--grey-400)', borderColor: isCo ? 'var(--neon)' : 'var(--grey-200)' }}>
+                      {p.name} {isCo ? '★' : '+'}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 8 }}>
+                Los Co-Creadores seleccionados (★) podrán ingresar scores y avanzar rondas.
+              </div>
             </div>
           )}
         </div>

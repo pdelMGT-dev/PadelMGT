@@ -45,6 +45,7 @@ export interface InvitedPlayer {
   status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
   invitedAt: string;
   isFriend: boolean;
+  isProvisional?: boolean;  // unregistered fill-in player
 }
 
 export interface FixedPair {
@@ -127,6 +128,7 @@ export interface ActiveGame {
   standings: Standing[];
   levelLabel?: string;        // display label for level filter used at creation
   creatorId?: string;         // user ID of the creator
+  coCreatorIds?: string[];    // player IDs that can also manage scores/rounds
   bracket?: KnockoutBracket;  // for knockout/world_cup
   groups?: GroupStage;        // for world_cup
   isCreator?: boolean;        // set by UI when rendering for creator

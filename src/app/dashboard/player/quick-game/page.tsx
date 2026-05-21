@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { createQuickGame, getAllGames } from '@/lib/game-store';
-import { createInvitation } from '@/lib/invitation-store';
-import { getFriendsForPlayer, searchPlayers } from '@/lib/player-store';
+import { createInvitation, getPendingInvitationsForPlayer, respondToInvitation, getInvitationsForPlayer } from '@/lib/invitation-store';
+import type { Invitation } from '@/lib/invitation-store';
+import { getFriendsForPlayer, searchPlayers, addFriendship } from '@/lib/player-store';
+import { getGame, saveGame } from '@/lib/game-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import type { ActiveGame, GamePlayer as EnginePlayer, InvitedPlayer, ScoreConfig } from '@/lib/game-engine';
 
@@ -197,6 +199,10 @@ export default function QuickGamePage() {
   const [qrGame, setQrGame]     = useState<ActiveGame | null>(null);
   const [copied, setCopied]     = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'icons' | 'list'>('icons');
+  const [invView, setInvView]       = useState<'icons' | 'list'>('icons');
+  const [myInvitations, setMyInvitations] = useState<Invitation[]>([]);
+  const [invToast, setInvToast]     = useState<string | null>(null);
 
   const reloadGames = useCallback(() => {
     setGames(getAllGames());
@@ -206,7 +212,13 @@ export default function QuickGamePage() {
     reloadGames();
     try {
       const u = localStorage.getItem('padelmgt_user');
-      if (u) setCurrentUser(JSON.parse(u));
+      if (u) {
+        const parsed = JSON.parse(u);
+        setCurrentUser(parsed);
+        // load invitations for this player
+        const invs = getInvitationsForPlayer(parsed.id).filter(i => i.status === 'pending');
+        setMyInvitations(invs);
+      }
     } catch {}
   }, [reloadGames]);
 
@@ -363,7 +375,7 @@ export default function QuickGamePage() {
       : { type: 'traditional', setsPerMatch, gamesPerSet, tiebreak, deuce: deuceRule === 'traditional' ? 'ventaja' : 'oro' };
 
     const enginePairType = pairType === 'fixed' ? 'parejas' : 'individual';
-    const derivedFormat: 'americano' | 'mexicano' = enginePairType === 'individual' && level === 'all' ? 'mexicano' : 'americano';
+    const derivedFormat: 'americano' | 'mexicano' = 'americano'; // JR always uses americano rotation internally
     const clubName = resolvedClubName();
     const cityName = resolvedCity();
     const countryName = resolvedCountry();
@@ -416,10 +428,47 @@ export default function QuickGamePage() {
   // DASHBOARD VIEW
   // ══════════════════════════════════════════════════════════════════════════
 
+  function handleAcceptInvitation(inv: Invitation) {
+    if (!currentUser) return;
+    respondToInvitation(inv.id, 'accepted');
+    const game = getGame(inv.gameId);
+    if (game) {
+      const updatedInvited = (game.invitedPlayers ?? []).map(p =>
+        p.id === currentUser.id ? { ...p, status: 'accepted' as const } : p
+      );
+      const alreadyPlayer = game.players.some(p => p.id === currentUser.id);
+      const updatedPlayers = alreadyPlayer ? game.players : [
+        ...game.players,
+        { id: currentUser.id, name: currentUser.name, ranking: 1000, isCreator: false, email: currentUser.email, shortId: currentUser.shortId },
+      ];
+      saveGame({ ...game, invitedPlayers: updatedInvited, players: updatedPlayers });
+      if (game.creatorId) addFriendship(currentUser.id, game.creatorId);
+    }
+    setMyInvitations(prev => prev.filter(i => i.id !== inv.id));
+    setInvToast(`Aceptaste la invitación a "${inv.gameName}"`);
+    reloadGames();
+    setTimeout(() => setInvToast(null), 3500);
+  }
+
+  function handleRejectInvitation(inv: Invitation) {
+    if (!currentUser) return;
+    respondToInvitation(inv.id, 'rejected');
+    const game = getGame(inv.gameId);
+    if (game) {
+      const updatedInvited = (game.invitedPlayers ?? []).map(p =>
+        p.id === currentUser.id ? { ...p, status: 'rejected' as const } : p
+      );
+      saveGame({ ...game, invitedPlayers: updatedInvited });
+    }
+    setMyInvitations(prev => prev.filter(i => i.id !== inv.id));
+    setInvToast(`Rechazaste la invitación a "${inv.gameName}"`);
+    setTimeout(() => setInvToast(null), 3500);
+  }
+
   if (view === 'dashboard') {
     const uid = currentUser?.id;
     const activeGames = games.filter(g =>
-      g.status !== 'finished' && (
+      g.status !== 'finished' && !g.cancelledAt && (
         g.creatorId === uid ||
         (uid && g.players.some(p => p.id === uid)) ||
         (uid && g.invitedPlayers?.some(p => p.id === uid && p.status === 'accepted'))
@@ -481,6 +530,13 @@ export default function QuickGamePage() {
           </div>
         )}
 
+        {/* Invitation toast */}
+        {invToast && (
+          <div style={{ marginBottom: 16, padding: '12px 18px', background: '#f0fdf4', border: '1px solid #bbf7d0', fontSize: 13, fontWeight: 600, color: 'var(--turf-green)' }}>
+            {invToast}
+          </div>
+        )}
+
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40, flexWrap: 'wrap', gap: 16 }}>
           <div>
@@ -495,9 +551,20 @@ export default function QuickGamePage() {
           </button>
         </div>
 
-        {/* MIS JUEGOS ACTIVOS */}
-        <div style={{ marginBottom: 40 }}>
-          <div style={secTitle}>Mis Juegos Activos ({activeGames.length})</div>
+        {/* ── MIS JUEGOS ACTIVOS ───────────────────────────────────────────── */}
+        <div style={{ marginBottom: 48 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={secTitle}>Mis Juegos Activos ({activeGames.length})</div>
+            <div style={{ display: 'flex', gap: 2 }}>
+              {(['icons', 'list'] as const).map(mode => (
+                <button key={mode} onClick={() => setActiveView(mode)}
+                  style={{ padding: '5px 10px', fontSize: 11, border: '1px solid var(--grey-200)', background: activeView === mode ? 'var(--black)' : '#fff', color: activeView === mode ? '#fff' : 'var(--grey-400)', cursor: 'pointer', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  {mode === 'icons' ? '⊞ Íconos' : '☰ Lista'}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {activeGames.length === 0 ? (
             <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '40px', textAlign: 'center' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: 'var(--grey-300)', marginBottom: 8 }}>Sin juegos activos</div>
@@ -506,12 +573,12 @@ export default function QuickGamePage() {
                 + Crear Juego Rápido
               </button>
             </div>
-          ) : (
+          ) : activeView === 'icons' ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 1, background: 'var(--grey-200)' }}>
               {activeGames.map(g => {
                 const si = STATUS_INFO[g.status as GameStatus] ?? { label: g.status, color: 'var(--grey-400)' };
                 const isCreator = g.creatorId === uid || (uid && g.players.some(p => p.id === uid && p.isCreator));
-                const confirmedCount = g.players.length + (g.invitedPlayers?.filter(p => p.status === 'accepted').length ?? 0);
+                const confirmedCount = g.players.length;
                 return (
                   <div key={g.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -528,16 +595,14 @@ export default function QuickGamePage() {
                         <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, lineHeight: 1 }}>
                           {confirmedCount}<span style={{ fontSize: 13, color: 'var(--grey-400)', fontFamily: 'var(--font-body)', fontWeight: 400 }}>/{g.maxPlayers}</span>
                         </div>
-                        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', fontWeight: 600 }}>jugadores</div>
+                        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', fontWeight: 600 }}>confirmados</div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                         <button onClick={() => setQrGame(g)} style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', background: 'rgba(124,58,237,0.08)', color: '#7c3aed', letterSpacing: '0.08em', border: 'none', cursor: 'pointer' }}>
                           {g.code} QR
                         </button>
-                        <Link
-                          href={`/dashboard/player/quick-game/${g.id}`}
-                          style={{ padding: '7px 16px', background: 'var(--grey-100)', color: 'var(--grey-600)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}
-                        >
+                        <Link href={`/dashboard/player/quick-game/${g.id}`}
+                          style={{ padding: '7px 16px', background: 'var(--black)', color: '#fff', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}>
                           {isCreator ? 'Gestionar' : 'Ver Juego'}
                         </Link>
                       </div>
@@ -546,33 +611,125 @@ export default function QuickGamePage() {
                 );
               })}
             </div>
+          ) : (
+            /* Lista view for active games */
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+              {activeGames.map((g, idx) => {
+                const si = STATUS_INFO[g.status as GameStatus] ?? { label: g.status, color: 'var(--grey-400)' };
+                const isCreator = g.creatorId === uid || (uid && g.players.some(p => p.id === uid && p.isCreator));
+                return (
+                  <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', borderTop: idx === 0 ? 'none' : '1px solid var(--grey-100)' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>{g.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{g.date} · {g.time} · {g.club}, {g.city}</div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: si.color, whiteSpace: 'nowrap' }}>{si.label}</span>
+                    <span style={{ fontSize: 12, color: 'var(--grey-400)', whiteSpace: 'nowrap' }}>{g.players.length}/{g.maxPlayers}</span>
+                    <Link href={`/dashboard/player/quick-game/${g.id}`}
+                      style={{ padding: '6px 14px', background: 'var(--black)', color: '#fff', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                      {isCreator ? 'Gestionar' : 'Ver'}
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {/* HISTORIAL */}
+        {/* ── INVITACIONES A JUEGOS RÁPIDOS ────────────────────────────────── */}
+        <div style={{ marginBottom: 48 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={secTitle}>
+              Invitaciones a Juegos Rápidos
+              {myInvitations.length > 0 && (
+                <span style={{ marginLeft: 8, background: '#f59e0b', color: '#fff', borderRadius: '50%', width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+                  {myInvitations.length}
+                </span>
+              )}
+            </div>
+            {myInvitations.length > 0 && (
+              <div style={{ display: 'flex', gap: 2 }}>
+                {(['icons', 'list'] as const).map(mode => (
+                  <button key={mode} onClick={() => setInvView(mode)}
+                    style={{ padding: '5px 10px', fontSize: 11, border: '1px solid var(--grey-200)', background: invView === mode ? 'var(--black)' : '#fff', color: invView === mode ? '#fff' : 'var(--grey-400)', cursor: 'pointer', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    {mode === 'icons' ? '⊞ Íconos' : '☰ Lista'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {myInvitations.length === 0 ? (
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '28px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
+              No tenés invitaciones pendientes.
+            </div>
+          ) : invView === 'icons' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 1, background: 'var(--grey-200)' }}>
+              {myInvitations.map(inv => (
+                <div key={inv.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', flex: 1, marginRight: 8 }}>{inv.gameName}</div>
+                    <span style={{ fontSize: 10, background: '#fef3c7', color: '#b45309', padding: '3px 8px', fontWeight: 700, letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>INVITACIÓN</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)', lineHeight: 1.7 }}>
+                    {inv.gameDate} · {inv.gameTime}<br />
+                    {inv.gameClub}, {inv.gameCity}<br />
+                    <span style={{ color: 'var(--grey-500)' }}>Invitado por <strong>{inv.fromPlayerName}</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => handleAcceptInvitation(inv)}
+                      style={{ flex: 1, padding: '9px', background: 'var(--turf-green)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      ✓ Aceptar
+                    </button>
+                    <button onClick={() => handleRejectInvitation(inv)}
+                      style={{ flex: 1, padding: '9px', background: '#fff', color: '#ee0005', border: '1px solid #ee0005', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      ✗ Rechazar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+              {myInvitations.map((inv, idx) => (
+                <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', borderTop: idx === 0 ? 'none' : '1px solid var(--grey-100)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>{inv.gameName}</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{inv.gameDate} · {inv.gameTime} · {inv.gameClub} · Por: {inv.fromPlayerName}</div>
+                  </div>
+                  <button onClick={() => handleAcceptInvitation(inv)}
+                    style={{ padding: '6px 12px', background: 'var(--turf-green)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
+                    ✓ Aceptar
+                  </button>
+                  <button onClick={() => handleRejectInvitation(inv)}
+                    style={{ padding: '6px 12px', background: '#fff', color: '#ee0005', border: '1px solid #ee0005', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
+                    ✗ Rechazar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── HISTORIAL ────────────────────────────────────────────────────── */}
         {finishedGames.length > 0 && (
           <div>
             <div style={secTitle}>Historial ({finishedGames.length})</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 1, background: 'var(--grey-200)' }}>
-              {finishedGames.map(g => {
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+              {finishedGames.map((g, idx) => {
                 const isCreator = g.creatorId === uid || (uid && g.players.some(p => p.id === uid && p.isCreator));
                 return (
-                  <div key={g.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', flex: 1, marginRight: 10 }}>{g.name}</div>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--grey-400)', flexShrink: 0 }}>Finalizado</span>
+                  <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', borderTop: idx === 0 ? 'none' : '1px solid var(--grey-100)' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>{g.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{g.date} · {g.time} · {g.club}, {g.city}</div>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--grey-400)', lineHeight: 1.7 }}>
-                      {g.date} · {g.time}<br />{g.club}, {g.city}
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700 }}>
-                        {g.players.length}<span style={{ fontSize: 12, color: 'var(--grey-400)', fontFamily: 'var(--font-body)', fontWeight: 400 }}>/{g.maxPlayers}</span>
-                      </div>
-                      <Link href={`/dashboard/player/quick-game/${g.id}`} style={{ padding: '6px 14px', background: 'var(--grey-100)', color: 'var(--grey-500)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}>
-                        {isCreator ? 'Gestionar' : 'Ver Juego'}
-                      </Link>
-                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--grey-400)', whiteSpace: 'nowrap' }}>Finalizado</span>
+                    <span style={{ fontSize: 12, color: 'var(--grey-400)', whiteSpace: 'nowrap' }}>{g.players.length}/{g.maxPlayers}</span>
+                    <Link href={`/dashboard/player/quick-game/${g.id}`}
+                      style={{ padding: '6px 14px', background: 'var(--grey-100)', color: 'var(--grey-500)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                      {isCreator ? 'Ver' : 'Resultados'}
+                    </Link>
                   </div>
                 );
               })}
@@ -1015,7 +1172,7 @@ export default function QuickGamePage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
             {([
               { key: 'traditional' as ScoreType, title: 'Tradicional', desc: '0, 15, 30, 40 — conteo clásico de pádel/tenis con games y sets.' },
-              { key: 'points'      as ScoreType, title: 'Por Puntos',  desc: 'Puntos simples hasta un objetivo. Estilo Americano.' },
+              { key: 'points'      as ScoreType, title: 'Por Puntos',  desc: 'Puntos simples hasta un objetivo definido.' },
             ]).map(({ key, title, desc }) => (
               <button key={key} onClick={() => setScoreType(key)} style={{ padding: '16px', textAlign: 'left', cursor: 'pointer', border: `2px solid ${scoreType === key ? 'var(--black)' : 'var(--grey-200)'}`, background: scoreType === key ? 'var(--black)' : '#fff', color: scoreType === key ? '#fff' : 'var(--black)', transition: 'all 0.12s' }}>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase', marginBottom: 5 }}>{title}</div>

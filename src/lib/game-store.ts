@@ -229,7 +229,51 @@ const g4Base: Omit<ActiveGame, 'standings'> = {
 
 const g4: ActiveGame = { ...g4Base, standings: calculateStandings({ ...g4Base, standings: [] }) };
 
-const INITIAL_GAMES: ActiveGame[] = [g1, g2, g3, g4];
+// g5: Test game — creator carlos (player-001), 4 confirmed players, ready to start
+const G5_NOW = new Date();
+G5_NOW.setDate(G5_NOW.getDate() + 1);
+const G5_DATE = G5_NOW.toISOString().split('T')[0];
+
+const G5_PLAYERS: GamePlayer[] = [
+  mkPlayer('player-001', 'Carlos Méndez', 1200, true),
+  mkPlayer('player-002', 'Sofía Ruiz',    1050, false),
+  mkPlayer('player-003', 'Lucas Herrera',  980, false),
+  mkPlayer('player-004', 'Ana Rodríguez', 1450, false),
+];
+
+const G5_INVITED: import('./game-engine').InvitedPlayer[] = [
+  { id: 'player-002', name: 'Sofía Ruiz',    email: 'sofia@padelmgt.com',  shortId: '#00102', ranking: 1050, status: 'accepted', invitedAt: new Date().toISOString(), isFriend: true  },
+  { id: 'player-003', name: 'Lucas Herrera', email: 'lucas@padelmgt.com',  shortId: '#00103', ranking:  980, status: 'accepted', invitedAt: new Date().toISOString(), isFriend: false },
+  { id: 'player-004', name: 'Ana Rodríguez', email: 'ana@padelmgt.com',    shortId: '#00104', ranking: 1450, status: 'accepted', invitedAt: new Date().toISOString(), isFriend: true  },
+];
+
+const g5: ActiveGame = {
+  id: 'g5',
+  code: 'JR-2026-5001',
+  name: 'Americano Express Carlos',
+  format: 'americano',
+  status: 'created',
+  date: G5_DATE,
+  time: '19:00',
+  club: 'Club La Cantera',
+  city: 'Córdoba',
+  country: 'Argentina',
+  pairType: 'individual',
+  mixto: false,
+  scoreConfig: { type: 'points', target: 24 },
+  maxPlayers: 4,
+  courts: 1,
+  players: G5_PLAYERS,
+  invitedPlayers: G5_INVITED,
+  rounds: [],
+  currentRound: 0,
+  standings: [],
+  levelLabel: 'Intermedio',
+  creatorId: 'player-001',
+  coCreatorIds: [],
+};
+
+const INITIAL_GAMES: ActiveGame[] = [g1, g2, g3, g4, g5];
 
 // ---------------------------------------------------------------------------
 // localStorage helpers
