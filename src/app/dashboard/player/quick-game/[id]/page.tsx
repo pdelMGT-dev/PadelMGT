@@ -327,6 +327,19 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     showToast('Juego cancelado.');
   }
 
+  function handleRemoveInvited(invitedId: string) {
+    if (!game) return;
+    // Cancel invitation and remove from confirmed players list
+    const updatedInvited = (game.invitedPlayers ?? []).map(ip =>
+      ip.id === invitedId ? { ...ip, status: 'cancelled' as const } : ip
+    );
+    const updatedPlayers = game.players.filter(p => p.id !== invitedId);
+    const updatedGame = { ...game, invitedPlayers: updatedInvited, players: updatedPlayers };
+    saveGame(updatedGame);
+    setGame(updatedGame);
+    showToast('Jugador quitado — slot liberado.');
+  }
+
   function handleInvitePlayer(player: RegisteredPlayer) {
     if (!game || !currentUser) return;
     if (replaceTargetId) {
@@ -814,12 +827,35 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
           </div>
         ) : (
           <div>
+            {/* QR + Share strip — above the game name */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, marginBottom: 20, padding: '16px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)' }}>
+              <div style={{ flexShrink: 0 }}>
+                <QRCodeSVG value={shareUrl || `https://padelmgt.com/quick-game/${game.code}`} size={80} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 4 }}>Compartir Juego</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', marginBottom: 6, wordBreak: 'break-all' }}>{shareUrl || `padelmgt.com/quick-game/${game.code}`}</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => {
+                      const url = shareUrl || `${window.location.origin}/quick-game/${game.code}`;
+                      navigator.clipboard.writeText(url).catch(() => {});
+                      showToast('¡Link copiado!');
+                    }}
+                    style={{ padding: '6px 14px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
+                  >
+                    Copiar link
+                  </button>
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)', display: 'flex', alignItems: 'center' }}>
+                    Código: <strong style={{ color: 'var(--black)', marginLeft: 4 }}>{game.code}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--black)', marginBottom: 6 }}>{game.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 6 }}>
-                  Código: <strong>{game.code}</strong>
-                </div>
                 <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 4 }}>
                   {game.date} · {game.time} · {game.club}, {game.city}
                 </div>
@@ -844,9 +880,16 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                         Cancelar Juego
                       </button>
                     </div>
-                    {isPending && isCreator && game.players.some(p => p.id === currentUser?.id) && (
+                    {isPending && isCreator && (
                       <button
-                        onClick={handleLeaveGame}
+                        onClick={() => {
+                          const hasCoCreator = (game.coCreatorIds ?? []).length > 0;
+                          if (!hasCoCreator) {
+                            showToast('Asigná al menos un Co-Creador antes de salirte del juego.');
+                          } else {
+                            handleLeaveGame();
+                          }
+                        }}
                         style={{ padding: '5px 14px', background: 'transparent', border: '1px solid var(--grey-300)', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--grey-500)', letterSpacing: '0.06em' }}
                       >
                         Salirme del juego
@@ -878,27 +921,50 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             {' jugadores confirmados'}
             {allConfirmed && (
               <span style={{ marginLeft: 10, fontSize: 9, background: '#dcfce7', color: '#166534', padding: '2px 8px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                Completo
+                Completo ✓
               </span>
             )}
           </div>
 
-          {/* Creator row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--grey-100)' }}>
-            <div style={{ width: 36, height: 36, background: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-              {currentUser ? initials(currentUser.name) : 'TU'}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{currentUser?.name ?? 'Tú'}</div>
-              <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Creador</div>
-            </div>
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 8px', background: '#dcfce7', color: '#166534' }}>
-              Confirmado
-            </span>
-          </div>
+          {/* Confirmed players (from game.players) */}
+          {game.players.map(p => {
+            const isThisCreator = p.id === game.creatorId || p.isCreator;
+            return (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--grey-100)' }}>
+                <div style={{ width: 36, height: 36, background: isThisCreator ? 'var(--black)' : 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: isThisCreator ? '#fff' : 'var(--grey-500)', flexShrink: 0 }}>
+                  {initials(p.name)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {p.name}
+                    {isThisCreator && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--neon)', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.08em' }}>CREADOR</span>}
+                    {(game.coCreatorIds ?? []).includes(p.id) && <span style={{ fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.08em' }}>CO-CREADOR</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p.email ?? ''}</div>
+                </div>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 8px', background: '#dcfce7', color: '#166534', flexShrink: 0 }}>
+                  Confirmado
+                </span>
+                {!isThisCreator && (
+                  <button
+                    onClick={() => handleRemoveInvited(p.id)}
+                    title="Quitar jugador"
+                    style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 14, fontWeight: 700, flexShrink: 0 }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            );
+          })}
 
-          {/* Invited players */}
-          {(game.invitedPlayers ?? []).filter(ip => ip.status !== 'cancelled').map(ip => (
+          {/* Pending invitations */}
+          {(game.invitedPlayers ?? []).filter(ip => ip.status === 'pending').length > 0 && (
+            <div style={{ marginTop: 4, marginBottom: 4, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', paddingTop: 12 }}>
+              Invitaciones Pendientes
+            </div>
+          )}
+          {(game.invitedPlayers ?? []).filter(ip => ip.status === 'pending').map(ip => (
             <div key={ip.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--grey-100)' }}>
               <div style={{ width: 36, height: 36, background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
                 {initials(ip.name)}
@@ -908,14 +974,33 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{ip.email ?? ip.shortId ?? ''}</div>
               </div>
               {invStatusBadge(ip.status)}
-              {ip.status === 'rejected' && (
-                <button
-                  onClick={() => { setReplaceTargetId(ip.id); setShowAddModal(true); }}
-                  style={{ padding: '6px 12px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', marginLeft: 8 }}
-                >
-                  Reemplazar
-                </button>
-              )}
+              <button
+                onClick={() => handleRemoveInvited(ip.id)}
+                title="Cancelar invitación"
+                style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 14, fontWeight: 700, flexShrink: 0 }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+
+          {/* Rejected invitations (with replace option) */}
+          {(game.invitedPlayers ?? []).filter(ip => ip.status === 'rejected').map(ip => (
+            <div key={ip.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--grey-100)', opacity: 0.7 }}>
+              <div style={{ width: 36, height: 36, background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
+                {initials(ip.name)}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{ip.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{ip.email ?? ip.shortId ?? ''}</div>
+              </div>
+              {invStatusBadge(ip.status)}
+              <button
+                onClick={() => { setReplaceTargetId(ip.id); setShowAddModal(true); }}
+                style={{ padding: '5px 10px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', flexShrink: 0 }}
+              >
+                Reemplazar
+              </button>
             </div>
           ))}
 
