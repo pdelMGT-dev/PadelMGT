@@ -479,6 +479,21 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     showToast(`Ronda ${next.currentRound} iniciada`);
   }
 
+  function handleLeaveGame() {
+    if (!game || !currentUser) return;
+    // Remove creator from players list, free the spot
+    const updatedPlayers = game.players.filter(p => p.id !== currentUser.id);
+    // Ensure at least one co-creator is assigned
+    const updatedGame: ActiveGame = {
+      ...game,
+      players: updatedPlayers,
+      // creatorId stays the same — creator keeps admin rights
+    };
+    saveGame(updatedGame);
+    setGame(updatedGame);
+    showToast('Te saliste del juego. Asigná al menos un Co-Creador para poder iniciarlo.');
+  }
+
   function handleFinishGame() {
     if (!game) return;
     const standings = calculateStandings(game);
@@ -812,19 +827,31 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
                 {statusBadge(game.status)}
                 {!isCancelled && !isFinished && (
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      onClick={() => setEditOpen(true)}
-                      style={{ padding: '7px 16px', background: 'var(--grey-100)', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--black)' }}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => setShowCancelModal(true)}
-                      style={{ padding: '7px 16px', background: '#ee0005', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#fff', letterSpacing: '0.05em' }}
-                    >
-                      Cancelar Juego
-                    </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {isPending && (
+                        <Link
+                          href={`/dashboard/player/quick-game/${game.id}/edit`}
+                          style={{ padding: '7px 16px', background: 'var(--black)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: 'var(--neon)', textDecoration: 'none', display: 'inline-block', letterSpacing: '0.05em' }}
+                        >
+                          ✎ Editar parámetros
+                        </Link>
+                      )}
+                      <button
+                        onClick={() => setShowCancelModal(true)}
+                        style={{ padding: '7px 16px', background: '#ee0005', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#fff', letterSpacing: '0.05em' }}
+                      >
+                        Cancelar Juego
+                      </button>
+                    </div>
+                    {isPending && isCreator && game.players.some(p => p.id === currentUser?.id) && (
+                      <button
+                        onClick={handleLeaveGame}
+                        style={{ padding: '5px 14px', background: 'transparent', border: '1px solid var(--grey-300)', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--grey-500)', letterSpacing: '0.06em' }}
+                      >
+                        Salirme del juego
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

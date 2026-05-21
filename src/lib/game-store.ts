@@ -273,7 +273,152 @@ const g5: ActiveGame = {
   coCreatorIds: [],
 };
 
-const INITIAL_GAMES: ActiveGame[] = [g1, g2, g3, g4, g5];
+// ── Test games for carlos (player-001) in all states ────────────────────────
+
+function tomorrow(): string {
+  const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0];
+}
+
+function inv(id: string, name: string, email: string, shortId: string, ranking: number, isFriend: boolean): import('./game-engine').InvitedPlayer {
+  return { id, name, email, shortId, ranking, status: 'accepted', invitedAt: new Date().toISOString(), isFriend };
+}
+
+// g6: 8 players, intercambio, all confirmed — ready to start (Carlos creator)
+const G6_PLAYERS: GamePlayer[] = [
+  mkPlayer('player-001', 'Carlos Méndez',   1200, true),
+  mkPlayer('player-004', 'Ana Rodríguez',   1450, false),
+  mkPlayer('player-005', 'Marcos Herrera',  1800, false),
+  mkPlayer('player-006', 'Carlos Vargas',    850, false),
+  mkPlayer('player-007', 'Laura Torres',     780, false),
+  mkPlayer('player-008', 'Diego Fernández', 1320, false),
+  mkPlayer('player-009', 'Pedro Morales',   2100, false),
+  mkPlayer('player-010', 'Isabel Bravo',    1650, false),
+];
+
+const g6: ActiveGame = {
+  id: 'g6',
+  code: 'JR-2026-6001',
+  name: 'Ronda de 8 — Intercambio',
+  format: 'americano',
+  status: 'created',
+  date: tomorrow(),
+  time: '10:00',
+  club: 'Padel Arena',
+  city: 'Buenos Aires',
+  country: 'Argentina',
+  pairType: 'individual',
+  mixto: false,
+  scoreConfig: { type: 'points', target: 24 },
+  maxPlayers: 8,
+  courts: 2,
+  players: G6_PLAYERS,
+  invitedPlayers: [
+    inv('player-004', 'Ana Rodríguez',   'ana@padelmgt.com',         '#00104', 1450, true),
+    inv('player-005', 'Marcos Herrera',  'marcos@padelmgt.com',      '#00105', 1800, true),
+    inv('player-006', 'Carlos Vargas',   'cvargas@padelmgt.com',     '#00106',  850, false),
+    inv('player-007', 'Laura Torres',    'ltorres@padelmgt.com',     '#00107',  780, false),
+    inv('player-008', 'Diego Fernández', 'dfernandez@padelmgt.com',  '#00108', 1320, true),
+    inv('player-009', 'Pedro Morales',   'pmorales@padelmgt.com',    '#00109', 2100, false),
+    inv('player-010', 'Isabel Bravo',    'ibravo@padelmgt.com',      '#00110', 1650, false),
+  ],
+  rounds: [],
+  currentRound: 0,
+  standings: [],
+  levelLabel: 'Avanzado',
+  creatorId: 'player-001',
+  coCreatorIds: [],
+};
+
+// g7: 4 players, pareja fija, all confirmed — ready to start (Carlos creator)
+const G7_PLAYERS: GamePlayer[] = [
+  mkPlayer('player-001', 'Carlos Méndez',   1200, true),
+  mkPlayer('player-002', 'Sofía Ruiz',      1050, false),
+  mkPlayer('player-003', 'Lucas Herrera',    980, false),
+  mkPlayer('player-013', 'Raúl Ortega',     1760, false),
+];
+
+const g7: ActiveGame = {
+  id: 'g7',
+  code: 'JR-2026-7001',
+  name: 'Pareja Fija — 4 Jugadores',
+  format: 'americano',
+  status: 'created',
+  date: tomorrow(),
+  time: '18:00',
+  club: 'Club La Cantera',
+  city: 'Córdoba',
+  country: 'Argentina',
+  pairType: 'parejas',
+  mixto: false,
+  scoreConfig: { type: 'points', target: 16 },
+  maxPlayers: 4,
+  courts: 1,
+  players: G7_PLAYERS,
+  invitedPlayers: [
+    inv('player-002', 'Sofía Ruiz',    'sofia@padelmgt.com',  '#00102', 1050, true),
+    inv('player-003', 'Lucas Herrera', 'lucas@padelmgt.com',  '#00103',  980, false),
+    inv('player-013', 'Raúl Ortega',   'rortega@padelmgt.com','#00113', 1760, false),
+  ],
+  rounds: [],
+  currentRound: 0,
+  standings: [],
+  levelLabel: 'Intermedio',
+  creatorId: 'player-001',
+  coCreatorIds: [],
+};
+
+// g8: 4 players, live game, 1 round done + 1 active (Carlos creator)
+const G8_PLAYERS: GamePlayer[] = [
+  mkPlayer('player-001', 'Carlos Méndez', 1200, true),
+  mkPlayer('player-002', 'Sofía Ruiz',   1050, false),
+  mkPlayer('player-003', 'Lucas Herrera',  980, false),
+  mkPlayer('player-004', 'Ana Rodríguez', 1450, false),
+];
+
+const G8_R1 = completedRound(1, [
+  { courtNum: 1, pair1: ['player-001', 'player-003'], pair2: ['player-002', 'player-004'], pair1Score: 18, pair2Score: 14 },
+]);
+const G8_R2: import('./game-engine').GameRound = {
+  num: 2, status: 'active', resting: [],
+  courts: [{ courtNum: 1, pair1: ['player-001', 'player-002'], pair2: ['player-003', 'player-004'], pair1Score: null, pair2Score: null, status: 'pending' }],
+};
+const G8_R3: import('./game-engine').GameRound = {
+  num: 3, status: 'pending', resting: [],
+  courts: [{ courtNum: 1, pair1: ['player-001', 'player-004'], pair2: ['player-002', 'player-003'], pair1Score: null, pair2Score: null, status: 'pending' }],
+};
+
+const g8Base: Omit<ActiveGame, 'standings'> = {
+  id: 'g8',
+  code: 'JR-2026-8001',
+  name: 'En Vivo — Ronda 2',
+  format: 'americano',
+  status: 'live',
+  date: new Date().toISOString().split('T')[0],
+  time: '20:00',
+  club: 'Padel Arena',
+  city: 'Buenos Aires',
+  country: 'Argentina',
+  pairType: 'individual',
+  mixto: false,
+  scoreConfig: { type: 'points', target: 24 },
+  maxPlayers: 4,
+  courts: 1,
+  players: G8_PLAYERS,
+  invitedPlayers: [
+    inv('player-002', 'Sofía Ruiz',    'sofia@padelmgt.com',  '#00102', 1050, true),
+    inv('player-003', 'Lucas Herrera', 'lucas@padelmgt.com',  '#00103',  980, false),
+    inv('player-004', 'Ana Rodríguez', 'ana@padelmgt.com',    '#00104', 1450, true),
+  ],
+  rounds: [G8_R1, G8_R2, G8_R3],
+  currentRound: 2,
+  levelLabel: 'Todos',
+  creatorId: 'player-001',
+  coCreatorIds: ['player-002'],
+};
+
+const g8: ActiveGame = { ...g8Base, standings: calculateStandings({ ...g8Base, standings: [] }) };
+
+const INITIAL_GAMES: ActiveGame[] = [g1, g2, g3, g4, g5, g6, g7, g8];
 
 // ---------------------------------------------------------------------------
 // localStorage helpers
