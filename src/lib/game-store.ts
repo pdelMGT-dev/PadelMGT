@@ -418,7 +418,158 @@ const g8Base: Omit<ActiveGame, 'standings'> = {
 
 const g8: ActiveGame = { ...g8Base, standings: calculateStandings({ ...g8Base, standings: [] }) };
 
-const INITIAL_GAMES: ActiveGame[] = [g1, g2, g3, g4, g5, g6, g7, g8];
+// ── 5 games — all players confirmed, ready to start ──────────────────────────
+
+function daysFromNow(n: number): string {
+  const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0];
+}
+
+// g9: 4 players · intercambio · Por Puntos 24 · Buenos Aires
+const g9: ActiveGame = {
+  id: 'g9', code: 'JR-2026-9001',
+  name: 'Americano Barrio Norte',
+  format: 'americano', status: 'created',
+  date: daysFromNow(1), time: '20:00',
+  club: 'Club Barrio Norte', city: 'Buenos Aires', country: 'Argentina',
+  pairType: 'individual', mixto: false,
+  scoreConfig: { type: 'points', target: 24 },
+  maxPlayers: 4, courts: 1,
+  players: [
+    mkPlayer('player-001', 'Carlos Méndez',  1200, true),
+    mkPlayer('player-002', 'Sofía Ruiz',     1050, false),
+    mkPlayer('player-003', 'Lucas Herrera',   980, false),
+    mkPlayer('player-004', 'Ana Rodríguez',  1450, false),
+  ],
+  invitedPlayers: [
+    inv('player-002', 'Sofía Ruiz',    'sofia@padelmgt.com',  '#00102', 1050, true),
+    inv('player-003', 'Lucas Herrera', 'lucas@padelmgt.com',  '#00103',  980, true),
+    inv('player-004', 'Ana Rodríguez', 'ana@padelmgt.com',    '#00104', 1450, true),
+  ],
+  rounds: [], currentRound: 0, standings: [],
+  levelLabel: 'Intermedio', creatorId: 'player-001', coCreatorIds: [],
+};
+
+// g10: 8 players · intercambio · Por Puntos 24 · Córdoba · 2 canchas
+const g10: ActiveGame = {
+  id: 'g10', code: 'JR-2026-9002',
+  name: 'Americano La Cantera 8',
+  format: 'americano', status: 'created',
+  date: daysFromNow(2), time: '10:00',
+  club: 'Club La Cantera', city: 'Córdoba', country: 'Argentina',
+  pairType: 'individual', mixto: false,
+  scoreConfig: { type: 'points', target: 24 },
+  maxPlayers: 8, courts: 2,
+  players: [
+    mkPlayer('player-001', 'Carlos Méndez',    1200, true),
+    mkPlayer('player-005', 'Marcos Herrera',   1800, false),
+    mkPlayer('player-006', 'Carlos Vargas',     850, false),
+    mkPlayer('player-007', 'Laura Torres',      780, false),
+    mkPlayer('player-008', 'Diego Fernández',  1320, false),
+    mkPlayer('player-013', 'Raúl Ortega',      1760, false),
+    mkPlayer('player-014', 'Marta Fuentes',     810, false),
+    mkPlayer('player-015', 'Valentina Cruz',   1120, false),
+  ],
+  invitedPlayers: [
+    inv('player-005', 'Marcos Herrera',   'marcos@padelmgt.com',      '#00105', 1800, true),
+    inv('player-006', 'Carlos Vargas',    'cvargas@padelmgt.com',     '#00106',  850, false),
+    inv('player-007', 'Laura Torres',     'ltorres@padelmgt.com',     '#00107',  780, false),
+    inv('player-008', 'Diego Fernández',  'dfernandez@padelmgt.com',  '#00108', 1320, false),
+    inv('player-013', 'Raúl Ortega',      'rortega@padelmgt.com',     '#00113', 1760, false),
+    inv('player-014', 'Marta Fuentes',    'mfuentes@padelmgt.com',    '#00114',  810, false),
+    inv('player-015', 'Valentina Cruz',   'vcruz@padelmgt.com',       '#00115', 1120, false),
+  ],
+  rounds: [], currentRound: 0, standings: [],
+  levelLabel: 'Avanzado', creatorId: 'player-001', coCreatorIds: [],
+};
+
+// g11: 6 players · intercambio · Tradicional (sets) · Madrid · 1 cancha
+const g11: ActiveGame = {
+  id: 'g11', code: 'JR-2026-9003',
+  name: 'Sets Clásicos Madrid',
+  format: 'americano', status: 'created',
+  date: daysFromNow(3), time: '11:00',
+  club: 'World Padel Tour', city: 'Madrid', country: 'España',
+  pairType: 'individual', mixto: false,
+  scoreConfig: { type: 'traditional', setsPerMatch: 1, gamesPerSet: 6, tiebreak: 7, deuce: 'oro' },
+  maxPlayers: 6, courts: 1,
+  players: [
+    mkPlayer('player-001', 'Carlos Méndez',    1200, true),
+    mkPlayer('player-009', 'Pedro Morales',    2100, false),
+    mkPlayer('player-010', 'Isabel Bravo',     1650, false),
+    mkPlayer('player-016', 'Nicolás Gómez',   1580, false),
+    mkPlayer('player-017', 'Fernanda Ríos',    990, false),
+    mkPlayer('player-018', 'Alejandro Pérez', 1340, false),
+  ],
+  invitedPlayers: [
+    inv('player-009', 'Pedro Morales',    'pmorales@padelmgt.com',  '#00109', 2100, false),
+    inv('player-010', 'Isabel Bravo',     'ibravo@padelmgt.com',    '#00110', 1650, false),
+    inv('player-016', 'Nicolás Gómez',   'ngomez@padelmgt.com',    '#00116', 1580, false),
+    inv('player-017', 'Fernanda Ríos',   'frios@padelmgt.com',     '#00117',  990, false),
+    inv('player-018', 'Alejandro Pérez', 'aperez@padelmgt.com',    '#00118', 1340, false),
+  ],
+  rounds: [], currentRound: 0, standings: [],
+  levelLabel: 'Avanzado', creatorId: 'player-001', coCreatorIds: [],
+};
+
+// g12: 4 players · pareja fija · Por Puntos 16 · Rosario · 1 cancha
+const g12: ActiveGame = {
+  id: 'g12', code: 'JR-2026-9004',
+  name: 'Pareja Fija Rosario',
+  format: 'americano', status: 'created',
+  date: daysFromNow(2), time: '18:30',
+  club: 'Padel Rosario Central', city: 'Rosario', country: 'Argentina',
+  pairType: 'parejas', mixto: false,
+  scoreConfig: { type: 'points', target: 16 },
+  maxPlayers: 4, courts: 1,
+  players: [
+    mkPlayer('player-001', 'Carlos Méndez',   1200, true),
+    mkPlayer('player-004', 'Ana Rodríguez',   1450, false),
+    mkPlayer('player-008', 'Diego Fernández', 1320, false),
+    mkPlayer('player-010', 'Isabel Bravo',    1650, false),
+  ],
+  invitedPlayers: [
+    inv('player-004', 'Ana Rodríguez',   'ana@padelmgt.com',          '#00104', 1450, true),
+    inv('player-008', 'Diego Fernández', 'dfernandez@padelmgt.com',   '#00108', 1320, false),
+    inv('player-010', 'Isabel Bravo',    'ibravo@padelmgt.com',       '#00110', 1650, false),
+  ],
+  rounds: [], currentRound: 0, standings: [],
+  levelLabel: 'Intermedio', creatorId: 'player-001', coCreatorIds: [],
+};
+
+// g13: 8 players · pareja fija · Por Puntos 24 · Santiago · 2 canchas
+const g13: ActiveGame = {
+  id: 'g13', code: 'JR-2026-9005',
+  name: 'Equipos Chile 8',
+  format: 'americano', status: 'created',
+  date: daysFromNow(4), time: '09:00',
+  club: 'Padel Santiago', city: 'Santiago', country: 'Chile',
+  pairType: 'parejas', mixto: false,
+  scoreConfig: { type: 'points', target: 24 },
+  maxPlayers: 8, courts: 2,
+  players: [
+    mkPlayer('player-001', 'Carlos Méndez',    1200, true),
+    mkPlayer('player-002', 'Sofía Ruiz',       1050, false),
+    mkPlayer('player-003', 'Lucas Herrera',     980, false),
+    mkPlayer('player-005', 'Marcos Herrera',   1800, false),
+    mkPlayer('player-011', 'Juan Castro',      1050, false),
+    mkPlayer('player-012', 'Elena Vidal',       920, false),
+    mkPlayer('player-015', 'Valentina Cruz',   1120, false),
+    mkPlayer('player-018', 'Alejandro Pérez', 1340, false),
+  ],
+  invitedPlayers: [
+    inv('player-002', 'Sofía Ruiz',       'sofia@padelmgt.com',    '#00102', 1050, true),
+    inv('player-003', 'Lucas Herrera',    'lucas@padelmgt.com',    '#00103',  980, true),
+    inv('player-005', 'Marcos Herrera',   'marcos@padelmgt.com',   '#00105', 1800, true),
+    inv('player-011', 'Juan Castro',      'jcastro@padelmgt.com',  '#00111', 1050, false),
+    inv('player-012', 'Elena Vidal',      'evidal@padelmgt.com',   '#00112',  920, false),
+    inv('player-015', 'Valentina Cruz',   'vcruz@padelmgt.com',    '#00115', 1120, false),
+    inv('player-018', 'Alejandro Pérez',  'aperez@padelmgt.com',   '#00118', 1340, false),
+  ],
+  rounds: [], currentRound: 0, standings: [],
+  levelLabel: 'Todos', creatorId: 'player-001', coCreatorIds: [],
+};
+
+const INITIAL_GAMES: ActiveGame[] = [g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13];
 
 // ---------------------------------------------------------------------------
 // localStorage helpers
