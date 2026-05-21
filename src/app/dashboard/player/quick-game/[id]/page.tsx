@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
 import { use, useEffect, useMemo, useState, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -138,6 +139,12 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   // Fixed pairs assignment (parejas mode)
   const [pairAssignments, setPairAssignments] = useState<FixedPair[]>([]);
   const [pairsLocked, setPairsLocked] = useState(false);
+
+  // Drag & drop state for pair builder
+  // slot key format: 'pool' | 'pair-{idx}-{1|2}'
+  const [dragId, setDragId]       = useState<string | null>(null);
+  const [dragSource, setDragSource] = useState<string | null>(null);
+  const [dropOver, setDropOver]   = useState<string | null>(null);
 
   // Load user
   useEffect(() => {
@@ -595,6 +602,54 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     setGame(updated);
     setPairsLocked(true);
     showToast('Parejas guardadas.');
+  }
+
+  // ── Drag & Drop for pair builder ──────────────────────────────────────────
+
+  function handlePairDrop(targetKey: string) {
+    if (!dragId || !dragSource || !game) return;
+    const player = game.players.find(p => p.id === dragId);
+    if (!player) return;
+
+    function slotFields(key: string): { idx: number; field: 'player1Id' | 'player2Id'; nameField: 'player1Name' | 'player2Name' } | null {
+      const m = key.match(/^pair-(\d+)-(1|2)$/);
+      if (!m) return null;
+      const slot = parseInt(m[2], 10) as 1 | 2;
+      return { idx: parseInt(m[1], 10), field: slot === 1 ? 'player1Id' : 'player2Id', nameField: slot === 1 ? 'player1Name' : 'player2Name' };
+    }
+
+    setPairAssignments(prev => {
+      let next = prev.map(pa => ({ ...pa }));
+
+      // 1. Find what's currently in the target slot (to displace)
+      const tgt = slotFields(targetKey);
+      const displaced = tgt ? (next[tgt.idx]?.[tgt.field] ?? '') : '';
+
+      // 2. Remove dragged player from source
+      const src = slotFields(dragSource);
+      if (src && next[src.idx]) {
+        next[src.idx] = { ...next[src.idx], [src.field]: '', [src.nameField]: '' };
+      }
+
+      // 3. Place dragged player in target slot
+      if (tgt && next[tgt.idx]) {
+        next[tgt.idx] = { ...next[tgt.idx], [tgt.field]: player.id, [tgt.nameField]: player.name };
+      }
+
+      // 4. If target had someone and source was a slot → put displaced player in source slot
+      if (displaced && src && next[src.idx]) {
+        const displacedPlayer = game.players.find(p => p.id === displaced);
+        if (displacedPlayer) {
+          next[src.idx] = { ...next[src.idx], [src.field]: displacedPlayer.id, [src.nameField]: displacedPlayer.name };
+        }
+      }
+
+      return next;
+    });
+
+    setDragId(null);
+    setDragSource(null);
+    setDropOver(null);
   }
 
   // Build auto-preview for individual mode (best + worst pairing)
@@ -1172,61 +1227,193 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 Listo — las parejas se asignan automáticamente al iniciar el juego
               </div>
             </div>
-          ) : (
+          ) : pairsLocked ? (
+            /* ── Pairs locked view ── */
             <div>
-              <p style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 16, lineHeight: 1.6 }}>
-                Asigna los jugadores a cada pareja fija. Cada jugador debe aparecer exactamente una vez.
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 {pairAssignments.map((pa, idx) => (
-                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto 1fr', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Pareja {idx + 1}</span>
-                    <select
-                      style={{ ...inp, padding: '8px 10px' }}
-                      value={pa.player1Id}
-                      onChange={e => updatePairAssignment(idx, 'player1Id', e.target.value)}
-                      disabled={pairsLocked}
-                    >
-                      <option value="">— Jugador 1 —</option>
-                      {game.players.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                    <span style={{ fontSize: 11, color: 'var(--grey-300)', textAlign: 'center' }}>&amp;</span>
-                    <select
-                      style={{ ...inp, padding: '8px 10px' }}
-                      value={pa.player2Id}
-                      onChange={e => updatePairAssignment(idx, 'player2Id', e.target.value)}
-                      disabled={pairsLocked}
-                    >
-                      <option value="">— Jugador 2 —</option>
-                      {game.players.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.1em', textTransform: 'uppercase', width: 56, flexShrink: 0 }}>Pareja {idx + 1}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{pa.player1Name}</span>
+                    <span style={{ fontSize: 11, color: 'var(--grey-300)' }}>&amp;</span>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{pa.player2Name}</span>
                   </div>
                 ))}
               </div>
-              {!pairsLocked ? (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <button
-                    onClick={handleSavePairs}
-                    disabled={!pairsFullyAssigned}
-                    style={{ padding: '10px 24px', background: pairsFullyAssigned ? 'var(--black)' : 'var(--grey-200)', color: pairsFullyAssigned ? '#fff' : 'var(--grey-400)', border: 'none', fontSize: 12, fontWeight: 700, cursor: pairsFullyAssigned ? 'pointer' : 'not-allowed', letterSpacing: '0.06em' }}
-                  >
-                    Guardar Parejas
-                  </button>
-                  {!pairsFullyAssigned && (
-                    <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>Asigna todos los jugadores para continuar</span>
-                  )}
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: 'var(--turf-green)', fontWeight: 600 }}>✓ Parejas guardadas</span>
-                  <button onClick={() => setPairsLocked(false)} style={{ padding: '6px 14px', background: 'var(--grey-100)', border: 'none', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>Editar</button>
-                </div>
-              )}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <span style={{ fontSize: 12, color: 'var(--turf-green)', fontWeight: 600 }}>✓ Parejas confirmadas</span>
+                <button onClick={() => setPairsLocked(false)} style={{ padding: '6px 14px', background: 'var(--grey-100)', border: 'none', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>Reorganizar</button>
+              </div>
             </div>
+          ) : (
+            /* ── Drag & drop pair builder ── */
+            (() => {
+              const assignedIds = new Set(pairAssignments.flatMap(pa => [pa.player1Id, pa.player2Id].filter(Boolean)));
+              const unassigned = game.players.filter(p => !assignedIds.has(p.id));
+              const isDragging = !!dragId;
+
+              function slotKey(pairIdx: number, slot: 1 | 2) { return `pair-${pairIdx}-${slot}`; }
+
+              function chipStyle(isDragSource: boolean): React.CSSProperties {
+                return {
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '7px 12px',
+                  background: isDragSource ? 'var(--grey-200)' : 'var(--black)',
+                  color: isDragSource ? 'var(--grey-400)' : '#fff',
+                  cursor: 'grab', userSelect: 'none',
+                  fontSize: 12, fontWeight: 700,
+                  border: 'none', opacity: isDragSource ? 0.5 : 1,
+                };
+              }
+
+              function dropZoneStyle(key: string, occupied: boolean): React.CSSProperties {
+                const isOver = dropOver === key;
+                return {
+                  flex: 1, minWidth: 110,
+                  height: 46,
+                  display: 'flex', alignItems: 'center',
+                  padding: '0 10px',
+                  border: `2px ${isOver ? 'solid' : 'dashed'} ${isOver ? 'var(--turf-green)' : occupied ? 'var(--black)' : 'var(--grey-300)'}`,
+                  background: isOver ? '#f0fdf4' : occupied ? 'var(--black)' : '#fff',
+                  cursor: isDragging ? 'copy' : 'default',
+                  transition: 'border-color 0.1s, background 0.1s',
+                };
+              }
+
+              return (
+                <div>
+                  <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 16 }}>
+                    Arrastrá los jugadores del pool a cada pareja. Podés intercambiar jugadores arrastrando entre slots.
+                  </p>
+
+                  {/* Pool */}
+                  <div
+                    onDragOver={e => { e.preventDefault(); setDropOver('pool'); }}
+                    onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOver(null); }}
+                    onDrop={e => { e.preventDefault(); if (dragSource !== 'pool') handlePairDrop('pool'); setDropOver(null); }}
+                    style={{
+                      minHeight: 56, padding: '10px 12px', marginBottom: 20,
+                      border: `2px dashed ${dropOver === 'pool' ? 'var(--turf-green)' : 'var(--grey-200)'}`,
+                      background: dropOver === 'pool' ? '#f0fdf4' : 'var(--grey-50)',
+                      display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+                    }}
+                  >
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginRight: 4, flexShrink: 0 }}>
+                      {unassigned.length > 0 ? `Disponibles (${unassigned.length})` : '✓ Todos asignados'}
+                    </span>
+                    {unassigned.map(p => (
+                      <div
+                        key={p.id}
+                        draggable
+                        onDragStart={() => { setDragId(p.id); setDragSource('pool'); }}
+                        onDragEnd={() => { setDragId(null); setDragSource(null); setDropOver(null); }}
+                        style={chipStyle(dragId === p.id && dragSource === 'pool')}
+                      >
+                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700 }}>
+                          {initials(p.name)}
+                        </div>
+                        {p.name}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pair rows */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+                    {pairAssignments.map((pa, idx) => {
+                      const s1key = slotKey(idx, 1);
+                      const s2key = slotKey(idx, 2);
+                      const p1 = pa.player1Id ? game.players.find(p => p.id === pa.player1Id) : null;
+                      const p2 = pa.player2Id ? game.players.find(p => p.id === pa.player2Id) : null;
+                      return (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', width: 60, flexShrink: 0 }}>
+                            Pareja {idx + 1}
+                          </span>
+
+                          {/* Slot 1 */}
+                          <div
+                            onDragOver={e => { e.preventDefault(); setDropOver(s1key); }}
+                            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOver(null); }}
+                            onDrop={e => { e.preventDefault(); handlePairDrop(s1key); }}
+                            style={dropZoneStyle(s1key, !!p1)}
+                          >
+                            {p1 ? (
+                              <div
+                                draggable
+                                onDragStart={() => { setDragId(p1.id); setDragSource(s1key); }}
+                                onDragEnd={() => { setDragId(null); setDragSource(null); setDropOver(null); }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'grab', flex: 1, color: '#fff', userSelect: 'none' }}
+                              >
+                                <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>
+                                  {initials(p1.name)}
+                                </div>
+                                <span style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p1.name}</span>
+                                <button
+                                  onClick={() => handlePairDrop('pool')}
+                                  onMouseDown={e => { setDragId(p1.id); setDragSource(s1key); e.stopPropagation(); }}
+                                  style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+                                  title="Quitar"
+                                >✕</button>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 11, color: 'var(--grey-300)', fontStyle: 'italic' }}>Soltá aquí</span>
+                            )}
+                          </div>
+
+                          <span style={{ fontSize: 13, color: 'var(--grey-300)', fontWeight: 700, flexShrink: 0 }}>&amp;</span>
+
+                          {/* Slot 2 */}
+                          <div
+                            onDragOver={e => { e.preventDefault(); setDropOver(s2key); }}
+                            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOver(null); }}
+                            onDrop={e => { e.preventDefault(); handlePairDrop(s2key); }}
+                            style={dropZoneStyle(s2key, !!p2)}
+                          >
+                            {p2 ? (
+                              <div
+                                draggable
+                                onDragStart={() => { setDragId(p2.id); setDragSource(s2key); }}
+                                onDragEnd={() => { setDragId(null); setDragSource(null); setDropOver(null); }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'grab', flex: 1, color: '#fff', userSelect: 'none' }}
+                              >
+                                <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>
+                                  {initials(p2.name)}
+                                </div>
+                                <span style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p2.name}</span>
+                                <button
+                                  onClick={() => { setDragId(p2.id); setDragSource(s2key); handlePairDrop('pool'); }}
+                                  onMouseDown={e => { setDragId(p2.id); setDragSource(s2key); e.stopPropagation(); }}
+                                  style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+                                  title="Quitar"
+                                >✕</button>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 11, color: 'var(--grey-300)', fontStyle: 'italic' }}>Soltá aquí</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Save button */}
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <button
+                      onClick={handleSavePairs}
+                      disabled={!pairsFullyAssigned}
+                      style={{ padding: '10px 24px', background: pairsFullyAssigned ? 'var(--turf-green)' : 'var(--grey-200)', color: pairsFullyAssigned ? '#fff' : 'var(--grey-400)', border: 'none', fontSize: 12, fontWeight: 700, cursor: pairsFullyAssigned ? 'pointer' : 'not-allowed', letterSpacing: '0.06em' }}
+                    >
+                      Confirmar Parejas →
+                    </button>
+                    {!pairsFullyAssigned && (
+                      <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>
+                        {unassigned.length} jugador{unassigned.length !== 1 ? 'es' : ''} sin asignar
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()
           )}
         </div>
       )}
