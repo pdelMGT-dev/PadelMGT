@@ -19,7 +19,7 @@ import {
   createInvitation,
   deleteInvitationsForGame,
 } from '@/lib/invitation-store';
-import { searchPlayers, addFriendship, areFriends } from '@/lib/player-store';
+import { searchPlayers, addFriendship, areFriends, getFriendsForPlayer } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { applyGameRankingResults, getRankingHistoryForGame } from '@/lib/ranking-store';
 import type { RankingEntry } from '@/lib/ranking-store';
@@ -125,6 +125,8 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
   const [playerSearchQ, setPlayerSearchQ] = useState('');
   const [playerSearchResults, setPlayerSearchResults] = useState<RegisteredPlayer[]>([]);
+  const [addTab, setAddTab] = useState<'friends' | 'search'>('friends');
+  const [friendList, setFriendList] = useState<RegisteredPlayer[]>([]);
 
   // Score inputs (points mode): key = `${roundNum}-${courtNum}`
   const [scoreInputs, setScoreInputs] = useState<Record<string, { p1: string; p2: string }>>({});
@@ -205,6 +207,16 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       setRankingEntries(getRankingHistoryForGame(game.id));
     }
   }, [game?.status, game?.id]);
+
+  // Load friends when add modal opens
+  useEffect(() => {
+    if (showAddModal && currentUser) {
+      const alreadyIn = game?.players.map(p => p.id) ?? [];
+      const alreadyInvited = game?.invitedPlayers.filter(ip => ip.status === 'pending').map(ip => ip.id) ?? [];
+      const exclude = new Set([...alreadyIn, ...alreadyInvited]);
+      setFriendList(getFriendsForPlayer(currentUser.id).filter(f => !exclude.has(f.id)));
+    }
+  }, [showAddModal, currentUser, game?.players, game?.invitedPlayers]);
 
   // Search players for invitation modal
   useEffect(() => {
@@ -494,17 +506,30 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   function handleLeaveGame() {
     if (!game || !currentUser) return;
-    // Remove creator from players list, free the spot
     const updatedPlayers = game.players.filter(p => p.id !== currentUser.id);
-    // Ensure at least one co-creator is assigned
-    const updatedGame: ActiveGame = {
-      ...game,
-      players: updatedPlayers,
-      // creatorId stays the same — creator keeps admin rights
-    };
+    const updatedGame: ActiveGame = { ...game, players: updatedPlayers };
     saveGame(updatedGame);
     setGame(updatedGame);
-    showToast('Te saliste del juego. Asigná al menos un Co-Creador para poder iniciarlo.');
+    showToast('Te saliste del juego como jugador. Seguís siendo el administrador.');
+  }
+
+  function handleJoinGame() {
+    if (!game || !currentUser) return;
+    if (game.players.length >= game.maxPlayers) {
+      showToast('El juego ya está completo — no hay slots disponibles.');
+      return;
+    }
+    if (game.players.some(p => p.id === currentUser.id)) return;
+    const newPlayer: GamePlayer = {
+      id: currentUser.id,
+      name: currentUser.name,
+      ranking: 1000,
+      isCreator: true,
+    };
+    const updatedGame: ActiveGame = { ...game, players: [...game.players, newPlayer] };
+    saveGame(updatedGame);
+    setGame(updatedGame);
+    showToast('Te uniste al juego como jugador.');
   }
 
   function handleFinishGame() {
@@ -727,44 +752,97 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       {/* Add/Replace player modal */}
       {showAddModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', padding: '32px', width: 480, maxWidth: '90vw' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, textTransform: 'uppercase', marginBottom: 16 }}>
-              {replaceTargetId ? 'Reemplazar Jugador' : 'Agregar Jugador'}
-            </div>
-            <input
-              style={{ ...inp, marginBottom: 12 }}
-              placeholder="Buscar por nombre, email o #ID..."
-              value={playerSearchQ}
-              onChange={e => setPlayerSearchQ(e.target.value)}
-              autoFocus
-            />
-            {playerSearchResults.length > 0 && (
-              <div style={{ border: '1px solid var(--grey-200)', maxHeight: 320, overflowY: 'auto' }}>
-                {playerSearchResults.map(p => (
-                  <div
-                    key={p.id}
-                    onClick={() => handleInvitePlayer(p)}
-                    style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid var(--grey-100)', display: 'flex', alignItems: 'center', gap: 12 }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--grey-50)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                  >
-                    <div style={{ width: 32, height: 32, background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
-                      {initials(p.name)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>{p.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p.email} · {p.shortId}</div>
-                    </div>
-                    <span style={{ fontSize: 11, color: 'var(--grey-400)', flexShrink: 0 }}>Rnk #{p.ranking}</span>
-                  </div>
+          <div style={{ background: '#fff', width: 500, maxWidth: '92vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            {/* Modal header */}
+            <div style={{ padding: '20px 24px 0', borderBottom: '1px solid var(--grey-200)' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', marginBottom: 16 }}>
+                {replaceTargetId ? 'Reemplazar Jugador' : 'Agregar Jugador'}
+              </div>
+              {/* Tabs */}
+              <div style={{ display: 'flex', gap: 0, marginBottom: -1 }}>
+                {(['friends', 'search'] as const).map(tab => (
+                  <button key={tab} onClick={() => { setAddTab(tab); setPlayerSearchQ(''); }}
+                    style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderBottom: addTab === tab ? '1px solid #fff' : '1px solid var(--grey-200)', background: addTab === tab ? '#fff' : 'var(--grey-50)', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase', color: addTab === tab ? 'var(--black)' : 'var(--grey-400)', marginRight: -1 }}>
+                    {tab === 'friends' ? `Amistades (${friendList.length})` : 'Buscar jugador'}
+                  </button>
                 ))}
               </div>
-            )}
-            {playerSearchQ && playerSearchResults.length === 0 && (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>No se encontraron jugadores</div>
-            )}
-            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => { setShowAddModal(false); setReplaceTargetId(null); setPlayerSearchQ(''); }} style={{ padding: '10px 20px', background: 'var(--grey-100)', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            </div>
+
+            {/* Tab content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+              {addTab === 'friends' ? (
+                friendList.length === 0 ? (
+                  <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
+                    No tenés amistades disponibles para agregar.<br />
+                    <span style={{ fontSize: 12 }}>Usá la pestaña "Buscar jugador" para encontrar a alguien.</span>
+                  </div>
+                ) : (
+                  <div style={{ border: '1px solid var(--grey-200)' }}>
+                    {friendList.map((p, idx) => (
+                      <div key={p.id}
+                        onClick={() => handleInvitePlayer(p)}
+                        style={{ padding: '12px 16px', cursor: 'pointer', borderTop: idx === 0 ? 'none' : '1px solid var(--grey-100)', display: 'flex', alignItems: 'center', gap: 12 }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--grey-50)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                      >
+                        <div style={{ width: 36, height: 36, background: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                          {initials(p.name)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>{p.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p.email} · {p.shortId}</div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                          <span style={{ fontSize: 9, background: '#f0fdf4', color: '#166534', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.08em' }}>AMIGO</span>
+                          <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>#{p.rankingPoints ?? p.ranking}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div>
+                  <input
+                    style={{ ...inp, marginBottom: 12 }}
+                    placeholder="Buscar por nombre, email o #ID..."
+                    value={playerSearchQ}
+                    onChange={e => setPlayerSearchQ(e.target.value)}
+                    autoFocus
+                  />
+                  {playerSearchResults.length > 0 ? (
+                    <div style={{ border: '1px solid var(--grey-200)' }}>
+                      {playerSearchResults.map((p, idx) => (
+                        <div key={p.id}
+                          onClick={() => handleInvitePlayer(p)}
+                          style={{ padding: '12px 16px', cursor: 'pointer', borderTop: idx === 0 ? 'none' : '1px solid var(--grey-100)', display: 'flex', alignItems: 'center', gap: 12 }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--grey-50)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                        >
+                          <div style={{ width: 36, height: 36, background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
+                            {initials(p.name)}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>{p.name}</div>
+                            <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p.email} · {p.shortId}</div>
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--grey-400)', flexShrink: 0 }}>#{p.rankingPoints ?? p.ranking}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : playerSearchQ ? (
+                    <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>No se encontraron jugadores</div>
+                  ) : (
+                    <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>Escribí al menos 2 caracteres para buscar</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div style={{ padding: '12px 24px', borderTop: '1px solid var(--grey-200)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setShowAddModal(false); setReplaceTargetId(null); setPlayerSearchQ(''); setAddTab('friends'); }}
+                style={{ padding: '10px 20px', background: 'var(--grey-100)', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 Cerrar
               </button>
             </div>
@@ -881,19 +959,26 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                       </button>
                     </div>
                     {isPending && isCreator && (
-                      <button
-                        onClick={() => {
-                          const hasCoCreator = (game.coCreatorIds ?? []).length > 0;
-                          if (!hasCoCreator) {
-                            showToast('Asigná al menos un Co-Creador antes de salirte del juego.');
-                          } else {
-                            handleLeaveGame();
-                          }
-                        }}
-                        style={{ padding: '5px 14px', background: 'transparent', border: '1px solid var(--grey-300)', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--grey-500)', letterSpacing: '0.06em' }}
-                      >
-                        Salirme del juego
-                      </button>
+                      currentUser && game.players.some(p => p.id === currentUser.id) ? (
+                        <button
+                          onClick={() => {
+                            const hasCoCreator = (game.coCreatorIds ?? []).length > 0;
+                            if (!hasCoCreator) showToast('Asigná al menos un Co-Creador antes de salirte del juego.');
+                            else handleLeaveGame();
+                          }}
+                          style={{ padding: '5px 14px', background: 'transparent', border: '1px solid var(--grey-300)', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: 'var(--grey-500)', letterSpacing: '0.06em' }}
+                        >
+                          Salirme del juego
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleJoinGame}
+                          disabled={game.players.length >= game.maxPlayers}
+                          style={{ padding: '5px 14px', background: game.players.length < game.maxPlayers ? 'var(--turf-green)' : 'var(--grey-200)', border: 'none', fontSize: 11, fontWeight: 700, cursor: game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed', color: game.players.length < game.maxPlayers ? '#fff' : 'var(--grey-400)', letterSpacing: '0.06em' }}
+                        >
+                          Unirme al juego
+                        </button>
+                      )
                     )}
                   </div>
                 )}
