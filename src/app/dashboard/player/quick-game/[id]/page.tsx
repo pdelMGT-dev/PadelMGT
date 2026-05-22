@@ -290,13 +290,13 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   const canStart = isPending && allConfirmed && (game.pairType !== 'parejas' || (pairsFullyAssigned && pairsLocked));
 
-  const activeRound = game.rounds.find(r => r.status === 'active') ?? null;
-  const activeRoundComplete = activeRound ? isRoundComplete(activeRound) : false;
+  const currentRound = game.rounds.find(r => r.num === game.currentRound) ?? null;
+  const currentRoundComplete = currentRound ? isRoundComplete(currentRound) : false;
   const gameComplete = isGameFinished(game);
 
-  const hasMoreRounds = !gameComplete && activeRoundComplete && (
+  const hasMoreRounds = !gameComplete && currentRoundComplete && (
     game.format === 'mexicano' ||
-    game.rounds.some(r => r.num > (activeRound?.num ?? 0) && r.status === 'pending')
+    game.rounds.some(r => r.num > game.currentRound && r.status === 'pending')
   );
 
   const isPointsMode = game.scoreConfig.type === 'points';
@@ -733,10 +733,10 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         )}
 
         {/* Current round (read-only) */}
-        {isLive && activeRound && (
+        {isLive && currentRound && (
           <div style={cardStyle}>
-            <div style={secTitle}>Ronda {activeRound.num} — En curso</div>
-            {activeRound.courts.map(court => (
+            <div style={secTitle}>Ronda {currentRound.num} — {currentRoundComplete ? 'Completada' : 'En curso'}</div>
+            {currentRound.courts.map(court => (
               <div key={court.courtNum} style={{ padding: '16px 0', borderBottom: '1px solid var(--grey-100)' }}>
                 <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Cancha {court.courtNum}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1462,18 +1462,59 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       {/* ── SECTION D: Juego En Vivo ──────────────────────────────────────── */}
       {isLive && (
         <div style={cardStyle}>
+          {/* Round header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
-            <div style={secTitle}>
-              Juego En Vivo — Ronda {game.currentRound}
-              {game.rounds.length > 0 && ` de ${game.rounds.filter(r => r.status !== 'pending' || r.num <= game.currentRound).length}`}
+            <div>
+              <div style={{ ...secTitle, marginBottom: 4 }}>
+                Juego En Vivo — Ronda {game.currentRound} de {game.rounds.length}
+              </div>
+              {currentRoundComplete && !gameComplete && (
+                <div style={{ fontSize: 12, color: 'var(--turf-green)', fontWeight: 600 }}>✓ Ronda {game.currentRound} completada</div>
+              )}
+              {gameComplete && (
+                <div style={{ fontSize: 12, color: '#ee0005', fontWeight: 600 }}>Todas las rondas completadas — ¡Podés finalizar!</div>
+              )}
+            </div>
+            {/* Compact round pills */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {game.rounds.map(r => (
+                <div key={r.num} style={{
+                  width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 700,
+                  background: r.status === 'completed' ? 'var(--turf-green)' : r.num === game.currentRound ? 'var(--black)' : 'var(--grey-100)',
+                  color: r.status === 'completed' ? '#fff' : r.num === game.currentRound ? '#fff' : 'var(--grey-400)',
+                }}>
+                  {r.num}
+                </div>
+              ))}
             </div>
           </div>
 
-          {activeRound && (
+          {/* Action buttons — shown prominently when round is complete */}
+          {currentRoundComplete && (
+            <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', padding: '16px 20px', background: gameComplete ? '#fff5f5' : '#f0fdf4', border: `1px solid ${gameComplete ? '#fca5a5' : '#86efac'}` }}>
+              {hasMoreRounds && (
+                <button
+                  onClick={handleNextRound}
+                  style={{ padding: '13px 32px', background: 'var(--black)', color: 'var(--neon)', border: 'none', fontSize: 13, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+                >
+                  Continuar Siguiente Ronda →
+                </button>
+              )}
+              <button
+                onClick={handleFinishGame}
+                style={{ padding: '13px 28px', background: gameComplete ? '#ee0005' : '#fff', color: gameComplete ? '#fff' : 'var(--grey-500)', border: `1px solid ${gameComplete ? '#ee0005' : 'var(--grey-200)'}`, fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
+              >
+                Finalizar Juego
+              </button>
+            </div>
+          )}
+
+          {currentRound && (
             <div>
               {/* Courts */}
-              {activeRound.courts.map(court => {
-                const key = `${activeRound.num}-${court.courtNum}`;
+              {currentRound.courts.map(court => {
+                const key = `${currentRound.num}-${court.courtNum}`;
                 const si = scoreInputs[key] ?? { p1: '', p2: '' };
                 const alreadyDone = court.status === 'completed';
                 return (
@@ -1524,7 +1565,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                     {!alreadyDone && (
                       <div style={{ marginTop: 14 }}>
                         <button
-                          onClick={() => handleRegisterScore(activeRound.num, court.courtNum)}
+                          onClick={() => handleRegisterScore(currentRound.num, court.courtNum)}
                           style={{ padding: '9px 22px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
                         >
                           Registrar Score
@@ -1536,32 +1577,32 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               })}
 
               {/* Resting players */}
-              {activeRound.resting.length > 0 && (
+              {currentRound.resting.length > 0 && (
                 <div style={{ padding: '12px 16px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)', marginBottom: 16 }}>
                   <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>Descansan: </span>
-                  <span style={{ fontSize: 13, color: 'var(--grey-500)' }}>{activeRound.resting.map(pid => getName(pid)).join(', ')}</span>
+                  <span style={{ fontSize: 13, color: 'var(--grey-500)' }}>{currentRound.resting.map(pid => getName(pid)).join(', ')}</span>
                 </div>
               )}
             </div>
           )}
 
-          {/* Round actions */}
-          {activeRoundComplete && (
-            <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
-              {hasMoreRounds && (
-                <button
-                  onClick={handleNextRound}
-                  style={{ padding: '12px 28px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
-                >
-                  Continuar Siguiente Ronda →
-                </button>
-              )}
-              <button
-                onClick={handleFinishGame}
-                style={{ padding: '12px 28px', background: gameComplete ? '#ee0005' : 'var(--grey-100)', color: gameComplete ? '#fff' : 'var(--black)', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
-              >
-                Finalizar Juego
-              </button>
+          {/* Completed rounds history */}
+          {game.rounds.filter(r => r.status === 'completed' && r.num < game.currentRound).length > 0 && (
+            <div style={{ marginTop: 8, borderTop: '1px solid var(--grey-100)', paddingTop: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>Historial de Rondas</div>
+              {game.rounds.filter(r => r.status === 'completed' && r.num < game.currentRound).map(r => (
+                <div key={r.num} style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--grey-400)', marginBottom: 6, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Ronda {r.num}</div>
+                  {r.courts.map(court => (
+                    <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', background: 'var(--grey-50)', marginBottom: 4, fontSize: 12 }}>
+                      <span style={{ fontSize: 10, color: 'var(--grey-400)', width: 56, flexShrink: 0 }}>Cancha {court.courtNum}</span>
+                      <span style={{ fontWeight: 600, flex: 1 }}>{getPairNames(court.pair1)}</span>
+                      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14 }}>{court.pair1Score} – {court.pair2Score}</span>
+                      <span style={{ fontWeight: 600, flex: 1, textAlign: 'right' }}>{getPairNames(court.pair2)}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           )}
         </div>
