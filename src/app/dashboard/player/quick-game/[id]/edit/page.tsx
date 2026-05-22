@@ -40,7 +40,9 @@ const CLUBS: Record<string, Club[]> = {
 };
 
 const CREATOR_REGISTERED_CLUBS: (Club & { city: string; country: string })[] = [
-  { id: 'c5', name: 'Club La Cantera', city: 'Córdoba', country: 'Argentina', courts: 8 },
+  { id: 'c1', name: 'Club Barrio Norte',  city: 'Buenos Aires', country: 'Argentina', courts: 6  },
+  { id: 'c2', name: 'Padel Arena',        city: 'Buenos Aires', country: 'Argentina', courts: 10 },
+  { id: 'c5', name: 'Club La Cantera',    city: 'Córdoba',      country: 'Argentina', courts: 8  },
 ];
 
 // ── Label maps ────────────────────────────────────────────────────────────────

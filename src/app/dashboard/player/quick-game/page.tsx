@@ -40,6 +40,7 @@ const CITIES_WITH_CLUBS: Record<string, string[]> = {
 };
 
 type Club = { id: string; name: string; courts: number };
+type PlayerClub = Club & { city: string; country: string };
 
 const CLUBS: Record<string, Club[]> = {
   'Buenos Aires': [
@@ -54,8 +55,11 @@ const CLUBS: Record<string, Club[]> = {
   Madrid:     [{ id: 'c8', name: 'World Padel Tour',      courts: 12 }],
 };
 
-const CREATOR_REGISTERED_CLUBS: Club[] = [
-  { id: 'c5', name: 'Club La Cantera', courts: 8 },
+// Clubs the current player belongs to (courts > 0 = physical clubs, excluding leagues)
+const CREATOR_REGISTERED_CLUBS: PlayerClub[] = [
+  { id: 'c1', name: 'Club Barrio Norte',  city: 'Buenos Aires', country: 'Argentina', courts: 6  },
+  { id: 'c2', name: 'Padel Arena',        city: 'Buenos Aires', country: 'Argentina', courts: 10 },
+  { id: 'c5', name: 'Club La Cantera',    city: 'Córdoba',      country: 'Argentina', courts: 8  },
 ];
 
 // ── Label maps ────────────────────────────────────────────────────────────────
@@ -231,7 +235,7 @@ export default function QuickGamePage() {
   const [time, setTime]                 = useState('');
   const [hasLocation, setHasLocation]   = useState<boolean | null>(null);
   const [isRegisteredClub, setIsRegisteredClub] = useState<boolean | null>(null);
-  const [selectedRegClub, setSelectedRegClub]   = useState<Club | null>(null);
+  const [selectedRegClub, setSelectedRegClub]   = useState<PlayerClub | null>(null);
   const [country, setCountry]           = useState('');
   const [city, setCity]                 = useState('');
   const [clubId, setClubId]             = useState('');
@@ -290,12 +294,12 @@ export default function QuickGamePage() {
   }
 
   function resolvedCity(): string {
-    if (isRegisteredClub && selectedRegClub) return 'Córdoba';
+    if (isRegisteredClub && selectedRegClub) return selectedRegClub.city;
     return city || '–';
   }
 
   function resolvedCountry(): string {
-    if (isRegisteredClub && selectedRegClub) return 'Argentina';
+    if (isRegisteredClub && selectedRegClub) return selectedRegClub.country;
     return country || '–';
   }
 
@@ -830,7 +834,7 @@ export default function QuickGamePage() {
                         <button key={c.id} onClick={() => setSelectedRegClub(c)}
                           style={{ padding: '14px 18px', textAlign: 'left', border: `2px solid ${selectedRegClub?.id === c.id ? 'var(--black)' : 'var(--grey-200)'}`, background: selectedRegClub?.id === c.id ? 'var(--black)' : '#fff', color: selectedRegClub?.id === c.id ? '#fff' : 'var(--black)', cursor: 'pointer' }}>
                           <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase' }}>{c.name}</div>
-                          <div style={{ fontSize: 11, marginTop: 2, color: selectedRegClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>Córdoba, Argentina · {c.courts} canchas</div>
+                          <div style={{ fontSize: 11, marginTop: 2, color: selectedRegClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{c.city}, {c.country} · {c.courts} canchas</div>
                         </button>
                       ))}
                     </div>
