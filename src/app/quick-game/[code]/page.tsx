@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getGameByCode, saveGame } from '@/lib/game-store';
-import type { ActiveGame, GameStatus, ScoreConfig } from '@/lib/game-engine';
+import type { ActiveGame, GameStatus, ScoreConfig, FixedPair } from '@/lib/game-engine';
 
 type JoinRequest = {
   id: string;
@@ -35,13 +35,19 @@ function scoreConfigLabel(cfg: ScoreConfig): string {
   return `Tradicional · ${cfg.setsPerMatch ?? 3} sets`;
 }
 
-function formatLabel(fmt: string): string {
-  const map: Record<string, string> = {
-    americano: 'Americano', mexicano: 'Mexicano',
-    round_robin: 'Round Robin', team_league: 'Team League',
-    knockout: 'Eliminatorio', world_cup: 'World Cup',
-  };
-  return map[fmt] ?? fmt;
+// formatLabel removed — no longer shown in public page chips
+
+function computePairStandings(game: ActiveGame) {
+  if (!game.fixedPairs || game.fixedPairs.length === 0) return [];
+  return game.fixedPairs.map((pair: FixedPair) => {
+    const s1 = game.standings.find(s => s.playerId === pair.player1Id);
+    const s2 = game.standings.find(s => s.playerId === pair.player2Id);
+    const pts = (s1?.pts ?? 0) + (s2?.pts ?? 0);
+    const wins = (s1?.wins ?? 0) + (s2?.wins ?? 0);
+    const played = Math.max(s1?.played ?? 0, s2?.played ?? 0);
+    const diff = (s1?.diff ?? 0) + (s2?.diff ?? 0);
+    return { pair, pts, wins, played, diff };
+  }).sort((a, b) => b.pts - a.pts || b.diff - a.diff);
 }
 
 const secTitle: React.CSSProperties = {
@@ -170,7 +176,7 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
     setJoined(false);
   }
 
-  const activeRound = game.rounds.find(r => r.status === 'active') ?? null;
+  const currentRound = game.rounds.find(r => r.num === game.currentRound) ?? null;
   const doneRounds  = game.rounds.filter(r => r.status === 'completed');
 
   function getName(pid: string) {
@@ -204,7 +210,6 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 12, color: 'var(--grey-500)' }}>
             {[
               game.date, game.time, game.club, game.city,
-              formatLabel(game.format),
               scoreConfigLabel(game.scoreConfig),
             ].map((item, i) => (
               <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -333,6 +338,44 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
             </div>
             {game.standings.length > 0 ? (
               <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+                {/* Pairs standings — only for pareja fija games */}
+                {game.pairType === 'parejas' && (() => {
+                  const pairStandings = computePairStandings(game);
+                  if (pairStandings.length === 0) return null;
+                  return (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--grey-100)' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Clasificación por Parejas</span>
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--grey-50)', borderBottom: '2px solid var(--grey-200)' }}>
+                            {['Pos', 'Pareja', 'W', 'Pts', 'PJ', '+/−'].map(h => (
+                              <th key={h} style={{ padding: '10px 14px', textAlign: h === 'Pos' ? 'center' : 'left', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pairStandings.map(({ pair, pts, wins, played, diff }, i) => (
+                            <tr key={pair.pairIndex} style={{ borderBottom: '1px solid var(--grey-100)', background: i % 2 === 0 ? '#fff' : 'var(--grey-50)' }}>
+                              <td style={{ padding: '12px 14px', textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: i < 3 ? 20 : 14, fontWeight: 700, color: i === 0 ? '#d4a017' : i === 1 ? 'var(--grey-400)' : i === 2 ? '#cd7f32' : 'var(--grey-300)' }}>
+                                {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                              </td>
+                              <td style={{ padding: '12px 14px' }}>
+                                <div style={{ fontSize: 13, fontWeight: 700 }}>{pair.player1Name}</div>
+                                <div style={{ fontSize: 12, color: 'var(--grey-500)' }}>{pair.player2Name}</div>
+                              </td>
+                              <td style={{ padding: '12px 14px', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600 }}>{wins}</td>
+                              <td style={{ padding: '12px 14px', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>{pts}</td>
+                              <td style={{ padding: '12px 14px', fontSize: 12, color: 'var(--grey-400)' }}>{played}</td>
+                              <td style={{ padding: '12px 14px', fontSize: 12, fontWeight: 600, color: diff >= 0 ? 'var(--turf-green)' : '#e53e3e' }}>{diff >= 0 ? '+' : ''}{diff}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
                 <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--grey-100)' }}>
                   <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Clasificación Final</span>
                 </div>
@@ -377,13 +420,13 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
         )}
 
         {/* Live round */}
-        {isLive && activeRound && (
+        {isLive && currentRound && (
           <div style={{ marginBottom: 36 }}>
-            <div style={secTitle}>Ronda Actual — Ronda {activeRound.num}</div>
-            {activeRound.resting.length > 0 && (
+            <div style={secTitle}>Ronda Actual — Ronda {currentRound.num}</div>
+            {currentRound.resting.length > 0 && (
               <div style={{ marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Descansan:</span>
-                {activeRound.resting.map(pid => (
+                {currentRound.resting.map(pid => (
                   <span key={pid} style={{ fontSize: 12, padding: '3px 10px', background: '#fff', border: '1px solid var(--grey-200)', color: 'var(--grey-500)' }}>
                     {getName(pid)}
                   </span>
@@ -391,7 +434,7 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
               </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {activeRound.courts.map(court => {
+              {currentRound.courts.map(court => {
                 const isDone = court.status === 'completed';
                 return (
                   <div key={court.courtNum} style={{ background: '#fff', border: `2px solid ${isDone ? 'var(--grey-200)' : 'var(--turf-green)'}`, padding: '18px 22px' }}>
@@ -506,7 +549,16 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
               ¡Juego Finalizado!
             </div>
             <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>
-              Ganador: <strong style={{ color: 'var(--neon)' }}>{game.standings[0]?.playerName ?? '—'}</strong> con {game.standings[0]?.pts ?? 0} pts
+              Ganador: <strong style={{ color: 'var(--neon)' }}>
+                {game.pairType === 'parejas' && game.fixedPairs
+                  ? (() => { const ps = computePairStandings(game); return ps[0] ? `${ps[0].pair.player1Name} & ${ps[0].pair.player2Name}` : '—'; })()
+                  : (game.standings[0]?.playerName ?? '—')
+                }
+              </strong> con {
+                game.pairType === 'parejas'
+                  ? (computePairStandings(game)[0]?.pts ?? 0)
+                  : (game.standings[0]?.pts ?? 0)
+              } pts
             </div>
           </div>
         )}

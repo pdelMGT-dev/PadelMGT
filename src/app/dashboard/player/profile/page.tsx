@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
+import { getRankingHistoryForGame } from '@/lib/ranking-store';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -68,9 +69,8 @@ const sel: React.CSSProperties = { ...inp, appearance: 'none' as const, cursor: 
 // ---------------------------------------------------------------------------
 
 function formatLabel(fmt: string): string {
+  if (fmt === 'americano' || fmt === 'mexicano') return 'Juego Rápido';
   const map: Record<string, string> = {
-    americano: 'Americano',
-    mexicano: 'Mexicano',
     round_robin: 'Round Robin',
     team_league: 'Liga',
     knockout: 'Knockout',
@@ -496,7 +496,7 @@ export default function PlayerProfilePage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-body)', fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid var(--grey-200)' }}>
-                    {['Fecha', 'Juego', 'Formato', 'Posición', 'Pts', 'PJ', '+/−'].map(h => (
+                    {['Fecha', 'Juego', 'Tipo', 'Posición', 'Pts', 'PJ', '+/−', 'Ranking Δ'].map(h => (
                       <th key={h} style={{
                         ...lbl, textAlign: 'left', padding: '8px 12px',
                         whiteSpace: 'nowrap', borderBottom: 'none',
@@ -510,16 +510,14 @@ export default function PlayerProfilePage() {
                     const posIdx = g.standings.findIndex(s => s.playerId === user.id);
                     const pos = posIdx >= 0 ? posIdx + 1 : '—';
                     const total = g.standings.length;
+                    const rankEntry = getRankingHistoryForGame(g.id).find(e => e.playerId === user.id);
                     return (
                       <tr key={g.id} style={{ borderBottom: '1px solid var(--grey-100)' }}>
                         <td style={{ padding: '12px 12px', color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{g.date}</td>
                         <td style={{ padding: '12px 12px', fontWeight: 600, color: 'var(--black)' }}>{g.name}</td>
                         <td style={{ padding: '12px 12px', color: 'var(--grey-500)' }}>{formatLabel(g.format)}</td>
                         <td style={{ padding: '12px 12px' }}>
-                          <span style={{
-                            fontWeight: 700,
-                            color: posIdx === 0 ? 'var(--turf-green)' : 'var(--black)',
-                          }}>
+                          <span style={{ fontWeight: 700, color: posIdx === 0 ? 'var(--turf-green)' : 'var(--black)' }}>
                             {pos}/{total}
                           </span>
                         </td>
@@ -527,6 +525,13 @@ export default function PlayerProfilePage() {
                         <td style={{ padding: '12px 12px', color: 'var(--grey-500)' }}>{standing?.played ?? '—'}</td>
                         <td style={{ padding: '12px 12px', color: 'var(--grey-500)' }}>
                           {standing ? (standing.diff >= 0 ? `+${standing.diff}` : String(standing.diff)) : '—'}
+                        </td>
+                        <td style={{ padding: '12px 12px', whiteSpace: 'nowrap' }}>
+                          {rankEntry ? (
+                            <span style={{ fontWeight: 700, color: rankEntry.delta > 0 ? 'var(--turf-green)' : rankEntry.delta < 0 ? '#ee0005' : '#b45309' }}>
+                              {rankEntry.delta > 0 ? '+' : ''}{rankEntry.delta}
+                            </span>
+                          ) : '—'}
                         </td>
                       </tr>
                     );

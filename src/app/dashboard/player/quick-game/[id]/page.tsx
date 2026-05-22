@@ -94,6 +94,21 @@ function invStatusBadge(status: InvitedPlayer['status']) {
   );
 }
 
+// ── Pair standings helper ─────────────────────────────────────────────────────
+
+function computePairStandings(game: ActiveGame) {
+  if (!game.fixedPairs || game.fixedPairs.length === 0) return [];
+  return game.fixedPairs.map(pair => {
+    const s1 = game.standings.find(s => s.playerId === pair.player1Id);
+    const s2 = game.standings.find(s => s.playerId === pair.player2Id);
+    const pts = (s1?.pts ?? 0) + (s2?.pts ?? 0);
+    const wins = (s1?.wins ?? 0) + (s2?.wins ?? 0);
+    const played = Math.max(s1?.played ?? 0, s2?.played ?? 0);
+    const diff = (s1?.diff ?? 0) + (s2?.diff ?? 0);
+    return { pair, pts, wins, played, diff };
+  }).sort((a, b) => b.pts - a.pts || b.diff - a.diff);
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function QuickGameDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -1612,6 +1627,46 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       {isLive && game.standings.length > 0 && (
         <div style={cardStyle}>
           <div style={secTitle}>Clasificación Actual</div>
+          {/* Pairs standings (live) */}
+          {game.pairType === 'parejas' && (() => {
+            const pairStandings = computePairStandings(game);
+            if (pairStandings.length === 0) return null;
+            return (
+              <>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>Clasificación por Parejas</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 24 }}>
+                  <thead>
+                    <tr style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
+                      <th style={{ textAlign: 'left', padding: '0 8px 10px 0', fontWeight: 700 }}>Pos</th>
+                      <th style={{ textAlign: 'left', padding: '0 8px 10px 0', fontWeight: 700 }}>Pareja</th>
+                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>PJ</th>
+                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>G</th>
+                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>Pts</th>
+                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>Dif</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pairStandings.map(({ pair, pts, wins, played, diff }, i) => (
+                      <tr key={pair.pairIndex} style={{ borderTop: '1px solid var(--grey-100)' }}>
+                        <td style={{ padding: '10px 8px 10px 0', fontWeight: 800, fontSize: i < 3 ? 14 : 12 }}>
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                        </td>
+                        <td style={{ padding: '10px 8px 10px 0' }}>
+                          <div style={{ fontWeight: 700, fontSize: 13 }}>{pair.player1Name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--grey-500)' }}>{pair.player2Name}</div>
+                        </td>
+                        <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{played}</td>
+                        <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{wins}</td>
+                        <td style={{ textAlign: 'center', padding: '10px 8px', fontWeight: 700 }}>{pts}</td>
+                        <td style={{ textAlign: 'center', padding: '10px 8px', color: diff >= 0 ? 'var(--turf-green)' : '#ee0005', fontWeight: 600 }}>{diff > 0 ? '+' : ''}{diff}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12, borderTop: '1px solid var(--grey-100)', paddingTop: 16 }}>Clasificación Individual</div>
+              </>
+            );
+          })()}
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
@@ -1645,6 +1700,46 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
           {/* Final standings */}
           <div style={cardStyle}>
             <div style={secTitle}>Clasificación Final</div>
+            {/* Pairs standings */}
+            {game.pairType === 'parejas' && (() => {
+              const pairStandings = computePairStandings(game);
+              if (pairStandings.length === 0) return null;
+              return (
+                <>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>Clasificación por Parejas</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 24 }}>
+                    <thead>
+                      <tr style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
+                        <th style={{ textAlign: 'left', padding: '0 8px 10px 0', fontWeight: 700 }}>Pos</th>
+                        <th style={{ textAlign: 'left', padding: '0 8px 10px 0', fontWeight: 700 }}>Pareja</th>
+                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>PJ</th>
+                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>G</th>
+                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>Pts</th>
+                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>Dif</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pairStandings.map(({ pair, pts, wins, played, diff }, i) => (
+                        <tr key={pair.pairIndex} style={{ borderTop: '1px solid var(--grey-100)' }}>
+                          <td style={{ padding: '12px 8px 12px 0', fontWeight: 800, fontSize: i < 3 ? 15 : 12 }}>
+                            {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                          </td>
+                          <td style={{ padding: '12px 8px 12px 0' }}>
+                            <div style={{ fontWeight: 700, fontSize: 13 }}>{pair.player1Name}</div>
+                            <div style={{ fontSize: 12, color: 'var(--grey-500)' }}>{pair.player2Name}</div>
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{played}</td>
+                          <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{wins}</td>
+                          <td style={{ textAlign: 'center', padding: '12px 8px', fontWeight: 800, fontSize: 15 }}>{pts}</td>
+                          <td style={{ textAlign: 'center', padding: '12px 8px', color: diff >= 0 ? 'var(--turf-green)' : '#ee0005', fontWeight: 600 }}>{diff > 0 ? '+' : ''}{diff}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12, borderTop: '1px solid var(--grey-100)', paddingTop: 16 }}>Clasificación Individual</div>
+                </>
+              );
+            })()}
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>

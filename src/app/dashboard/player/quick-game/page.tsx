@@ -10,6 +10,8 @@ import { getFriendsForPlayer, searchPlayers, addFriendship } from '@/lib/player-
 import { getGame, saveGame } from '@/lib/game-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import type { ActiveGame, GamePlayer as EnginePlayer, InvitedPlayer, ScoreConfig } from '@/lib/game-engine';
+import { getRankingHistoryForGame } from '@/lib/ranking-store';
+import type { RankingEntry } from '@/lib/ranking-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -722,14 +724,33 @@ export default function QuickGamePage() {
             <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
               {finishedGames.map((g, idx) => {
                 const isCreator = g.creatorId === uid || (uid && g.players.some(p => p.id === uid && p.isCreator));
+                const myRankingEntry = uid ? getRankingHistoryForGame(g.id).find(e => e.playerId === uid) : null;
+                const standing = uid ? g.standings.find(s => s.playerId === uid) : null;
+                const posIdx = uid ? g.standings.findIndex(s => s.playerId === uid) : -1;
                 return (
                   <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', borderTop: idx === 0 ? 'none' : '1px solid var(--grey-100)' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>{g.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{g.date} · {g.time} · {g.club}, {g.city}</div>
+                      {standing && (
+                        <div style={{ fontSize: 11, color: 'var(--grey-500)', marginTop: 2 }}>
+                          Posición {posIdx + 1}/{g.standings.length} · {standing.pts} pts · {standing.wins}W
+                        </div>
+                      )}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--grey-400)', whiteSpace: 'nowrap' }}>Finalizado</span>
-                    <span style={{ fontSize: 12, color: 'var(--grey-400)', whiteSpace: 'nowrap' }}>{g.players.length}/{g.maxPlayers}</span>
+                    {myRankingEntry && (
+                      <div style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        padding: '6px 10px',
+                        background: myRankingEntry.delta > 0 ? '#dcfce7' : myRankingEntry.delta < 0 ? '#fee2e2' : '#fef3c7',
+                        flexShrink: 0,
+                      }}>
+                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800, color: myRankingEntry.delta > 0 ? '#166534' : myRankingEntry.delta < 0 ? '#ee0005' : '#b45309' }}>
+                          {myRankingEntry.delta > 0 ? '+' : ''}{myRankingEntry.delta}
+                        </span>
+                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: myRankingEntry.delta > 0 ? '#166534' : myRankingEntry.delta < 0 ? '#ee0005' : '#b45309' }}>pts ranking</span>
+                      </div>
+                    )}
                     <Link href={`/dashboard/player/quick-game/${g.id}`}
                       style={{ padding: '6px 14px', background: 'var(--grey-100)', color: 'var(--grey-500)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' }}>
                       {isCreator ? 'Ver' : 'Resultados'}
