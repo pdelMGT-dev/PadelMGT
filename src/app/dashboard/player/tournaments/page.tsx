@@ -1221,7 +1221,9 @@ export default function PlayerTournamentsPage() {
             <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>{t.players.length}/{t.maxPlayers} jugadores</span>
           </div>
         </div>
-        <Link href={`/dashboard/player/tournaments/${t.id}`}
+        <Link href={isCreator
+          ? `/dashboard/player/tournaments/${t.id}`
+          : `/dashboard/player/tournaments/${t.id}/view`}
           style={{ padding: '7px 16px', background: 'var(--grey-100)', color: 'var(--grey-600)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' }}>
           {isCreator ? 'Gestionar →' : 'Ver →'}
         </Link>

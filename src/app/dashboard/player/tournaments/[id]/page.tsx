@@ -302,7 +302,8 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   const emptySlots = Math.max(0, t.maxPlayers - confirmedPlayers.length);
   const isStartingSoon = t.status === 'starting_soon';
   const allFilled = confirmedPlayers.length >= t.maxPlayers;
-  const canStart = allFilled || isStartingSoon;
+  const noPending = pendingInvited.length === 0;
+  const canStart = allFilled && noPending;
   const si = statusInfo(t.status);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -350,9 +351,23 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
 
   function handleRemovePlayer(playerId: string) {
     if (t.creatorId === playerId) return;
+    if (t.status === 'live') return; // locked during live
     const updated: Tournament = {
       ...t,
       players: t.players.filter(p => p.id !== playerId),
+      invitedPlayers: (t.invitedPlayers ?? []).map(ip =>
+        ip.id === playerId ? { ...ip, status: 'cancelled' as const } : ip
+      ),
+    };
+    saveTournament(updated);
+    setTournament(updated);
+  }
+
+  function handleRemoveInvited(playerId: string) {
+    if (tournament!.status === 'live') return;
+    const updated: Tournament = {
+      ...tournament!,
+      invitedPlayers: (tournament!.invitedPlayers ?? []).filter(p => p.id !== playerId),
     };
     saveTournament(updated);
     setTournament(updated);
@@ -767,7 +782,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                   {p.isCreator && (
                     <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: 'var(--black)', color: 'var(--neon)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CREADOR</span>
                   )}
-                  {!p.isCreator && t.status === 'created' && (
+                  {!p.isCreator && t.status !== 'live' && (
                     <button onClick={() => handleRemovePlayer(p.id)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--grey-300)', padding: 0, lineHeight: 1 }}>
                       ✕
@@ -794,6 +809,12 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                     {p.email && <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.email}</div>}
                   </div>
                   <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', background: 'rgba(245,166,35,0.15)', color: '#f5a623', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Pendiente</span>
+                  {t.status !== 'live' && (
+                    <button onClick={() => handleRemoveInvited(p.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--grey-300)', padding: 0, lineHeight: 1 }}>
+                      ✕
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
