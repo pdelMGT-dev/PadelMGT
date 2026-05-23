@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getTournament, saveTournament } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
+import { applyTournamentRankingResults } from '@/lib/ranking-store';
 import {
   updateMatchScore,
   startNextRound,
@@ -185,6 +186,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   function handleFinishTournament() {
     const updated: Tournament = { ...t, status: 'finished' };
     saveTournament(updated);
+    applyTournamentRankingResults(updated);
     setTournament(updated);
     router.push(`/dashboard/player/tournaments/${id}`);
   }

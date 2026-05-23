@@ -1209,6 +1209,35 @@ export default function PlayerTournamentsPage() {
 
   function TournamentCard({ t }: { t: Tournament }) {
     const isCreator = currentUser && t.creatorId === currentUser.id;
+    const isConfirmed = !isCreator && currentUser && t.players.some(p => p.id === currentUser.id);
+    const invEntry = currentUser && (t.invitedPlayers ?? []).find(p => p.id === currentUser.id);
+    const isPending = !isCreator && !isConfirmed && invEntry?.status === 'pending';
+
+    function roleBadge() {
+      if (isCreator) {
+        return (
+          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'var(--black)', color: 'var(--neon)' }}>
+            ORGANIZADOR
+          </span>
+        );
+      }
+      if (isConfirmed) {
+        return (
+          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(0,180,0,0.1)', color: 'var(--turf-green)' }}>
+            CONFIRMADO
+          </span>
+        );
+      }
+      if (isPending) {
+        return (
+          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'rgba(245,166,35,0.1)', color: '#f5a623' }}>
+            INVITADO
+          </span>
+        );
+      }
+      return null;
+    }
+
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', borderTop: 'none', borderBottom: '1px solid var(--grey-100)' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1218,6 +1247,7 @@ export default function PlayerTournamentsPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {statusBadge(t.status)}
+            {roleBadge()}
             <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>{t.players.length}/{t.maxPlayers} jugadores</span>
           </div>
         </div>
