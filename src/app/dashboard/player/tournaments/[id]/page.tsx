@@ -7,7 +7,7 @@ import type { Tournament } from '@/lib/tournament-store';
 import type { GamePlayer, InvitedPlayer } from '@/lib/game-engine';
 import { startTournament } from '@/lib/tournament-engine';
 import { createInvitation, getInvitationsForGame } from '@/lib/invitation-store';
-import { searchPlayers } from '@/lib/player-store';
+import { searchPlayers, getFriendsForPlayer } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -88,6 +88,12 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   const [editClub, setEditClub] = useState('');
   const [editCity, setEditCity] = useState('');
   const [editMaxPlayers, setEditMaxPlayers] = useState(8);
+  const [editFormat, setEditFormat] = useState('');
+  const [editModalidad, setEditModalidad] = useState<'individual' | 'parejas'>('individual');
+  const [editMixto, setEditMixto] = useState(false);
+  const [editCourts, setEditCourts] = useState(2);
+  const [editScoreType, setEditScoreType] = useState<'points' | 'traditional'>('points');
+  const [editPtTarget, setEditPtTarget] = useState(24);
 
   // Info section expand
   const [infoExpanded, setInfoExpanded] = useState(true);
@@ -96,6 +102,8 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   const [provSlotInputs, setProvSlotInputs] = useState<Record<number, string>>({});
 
   // Invite panel
+  const [inviteTab, setInviteTab] = useState<'friends' | 'search'>('friends');
+  const [inviteFriends, setInviteFriends] = useState<RegisteredPlayer[]>([]);
   const [inviteQ, setInviteQ] = useState('');
   const [inviteResults, setInviteResults] = useState<RegisteredPlayer[]>([]);
   const [inviteSent, setInviteSent] = useState<string[]>([]);
@@ -143,6 +151,16 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
       setInviteResults([]);
     }
   }, [inviteQ, tournament]);
+
+  // ── Load friends for invite ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!currentUser || !tournament) return;
+    const allIds = new Set([
+      ...tournament.players.map(p => p.id),
+      ...(tournament.invitedPlayers ?? []).map(p => p.id),
+    ]);
+    setInviteFriends(getFriendsForPlayer(currentUser.id).filter(f => !allIds.has(f.id)));
+  }, [currentUser, tournament]);
 
   // ── Guard: loading ────────────────────────────────────────────────────────
   if (tournament === undefined) {
@@ -290,6 +308,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   function handleSaveEdit() {
+    const canChangeFormat = t.status !== 'live';
     const updated: Tournament = {
       ...t,
       name: editName.trim() || t.name,
@@ -298,6 +317,15 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
       club: editClub.trim() || t.club,
       city: editCity.trim() || t.city,
       maxPlayers: editMaxPlayers,
+      ...(canChangeFormat ? {
+        format: editFormat as Tournament['format'],
+        pairType: editModalidad,
+        mixto: editMixto,
+        courts: editCourts,
+        scoreConfig: editScoreType === 'points'
+          ? { type: 'points' as const, target: editPtTarget }
+          : t.scoreConfig,
+      } : {}),
     };
     saveTournament(updated);
     setTournament(updated);
@@ -311,6 +339,12 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     setEditClub(t.club);
     setEditCity(t.city);
     setEditMaxPlayers(t.maxPlayers);
+    setEditFormat(t.format);
+    setEditModalidad(t.pairType as 'individual' | 'parejas');
+    setEditMixto(t.mixto);
+    setEditCourts(t.courts);
+    setEditScoreType(t.scoreConfig.type);
+    setEditPtTarget(t.scoreConfig.target ?? 24);
     setShowEdit(true);
   }
 
@@ -594,6 +628,87 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                         onChange={e => setEditMaxPlayers(Number(e.target.value))} style={inp} />
                     </div>
                   </div>
+
+                  {/* Lock notice */}
+                  {t.status === 'live' && (
+                    <div style={{ padding: '8px 12px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 11, color: 'var(--grey-500)', marginBottom: 14 }}>
+                      Formato y modalidad bloqueados (torneo en vivo)
+                    </div>
+                  )}
+
+                  {/* Formato */}
+                  {t.status !== 'live' && (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={lbl}>Formato</label>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {(['americano', 'mexicano'] as const).map(fk => (
+                          <button key={fk} onClick={() => setEditFormat(fk)}
+                            style={{ padding: '10px 20px', border: `2px solid ${editFormat === fk ? 'var(--black)' : 'var(--grey-200)'}`, background: editFormat === fk ? 'var(--black)' : '#fff', color: editFormat === fk ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>
+                            {fk.charAt(0).toUpperCase() + fk.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Modalidad */}
+                  {t.status !== 'live' && (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={lbl}>Modalidad</label>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {(['individual', 'parejas'] as const).map(m => (
+                          <button key={m} onClick={() => setEditModalidad(m)}
+                            style={{ padding: '10px 20px', border: `2px solid ${editModalidad === m ? 'var(--black)' : 'var(--grey-200)'}`, background: editModalidad === m ? 'var(--black)' : '#fff', color: editModalidad === m ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'capitalize' }}>
+                            {m.charAt(0).toUpperCase() + m.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mixto */}
+                  {t.status !== 'live' && (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={lbl}>Mixto</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {([{ label: 'No', val: false }, { label: 'Sí', val: true }] as const).map(o => (
+                          <button key={String(o.val)} onClick={() => setEditMixto(o.val)}
+                            style={{ padding: '10px 20px', border: `2px solid ${editMixto === o.val ? 'var(--black)' : 'var(--grey-200)'}`, background: editMixto === o.val ? 'var(--black)' : '#fff', color: editMixto === o.val ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Canchas */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={lbl}>Canchas</label>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
+                        <button key={n} onClick={() => setEditCourts(n)}
+                          style={{ width: 44, height: 44, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, cursor: 'pointer', border: `2px solid ${editCourts === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editCourts === n ? 'var(--black)' : '#fff', color: editCourts === n ? '#fff' : 'var(--black)' }}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Puntuación (for americano/mexicano) */}
+                  {(editFormat === 'americano' || editFormat === 'mexicano') && (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={lbl}>Puntuación — Puntos (múltiplos de 4)</label>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {[4, 8, 12, 16, 20, 24, 28, 32].map(n => (
+                          <button key={n} onClick={() => setEditPtTarget(n)}
+                            style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, cursor: 'pointer', border: `2px solid ${editPtTarget === n ? 'var(--black)' : 'var(--grey-200)'}`, background: editPtTarget === n ? 'var(--black)' : '#fff', color: editPtTarget === n ? '#fff' : 'var(--black)' }}>
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button onClick={handleSaveEdit}
                       style={{ padding: '10px 22px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -754,42 +869,90 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 10 }}>
                 Invitar jugador
               </div>
-              <input
-                type="text"
-                value={inviteQ}
-                onChange={e => setInviteQ(e.target.value)}
-                placeholder="Buscar por nombre, email o #ID…"
-                style={{ ...inp, marginBottom: 0 }}
-              />
-              {inviteQ.trim().length >= 2 && (
-                <div style={{ border: '1px solid var(--grey-200)', borderTop: 'none', maxHeight: 240, overflowY: 'auto' }}>
-                  {inviteResults.length === 0 ? (
-                    <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--grey-400)' }}>No se encontraron jugadores.</div>
-                  ) : inviteResults.map(p => (
-                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--grey-100)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--grey-200)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
-                          {initials(p.name)}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
-                          <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.shortId} · #{p.ranking}</div>
-                        </div>
-                      </div>
-                      {inviteSent.includes(p.id) ? (
-                        <span style={{ fontSize: 9, fontWeight: 700, padding: '3px 8px', background: 'rgba(0,180,0,0.1)', color: 'var(--turf-green)', textTransform: 'uppercase' }}>Enviado</span>
-                      ) : (
-                        <button onClick={() => handleInvitePlayer(p)}
-                          style={{ padding: '6px 14px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                          Invitar
+
+              {/* Invite tabs */}
+              <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '2px solid var(--grey-200)' }}>
+                {(['friends', 'search'] as const).map(tab => {
+                  const labels = { friends: 'Mis Amistades', search: 'Buscar Jugador' };
+                  return (
+                    <button key={tab} onClick={() => { setInviteTab(tab); setInviteQ(''); setInviteResults([]); }}
+                      style={{ padding: '10px 18px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', border: 'none', borderBottom: `2px solid ${inviteTab === tab ? 'var(--black)' : 'transparent'}`, background: 'transparent', color: inviteTab === tab ? 'var(--black)' : 'var(--grey-400)', cursor: 'pointer', marginBottom: -2 }}>
+                      {labels[tab]}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Friends tab */}
+              {inviteTab === 'friends' && (
+                <div>
+                  {inviteFriends.length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'var(--grey-400)', padding: '16px 0' }}>No tenés amigos disponibles para invitar.</div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
+                      {inviteFriends.map(f => (
+                        <button key={f.id} onClick={() => handleInvitePlayer(f)}
+                          disabled={inviteSent.includes(f.id)}
+                          style={{ padding: '12px', border: `1px solid ${inviteSent.includes(f.id) ? 'var(--turf-green)' : 'var(--grey-200)'}`, background: inviteSent.includes(f.id) ? 'rgba(0,180,0,0.04)' : '#fff', cursor: inviteSent.includes(f.id) ? 'default' : 'pointer', textAlign: 'left' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--grey-300)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                              {initials(f.name)}
+                            </div>
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', background: 'rgba(124,58,237,0.1)', color: '#7c3aed' }}>#{f.ranking}</span>
+                          </div>
+                          <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3 }}>{f.name}</div>
+                          <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 2 }}>{f.shortId}</div>
+                          {inviteSent.includes(f.id) && (
+                            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--turf-green)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Enviado</div>
+                          )}
                         </button>
-                      )}
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
-              {inviteQ.trim().length > 0 && inviteQ.trim().length < 2 && (
-                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--grey-400)' }}>Escribí al menos 2 caracteres para buscar.</div>
+
+              {/* Search tab */}
+              {inviteTab === 'search' && (
+                <div>
+                  <input
+                    type="text"
+                    value={inviteQ}
+                    onChange={e => setInviteQ(e.target.value)}
+                    placeholder="Buscar por nombre, email o #ID…"
+                    style={{ ...inp, marginBottom: 0 }}
+                  />
+                  {inviteQ.trim().length >= 2 && (
+                    <div style={{ border: '1px solid var(--grey-200)', borderTop: 'none', maxHeight: 240, overflowY: 'auto' }}>
+                      {inviteResults.length === 0 ? (
+                        <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--grey-400)' }}>No se encontraron jugadores.</div>
+                      ) : inviteResults.map(p => (
+                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--grey-100)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--grey-200)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
+                              {initials(p.name)}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
+                              <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.shortId} · #{p.ranking}</div>
+                            </div>
+                          </div>
+                          {inviteSent.includes(p.id) ? (
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: '3px 8px', background: 'rgba(0,180,0,0.1)', color: 'var(--turf-green)', textTransform: 'uppercase' }}>Enviado</span>
+                          ) : (
+                            <button onClick={() => handleInvitePlayer(p)}
+                              style={{ padding: '6px 14px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              Invitar
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {inviteQ.trim().length > 0 && inviteQ.trim().length < 2 && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: 'var(--grey-400)' }}>Escribí al menos 2 caracteres para buscar.</div>
+                  )}
+                </div>
               )}
             </div>
           )}

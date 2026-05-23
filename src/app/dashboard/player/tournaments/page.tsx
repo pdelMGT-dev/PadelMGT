@@ -12,7 +12,7 @@ import type { RegisteredPlayer } from '@/lib/player-store';
 
 type FormatKey = 'americano' | 'mexicano' | 'round_robin' | 'team_league' | 'knockout' | 'world_cup';
 type PlayerClub = { id: string; name: string; city: string; country: string; courts: number };
-type TournamentPlayer = { id: string; name: string; ranking: number; isCreator: boolean; email?: string; sex?: 'masculino' | 'femenino' };
+type TournamentPlayer = { id: string; name: string; ranking: number; isCreator: boolean; email?: string; sex?: 'masculino' | 'femenino'; isProvisional?: boolean };
 type InvitedEntry = { id: string; name: string; email?: string; shortId?: string; ranking: number; status: 'pending' | 'accepted' | 'rejected'; invitedAt: string; isProvisional?: boolean };
 
 // ── Static data ───────────────────────────────────────────────────────────────
@@ -180,7 +180,8 @@ export default function PlayerTournamentsPage() {
 
   // ── Step 2 ──────────────────────────────────────────────────────────────────
   const [tFormat, setTFormat] = useState<FormatKey | null>(null);
-  const [tModalidad, setTModalidad] = useState<'individual' | 'parejas' | 'mixto'>('individual');
+  const [tModalidad, setTModalidad] = useState<'individual' | 'parejas'>('individual');
+  const [tMixto, setTMixto] = useState(false);
   const [tMaxPlayers, setTMaxPlayers] = useState(8);
   const [tCourts, setTCourts] = useState(2);
   const [tScoreType, setTScoreType] = useState<'points' | 'traditional'>('points');
@@ -219,7 +220,9 @@ export default function PlayerTournamentsPage() {
   useEffect(() => {
     if (!currentUser) return;
     setMyTournaments(getAllTournaments().filter(t =>
-      t.creatorId === currentUser.id || t.players.some(p => p.id === currentUser.id)
+      t.creatorId === currentUser.id ||
+      t.players.some(p => p.id === currentUser.id) ||
+      (t.invitedPlayers ?? []).some(p => p.id === currentUser.id)
     ));
   }, [currentUser]);
 
@@ -252,7 +255,7 @@ export default function PlayerTournamentsPage() {
 
   // Initialize pair assignments when player list fills
   useEffect(() => {
-    if (tPlayers.length === tMaxPlayers && tModalidad !== 'individual') {
+    if (tPlayers.length === tMaxPlayers && (tModalidad === 'parejas' || tMixto)) {
       const numPairs = tMaxPlayers / 2;
       setTPairAssignments(prev => {
         if (prev.length === numPairs) return prev;
@@ -305,7 +308,7 @@ export default function PlayerTournamentsPage() {
     setTName(''); setTDate(''); setTTime('');
     setTHasLocation(null); setTIsRegClub(null); setTSelectedRegClub(null);
     setTCountry(''); setTCity(''); setTClubId(''); setTCustomClub('');
-    setTFormat(null); setTModalidad('individual');
+    setTFormat(null); setTModalidad('individual'); setTMixto(false);
     setTMaxPlayers(8); setTCourts(2); setTScoreType('points');
     setTPtTarget(24); setTSets(1); setTGames(6); setTTiebreak(7); setTDeuce('oro');
     setTPlayers([]); setTInvited([]); setTCreatorInGame(true);
@@ -323,11 +326,35 @@ export default function PlayerTournamentsPage() {
       ? { type: 'points' as const, target: tPtTarget }
       : { type: 'traditional' as const, setsPerMatch: tSets, gamesPerSet: tGames, tiebreak: tTiebreak, deuce: tDeuce };
 
-    const invitedPlayers = tInvited.map(e => ({
+    // Only creator + provisionals go to confirmed players
+    const confirmedPlayers = tPlayers.filter(p => p.isCreator || p.id.startsWith('prov-'));
+
+    // Non-creator non-provisional go to invitedPlayers as pending
+    const registeredInvites = tPlayers
+      .filter(p => !p.isCreator && !p.id.startsWith('prov-'))
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        shortId: undefined as string | undefined,
+        ranking: p.ranking,
+        status: 'pending' as const,
+        invitedAt: new Date().toISOString(),
+        isFriend: true,
+        isProvisional: false,
+      }));
+
+    // tInvited already contains provisional entries from the wizard
+    const tInvitedMapped = tInvited.map(e => ({
       id: e.id, name: e.name, email: e.email, shortId: e.shortId,
       ranking: e.ranking, status: e.status, invitedAt: e.invitedAt,
       isFriend: false, isProvisional: e.isProvisional,
     }));
+
+    const allInvited = [
+      ...tInvitedMapped, // from tInvited (the provisional list)
+      ...registeredInvites,
+    ];
 
     const tournament = createTournament({
       name: tName.trim() || `Torneo ${FORMAT_LABEL[tFormat ?? 'americano']}`,
@@ -337,13 +364,13 @@ export default function PlayerTournamentsPage() {
       city: resolvedCity() || '–',
       country: resolvedCountry() || '–',
       format: tFormat ?? 'americano',
-      pairType: tModalidad === 'mixto' ? 'parejas' : tModalidad as 'individual' | 'parejas',
-      mixto: tModalidad === 'mixto',
+      pairType: tModalidad as 'individual' | 'parejas',
+      mixto: tMixto,
       scoreConfig,
       maxPlayers: tMaxPlayers,
       courts: tCourts,
-      players: tPlayers,
-      invitedPlayers,
+      players: confirmedPlayers,
+      invitedPlayers: allInvited,
       creatorId: currentUser.id,
     });
 
@@ -356,7 +383,9 @@ export default function PlayerTournamentsPage() {
     setStep(99);
 
     setMyTournaments(getAllTournaments().filter(t =>
-      t.creatorId === currentUser.id || t.players.some(p => p.id === currentUser.id)
+      t.creatorId === currentUser.id ||
+      t.players.some(p => p.id === currentUser.id) ||
+      (t.invitedPlayers ?? []).some(p => p.id === currentUser.id)
     ));
   }
 
@@ -625,10 +654,26 @@ export default function PlayerTournamentsPage() {
             <div style={card}>
               <div style={secTitle}>Modalidad</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {(['individual', 'parejas', ...(tFormat === 'americano' || tFormat === 'mexicano' ? ['mixto'] : [])] as ('individual' | 'parejas' | 'mixto')[]).map(m => (
+                {(['individual', 'parejas'] as const).map(m => (
                   <button key={m} onClick={() => setTModalidad(m)}
                     style={{ padding: '10px 20px', border: `2px solid ${tModalidad === m ? 'var(--black)' : 'var(--grey-200)'}`, background: tModalidad === m ? 'var(--black)' : '#fff', color: tModalidad === m ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'capitalize' }}>
                     {m.charAt(0).toUpperCase() + m.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Card 2b: Mixto toggle (only for americano/mexicano) */}
+          {tFormat && fmtFunctional && (tFormat === 'americano' || tFormat === 'mexicano') && (
+            <div style={card}>
+              <div style={secTitle}>Mixto</div>
+              <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 12 }}>¿Es torneo mixto (Hombres + Mujeres)?</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {([{ label: 'No', val: false }, { label: 'Sí', val: true }] as const).map(o => (
+                  <button key={String(o.val)} onClick={() => setTMixto(o.val)}
+                    style={{ padding: '10px 20px', border: `2px solid ${tMixto === o.val ? 'var(--black)' : 'var(--grey-200)'}`, background: tMixto === o.val ? 'var(--black)' : '#fff', color: tMixto === o.val ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase' }}>
+                    {o.label}
                   </button>
                 ))}
               </div>
@@ -769,7 +814,7 @@ export default function PlayerTournamentsPage() {
     // ── STEP 3: Jugadores + Parejas ────────────────────────────────────────
     if (step === 3) {
       const canAddMore = tPlayers.length < tMaxPlayers;
-      const needsPairs = (tModalidad === 'parejas' || tModalidad === 'mixto') && tPlayers.length === tMaxPlayers;
+      const needsPairs = (tModalidad === 'parejas' || tMixto) && tPlayers.length === tMaxPlayers;
       const canCreate = tPlayers.length >= 1 && (!needsPairs || tPairsLocked);
 
       return (
@@ -968,7 +1013,7 @@ export default function PlayerTournamentsPage() {
             <div style={card}>
               <div style={secTitle}>Armar Parejas</div>
 
-              {tModalidad === 'mixto' && (
+              {tMixto && (
                 <div style={{ padding: '10px 14px', background: '#fef9c3', border: '1px solid #fde047', fontSize: 12, color: '#854d0e', marginBottom: 16 }}>
                   Las parejas Mixto deben ser Hombre + Mujer.
                 </div>
