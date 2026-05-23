@@ -3,15 +3,13 @@
 import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { getTournament, saveTournament } from '@/lib/tournament-store';
+import { startTournament } from '@/lib/tournament-engine';
 import {
-  getGame,
-  saveGame,
+  isRoundComplete, calculateStandings, isGameFinished,
   updateMatchScore as engineUpdateScore,
-  startGame as engineStartGame,
   startNextRound as engineStartNextRound,
-  isGameFinished,
-} from '@/lib/game-store';
-import { isRoundComplete, calculateStandings } from '@/lib/game-engine';
+} from '@/lib/game-engine';
 import type { ActiveGame, GameStatus, ScoreConfig, KnockoutMatch } from '@/lib/game-engine';
 
 // ── Join request helpers ───────────────────────────────────────────────────────
@@ -78,11 +76,11 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
 
   const [game, setGame] = useState<ActiveGame | null>(() => {
     if (typeof window === 'undefined') return null;
-    return getGame(id);
+    return getTournament(id);
   });
 
   useEffect(() => {
-    if (!game) setGame(getGame(id));
+    if (!game) setGame(getTournament(id));
   }, [id, game]);
 
   const [scoreInputs, setScoreInputs] = useState<Record<string, { p1: string; p2: string }>>({});
@@ -183,8 +181,8 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
   // ── Actions ────────────────────────────────────────────────────────────────
 
   function handleStart() {
-    const started = engineStartGame(game!);
-    saveGame(started);
+    const started = startTournament(game!);
+    saveTournament(started);
     setGame(started);
     showToast('¡Torneo iniciado!');
   }
@@ -195,7 +193,7 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
     const p1 = Math.max(0, parseInt(raw.p1 || '0', 10));
     const p2 = Math.max(0, parseInt(raw.p2 || '0', 10));
     const updated = engineUpdateScore(game!, roundNum, courtNum, p1, p2);
-    saveGame(updated);
+    saveTournament(updated);
     setGame(updated);
     setScoreInputs(prev => { const n = { ...prev }; delete n[key]; return n; });
     const round = updated.rounds.find(r => r.num === roundNum);
@@ -207,7 +205,7 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
 
   function handleNextRound() {
     const next = engineStartNextRound(game!);
-    saveGame(next);
+    saveTournament(next);
     setGame(next);
     setScoreInputs({});
     showToast(`Ronda ${next.currentRound} iniciada`);
@@ -278,14 +276,14 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
     });
 
     const updated: ActiveGame = { ...game!, bracket: { rounds: advancedRounds } };
-    saveGame(updated);
+    saveTournament(updated);
     setGame(updated);
     setBracketInputs(prev => { const n = { ...prev }; delete n[key]; return n; });
 
     const lastRound = advancedRounds[advancedRounds.length - 1];
     if (lastRound?.matches.every(m => m.status === 'completed')) {
       const finished: ActiveGame = { ...updated, status: 'finished' };
-      saveGame(finished);
+      saveTournament(finished);
       setGame(finished);
       showToast('¡Torneo finalizado!');
     }
@@ -298,33 +296,33 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
   function handleSaveEdits() {
     if (!game) return;
     const updated: ActiveGame = { ...game, name: editName.trim() || game.name, date: editDate || game.date, time: editTime || game.time, club: editIsCustomLoc ? editClub.trim() : (editClub.trim() || game.club), city: editIsCustomLoc ? editCity.trim() : (editCity.trim() || game.city) };
-    saveGame(updated); setGame(updated); setEditOpen(false); showToast('Torneo actualizado.');
+    saveTournament(updated); setGame(updated); setEditOpen(false); showToast('Torneo actualizado.');
   }
 
   function handleAddPlayer() {
     if (!addPlayerName.trim() || !game || game.players.length >= game.maxPlayers) return;
     const newP = { id: `manual-${Date.now()}`, name: addPlayerName.trim(), ranking: 0, isCreator: false };
     const updated = { ...game, players: [...game.players, newP] };
-    saveGame(updated); setGame(updated); setAddPlayerName(''); showToast(`${newP.name} agregado.`);
+    saveTournament(updated); setGame(updated); setAddPlayerName(''); showToast(`${newP.name} agregado.`);
   }
 
   function handleRemovePlayer(pid: string) {
     if (!game) return;
     const updated = { ...game, players: game.players.filter(p => p.id !== pid) };
-    saveGame(updated); setGame(updated); showToast('Jugador eliminado.');
+    saveTournament(updated); setGame(updated); showToast('Jugador eliminado.');
   }
 
   function handleTrimSlots() {
     if (!game) return;
     const updated = { ...game, maxPlayers: game.players.length };
-    saveGame(updated); setGame(updated); showToast('Spots ajustados.');
+    saveTournament(updated); setGame(updated); showToast('Spots ajustados.');
   }
 
   function handleApproveRequest(req: JoinRequest) {
     if (!game || game.players.length >= game.maxPlayers) return;
     const newP = { id: req.playerId, name: req.playerName, ranking: 0, isCreator: false };
     const updated = { ...game, players: [...game.players, newP] };
-    saveGame(updated); setGame(updated);
+    saveTournament(updated); setGame(updated);
     updateJoinRequest(req.id, 'approved');
     setJoinRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved' } : r));
     showToast(`${req.playerName} aprobado.`);
@@ -361,7 +359,7 @@ export default function TournamentAdminPage({ params }: { params: Promise<{ id: 
       court.pair1Score = p1; court.pair2Score = p2; court.status = 'completed';
     }
     updated.standings = calculateStandings(updated);
-    saveGame(updated); setGame(updated); setEditScores({}); setEditResultsOpen(false); showToast('Resultados actualizados.');
+    saveTournament(updated); setGame(updated); setEditScores({}); setEditResultsOpen(false); showToast('Resultados actualizados.');
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────

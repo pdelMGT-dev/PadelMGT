@@ -600,7 +600,14 @@ export default function PlayerTournamentsPage() {
                 const active = tFormat === fk;
                 return (
                   <button key={fk}
-                    onClick={() => f.functional ? setTFormat(fk) : undefined}
+                    onClick={() => {
+                      if (!f.functional) return;
+                      setTFormat(fk);
+                      if (fk === 'americano' || fk === 'mexicano') {
+                        setTScoreType('points');
+                        setTPtTarget(24);
+                      }
+                    }}
                     style={{ padding: '16px', border: `2px solid ${active ? 'var(--black)' : 'var(--grey-200)'}`, background: active ? 'var(--black)' : f.functional ? '#fff' : 'var(--grey-50)', cursor: f.functional ? 'pointer' : 'default', textAlign: 'left', position: 'relative', opacity: f.functional ? 1 : 0.65 }}>
                     {!f.functional && (
                       <div style={{ position: 'absolute', top: 8, right: 8, fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', background: 'var(--grey-200)', color: 'var(--grey-500)', padding: '2px 6px' }}>Próximamente</div>
@@ -661,76 +668,95 @@ export default function PlayerTournamentsPage() {
           {tFormat && (
             <div style={card}>
               <div style={secTitle}>Puntuación</div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                {[{ v: 'points', label: 'Por Puntos' }, { v: 'traditional', label: 'Tradicional (sets)' }].map(o => (
-                  <button key={o.v} onClick={() => setTScoreType(o.v as 'points' | 'traditional')}
-                    style={{ padding: '10px 18px', border: `2px solid ${tScoreType === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tScoreType === o.v ? 'var(--black)' : '#fff', color: tScoreType === o.v ? '#fff' : 'var(--black)', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    {o.label}
-                  </button>
-                ))}
-              </div>
 
-              {tScoreType === 'points' && (
+              {(tFormat === 'americano' || tFormat === 'mexicano') ? (
+                /* Americano / Mexicano: only multiples-of-4 points picker */
                 <div>
-                  <label style={lbl}>Puntos objetivo</label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {[16, 24, 32].map(n => (
+                  <label style={lbl}>Puntos (múltiplos de 4)</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {[4, 8, 12, 16, 20, 24, 28, 32].map(n => (
                       <button key={n} onClick={() => setTPtTarget(n)}
-                        style={{ width: 58, height: 48, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tPtTarget === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tPtTarget === n ? 'var(--black)' : '#fff', color: tPtTarget === n ? '#fff' : 'var(--black)' }}>
+                        style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tPtTarget === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tPtTarget === n ? 'var(--black)' : '#fff', color: tPtTarget === n ? '#fff' : 'var(--black)' }}>
                         {n}
                       </button>
                     ))}
                   </div>
                 </div>
-              )}
+              ) : (
+                /* Other formats: show both scoring options */
+                <>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    {[{ v: 'points', label: 'Por Puntos' }, { v: 'traditional', label: 'Tradicional (sets)' }].map(o => (
+                      <button key={o.v} onClick={() => setTScoreType(o.v as 'points' | 'traditional')}
+                        style={{ padding: '10px 18px', border: `2px solid ${tScoreType === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tScoreType === o.v ? 'var(--black)' : '#fff', color: tScoreType === o.v ? '#fff' : 'var(--black)', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
 
-              {tScoreType === 'traditional' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div>
-                    <label style={lbl}>Sets por partido</label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {[1, 3].map(n => (
-                        <button key={n} onClick={() => setTSets(n)}
-                          style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tSets === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tSets === n ? 'var(--black)' : '#fff', color: tSets === n ? '#fff' : 'var(--black)' }}>
-                          {n}
-                        </button>
-                      ))}
+                  {tScoreType === 'points' && (
+                    <div>
+                      <label style={lbl}>Puntos objetivo</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {[16, 24, 32].map(n => (
+                          <button key={n} onClick={() => setTPtTarget(n)}
+                            style={{ width: 58, height: 48, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tPtTarget === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tPtTarget === n ? 'var(--black)' : '#fff', color: tPtTarget === n ? '#fff' : 'var(--black)' }}>
+                            {n}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <label style={lbl}>Games por set</label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {[4, 5, 6].map(n => (
-                        <button key={n} onClick={() => setTGames(n)}
-                          style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tGames === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tGames === n ? 'var(--black)' : '#fff', color: tGames === n ? '#fff' : 'var(--black)' }}>
-                          {n}
-                        </button>
-                      ))}
+                  )}
+
+                  {tScoreType === 'traditional' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      <div>
+                        <label style={lbl}>Sets por partido</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {[1, 3].map(n => (
+                            <button key={n} onClick={() => setTSets(n)}
+                              style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tSets === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tSets === n ? 'var(--black)' : '#fff', color: tSets === n ? '#fff' : 'var(--black)' }}>
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label style={lbl}>Games por set</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {[4, 5, 6].map(n => (
+                            <button key={n} onClick={() => setTGames(n)}
+                              style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tGames === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tGames === n ? 'var(--black)' : '#fff', color: tGames === n ? '#fff' : 'var(--black)' }}>
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label style={lbl}>Tiebreak a</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {[7, 10].map(n => (
+                            <button key={n} onClick={() => setTTiebreak(n)}
+                              style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tTiebreak === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tTiebreak === n ? 'var(--black)' : '#fff', color: tTiebreak === n ? '#fff' : 'var(--black)' }}>
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label style={lbl}>Regla de Deuce</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {[{ v: 'ventaja', label: 'Ventaja' }, { v: 'oro', label: 'Punto de Oro' }].map(o => (
+                            <button key={o.v} onClick={() => setTDeuce(o.v as 'ventaja' | 'oro')}
+                              style={{ padding: '10px 18px', border: `2px solid ${tDeuce === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tDeuce === o.v ? 'var(--black)' : '#fff', color: tDeuce === o.v ? '#fff' : 'var(--black)', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              {o.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <label style={lbl}>Tiebreak a</label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {[7, 10].map(n => (
-                        <button key={n} onClick={() => setTTiebreak(n)}
-                          style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tTiebreak === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tTiebreak === n ? 'var(--black)' : '#fff', color: tTiebreak === n ? '#fff' : 'var(--black)' }}>
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label style={lbl}>Regla de Deuce</label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {[{ v: 'ventaja', label: 'Ventaja' }, { v: 'oro', label: 'Punto de Oro' }].map(o => (
-                        <button key={o.v} onClick={() => setTDeuce(o.v as 'ventaja' | 'oro')}
-                          style={{ padding: '10px 18px', border: `2px solid ${tDeuce === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tDeuce === o.v ? 'var(--black)' : '#fff', color: tDeuce === o.v ? '#fff' : 'var(--black)', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                          {o.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                  )}
+                </>
               )}
             </div>
           )}
