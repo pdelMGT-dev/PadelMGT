@@ -10,8 +10,9 @@ import {
   type Invitation,
 } from '@/lib/invitation-store';
 import { addFriendship } from '@/lib/player-store';
+import { getTournament, saveTournament } from '@/lib/tournament-store';
 
-type CurrentUser = { id: string; name: string; email: string; shortId: string; role: string; sub: string };
+type CurrentUser = { id: string; name: string; email: string; shortId: string; role: string; sub: string; ranking?: number };
 
 const stats = [
   { label: 'Torneos jugados', value: '24', delta: '+3 este mes' },
@@ -118,6 +119,36 @@ export default function PlayerHomePage() {
         (g.creatorId === currentUser.id || g.players.some(p => p.id === currentUser.id))
       );
       setMyActiveGames(active);
+    } else {
+      // Try tournament-store
+      const tournament = getTournament(inv.gameId);
+      if (tournament) {
+        const updatedInvitedPlayers = (tournament.invitedPlayers ?? []).map(ip =>
+          ip.id === currentUser.id ? { ...ip, status: 'accepted' as const } : ip
+        );
+        const alreadyConfirmed = tournament.players.some(p => p.id === currentUser.id);
+        const updatedPlayers = alreadyConfirmed
+          ? tournament.players
+          : [
+              ...tournament.players,
+              {
+                id: currentUser.id,
+                name: currentUser.name,
+                ranking: currentUser.ranking ?? 1000,
+                isCreator: false,
+                email: currentUser.email,
+                shortId: currentUser.shortId,
+              },
+            ];
+        saveTournament({
+          ...tournament,
+          invitedPlayers: updatedInvitedPlayers,
+          players: updatedPlayers,
+        });
+        if (tournament.creatorId) {
+          addFriendship(currentUser.id, tournament.creatorId);
+        }
+      }
     }
     setPendingInvitations(prev => prev.filter(i => i.id !== inv.id));
     showToast(`Aceptaste la invitación a ${inv.gameName}`);
@@ -132,6 +163,16 @@ export default function PlayerHomePage() {
         ip.id === currentUser.id ? { ...ip, status: 'rejected' as const } : ip
       );
       saveGame({ ...game, invitedPlayers: updatedInvitedPlayers });
+    } else {
+      const tournament = getTournament(inv.gameId);
+      if (tournament) {
+        saveTournament({
+          ...tournament,
+          invitedPlayers: (tournament.invitedPlayers ?? []).map(ip =>
+            ip.id === currentUser.id ? { ...ip, status: 'rejected' as const } : ip
+          ),
+        });
+      }
     }
     setPendingInvitations(prev => prev.filter(i => i.id !== inv.id));
     showToast(`Rechazaste la invitación a ${inv.gameName}`);
