@@ -62,9 +62,9 @@ export default function QuickGamesPage() {
         </div>
       </div>
 
-      <section style={{ padding: '64px 48px 96px' }}>
+      <section style={{ padding: 'clamp(40px, 5vw, 64px) clamp(20px, 4vw, 48px) clamp(48px, 7vw, 96px)' }}>
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, marginBottom: 80 }}>
+          <div className="grid-2-col" style={{ marginBottom: 80 }}>
 
             {/* Create teaser */}
             <div>

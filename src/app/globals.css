@@ -365,3 +365,153 @@ html, body {
 .event-pill.tournament { background: var(--court-blue); }
 .event-pill.league { background: var(--turf-green); }
 .event-pill.quick { background: var(--grey-500); }
+
+/* ── RESPONSIVE LAYOUT UTILITIES ── */
+
+/* Mobile hamburger toggle (hidden by default on desktop) */
+.nav-mobile-toggle {
+  display: none;
+  background: none; border: none; cursor: pointer;
+  align-items: center; justify-content: center;
+  padding: 4px;
+  position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+}
+
+/* Mobile full-screen menu overlay */
+.mobile-menu-overlay {
+  position: fixed; inset: 0; background: #111; z-index: 200;
+  display: flex; flex-direction: column; padding: 24px 28px;
+  overflow-y: auto;
+}
+
+/* Table horizontal scroll wrapper */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Grid utilities */
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.grid-3-live { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-2-col  { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; }
+
+/* Dashboard */
+.dashboard-layout {
+  display: flex; min-height: 100vh; background: var(--grey-50);
+}
+.dashboard-sidebar {
+  width: 256px; min-height: 100vh; background: #0a0a0a;
+  display: flex; flex-direction: column;
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 100;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  overflow-y: auto;
+}
+.dashboard-main {
+  margin-left: 256px; flex: 1; min-height: 100vh;
+  display: flex; flex-direction: column;
+}
+.dash-mobile-bar {
+  display: none;
+  position: sticky; top: 0; z-index: 90;
+  background: #0a0a0a; border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 0 20px; height: 56px;
+  align-items: center; justify-content: space-between;
+}
+.dash-backdrop {
+  display: none;
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99;
+}
+.dash-sidebar-close { display: none !important; }
+
+/* ── TABLET (≤ 1024px) ── */
+@media (max-width: 1024px) {
+  /* Navbar */
+  .header-nav  { display: none; }
+  .header-actions { display: none; }
+  .nav-mobile-toggle { display: flex; }
+  .header-row { grid-template-columns: 1fr auto; }
+
+  /* Hero stats — move below content */
+  .hero-stats {
+    position: static;
+    display: flex; justify-content: flex-start; flex-wrap: wrap;
+    gap: 32px; padding: 32px 48px;
+    background: rgba(0,0,0,0.35);
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+
+  /* Section header row — stack vertically */
+  .section-header-row { flex-direction: column; align-items: flex-start; gap: 16px; }
+
+  /* Format grid — 2 columns */
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+
+  /* Live matches — 2 columns */
+  .grid-3-live { grid-template-columns: repeat(2, 1fr); }
+
+  /* Quick games two-col — stack */
+  .grid-2-col  { grid-template-columns: 1fr; gap: 40px; }
+
+  /* Footer */
+  .footer-grid { grid-template-columns: 1fr 1fr 1fr; gap: 32px; }
+
+  /* Dashboard */
+  .dashboard-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+    z-index: 150;
+  }
+  .dashboard-sidebar.sidebar-open { transform: translateX(0); }
+  .dashboard-main { margin-left: 0; }
+  .dash-mobile-bar { display: flex; }
+  .dash-backdrop { display: block; }
+  .dash-sidebar-close { display: flex !important; }
+}
+
+/* ── MOBILE (≤ 767px) ── */
+@media (max-width: 767px) {
+  /* Header */
+  .app-header { position: sticky !important; }
+  .header-row { height: 56px; padding: 0 16px; }
+
+  /* Hero */
+  .hero { min-height: 100svh; }
+  .hero-content { padding: 80px 20px 32px; min-height: 100svh; }
+  .hero-headline { font-size: clamp(48px, 14vw, 80px); margin-bottom: 20px; }
+  .hero-sub { font-size: 15px; margin-bottom: 24px; }
+  .hero-stats { padding: 24px 20px; gap: 24px; }
+  .hero-stat-num { font-size: 36px; }
+  .hero-cta-row { flex-direction: column; gap: 10px; }
+  .hero-cta-row .btn { width: 100%; justify-content: center; }
+
+  /* Marquee */
+  .marquee-item { font-size: 32px; }
+
+  /* Sections */
+  .section-title { font-size: clamp(32px, 8vw, 52px); }
+  .page-header { padding: 72px 20px 40px; }
+  .page-title { font-size: clamp(40px, 11vw, 80px); }
+  .page-sub { font-size: 14px; }
+
+  /* Grids */
+  .grid-3, .grid-2 { grid-template-columns: 1fr; }
+  .grid-3-live { grid-template-columns: 1fr; }
+  .grid-2-col  { grid-template-columns: 1fr; gap: 32px; }
+
+  /* Ranking table — hide non-essential cols */
+  .rank-table .hide-mobile { display: none; }
+
+  /* Footer */
+  .footer-grid { grid-template-columns: 1fr 1fr; gap: 24px; }
+  .app-footer  { padding: 48px 20px 24px; }
+  .footer-bottom { flex-direction: column; gap: 12px; text-align: center; }
+
+  /* Buttons */
+  .btn-lg { padding: 14px 24px; font-size: 14px; }
+
+  /* Pill tabs — horizontal scroll */
+  .pill-tabs-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+  .pill-tabs-row::-webkit-scrollbar { display: none; }
+
+  /* Calendar */
+  .cal-cell { min-height: 60px; padding: 4px; }
+}
+

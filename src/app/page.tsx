@@ -89,7 +89,7 @@ export default function HomePage() {
       </div>
 
       {/* ── FORMAT GRID ── */}
-      <section style={{ padding: '120px 48px' }}>
+      <section style={{ padding: 'clamp(64px, 8vw, 120px) clamp(20px, 4vw, 48px)' }}>
         <div style={{ maxWidth: 1760, margin: '0 auto' }}>
           <div className="section-header-row">
             <div>
@@ -103,13 +103,13 @@ export default function HomePage() {
             <Link href="/tournaments" className="btn btn-secondary">Ver Todo →</Link>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          <div className="grid-3">
             {formats.map((f, i) => (
               <Link
                 key={f.k}
                 href={`/tournaments/${f.k}`}
                 className="card-image"
-                style={{ height: 420, display: 'block', cursor: 'pointer', textDecoration: 'none', borderRadius: 0 }}
+                style={{ height: 'clamp(260px, 30vw, 420px)', display: 'block', cursor: 'pointer', textDecoration: 'none', borderRadius: 0 }}
               >
                 <img src={f.img} alt={f.name} style={{ opacity: 0.82 }} />
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0) 25%, rgba(0,0,0,0.88) 100%)' }} />
@@ -117,7 +117,7 @@ export default function HomePage() {
                   <div style={{ fontSize: 10, letterSpacing: '0.2em', fontWeight: 600, opacity: 0.6 }}>0{i + 1} / 06</div>
                 </div>
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '24px' }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 600, textTransform: 'uppercase', lineHeight: 0.95, letterSpacing: '-0.015em', color: '#fff', marginBottom: 8 }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 2.5vw, 34px)', fontWeight: 600, textTransform: 'uppercase', lineHeight: 0.95, letterSpacing: '-0.015em', color: '#fff', marginBottom: 8 }}>
                     {f.name}
                   </div>
                   <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', marginBottom: 14, maxWidth: 300 }}>{f.desc}</div>
@@ -132,7 +132,7 @@ export default function HomePage() {
       </section>
 
       {/* ── LIVE MATCHES ── */}
-      <section style={{ background: '#111', color: '#fff', padding: '120px 48px' }}>
+      <section style={{ background: '#111', color: '#fff', padding: 'clamp(64px, 8vw, 120px) clamp(20px, 4vw, 48px)' }}>
         <div style={{ maxWidth: 1760, margin: '0 auto' }}>
           <div className="section-header-row">
             <div>
@@ -150,7 +150,7 @@ export default function HomePage() {
             <Link href="/live-scores" className="btn btn-outline-dark">Ver todos →</Link>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          <div className="grid-3-live">
             {liveMatches.map((m, i) => (
               <div key={i} style={{ background: '#1f1f21', padding: 24, border: '1px solid #28282a', borderRadius: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
@@ -175,7 +175,7 @@ export default function HomePage() {
       </section>
 
       {/* ── RANKING TEASER ── */}
-      <section style={{ padding: '120px 48px', background: '#fafafa' }}>
+      <section style={{ padding: 'clamp(64px, 8vw, 120px) clamp(20px, 4vw, 48px)', background: '#fafafa' }}>
         <div style={{ maxWidth: 1760, margin: '0 auto' }}>
           <div className="section-header-row">
             <div>

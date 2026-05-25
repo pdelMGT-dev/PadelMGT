@@ -49,7 +49,7 @@ export default function LeaguesPage() {
         </div>
       </div>
 
-      <section style={{ padding: '64px 48px 96px' }}>
+      <section style={{ padding: 'clamp(40px, 5vw, 64px) clamp(20px, 4vw, 48px) clamp(48px, 7vw, 96px)' }}>
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>
           {/* Location indicator */}
           {detectedCountry && (
@@ -66,8 +66,8 @@ export default function LeaguesPage() {
           )}
 
           {/* Search / filters */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(3, auto)', gap: 12, marginBottom: 48, alignItems: 'center', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 48, alignItems: 'center', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: 20, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '1 1 200px', minWidth: 160 }}>
               <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ color: 'var(--grey-400)', flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar ligas..." style={{ border: 'none', background: 'none', font: 'inherit', fontSize: 14, outline: 'none', width: '100%' }} />
             </div>
@@ -85,8 +85,8 @@ export default function LeaguesPage() {
           <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 24, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>{filtered.length} liga{filtered.length !== 1 ? 's' : ''} encontrada{filtered.length !== 1 ? 's' : ''}</p>
 
           {/* Table */}
-          <div style={{ border: '1px solid var(--grey-200)' }}>
-            <table className="rank-table">
+          <div className="table-scroll" style={{ border: '1px solid var(--grey-200)' }}>
+            <table className="rank-table" style={{ minWidth: 700 }}>
               <thead>
                 <tr>
                   <th style={{ paddingLeft: 24 }}>Liga</th>

@@ -22,7 +22,7 @@ export default function TournamentsPage() {
       </div>
 
       {/* Format grid */}
-      <section style={{ padding: '96px 48px' }}>
+      <section style={{ padding: 'clamp(48px, 7vw, 96px) clamp(20px, 4vw, 48px)' }}>
         <div style={{ maxWidth: 1760, margin: '0 auto' }}>
           <div className="section-header-row" style={{ marginBottom: 32 }}>
             <div>
@@ -61,7 +61,7 @@ export default function TournamentsPage() {
       </section>
 
       {/* Active tournaments */}
-      <section style={{ padding: '0 48px 96px' }}>
+      <section style={{ padding: '0 clamp(20px, 4vw, 48px) clamp(48px, 7vw, 96px)' }}>
         <div style={{ maxWidth: 1760, margin: '0 auto' }}>
           <div style={{ marginBottom: 32 }}>
             <div className="section-eyebrow">Torneos activos y próximos</div>
@@ -75,8 +75,8 @@ export default function TournamentsPage() {
             ))}
           </div>
 
-          <div style={{ border: '1px solid var(--grey-200)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-body)' }}>
+          <div className="table-scroll" style={{ border: '1px solid var(--grey-200)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-body)', minWidth: 800 }}>
               <thead>
                 <tr style={{ background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-200)' }}>
                   {['Estado', 'Torneo', 'Formato', 'Club · Sede', 'Jugadores', 'Nivel', 'Premio', 'Fecha', ''].map((h) => (
