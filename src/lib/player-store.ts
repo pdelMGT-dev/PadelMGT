@@ -86,13 +86,27 @@ export function searchPlayers(query: string): RegisteredPlayer[] {
 }
 
 export function getFriendsForPlayer(playerId: string): RegisteredPlayer[] {
-  const FRIENDSHIPS: Record<string, string[]> = {
+  // Seed friendships (fallback for accounts without localStorage data)
+  const SEED_FRIENDSHIPS: Record<string, string[]> = {
     'player-001': ['player-004', 'player-005', 'player-006', 'player-008'],
     'player-002': ['player-004', 'player-007', 'player-015'],
     'player-003': ['player-006', 'player-007', 'player-014'],
   };
-  const friendIds = FRIENDSHIPS[playerId] ?? [];
-  return load().filter((p) => friendIds.includes(p.id));
+
+  const seedIds = new Set<string>(SEED_FRIENDSHIPS[playerId] ?? []);
+
+  // Dynamic friendships from localStorage (written by addFriendship)
+  const dynamicIds = new Set<string>();
+  if (!isServer()) {
+    try {
+      const raw = localStorage.getItem('padelmgt_friendships') ?? '{}';
+      const map: Record<string, string[]> = JSON.parse(raw);
+      (map[playerId] ?? []).forEach(id => dynamicIds.add(id));
+    } catch {}
+  }
+
+  const allIds = new Set([...seedIds, ...dynamicIds]);
+  return load().filter((p) => allIds.has(p.id));
 }
 
 export function addFriendship(playerId: string, friendId: string): void {
