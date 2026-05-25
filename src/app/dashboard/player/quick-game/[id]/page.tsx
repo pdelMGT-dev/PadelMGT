@@ -195,10 +195,28 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     return () => clearInterval(interval);
   }, [refreshGame]);
 
-  // Sync shareUrl
+  // Sync shareUrl — embed compact snapshot so other devices can render the page
   useEffect(() => {
-    if (game?.code) setShareUrl(`${window.location.origin}/quick-game/${game.code}`);
-  }, [game?.code]);
+    if (!game?.code) return;
+    try {
+      const snap = {
+        n:   game.name,
+        cl:  game.club  || '',
+        ci:  game.city  || '',
+        co:  game.country || '',
+        st:  game.status,
+        p:   game.players.length,
+        mp:  game.maxPlayers,
+        fmt: game.format   || 'americano',
+        pt:  game.pairType || 'individual',
+        lv:  game.levelLabel || '',
+      };
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(snap))));
+      setShareUrl(`${window.location.origin}/quick-game/${game.code}?s=${encoded}`);
+    } catch {
+      setShareUrl(`${window.location.origin}/quick-game/${game.code}`);
+    }
+  }, [game?.code, game?.status, game?.players.length]);
 
   // Init edit fields
   useEffect(() => {

@@ -62,6 +62,12 @@ const RESULT_INFO: Record<string, { label: string; bg: string; textColor: string
   loss: { label: 'DERROTA',  bg: '#fee2e2', textColor: '#991b1b' },
 };
 
+interface GameSnap {
+  n: string; cl: string; ci: string; co: string;
+  st: string; p: number; mp: number;
+  fmt: string; pt: string; lv: string;
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function PublicQuickGamePage({ params }: { params: Promise<{ code: string }> }) {
@@ -70,6 +76,7 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
   const [game, setGame] = useState<ActiveGame | null>(() =>
     typeof window !== 'undefined' ? getGameByCode(code) : null
   );
+  const [snap, setSnap]               = useState<GameSnap | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [joinName, setJoinName]       = useState('');
   const [showJoin, setShowJoin]       = useState(false);
@@ -85,7 +92,17 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
       const raw = localStorage.getItem('padelmgt_user');
       const parsed: CurrentUser | null = JSON.parse(raw || 'null');
       setCurrentUser(parsed);
-      setShareUrl(`${window.location.origin}/quick-game/${code}`);
+      // Keep full URL (with snap param) intact for QR re-sharing
+      setShareUrl(window.location.href);
+
+      // Decode snapshot from URL if present
+      const sp = new URLSearchParams(window.location.search).get('s');
+      if (sp) {
+        try {
+          const decoded = JSON.parse(decodeURIComponent(escape(atob(sp)))) as GameSnap;
+          setSnap(decoded);
+        } catch {}
+      }
     } catch {}
   }, [code]);
 
@@ -104,11 +121,102 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
     return () => clearInterval(interval);
   }, [code]);
 
+  // ── Snapshot view (cross-device: game not in local storage) ──────────────────
+  if (!game && snap) {
+    const statusLabel: Record<string, string> = {
+      created: 'Inscripciones abiertas', starting_soon: 'Por Empezar',
+      live: 'En Vivo', finished: 'Finalizado',
+    };
+    const statusColor: Record<string, string> = {
+      created: '#a78bfa', starting_soon: '#f5a623', live: '#d6ff00', finished: 'rgba(255,255,255,0.5)',
+    };
+    const pct = snap.mp > 0 ? Math.round((snap.p / snap.mp) * 100) : 0;
+    return (
+      <div style={{ minHeight: '100vh', background: '#0a0f1e', color: '#fff', fontFamily: 'var(--font-body)' }}>
+        {/* Hero */}
+        <div style={{ position: 'relative', background: '#0a0f1e', padding: 'clamp(80px,10vw,140px) clamp(20px,5vw,48px) clamp(32px,4vw,48px)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/assets/court-bg.svg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.12 }} />
+          <div style={{ position: 'relative', maxWidth: 1200, margin: '0 auto' }}>
+            <Link href="/quick-games" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', marginBottom: 24, fontWeight: 600 }}>
+              ← Juegos Rápidos
+            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', borderRadius: 30, border: `1px solid ${statusColor[snap.st] ?? '#fff'}`, color: statusColor[snap.st] ?? '#fff', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.05)' }}>
+                {snap.st === 'live' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#d6ff00', display: 'inline-block', animation: 'pulse 1.4s infinite' }} />}
+                {statusLabel[snap.st] ?? snap.st}
+              </span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>{code}</span>
+            </div>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'clamp(36px, 6vw, 80px)', lineHeight: 0.92, textTransform: 'uppercase', letterSpacing: '-0.025em', margin: '0 0 16px', color: '#fff' }}>
+              {snap.n}
+            </h1>
+            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', margin: 0 }}>
+              {[snap.cl, snap.ci, snap.co].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+        </div>
+
+        {/* Info bar */}
+        <div style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', padding: '0 clamp(20px,5vw,48px)' }}>
+            {[
+              { label: 'Modalidad', value: snap.pt === 'individual' ? 'Individual' : 'Pareja Fija' },
+              { label: 'Formato',   value: FORMAT_LABEL[snap.fmt] ?? snap.fmt },
+              { label: 'Nivel',     value: snap.lv || 'Todos los niveles' },
+              { label: 'Jugadores', value: `${snap.p} / ${snap.mp}` },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ padding: '20px 16px', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontWeight: 600, marginBottom: 6 }}>{label}</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#fff' }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px clamp(20px,5vw,48px)' }}>
+          {/* Player fill bar */}
+          <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: 24, marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Jugadores confirmados</span>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: '#fff' }}>{snap.p}<span style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>/{snap.mp}</span></span>
+            </div>
+            <div style={{ height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: 'var(--neon)', borderRadius: 3, transition: 'width 0.3s' }} />
+            </div>
+          </div>
+
+          {/* Cross-device notice */}
+          <div style={{ background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.2)', borderRadius: 4, padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>ℹ️</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--neon)', marginBottom: 4 }}>Estás viendo desde otro dispositivo</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>
+                Para unirte o ver los detalles completos, pedile al organizador que te comparta el enlace o iniciá sesión en la app.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 32, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <Link href="/signup" className="btn btn-on-dark">Crear cuenta →</Link>
+            <Link href="/login" className="btn btn-outline-dark">Iniciar sesión</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Not found (no snapshot either) ───────────────────────────────────────────
   if (!game) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, fontFamily: 'var(--font-body)' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, fontFamily: 'var(--font-body)', textAlign: 'center' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, textTransform: 'uppercase', marginBottom: 12 }}>Juego no encontrado</div>
-        <div style={{ fontSize: 13, color: 'var(--grey-400)', marginBottom: 24 }}>El código <strong>{code}</strong> no corresponde a ningún juego.</div>
+        <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 8, maxWidth: 380 }}>
+          El código <strong style={{ color: 'var(--black)' }}>{code}</strong> no corresponde a ningún juego en este dispositivo.
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 28, maxWidth: 380, lineHeight: 1.6 }}>
+          Los juegos se almacenan localmente. Pedile al organizador que genere un nuevo QR desde su dispositivo para compartir la información correctamente.
+        </div>
         <Link href="/" style={{ fontSize: 12, fontWeight: 600, color: 'var(--black)', textDecoration: 'none' }}>← Volver al inicio</Link>
       </div>
     );
