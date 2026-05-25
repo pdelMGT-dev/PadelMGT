@@ -161,6 +161,7 @@ export default function PlayerTournamentsPage() {
   // ── My tournaments ──────────────────────────────────────────────────────────
   const [myTournaments, setMyTournaments] = useState<Tournament[]>([]);
   const [historialFilter, setHistorialFilter] = useState<'todos' | 'finalizado' | 'cancelado' | 'organizador' | 'jugador'>('todos');
+  const [activeView, setActiveView] = useState<'icons' | 'list'>('icons');
 
   // ── Success ─────────────────────────────────────────────────────────────────
   const [newTId, setNewTId] = useState('');
@@ -1309,10 +1310,60 @@ export default function PlayerTournamentsPage() {
 
       {/* Torneos Activos */}
       <div style={{ marginBottom: 40 }}>
-        <div style={secTitle}>Torneos Activos ({activeTournaments.length})</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={secTitle}>Torneos Activos ({activeTournaments.length})</div>
+          {activeTournaments.length > 0 && (
+            <div style={{ display: 'flex', gap: 2 }}>
+              {(['icons', 'list'] as const).map(mode => (
+                <button key={mode} onClick={() => setActiveView(mode)}
+                  style={{ padding: '5px 10px', fontSize: 11, border: '1px solid var(--grey-200)', background: activeView === mode ? 'var(--black)' : '#fff', color: activeView === mode ? '#fff' : 'var(--grey-400)', cursor: 'pointer', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  {mode === 'icons' ? '⊞ Íconos' : '☰ Lista'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {activeTournaments.length === 0 ? (
           <div style={{ padding: '32px', background: '#fff', border: '1px solid var(--grey-200)', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
             No tenés torneos activos. ¡Creá uno!
+          </div>
+        ) : activeView === 'icons' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 1, background: 'var(--grey-200)' }}>
+            {activeTournaments.map(t => {
+              const isCreator = currentUser && t.creatorId === currentUser.id;
+              const si = { created: { label: 'Inscripciones abiertas', color: '#7c3aed' }, starting_soon: { label: 'Por Empezar', color: '#f5a623' }, live: { label: 'En Vivo', color: 'var(--turf-green)' } }[t.status as string] ?? { label: t.status, color: 'var(--grey-400)' };
+              const href = t.status === 'live' && isCreator
+                ? `/dashboard/player/tournaments/${t.id}/live`
+                : isCreator
+                ? `/dashboard/player/tournaments/${t.id}`
+                : `/dashboard/player/tournaments/${t.id}/view`;
+              return (
+                <div key={t.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', lineHeight: 1.2, flex: 1, marginRight: 10 }}>{t.name}</div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: si.color, flexShrink: 0 }}>{si.label}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)', lineHeight: 1.7 }}>
+                    {t.date}{t.time ? ` · ${t.time}` : ''}<br />
+                    {t.club}, {t.city}<br />
+                    {FORMAT_LABEL[t.format] ?? t.format} · {t.pairType === 'parejas' ? 'Parejas' : 'Individual'}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                    <div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, lineHeight: 1 }}>
+                        {t.players.length}<span style={{ fontSize: 13, color: 'var(--grey-400)', fontFamily: 'var(--font-body)', fontWeight: 400 }}>/{t.maxPlayers}</span>
+                      </div>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', fontWeight: 600 }}>jugadores</div>
+                    </div>
+                    <Link href={href}
+                      style={{ padding: '7px 16px', background: t.status === 'live' && isCreator ? 'var(--turf-green)' : 'var(--black)', color: '#fff', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}>
+                      {t.status === 'live' && isCreator ? 'EN VIVO →' : isCreator ? 'Gestionar' : 'Ver'}
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
