@@ -18,15 +18,6 @@ type MixtoPlayer = GamePlayer & { sex?: 'masculino' | 'femenino' };
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/** Classic circle rotation: fix position 0, pop last, insert at position 1. */
-function rotateCircle<T>(arr: T[]): T[] {
-  if (arr.length <= 2) return arr;
-  const next = [...arr];
-  const last = next.pop()!;
-  next.splice(1, 0, last);
-  return next;
-}
-
 // ---------------------------------------------------------------------------
 // Americano Individual (non-mixto)
 // ---------------------------------------------------------------------------
@@ -38,29 +29,30 @@ function generateAmericanoIndividualRounds(
   const N = players.length;
   if (N < 4) return [];
 
-  // Maximum active players must be a multiple of 4
   const maxActive = courts * 4;
   const active = Math.min(maxActive, Math.floor(N / 4) * 4);
+  const restCount = N - active;
 
   let arr = players.map((_, i) => i); // indices 0..N-1
   const rounds: GameRound[] = [];
 
   for (let r = 0; r < N; r++) {
-    const playingIndices = arr.slice(0, active);
-    const restingIndices = arr.slice(active);
+    // First restCount in circle rest, remaining active play
+    const restingIndices = arr.slice(0, restCount);
+    const playingIndices = arr.slice(restCount); // length = active
 
+    // Fold pairing: play[k*2] partners with play[active-1-k*2]
     const courtMatches: CourtMatch[] = [];
-    for (let c = 0; c < playingIndices.length; c += 4) {
-      if (c + 3 < playingIndices.length && courtMatches.length < courts) {
-        courtMatches.push({
-          courtNum: courtMatches.length + 1,
-          pair1: [players[playingIndices[c]].id, players[playingIndices[c + 1]].id],
-          pair2: [players[playingIndices[c + 2]].id, players[playingIndices[c + 3]].id],
-          pair1Score: null,
-          pair2Score: null,
-          status: 'pending',
-        });
-      }
+    const nP = playingIndices.length;
+    for (let k = 0; k * 4 < nP && courtMatches.length < courts; k++) {
+      courtMatches.push({
+        courtNum: courtMatches.length + 1,
+        pair1: [players[playingIndices[k * 2]].id, players[playingIndices[nP - 1 - k * 2]].id],
+        pair2: [players[playingIndices[k * 2 + 1]].id, players[playingIndices[nP - 2 - k * 2]].id],
+        pair1Score: null,
+        pair2Score: null,
+        status: 'pending',
+      });
     }
 
     rounds.push({
@@ -70,7 +62,8 @@ function generateAmericanoIndividualRounds(
       resting: restingIndices.map(i => players[i].id),
     });
 
-    arr = rotateCircle(arr);
+    // Full cyclic rotation: move first to last (no fixed player = balanced rests)
+    arr = [...arr.slice(1), arr[0]];
   }
 
   return rounds;
@@ -87,35 +80,34 @@ function generateAmericanoParejasRounds(
   const M = fixedPairs.length;
   if (M < 2) return [];
 
-  // Maximum active teams: 2 per court (one per side)
   const maxActiveTeams = courts * 2;
   const activeTeams = Math.min(maxActiveTeams, Math.floor(M / 2) * 2);
+  const restTeams = M - activeTeams;
 
   let arr = Array.from({ length: M }, (_, i) => i); // team indices
   const rounds: GameRound[] = [];
 
   for (let r = 0; r < M; r++) {
-    const playingTeams = arr.slice(0, activeTeams);
-    const restingTeams = arr.slice(activeTeams);
+    // First restTeams in circle rest
+    const restingTeamIndices = arr.slice(0, restTeams);
+    const playingTeamIndices = arr.slice(restTeams); // length = activeTeams
 
     const courtMatches: CourtMatch[] = [];
-    for (let c = 0; c < playingTeams.length; c += 2) {
-      if (c + 1 < playingTeams.length && courtMatches.length < courts) {
-        const team1 = fixedPairs[playingTeams[c]];
-        const team2 = fixedPairs[playingTeams[c + 1]];
-        courtMatches.push({
-          courtNum: courtMatches.length + 1,
-          pair1: [team1.player1Id, team1.player2Id],
-          pair2: [team2.player1Id, team2.player2Id],
-          pair1Score: null,
-          pair2Score: null,
-          status: 'pending',
-        });
-      }
+    for (let c = 0; c + 1 < playingTeamIndices.length && courtMatches.length < courts; c += 2) {
+      const team1 = fixedPairs[playingTeamIndices[c]];
+      const team2 = fixedPairs[playingTeamIndices[c + 1]];
+      courtMatches.push({
+        courtNum: courtMatches.length + 1,
+        pair1: [team1.player1Id, team1.player2Id],
+        pair2: [team2.player1Id, team2.player2Id],
+        pair1Score: null,
+        pair2Score: null,
+        status: 'pending',
+      });
     }
 
     const restingPlayerIds: string[] = [];
-    for (const teamIdx of restingTeams) {
+    for (const teamIdx of restingTeamIndices) {
       const team = fixedPairs[teamIdx];
       restingPlayerIds.push(team.player1Id, team.player2Id);
     }
@@ -127,7 +119,8 @@ function generateAmericanoParejasRounds(
       resting: restingPlayerIds,
     });
 
-    arr = rotateCircle(arr);
+    // Full cyclic rotation (no fixed team = balanced rests)
+    arr = [...arr.slice(1), arr[0]];
   }
 
   return rounds;

@@ -78,6 +78,8 @@ export interface Standing {
   playerName: string;
   pts: number;          // points scored (for points mode) or match wins * 3 + draws
   wins: number;         // courts/matches won
+  losses: number;
+  draws: number;
   played: number;
   diff: number;         // point/game difference
   pointsFor: number;
@@ -486,6 +488,8 @@ export function generateWorldCupGroups(
       playerName: p.name,
       pts: 0,
       wins: 0,
+      losses: 0,
+      draws: 0,
       played: 0,
       diff: 0,
       pointsFor: 0,
@@ -509,6 +513,8 @@ export function calculateStandings(game: ActiveGame): Standing[] {
       playerName: player.name,
       pts: 0,
       wins: 0,
+      losses: 0,
+      draws: 0,
       played: 0,
       diff: 0,
       pointsFor: 0,
@@ -537,10 +543,13 @@ export function calculateStandings(game: ActiveGame): Standing[] {
         s.diff += s1 - s2;
         if (isRoundRobin) {
           if (s1 > s2) { s.wins += 1; s.pts += 3; }
-          else if (s1 === s2) { s.pts += 1; }
+          else if (s1 === s2) { s.draws += 1; s.pts += 1; }
+          else s.losses += 1;
         } else {
           s.pts += s1;
           if (s1 > s2) s.wins += 1;
+          else if (s1 === s2) s.draws += 1;
+          else s.losses += 1;
         }
       }
 
@@ -553,10 +562,13 @@ export function calculateStandings(game: ActiveGame): Standing[] {
         s.diff += s2 - s1;
         if (isRoundRobin) {
           if (s2 > s1) { s.wins += 1; s.pts += 3; }
-          else if (s2 === s1) { s.pts += 1; }
+          else if (s2 === s1) { s.draws += 1; s.pts += 1; }
+          else s.losses += 1;
         } else {
           s.pts += s2;
           if (s2 > s1) s.wins += 1;
+          else if (s2 === s1) s.draws += 1;
+          else s.losses += 1;
         }
       }
 

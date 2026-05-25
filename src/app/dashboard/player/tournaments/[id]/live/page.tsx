@@ -13,7 +13,7 @@ import {
   isGameFinished,
   calculateStandings,
 } from '@/lib/game-engine';
-import type { GameRound, GamePlayer } from '@/lib/game-engine';
+import type { GameRound, GamePlayer, Standing } from '@/lib/game-engine';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -78,6 +78,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   const [tournament, setTournament] = useState<Tournament | null | undefined>(undefined);
   const [finishConfirm, setFinishConfirm] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(true);
+  const [roundOpen, setRoundOpen] = useState<Record<number, boolean>>({});
 
   // Score inputs: key = `${roundNum}-${courtNum}`, value = { p1: string; p2: string }
   const [scoreInputs, setScoreInputs] = useState<Record<string, { p1: string; p2: string }>>({});
@@ -104,6 +106,15 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     const interval = setInterval(loadTournament, 5000);
     return () => clearInterval(interval);
   }, [loadTournament]);
+
+  // ── Auto-open active round ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!tournament) return;
+    const activeRound = tournament.rounds.find(r => r.status === 'active');
+    if (activeRound) {
+      setRoundOpen({ [activeRound.num]: true });
+    }
+  }, [tournament?.currentRound]);
 
   // ── Redirect if not live ──────────────────────────────────────────────────
   useEffect(() => {
@@ -301,83 +312,113 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 32px' }}>
 
-        {/* ── INFO PANEL: 3-column grid ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 32 }}>
-
-          {/* Col 1: Detalles del torneo */}
-          <div style={card}>
-            <div style={secTitle}>Detalles del Torneo</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-              <div>
-                <span style={{ fontWeight: 700, color: 'var(--black)' }}>{t.name}</span>
-              </div>
-              <InfoRow label="Formato" value={FORMAT_LABEL[t.format] ?? t.format} />
-              <InfoRow label="Modalidad" value={t.pairType === 'parejas' ? 'Parejas Fijas' : 'Individual'} />
-              <InfoRow label="Mixto" value={(t as Tournament & { mixto?: boolean }).mixto ? 'Sí' : 'No'} />
-              <InfoRow label="Puntuación" value={scoreConfigLabel} />
-              <InfoRow label="Canchas" value={String(t.courts)} />
-              <InfoRow label="Fecha" value={t.date} />
-              <InfoRow label="Hora" value={t.time} />
-              {t.club && <InfoRow label="Club" value={t.club} />}
-              {t.city && <InfoRow label="Ciudad" value={t.city} />}
+        {/* ── INFO PANEL: collapsible accordion ── */}
+        <div style={{ marginBottom: 32 }}>
+          {/* Accordion header */}
+          <div
+            onClick={() => setInfoOpen(o => !o)}
+            style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '12px 24px', background: '#fff', border: '1px solid var(--grey-200)',
+              cursor: 'pointer', marginBottom: 1,
+            }}
+          >
+            <div style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.14em',
+              textTransform: 'uppercase', color: 'var(--grey-500)',
+            }}>
+              DETALLES DEL TORNEO
             </div>
+            <span style={{
+              fontSize: 18, color: 'var(--grey-400)',
+              transform: infoOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+              transition: 'transform 0.2s',
+              display: 'inline-block',
+            }}>
+              ▼
+            </span>
           </div>
 
-          {/* Col 2: Jugadores */}
-          <div style={card}>
-            <div style={secTitle}>Jugadores ({t.players.length}/{t.maxPlayers})</div>
-            <div style={{ fontSize: 11, color: 'var(--grey-500)', marginBottom: 12 }}>
-              Jugadores confirmados: <strong>{t.players.length}</strong>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {t.players.map((p, i) => {
-                const isCreatorPlayer = p.id === t.creatorId || p.isCreator;
-                return (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                    <span style={{ fontSize: 10, color: 'var(--grey-400)', minWidth: 18, textAlign: 'right', fontWeight: 700 }}>
-                      {i + 1}.
-                    </span>
-                    <span style={{ fontWeight: isCreatorPlayer ? 700 : 400, color: 'var(--black)' }}>
-                      {p.name}
-                    </span>
-                    {isCreatorPlayer && (
-                      <span style={{ fontSize: 12, color: '#f59e0b' }}>★</span>
-                    )}
+          {/* 3-column grid — collapsible */}
+          {infoOpen && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginTop: 8 }}>
+
+              {/* Col 1: Detalles del torneo */}
+              <div style={card}>
+                <div style={secTitle}>Detalles del Torneo</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                  <div>
+                    <span style={{ fontWeight: 700, color: 'var(--black)' }}>{t.name}</span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                  <InfoRow label="Formato" value={FORMAT_LABEL[t.format] ?? t.format} />
+                  <InfoRow label="Modalidad" value={t.pairType === 'parejas' ? 'Parejas Fijas' : 'Individual'} />
+                  <InfoRow label="Mixto" value={(t as Tournament & { mixto?: boolean }).mixto ? 'Sí' : 'No'} />
+                  <InfoRow label="Puntuación" value={scoreConfigLabel} />
+                  <InfoRow label="Canchas" value={String(t.courts)} />
+                  <InfoRow label="Fecha" value={t.date} />
+                  <InfoRow label="Hora" value={t.time} />
+                  {t.club && <InfoRow label="Club" value={t.club} />}
+                  {t.city && <InfoRow label="Ciudad" value={t.city} />}
+                </div>
+              </div>
 
-          {/* Col 3: QR Código */}
-          <div style={card}>
-            <div style={secTitle}>QR Código</div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-              <QRCodeSVG value={shareUrl} size={120} />
-              <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: 'var(--black)', letterSpacing: '0.1em' }}>
-                {t.code}
+              {/* Col 2: Jugadores */}
+              <div style={card}>
+                <div style={secTitle}>Jugadores ({t.players.length}/{t.maxPlayers})</div>
+                <div style={{ fontSize: 11, color: 'var(--grey-500)', marginBottom: 12 }}>
+                  Jugadores confirmados: <strong>{t.players.length}</strong>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {t.players.map((p, i) => {
+                    const isCreatorPlayer = p.id === t.creatorId || p.isCreator;
+                    return (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                        <span style={{ fontSize: 10, color: 'var(--grey-400)', minWidth: 18, textAlign: 'right', fontWeight: 700 }}>
+                          {i + 1}.
+                        </span>
+                        <span style={{ fontWeight: isCreatorPlayer ? 700 : 400, color: 'var(--black)' }}>
+                          {p.name}
+                        </span>
+                        {isCreatorPlayer && (
+                          <span style={{ fontSize: 12, color: '#f59e0b' }}>★</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <button
-                onClick={handleCopyUrl}
-                style={{
-                  padding: '7px 16px',
-                  background: copied ? 'var(--turf-green)' : 'var(--black)',
-                  color: '#fff',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  transition: 'background 0.2s',
-                }}>
-                {copied ? '✓ Copiado' : 'Copiar URL'}
-              </button>
-              <div style={{ fontSize: 10, color: 'var(--grey-400)', textAlign: 'center', wordBreak: 'break-all' }}>
-                {shareUrl}
+
+              {/* Col 3: QR Código */}
+              <div style={card}>
+                <div style={secTitle}>QR Código</div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                  <QRCodeSVG value={shareUrl} size={120} />
+                  <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: 'var(--black)', letterSpacing: '0.1em' }}>
+                    {t.code}
+                  </div>
+                  <button
+                    onClick={handleCopyUrl}
+                    style={{
+                      padding: '7px 16px',
+                      background: copied ? 'var(--turf-green)' : 'var(--black)',
+                      color: '#fff',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      transition: 'background 0.2s',
+                    }}>
+                    {copied ? '✓ Copiado' : 'Copiar URL'}
+                  </button>
+                  <div style={{ fontSize: 10, color: 'var(--grey-400)', textAlign: 'center', wordBreak: 'break-all' }}>
+                    {shareUrl}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* ── RONDAS ── */}

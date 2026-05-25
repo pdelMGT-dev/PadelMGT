@@ -1188,9 +1188,11 @@ export default function PlayerTournamentsPage() {
   // ══════════════════════════════════════════════════════════════════════════
 
   const activeTournaments = myTournaments.filter(t =>
-    t.status === 'created' || t.status === 'starting_soon' || t.status === 'live'
+    !t.cancelledAt && (t.status === 'created' || t.status === 'starting_soon' || t.status === 'live')
   );
-  const finishedTournaments = myTournaments.filter(t => t.status === 'finished');
+  const finishedTournaments = myTournaments.filter(t =>
+    t.status === 'finished' || !!t.cancelledAt
+  );
 
   function statusBadge(status: string) {
     const map: Record<string, { label: string; bg: string; color: string }> = {
@@ -1198,6 +1200,7 @@ export default function PlayerTournamentsPage() {
       starting_soon: { label: 'Por Empezar', bg: 'rgba(245,166,35,0.1)', color: '#f5a623'           },
       live:          { label: 'En Vivo',     bg: 'rgba(0,180,0,0.1)',     color: 'var(--turf-green)' },
       finished:      { label: 'Finalizado',  bg: 'var(--grey-100)',       color: 'var(--grey-500)'   },
+      cancelled:     { label: 'Cancelado',   bg: 'var(--grey-100)',       color: 'var(--grey-500)'   },
     };
     const s = map[status] ?? map.created;
     return (
@@ -1246,17 +1249,28 @@ export default function PlayerTournamentsPage() {
             {FORMAT_LABEL[t.format] ?? t.format} · {t.date} {t.time && `· ${t.time}`} · {t.club}, {t.city}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {statusBadge(t.status)}
+            {statusBadge(t.cancelledAt ? 'cancelled' : t.status)}
             {roleBadge()}
             <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>{t.players.length}/{t.maxPlayers} jugadores</span>
           </div>
         </div>
-        <Link href={isCreator
-          ? `/dashboard/player/tournaments/${t.id}`
-          : `/dashboard/player/tournaments/${t.id}/view`}
-          style={{ padding: '7px 16px', background: 'var(--grey-100)', color: 'var(--grey-600)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' }}>
-          {isCreator ? 'Gestionar →' : 'Ver →'}
-        </Link>
+        {(() => {
+          const baseStyle: React.CSSProperties = { padding: '7px 16px', background: 'var(--grey-100)', color: 'var(--grey-600)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' };
+          const href = t.status === 'live' && isCreator
+            ? `/dashboard/player/tournaments/${t.id}/live`
+            : isCreator
+            ? `/dashboard/player/tournaments/${t.id}`
+            : `/dashboard/player/tournaments/${t.id}/view`;
+          const btnLabel = t.status === 'live' && isCreator ? 'EN VIVO →' : isCreator ? 'Gestionar →' : 'Ver →';
+          const btnStyle = t.status === 'live' && isCreator
+            ? { ...baseStyle, background: 'var(--turf-green)', color: '#fff' }
+            : baseStyle;
+          return (
+            <Link href={href} style={btnStyle}>
+              {btnLabel}
+            </Link>
+          );
+        })()}
       </div>
     );
   }
