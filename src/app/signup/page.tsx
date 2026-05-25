@@ -2,148 +2,160 @@
 
 import Link from 'next/link';
 import { useState, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { registerPlayer, type PlayerSex } from '@/lib/player-store';
 
-type Role = 'player' | 'club_manager' | 'league_organizer' | 'federation';
-
-const roles: { id: Role; label: string; sub: string; features: string[] }[] = [
-  { id: 'player', label: 'Jugador', sub: 'Para jugadores que quieren encontrar partidos y torneos.', features: ['Ranking personal', 'Historial de partidos', 'Invitaciones por QR', 'Conexión con amigos'] },
-  { id: 'club_manager', label: 'Club', sub: 'Para gestionar un club, canchas y torneos.', features: ['Dashboard del club', 'Torneos ilimitados', 'Gestión de miembros', 'Importar jugadores CSV'] },
-  { id: 'league_organizer', label: 'Liga', sub: 'Para organizar ligas y competiciones multi-club.', features: ['Tabla de posiciones', 'Multi-club / multi-sede', 'Ascensos y descensos', 'Gestión de temporadas'] },
-  { id: 'federation', label: 'Federación', sub: 'Para federaciones nacionales y regionales.', features: ['Ranking oficial', 'White-label completo', 'Multi-categoría', 'Torneos sancionados'] },
+const COUNTRIES: string[] = [
+  'Argentina', 'Bolivia', 'Brasil', 'Chile', 'Colombia', 'Costa Rica', 'Cuba',
+  'Ecuador', 'El Salvador', 'España', 'Guatemala', 'Honduras', 'México',
+  'Nicaragua', 'Panamá', 'Paraguay', 'Perú', 'Portugal', 'Puerto Rico',
+  'República Dominicana', 'Uruguay', 'Venezuela', 'Alemania', 'Australia',
+  'Bélgica', 'Canadá', 'China', 'Dinamarca', 'Estados Unidos', 'Francia',
+  'Grecia', 'Holanda', 'India', 'Italia', 'Japón', 'Noruega', 'Polonia',
+  'Reino Unido', 'Rusia', 'Sudáfrica', 'Suecia', 'Suiza', 'Turquía',
+  'Ucrania', 'Otro',
 ];
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
+  textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 8,
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '12px 14px', border: '1px solid var(--grey-200)',
+  fontSize: 14, outline: 'none', background: '#fff', boxSizing: 'border-box',
+  display: 'block', fontFamily: 'var(--font-body)', borderRadius: 0,
+};
 
 function SignupForm() {
   const router = useRouter();
-  const params = useSearchParams();
-  const defaultRole = (params.get('role') as Role) || 'player';
-  const [role, setRole] = useState<Role>(defaultRole);
+  const [name,     setName]     = useState('');
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
+  const [country,  setCountry]  = useState('');
+  const [sex,      setSex]      = useState<PlayerSex | ''>('');
+  const [error,    setError]    = useState('');
+  const [loading,  setLoading]  = useState(false);
 
-  const roleToPath: Record<Role, string> = {
-    player: '/dashboard/player',
-    club_manager: '/dashboard/club',
-    league_organizer: '/dashboard/league',
-    federation: '/dashboard/federation',
-  };
-  const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', country: '', city: '', orgName: '' });
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
 
-  const update = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+    if (!name.trim())        { setError('Ingresá tu nombre completo.'); return; }
+    if (!email.trim())       { setError('Ingresá un email válido.'); return; }
+    if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
+    if (!country)            { setError('Seleccioná tu país.'); return; }
+    if (!sex)                { setError('Seleccioná tu sexo.'); return; }
+
+    setLoading(true);
+    const player = registerPlayer({ name: name.trim(), email: email.trim(), password, country, sex });
+
+    if (!player) {
+      setError('Ya existe una cuenta con ese email.');
+      setLoading(false);
+      return;
+    }
+
+    const session = {
+      id:         player.id,
+      name:       player.name,
+      email:      player.email,
+      shortId:    player.shortId,
+      role:       'player',
+      sub:        `${player.shortId} · ${player.country ?? ''}`,
+      firstLogin: true,
+    };
+    localStorage.setItem('padelmgt_user', JSON.stringify(session));
+    router.push('/dashboard/player');
+  }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--grey-50)', display: 'flex' }}>
-      {/* Left — court image */}
-      <div style={{ flex: '0 0 45%', position: 'relative', overflow: 'hidden', display: 'flex' }}>
-        <img src="/assets/court-bg.svg" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(10,22,56,0.88) 0%, rgba(26,78,216,0.75) 100%)' }} />
-        <div style={{ position: 'relative', padding: '64px 48px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', width: '100%' }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-            <div style={{ width: 32, height: 32, background: '#fff', color: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18 }}>P</div>
-            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 22, textTransform: 'uppercase', color: '#fff', letterSpacing: '-0.01em' }}>PadelMGT</span>
-          </Link>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'clamp(40px, 5vw, 80px)', textTransform: 'uppercase', letterSpacing: '-0.025em', lineHeight: 0.9, color: '#fff', marginBottom: 20 }}>
-              CREA.<br /><span style={{ color: 'var(--neon)' }}>JUEGA.</span><br />RANKEA.
-            </div>
-            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1.6, maxWidth: 320 }}>
-              La plataforma para gestionar torneos, ligas y clubes de pádel en Latinoamérica.
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 32 }}>
-            {[{ n: '12,400+', l: 'Jugadores' }, { n: '380', l: 'Clubes' }, { n: '47', l: 'Ligas' }].map(s => (
-              <div key={s.l}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, color: '#fff' }}>{s.n}</div>
-                <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>{s.l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+    <div style={{ minHeight: '100vh', background: 'var(--grey-50)', display: 'flex', flexDirection: 'column' }}>
+      {/* Top bar */}
+      <div style={{ background: 'var(--black)', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <div style={{ width: 32, height: 32, background: 'var(--neon)', color: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18 }}>P</div>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: '#fff', letterSpacing: '0.04em' }}>PADELMGT</span>
+        </Link>
+        <Link href="/login" style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>
+          ¿Ya tenés cuenta? Iniciar sesión →
+        </Link>
       </div>
 
-      {/* Right — form */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 48px', overflow: 'auto' }}>
-        <div style={{ width: '100%', maxWidth: 480 }}>
-          <div style={{ marginBottom: 40 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>
-              Paso {step} de 2
-            </p>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 48, textTransform: 'uppercase', letterSpacing: '-0.02em', lineHeight: 0.92, margin: 0 }}>
-              {step === 1 ? 'SOY UN…' : 'MIS DATOS'}
-            </h1>
-          </div>
+      {/* Card */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
+        <div style={{ background: '#fff', width: '100%', maxWidth: 520, padding: '48px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 36, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 6px', color: 'var(--black)' }}>
+            Crear cuenta
+          </h1>
+          <p style={{ fontSize: 14, color: 'var(--grey-500)', margin: '0 0 32px' }}>
+            Únete a PadelMGT y empieza a jugar
+          </p>
 
-          {step === 1 && (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 32 }}>
-                {roles.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => setRole(r.id)}
+          <form onSubmit={handleSubmit} noValidate>
+            <div style={{ marginBottom: 20 }}>
+              <label htmlFor="su-name" style={labelStyle}>Nombre y apellido</label>
+              <input id="su-name" type="text" autoComplete="name" placeholder="Diego García"
+                value={name} onChange={e => setName(e.target.value)} required style={inputStyle} />
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label htmlFor="su-email" style={labelStyle}>Email</label>
+              <input id="su-email" type="email" autoComplete="email" placeholder="tu@email.com"
+                value={email} onChange={e => setEmail(e.target.value)} required style={inputStyle} />
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label htmlFor="su-password" style={labelStyle}>Contraseña</label>
+              <input id="su-password" type="password" autoComplete="new-password" placeholder="Mínimo 6 caracteres"
+                value={password} onChange={e => setPassword(e.target.value)} required style={inputStyle} />
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label htmlFor="su-country" style={labelStyle}>País de residencia</label>
+              <select id="su-country" value={country} onChange={e => setCountry(e.target.value)}
+                style={{ ...inputStyle, appearance: 'none' as const, cursor: 'pointer',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239E9EA0'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center',
+                  color: country ? 'var(--black)' : 'var(--grey-400)',
+                }}>
+                <option value="" disabled>Seleccioná tu país</option>
+                {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 28 }}>
+              <label style={labelStyle}>Sexo</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {([['M', 'Masculino'], ['F', 'Femenino']] as [PlayerSex, string][]).map(([val, label]) => (
+                  <button key={val} type="button" onClick={() => setSex(val)}
                     style={{
-                      textAlign: 'left', padding: '20px', border: `2px solid ${role === r.id ? 'var(--black)' : 'var(--grey-200)'}`,
-                      background: role === r.id ? 'var(--black)' : '#fff', cursor: 'pointer', borderRadius: 0,
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 22, textTransform: 'uppercase', color: role === r.id ? '#fff' : 'var(--black)', letterSpacing: '-0.01em', marginBottom: 6 }}>{r.label}</div>
-                    <div style={{ fontSize: 12, color: role === r.id ? 'rgba(255,255,255,0.7)' : 'var(--grey-500)', marginBottom: 12, lineHeight: 1.4 }}>{r.sub}</div>
-                    <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-                      {r.features.map(f => (
-                        <li key={f} style={{ fontSize: 11, color: role === r.id ? 'rgba(255,255,255,0.8)' : 'var(--grey-500)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                          <span style={{ color: role === r.id ? 'var(--neon)' : 'var(--turf-green)', fontSize: 10, fontWeight: 700 }}>✓</span> {f}
-                        </li>
-                      ))}
-                    </ul>
+                      padding: '12px', border: `2px solid ${sex === val ? 'var(--black)' : 'var(--grey-200)'}`,
+                      background: sex === val ? 'var(--black)' : '#fff',
+                      color: sex === val ? '#fff' : 'var(--grey-500)',
+                      fontSize: 14, fontWeight: sex === val ? 700 : 400, cursor: 'pointer',
+                    }}>
+                    {label}
                   </button>
                 ))}
               </div>
-              <button onClick={() => setStep(2)} className="btn btn-primary btn-lg" style={{ width: '100%', borderRadius: 0, fontSize: 14, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                Continuar como {roles.find(r => r.id === role)?.label} →
-              </button>
-            </>
-          )}
+            </div>
 
-          {step === 2 && (
-            <>
-              <button onClick={() => setStep(1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--grey-500)', marginBottom: 24, padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                ← Volver
-              </button>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 4 }}>
-                <div className="field"><label>Nombre</label><input value={form.firstName} onChange={e => update('firstName', e.target.value)} placeholder="Diego" style={{ borderRadius: 0 }} /></div>
-                <div className="field"><label>Apellido</label><input value={form.lastName} onChange={e => update('lastName', e.target.value)} placeholder="García" style={{ borderRadius: 0 }} /></div>
+            {error && (
+              <div style={{ marginBottom: 20, padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: 13, fontWeight: 600 }}>
+                {error}
               </div>
-              <div className="field"><label>Email</label><input type="email" value={form.email} onChange={e => update('email', e.target.value)} placeholder="diego@email.com" style={{ borderRadius: 0 }} /></div>
-              <div className="field"><label>Contraseña</label><input type="password" value={form.password} onChange={e => update('password', e.target.value)} placeholder="Mínimo 8 caracteres" style={{ borderRadius: 0 }} /></div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 4 }}>
-                <div className="field"><label>País</label>
-                  <select value={form.country} onChange={e => update('country', e.target.value)} style={{ borderRadius: 0 }}>
-                    <option value="">Seleccionar</option>
-                    {['Argentina', 'México', 'Colombia', 'Chile', 'Brasil', 'Perú', 'Uruguay', 'España', 'Otro'].map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="field"><label>Ciudad</label><input value={form.city} onChange={e => update('city', e.target.value)} placeholder="Tu ciudad" style={{ borderRadius: 0 }} /></div>
-              </div>
-              {role !== 'player' && (
-                <div className="field">
-                  <label>{role === 'club_manager' ? 'Nombre del Club' : role === 'league_organizer' ? 'Nombre de la Liga' : 'Nombre de la Federación'}</label>
-                  <input value={form.orgName} onChange={e => update('orgName', e.target.value)} placeholder="Mi Organización" style={{ borderRadius: 0 }} />
-                </div>
-              )}
-              <p style={{ fontSize: 11, color: 'var(--grey-400)', marginBottom: 16, lineHeight: 1.5 }}>
-                Al crear una cuenta aceptas nuestros <Link href="/terms" style={{ color: 'var(--black)' }}>Términos</Link> y <Link href="/privacy" style={{ color: 'var(--black)' }}>Política de Privacidad</Link>.
-              </p>
-              <button
-                onClick={() => router.push(roleToPath[role])}
-                className="btn btn-primary btn-lg"
-                style={{ width: '100%', borderRadius: 0, fontSize: 14, letterSpacing: '0.08em', textTransform: 'uppercase' }}
-              >
-                Crear Cuenta
-              </button>
-            </>
-          )}
+            )}
 
-          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--grey-400)', marginTop: 24 }}>
-            ¿Ya tienes cuenta? <Link href="/login" style={{ color: 'var(--black)', fontWeight: 600 }}>Iniciar Sesión</Link>
+            <button type="submit" disabled={loading} className="btn btn-primary"
+              style={{ width: '100%', borderRadius: 0, padding: '14px', fontSize: 14, opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+              {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+            </button>
+          </form>
+
+          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--grey-500)', marginTop: 24 }}>
+            ¿Ya tenés cuenta?{' '}
+            <Link href="/login" style={{ color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Iniciar sesión</Link>
           </p>
         </div>
       </div>
