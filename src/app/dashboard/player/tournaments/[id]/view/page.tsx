@@ -387,50 +387,71 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
         </div>
 
         {/* ── Standings ── */}
-        {hasStandings && (
-          <div style={card}>
-            <div style={secTitle}>Clasificación</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--grey-100)' }}>
-                  {['Pos', 'Jugador', 'W', 'Pts', 'PJ', '+/-'].map(h => (
-                    <th key={h} style={{
-                      padding: '6px 8px', textAlign: h === 'Jugador' ? 'left' : 'center',
-                      fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
-                      textTransform: 'uppercase', color: 'var(--grey-400)',
-                    }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {t.standings.map((s, i) => {
-                  const isMe = currentUser && s.playerId === currentUser.id;
-                  return (
-                    <tr key={s.playerId} style={{
-                      borderBottom: '1px solid var(--grey-100)',
-                      background: isMe ? 'rgba(214,255,0,0.06)' : 'transparent',
-                    }}>
-                      <td style={{ padding: '8px', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, color: i === 0 ? 'var(--turf-green)' : 'var(--grey-400)' }}>
-                        {i + 1}
-                      </td>
-                      <td style={{ padding: '8px', fontWeight: isMe ? 700 : 500 }}>
-                        {s.playerName}{isMe && ' ★'}
-                      </td>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>{s.wins}</td>
-                      <td style={{ padding: '8px', textAlign: 'center', fontWeight: 700 }}>{s.pts}</td>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>{s.played}</td>
-                      <td style={{ padding: '8px', textAlign: 'center', color: s.diff >= 0 ? 'var(--turf-green)' : '#dc2626' }}>
-                        {s.diff > 0 ? `+${s.diff}` : s.diff}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {hasStandings && (() => {
+          const isParejas = t.pairType === 'parejas' && t.fixedPairs && t.fixedPairs.length > 0;
+          function pairLabel(playerId: string): string {
+            if (isParejas) {
+              const pair = t.fixedPairs!.find(p => p.player1Id === playerId);
+              if (pair) return pair.name || `${pair.player1Name} / ${pair.player2Name}`;
+            }
+            return t.players.find(p => p.id === playerId)?.name ?? playerId;
+          }
+          function pairSub(playerId: string): string | null {
+            if (!isParejas) return null;
+            const pair = t.fixedPairs!.find(p => p.player1Id === playerId);
+            return pair?.name ? `${pair.player1Name} / ${pair.player2Name}` : null;
+          }
+          const isMe = (playerId: string) => currentUser && (
+            playerId === currentUser.id ||
+            (isParejas && t.fixedPairs!.some(p => p.player1Id === playerId && (p.player1Id === currentUser.id || p.player2Id === currentUser.id)))
+          );
+          return (
+            <div style={card}>
+              <div style={secTitle}>Clasificación</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--grey-100)' }}>
+                    {['Pos', isParejas ? 'Equipo' : 'Jugador', 'W', 'Pts', 'PJ', '+/-'].map(h => (
+                      <th key={h} style={{
+                        padding: '6px 8px', textAlign: h === 'Equipo' || h === 'Jugador' ? 'left' : 'center',
+                        fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
+                        textTransform: 'uppercase', color: 'var(--grey-400)',
+                      }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {t.standings.map((s, i) => {
+                    const me = isMe(s.playerId);
+                    const sub = pairSub(s.playerId);
+                    return (
+                      <tr key={s.playerId} style={{
+                        borderBottom: '1px solid var(--grey-100)',
+                        background: me ? 'rgba(214,255,0,0.06)' : 'transparent',
+                      }}>
+                        <td style={{ padding: '8px', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, color: i === 0 ? 'var(--turf-green)' : 'var(--grey-400)' }}>
+                          {i === 0 ? '🥇' : i + 1}
+                        </td>
+                        <td style={{ padding: '8px', fontWeight: me ? 700 : 500 }}>
+                          <div>{pairLabel(s.playerId)}{me && <span style={{ marginLeft: 4, fontSize: 11 }}>★</span>}</div>
+                          {sub && <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 1 }}>{sub}</div>}
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>{s.wins}</td>
+                        <td style={{ padding: '8px', textAlign: 'center', fontWeight: 700 }}>{s.pts}</td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>{s.played}</td>
+                        <td style={{ padding: '8px', textAlign: 'center', color: s.diff >= 0 ? 'var(--turf-green)' : '#dc2626' }}>
+                          {s.diff > 0 ? `+${s.diff}` : s.diff}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
 
         {/* ── Footer link ── */}
         <div style={{ textAlign: 'center', paddingTop: 8 }}>

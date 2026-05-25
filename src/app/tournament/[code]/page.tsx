@@ -4,7 +4,7 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getTournamentByCode } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
-import type { ScoreConfig } from '@/lib/game-engine';
+import type { ScoreConfig, FixedPair } from '@/lib/game-engine';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -71,6 +71,22 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
 
   function getName(pid: string) {
     return tournament!.players.find(p => p.id === pid)?.name ?? pid;
+  }
+
+  function getPairLabel(playerId: string): string {
+    const fp = tournament!.fixedPairs;
+    if (fp?.length) {
+      const pair = fp.find((p: FixedPair) => p.player1Id === playerId);
+      if (pair) return pair.name || `${pair.player1Name} / ${pair.player2Name}`;
+    }
+    return tournament!.players.find(p => p.id === playerId)?.name ?? playerId;
+  }
+
+  function getPairSub(playerId: string): string | null {
+    const fp = tournament!.fixedPairs;
+    if (!fp?.length) return null;
+    const pair = fp.find((p: FixedPair) => p.player1Id === playerId);
+    return pair?.name ? `${pair.player1Name} / ${pair.player2Name}` : null;
   }
 
   const currentRound = tournament.rounds.find(r => r.num === tournament.currentRound) ?? null;
@@ -168,9 +184,16 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                   if (!s) return <div key={i} style={{ width: 110 }} />;
                   const isFirst = i === 0;
                   return (
-                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 110 }}>
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 130 }}>
                       <div style={{ fontSize: isFirst ? 48 : 36, marginBottom: 6 }}>{medals[i]}</div>
-                      <div style={{ color: '#fff', fontSize: isFirst ? 14 : 12, fontWeight: 700, textAlign: 'center', marginBottom: 4, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.playerName}</div>
+                      <div style={{ color: '#fff', fontSize: isFirst ? 14 : 12, fontWeight: 700, textAlign: 'center', marginBottom: getPairSub(s.playerId) ? 2 : 4, maxWidth: 122, wordBreak: 'break-word', lineHeight: 1.3 }}>
+                        {getPairLabel(s.playerId)}
+                      </div>
+                      {getPairSub(s.playerId) && (
+                        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, textAlign: 'center', marginBottom: 4, maxWidth: 122, wordBreak: 'break-word' }}>
+                          {getPairSub(s.playerId)}
+                        </div>
+                      )}
                       <div style={{ fontFamily: 'var(--font-display)', fontSize: isFirst ? 20 : 16, fontWeight: 700, color: platColors[i], marginBottom: 10 }}>{s.pts} pts</div>
                       <div style={{ width: '100%', height: heights[i], background: platColors[i], display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: isFirst ? `0 -4px 16px ${platColors[i]}66` : 'none' }}>
                         <span style={{ fontFamily: 'var(--font-display)', fontSize: isFirst ? 28 : 22, fontWeight: 700, color: '#fff' }}>{i + 1}º</span>
@@ -208,8 +231,13 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                           {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
                         </td>
                         <td style={{ padding: '12px 14px' }}>
-                          <span style={{ fontSize: 13, fontWeight: isMe ? 700 : 500 }}>{s.playerName}</span>
-                          {isMe && <span style={{ marginLeft: 8, fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px', fontWeight: 700 }}>TÚ</span>}
+                          <div style={{ fontSize: 13, fontWeight: isMe ? 700 : 500 }}>
+                            {getPairLabel(s.playerId)}
+                            {isMe && <span style={{ marginLeft: 8, fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px', fontWeight: 700 }}>TÚ</span>}
+                          </div>
+                          {getPairSub(s.playerId) && (
+                            <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 1 }}>{getPairSub(s.playerId)}</div>
+                          )}
                         </td>
                         {isFinished ? (
                           <>
