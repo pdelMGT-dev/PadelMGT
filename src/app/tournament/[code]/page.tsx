@@ -6,6 +6,7 @@ import { getTournamentByCode } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
 import type { ScoreConfig, FixedPair } from '@/lib/game-engine';
 import { submitJoinRequest, getMyJoinRequest, type JoinRequest } from '@/lib/join-request-store';
+import { QRCodeSVG } from 'qrcode.react';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -422,11 +423,16 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
 
           {/* QR section */}
           <div style={{ background: '#1a1a2e', color: '#fff', padding: '28px 24px', textAlign: 'center' }}>
-            {/* QR grid icon */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 12px)', gap: 3, justifyContent: 'center', marginBottom: 16 }}>
-              {[1,1,1,1,1, 1,0,0,0,1, 1,0,1,0,1, 1,0,0,0,1, 1,1,1,1,1].map((v, i) => (
-                <div key={i} style={{ width: 12, height: 12, background: v ? 'rgba(255,255,255,0.85)' : 'transparent' }} />
-              ))}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+              <div style={{ padding: 8, background: '#fff', borderRadius: 4 }}>
+                <QRCodeSVG
+                  value={typeof window !== 'undefined' ? `${window.location.origin}/tournament/${tournament.code}` : `https://padelmgt.com/tournament/${tournament.code}`}
+                  size={120}
+                  bgColor="#ffffff"
+                  fgColor="#0a0f1e"
+                  level="M"
+                />
+              </div>
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>ÚNETE CON QR</div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>Escanea para unirte a este torneo desde tu móvil</div>
