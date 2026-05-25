@@ -68,6 +68,67 @@ const card: React.CSSProperties = {
   marginBottom: 16,
 };
 
+// ── Podium Component ──────────────────────────────────────────────────────────
+
+function PodiumSection({ standings, players }: { standings: Standing[], players: GamePlayer[] }) {
+  const top3 = standings.slice(0, 3);
+  if (top3.length < 1) return null;
+
+  const medals = ['🥇', '🥈', '🥉'];
+  const heights = [160, 120, 90]; // platform heights in px
+  const order = [1, 0, 2]; // display order: 2nd, 1st, 3rd
+
+  return (
+    <div style={{ background: 'var(--black)', padding: '40px 24px 0', marginBottom: 0 }}>
+      <div style={{
+        fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase',
+        color: 'rgba(255,255,255,0.4)', fontWeight: 700, textAlign: 'center', marginBottom: 32
+      }}>
+        🏆 TORNEO FINALIZADO — RESULTADOS
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 2 }}>
+        {order.map(i => {
+          const s = top3[i];
+          if (!s) return <div key={i} style={{ width: 120 }} />;
+          const isFirst = i === 0;
+          const platH = heights[i];
+          const platColor = i === 0 ? '#c9a227' : i === 1 ? '#9e9e9e' : '#a0522d'; // gold, silver, bronze
+
+          return (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 120 }}>
+              {/* Avatar / medal */}
+              <div style={{ fontSize: isFirst ? 52 : 40, marginBottom: 8 }}>{medals[i]}</div>
+              {/* Name */}
+              <div style={{
+                color: '#fff', fontSize: isFirst ? 14 : 12, fontWeight: 700,
+                textAlign: 'center', marginBottom: 4, maxWidth: 110,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+              }}>{s.playerName}</div>
+              {/* Points */}
+              <div style={{
+                fontFamily: 'var(--font-display)', fontSize: isFirst ? 22 : 18,
+                fontWeight: 700, color: platColor, marginBottom: 12
+              }}>{s.pts} pts</div>
+              {/* Platform */}
+              <div style={{
+                width: '100%', height: platH, background: platColor,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: isFirst ? `0 -4px 20px ${platColor}66` : 'none',
+              }}>
+                <span style={{
+                  fontFamily: 'var(--font-display)', fontSize: isFirst ? 32 : 24,
+                  fontWeight: 700, color: '#fff', letterSpacing: '-0.02em'
+                }}>{i + 1}º</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Page Component ─────────────────────────────────────────────────────────────
 
 export default function LiveTorneoPage({ params }: { params: Promise<{ id: string }> }) {
@@ -110,15 +171,20 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   // ── Auto-open active round ────────────────────────────────────────────────
   useEffect(() => {
     if (!tournament) return;
-    const activeRound = tournament.rounds.find(r => r.status === 'active');
-    if (activeRound) {
-      setRoundOpen({ [activeRound.num]: true });
+    if (tournament.status === 'finished') {
+      // Open all rounds when finished
+      const allOpen: Record<number, boolean> = {};
+      tournament.rounds.forEach(r => { allOpen[r.num] = true; });
+      setRoundOpen(allOpen);
+    } else {
+      const activeRound = tournament.rounds.find(r => r.status === 'active');
+      if (activeRound) setRoundOpen({ [activeRound.num]: true });
     }
-  }, [tournament?.currentRound]);
+  }, [tournament?.currentRound, tournament?.status]);
 
-  // ── Redirect if not live ──────────────────────────────────────────────────
+  // ── Redirect if not live or finished ─────────────────────────────────────
   useEffect(() => {
-    if (tournament && tournament.status !== 'live') {
+    if (tournament && tournament.status !== 'live' && tournament.status !== 'finished') {
       router.replace(`/dashboard/player/tournaments/${id}`);
     }
   }, [tournament, id, router]);
@@ -161,6 +227,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   }
 
   // ── Derived data ──────────────────────────────────────────────────────────
+  const isFinished = t.status === 'finished';
   const currentRoundNum = t.currentRound;
   const totalRounds = t.rounds.length;
   const isMexicano = t.format === 'mexicano';
@@ -271,6 +338,11 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   return (
     <div style={{ paddingBottom: 80 }}>
 
+      {/* ── Podium (finished mode) ── */}
+      {isFinished && (
+        <PodiumSection standings={calculateStandings(t)} players={t.players} />
+      )}
+
       {/* ── Sticky top bar ── */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -289,7 +361,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
             Ronda {currentRoundNum} / {expectedTotalRounds}
           </div>
         </div>
-        {!finishConfirm ? (
+        {!isFinished && (!finishConfirm ? (
           <button
             onClick={() => setFinishConfirm(true)}
             style={{ padding: '8px 16px', background: '#dc2626', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
@@ -307,7 +379,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
               No
             </button>
           </div>
-        )}
+        ))}
       </div>
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 32px' }}>
@@ -508,7 +580,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                       {round.courts.map(court => {
                         const key = `${round.num}-${court.courtNum}`;
                         const isCourtDone = court.status === 'completed';
-                        const isEditable = isActive && !isCompleted;
+                        const isEditable = isActive && !isCompleted && !isFinished;
                         const pair1Label = getPairLabel(t, court.pair1);
                         const pair2Label = getPairLabel(t, court.pair2);
 
@@ -628,8 +700,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                       )}
                     </div>
 
-                    {/* Action banner: only on active round when complete */}
-                    {isActive && roundDone && (
+                    {/* Action banner: only on active round when complete, hidden when finished */}
+                    {!isFinished && isActive && roundDone && (
                       <div style={{
                         padding: '18px 20px',
                         background: 'rgba(34,197,94,0.08)',

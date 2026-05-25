@@ -1256,13 +1256,18 @@ export default function PlayerTournamentsPage() {
         </div>
         {(() => {
           const baseStyle: React.CSSProperties = { padding: '7px 16px', background: 'var(--grey-100)', color: 'var(--grey-600)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' };
-          const href = t.status === 'live' && isCreator
+          const isFinishedT = t.status === 'finished';
+          const href = isFinishedT
+            ? `/dashboard/player/tournaments/${t.id}/live`
+            : t.status === 'live' && isCreator
             ? `/dashboard/player/tournaments/${t.id}/live`
             : isCreator
             ? `/dashboard/player/tournaments/${t.id}`
             : `/dashboard/player/tournaments/${t.id}/view`;
-          const btnLabel = t.status === 'live' && isCreator ? 'EN VIVO →' : isCreator ? 'Gestionar →' : 'Ver →';
-          const btnStyle = t.status === 'live' && isCreator
+          const btnLabel = isFinishedT ? 'Ver resultados →' : t.status === 'live' && isCreator ? 'EN VIVO →' : isCreator ? 'Gestionar →' : 'Ver →';
+          const btnStyle = isFinishedT
+            ? { ...baseStyle, background: 'var(--grey-800)', color: '#fff' }
+            : t.status === 'live' && isCreator
             ? { ...baseStyle, background: 'var(--turf-green)', color: '#fff' }
             : baseStyle;
           return (
