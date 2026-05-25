@@ -85,7 +85,10 @@ export default function TournamentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {ongoingTournaments.map((t) => (
+                {[...ongoingTournaments].sort((a, b) => {
+                  const order: Record<string, number> = { ongoing: 0, upcoming: 1, completed: 2 };
+                  return (order[a.status] ?? 3) - (order[b.status] ?? 3);
+                }).map((t) => (
                   <tr key={t.id} style={{ borderBottom: '1px solid var(--grey-200)' }}>
                     <td style={{ padding: '16px' }}>
                       <span className={`badge ${t.status === 'ongoing' ? 'badge-live' : t.status === 'upcoming' ? 'badge-soon' : ''}`}>

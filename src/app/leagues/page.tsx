@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { leagues, countries, cities } from '@/lib/data';
 
 export default function LeaguesPage() {
@@ -9,6 +9,21 @@ export default function LeaguesPage() {
   const [country, setCountry] = useState('All Countries');
   const [city, setCity] = useState('All Cities');
   const [status, setStatus] = useState('Todos');
+  const [detectedCountry, setDetectedCountry] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('https://ip-api.com/json')
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'success' && data.country) {
+          setDetectedCountry(data.country);
+          if (countries.includes(data.country)) {
+            setCountry(data.country);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const available = cities[country] || ['All Cities'];
 
@@ -36,6 +51,20 @@ export default function LeaguesPage() {
 
       <section style={{ padding: '64px 48px 96px' }}>
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>
+          {/* Location indicator */}
+          {detectedCountry && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, fontSize: 13, color: 'var(--grey-500)' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span>Ubicación detectada: <strong style={{ color: 'var(--black)' }}>{detectedCountry}</strong></span>
+              <button
+                onClick={() => { setDetectedCountry(null); setCountry('All Countries'); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--grey-400)', textDecoration: 'underline', padding: 0 }}
+              >
+                Limpiar
+              </button>
+            </div>
+          )}
+
           {/* Search / filters */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr repeat(3, auto)', gap: 12, marginBottom: 48, alignItems: 'center', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

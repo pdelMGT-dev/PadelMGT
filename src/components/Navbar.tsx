@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
-import Image from 'next/image';
 
 const leftLinks = [
   { href: '/', label: 'Inicio' },
@@ -20,21 +19,35 @@ const rightLinks = [
   { href: '/about', label: 'Nosotros' },
 ];
 
+function LogoIcon({ size = 30 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Teal hook */}
+      <path d="M4 26 C4 30 9 31 14 30 C20 29 24 24 24 19" stroke="#3DCFC0" strokeWidth="5" strokeLinecap="round" fill="none"/>
+      {/* Blue dots spray */}
+      <circle cx="8"  cy="16" r="2.3" fill="#3B9FDF"/>
+      <circle cx="13" cy="12" r="2.0" fill="#3B9FDF"/>
+      <circle cx="18" cy="9"  r="1.8" fill="#3B9FDF"/>
+      <circle cx="4"  cy="20" r="1.8" fill="#3B9FDF"/>
+      <circle cx="10" cy="21" r="1.5" fill="#3B9FDF"/>
+      <circle cx="22" cy="13" r="1.5" fill="#3B9FDF"/>
+      <circle cx="16" cy="15" r="1.3" fill="#3B9FDF"/>
+      <circle cx="25" cy="8"  r="1.3" fill="#3B9FDF"/>
+      <circle cx="27" cy="16" r="1.0" fill="#3B9FDF"/>
+      <circle cx="20" cy="4"  r="1.0" fill="#3B9FDF"/>
+    </svg>
+  );
+}
+
 export default function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const isHome = pathname === '/';
 
-  // Don't render on dashboard routes — they use DashboardSidebar instead
   if (pathname.startsWith('/dashboard')) return null;
 
   return (
     <>
-      {/* Promo banner */}
-      <div className="promo-banner">
-        Crea torneos en menos de 60 segundos. Federaciones — contacta ventas →
-      </div>
-
       <header className={`app-header${isHome ? ' transparent' : ''}`} style={isHome ? { position: 'absolute', width: '100%' } : {}}>
         {/* Desktop */}
         <div className="header-row" style={{ display: 'grid' }}>
@@ -53,7 +66,7 @@ export default function Navbar() {
 
           {/* Center logo */}
           <Link href="/" className="logo" style={{ justifySelf: 'center' }}>
-            <span className="logo-mark">P</span>
+            <LogoIcon />
             PadelMGT
           </Link>
 
@@ -98,7 +111,7 @@ export default function Navbar() {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 }}>
             <Link href="/" className="logo" style={{ color: '#fff' }} onClick={() => setMobileOpen(false)}>
-              <span className="logo-mark" style={{ background: '#fff', color: '#111' }}>P</span>
+              <LogoIcon />
               PadelMGT
             </Link>
             <button onClick={() => setMobileOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}>

@@ -1,5 +1,7 @@
+'use client';
+
 import Link from 'next/link';
-import Image from 'next/image';
+import { useState } from 'react';
 
 const formats = [
   { k: 'americano', name: 'Americano', desc: 'Cada pareja juega contra todas. Ideal para una tarde de juego.', when: '1 sesión', teams: '4–32 parejas', img: '/assets/court-card.svg' },
@@ -17,19 +19,32 @@ const liveMatches = [
 ];
 
 const topPlayers = [
-  { pos: 1, name: 'Diego García', country: '🇦🇷', club: 'Club Atlético Padel', level: 'Profesional', wins: 38, losses: 4, points: 2400 },
-  { pos: 2, name: 'Mateo Martínez', country: '🇲🇽', club: 'Padel Pro Center', level: 'Profesional', wins: 35, losses: 6, points: 2344 },
-  { pos: 3, name: 'Sofía Rodríguez', country: '🇨🇴', club: 'Pádel Caribe', level: 'Federado', wins: 32, losses: 7, points: 2288 },
-  { pos: 4, name: 'Lucas González', country: '🇨🇱', club: 'Andes Padel', level: 'Federado', wins: 30, losses: 9, points: 2232 },
-  { pos: 5, name: 'Valentina Hernández', country: '🇧🇷', club: 'Cancha 7', level: 'Avanzado', wins: 28, losses: 10, points: 2176 },
-  { pos: 6, name: 'Tomás López', country: '🇪🇸', club: 'Norte Sport', level: 'Federado', wins: 27, losses: 11, points: 2120 },
-  { pos: 7, name: 'Camila Pérez', country: '🇦🇷', club: 'Madero Club', level: 'Avanzado', wins: 26, losses: 12, points: 2064 },
-  { pos: 8, name: 'Joaquín Sánchez', country: '🇲🇽', club: 'Vertical Club', level: 'Avanzado', wins: 24, losses: 13, points: 2008 },
+  { pos: 1, name: 'Diego García',         country: '🇦🇷', countryName: 'Argentina', club: 'Club Atlético Padel', level: 'Profesional', wins: 38, losses: 4,  points: 2400 },
+  { pos: 2, name: 'Mateo Martínez',        country: '🇲🇽', countryName: 'México',    club: 'Padel Pro Center',   level: 'Profesional', wins: 35, losses: 6,  points: 2344 },
+  { pos: 3, name: 'Sofía Rodríguez',       country: '🇨🇴', countryName: 'Colombia',  club: 'Pádel Caribe',       level: 'Federado',    wins: 32, losses: 7,  points: 2288 },
+  { pos: 4, name: 'Lucas González',        country: '🇨🇱', countryName: 'Chile',     club: 'Andes Padel',        level: 'Federado',    wins: 30, losses: 9,  points: 2232 },
+  { pos: 5, name: 'Valentina Hernández',   country: '🇧🇷', countryName: 'Brasil',    club: 'Cancha 7',           level: 'Avanzado',    wins: 28, losses: 10, points: 2176 },
+  { pos: 6, name: 'Tomás López',           country: '🇪🇸', countryName: 'España',    club: 'Norte Sport',        level: 'Federado',    wins: 27, losses: 11, points: 2120 },
+  { pos: 7, name: 'Camila Pérez',          country: '🇦🇷', countryName: 'Argentina', club: 'Madero Club',        level: 'Avanzado',    wins: 26, losses: 12, points: 2064 },
+  { pos: 8, name: 'Joaquín Sánchez',       country: '🇲🇽', countryName: 'México',    club: 'Vertical Club',      level: 'Avanzado',    wins: 24, losses: 13, points: 2008 },
+  { pos: 9, name: 'Ana Betancourt',        country: '🇨🇴', countryName: 'Colombia',  club: 'Padel Norte',        level: 'Federado',    wins: 23, losses: 12, points: 1960 },
+  { pos: 10, name: 'Bruno Alves',          country: '🇧🇷', countryName: 'Brasil',    club: 'Sport Club RS',      level: 'Avanzado',    wins: 22, losses: 13, points: 1910 },
+  { pos: 11, name: 'Renata Fuentes',       country: '🇨🇱', countryName: 'Chile',     club: 'Cordillera Padel',   level: 'Avanzado',    wins: 20, losses: 14, points: 1855 },
+  { pos: 12, name: 'Pablo Fernández',      country: '🇦🇷', countryName: 'Argentina', club: 'Buenos Aires Padel', level: 'Federado',    wins: 19, losses: 15, points: 1800 },
 ];
+
+const countries = [...new Set(topPlayers.map(p => p.countryName))];
 
 const marqueeItems = ['CREA', 'JUEGA', 'RANKEA', 'TORNEOS', 'LIGAS', 'CLUBES', 'AUTOMATIZA', 'GANA'];
 
 export default function HomePage() {
+  const [rankTab, setRankTab] = useState<'latam' | 'country'>('latam');
+  const [selectedCountry, setSelectedCountry] = useState(countries[0]);
+
+  const visiblePlayers = rankTab === 'latam'
+    ? topPlayers.slice(0, 8)
+    : topPlayers.filter(p => p.countryName === selectedCountry).slice(0, 10);
+
   return (
     <div>
       {/* ── HERO ── */}
@@ -127,7 +142,7 @@ export default function HomePage() {
                   En Vivo Ahora
                 </span>
               </div>
-              <h2 className="section-title" style={{ color: '#fff' }}>PARTIDOS EN CURSO</h2>
+              <h2 className="section-title" style={{ color: '#fff' }}>JUEGOS ACTUALES</h2>
               <p className="section-sub" style={{ color: 'rgba(255,255,255,0.55)' }}>
                 Resultados en tiempo real desde clubes de toda la región.
               </p>
@@ -171,33 +186,79 @@ export default function HomePage() {
             <Link href="/ranking" className="btn btn-secondary">Ver Todo →</Link>
           </div>
 
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 24, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setRankTab('latam')}
+              style={{
+                padding: '8px 20px', border: '2px solid', cursor: 'pointer', fontSize: 12,
+                fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                background: rankTab === 'latam' ? 'var(--black)' : 'transparent',
+                borderColor: rankTab === 'latam' ? 'var(--black)' : 'var(--grey-300)',
+                color: rankTab === 'latam' ? '#fff' : 'var(--grey-500)',
+              }}
+            >
+              LATAM
+            </button>
+            <button
+              onClick={() => setRankTab('country')}
+              style={{
+                padding: '8px 20px', border: '2px solid', cursor: 'pointer', fontSize: 12,
+                fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                background: rankTab === 'country' ? 'var(--black)' : 'transparent',
+                borderColor: rankTab === 'country' ? 'var(--black)' : 'var(--grey-300)',
+                color: rankTab === 'country' ? '#fff' : 'var(--grey-500)',
+              }}
+            >
+              Por País
+            </button>
+            {rankTab === 'country' && (
+              <select
+                value={selectedCountry}
+                onChange={e => setSelectedCountry(e.target.value)}
+                className="field"
+                style={{ margin: 0, padding: '8px 14px', borderRadius: 0, fontSize: 13, minWidth: 160 }}
+              >
+                {countries.map(c => <option key={c}>{c}</option>)}
+              </select>
+            )}
+          </div>
+
           <div style={{ background: '#fff', border: '1px solid #e5e5e5' }}>
-            <table className="rank-table">
-              <thead>
-                <tr>
-                  <th style={{ paddingLeft: 32, width: 60 }}>#</th>
-                  <th>Jugador</th>
-                  <th>País</th>
-                  <th>Club</th>
-                  <th>Nivel</th>
-                  <th style={{ textAlign: 'right' }}>V/D</th>
-                  <th style={{ textAlign: 'right', paddingRight: 32 }}>Puntos</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topPlayers.map((p) => (
-                  <tr key={p.pos}>
-                    <td style={{ paddingLeft: 32, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 18 }}>{p.pos}</td>
-                    <td style={{ fontWeight: 500 }}>{p.name}</td>
-                    <td><span style={{ fontSize: 18 }}>{p.country}</span></td>
-                    <td style={{ color: 'var(--grey-500)', fontSize: 13 }}>{p.club}</td>
-                    <td><span className="chip" style={{ padding: '4px 10px', fontSize: 10 }}>{p.level}</span></td>
-                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--grey-500)' }}>{p.wins}/{p.losses}</td>
-                    <td style={{ textAlign: 'right', paddingRight: 32, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20 }}>{p.points.toLocaleString()}</td>
+            {visiblePlayers.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14 }}>
+                No hay jugadores registrados de {selectedCountry} todavía.
+              </div>
+            ) : (
+              <table className="rank-table">
+                <thead>
+                  <tr>
+                    <th style={{ paddingLeft: 32, width: 60 }}>#</th>
+                    <th>Jugador</th>
+                    <th>País</th>
+                    <th>Club</th>
+                    <th>Nivel</th>
+                    <th style={{ textAlign: 'right' }}>V/D</th>
+                    <th style={{ textAlign: 'right', paddingRight: 32 }}>Puntos</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {visiblePlayers.map((p, i) => (
+                    <tr key={p.pos}>
+                      <td style={{ paddingLeft: 32, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 18 }}>
+                        {rankTab === 'country' ? i + 1 : p.pos}
+                      </td>
+                      <td style={{ fontWeight: 500 }}>{p.name}</td>
+                      <td><span style={{ fontSize: 18 }}>{p.country}</span></td>
+                      <td style={{ color: 'var(--grey-500)', fontSize: 13 }}>{p.club}</td>
+                      <td><span className="chip" style={{ padding: '4px 10px', fontSize: 10 }}>{p.level}</span></td>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--grey-500)' }}>{p.wins}/{p.losses}</td>
+                      <td style={{ textAlign: 'right', paddingRight: 32, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20 }}>{p.points.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </section>

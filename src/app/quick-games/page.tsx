@@ -1,20 +1,54 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getAllGames } from '@/lib/game-store';
+import type { ActiveGame } from '@/lib/game-engine';
 
 const levels = ['Todos los niveles', 'Principiante', 'Intermedio', 'Avanzado'];
-
-const nearby = [
-  { name: 'Americano Express',   host: 'Diego M.', level: 'Todos',       players: 6,  max: 8,  distance: '0.8 km', time: 'Hoy 19:00',    pairType: 'Intercambio' },
-  { name: 'Juego del Barrio',    host: 'Ana R.',    level: 'Intermedio',  players: 4,  max: 8,  distance: '1.2 km', time: 'Hoy 20:30',    pairType: 'Intercambio' },
-  { name: 'Rápido Avanzado',     host: 'Carlos V.', level: 'Avanzado',    players: 2,  max: 4,  distance: '2.0 km', time: 'Mañana 09:00', pairType: 'Pareja Fija' },
-  { name: 'Open Mixto',          host: 'Sofía L.',  level: 'Todos',       players: 10, max: 12, distance: '2.5 km', time: 'Sábado 10:00', pairType: 'Intercambio' },
-];
 
 export default function QuickGamesPage() {
   const [level, setLevel] = useState('Todos los niveles');
   const [size, setSize] = useState(8);
+  const [detectedCountry, setDetectedCountry] = useState<string | null>(null);
+  const [detectedCity, setDetectedCity] = useState<string | null>(null);
+  const [manualCountry, setManualCountry] = useState<string>('');
+  const [nearbyGames, setNearbyGames] = useState<ActiveGame[]>([]);
+  const [locationLoading, setLocationLoading] = useState(true);
+  const [allCountries, setAllCountries] = useState<string[]>([]);
+
+  useEffect(() => {
+    const games = getAllGames().filter(g => g.status !== 'finished');
+    const countryList = [...new Set(games.map(g => g.country).filter(Boolean))] as string[];
+    setAllCountries(countryList);
+
+    fetch('https://ip-api.com/json')
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'success') {
+          const c = data.country as string;
+          const ci = data.city as string;
+          setDetectedCountry(c);
+          setDetectedCity(ci);
+          setManualCountry(c);
+          setNearbyGames(games.filter(g => g.country === c || g.city === ci));
+        } else {
+          setNearbyGames(games);
+        }
+      })
+      .catch(() => {
+        setNearbyGames(games);
+      })
+      .finally(() => setLocationLoading(false));
+  }, []);
+
+  function applyCountry(c: string) {
+    setManualCountry(c);
+    const games = getAllGames().filter(g => g.status !== 'finished');
+    setNearbyGames(c ? games.filter(g => g.country === c) : games);
+  }
+
+  const locationLabel = manualCountry || detectedCountry || 'tu zona';
 
   return (
     <div>
@@ -94,29 +128,65 @@ export default function QuickGamesPage() {
             {/* Find nearby */}
             <div>
               <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 8 }}>Juegos Cercanos</div>
-              <h2 className="section-title" style={{ fontSize: 'clamp(32px, 3vw, 56px)', marginBottom: 40 }}>ÚNETE AHORA</h2>
+              <h2 className="section-title" style={{ fontSize: 'clamp(32px, 3vw, 56px)', marginBottom: 24 }}>ÚNETE AHORA</h2>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-                {nearby.map((g, i) => (
-                  <div key={i} style={{ background: '#fff', padding: '24px 28px', display: 'flex', gap: 20, alignItems: 'center' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                        <span className="chip" style={{ fontSize: 10 }}>{g.level}</span>
-                        <span className="chip" style={{ fontSize: 10, background: 'var(--grey-50)' }}>{g.pairType}</span>
-                      </div>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--black)' }}>{g.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 4 }}>Por {g.host} · {g.distance} · {g.time}</div>
-                    </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, color: 'var(--black)', lineHeight: 1 }}>
-                        {g.players}<span style={{ fontSize: 16, color: 'var(--grey-400)' }}>/{g.max}</span>
-                      </div>
-                      <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 10 }}>jugadores</div>
-                      <Link href="/login" className="btn btn-primary btn-sm" style={{ borderRadius: 0 }}>Unirse</Link>
-                    </div>
-                  </div>
-                ))}
+              {/* Location bar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: '12px 16px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--turf-green)', flexShrink: 0 }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                {locationLoading ? (
+                  <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>Detectando tu ubicación…</span>
+                ) : (
+                  <span style={{ fontSize: 12, color: 'var(--grey-600)', flex: 1 }}>
+                    Mostrando juegos en: <strong>{locationLabel}</strong>
+                  </span>
+                )}
+                <select
+                  value={manualCountry}
+                  onChange={e => applyCountry(e.target.value)}
+                  className="field"
+                  style={{ margin: 0, padding: '6px 10px', borderRadius: 0, fontSize: 12, minWidth: 120 }}
+                >
+                  <option value="">Todos</option>
+                  {allCountries.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
+
+              {nearbyGames.length === 0 ? (
+                <div style={{ padding: '40px 28px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 16 }}>
+                    {locationLoading ? 'Cargando juegos…' : `No hay juegos abiertos en ${locationLabel} ahora.`}
+                  </div>
+                  <Link href="/login" className="btn btn-primary btn-sm" style={{ borderRadius: 0 }}>Crear uno →</Link>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+                  {nearbyGames.slice(0, 5).map((g) => (
+                    <div key={g.id} style={{ background: '#fff', padding: '24px 28px', display: 'flex', gap: 20, alignItems: 'center' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                          <span className="chip" style={{ fontSize: 10 }}>{g.levelLabel || 'Todos los niveles'}</span>
+                          <span className="chip" style={{ fontSize: 10, background: 'var(--grey-50)' }}>
+                            {g.pairType === 'individual' ? 'Intercambio' : 'Pareja Fija'}
+                          </span>
+                          {g.status === 'live' && <span className="badge badge-live" style={{ fontSize: 9 }}>LIVE</span>}
+                        </div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--black)' }}>{g.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 4 }}>
+                          {g.city}{g.country ? `, ${g.country}` : ''}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, color: 'var(--black)', lineHeight: 1 }}>
+                          {g.players.length}
+                          <span style={{ fontSize: 16, color: 'var(--grey-400)' }}>/{g.maxPlayers}</span>
+                        </div>
+                        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 10 }}>jugadores</div>
+                        <Link href={`/quick-game/${g.code}`} className="btn btn-primary btn-sm" style={{ borderRadius: 0 }}>Ver →</Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div style={{ background: 'var(--grey-50)', border: '1px solid var(--grey-200)', padding: '20px 28px', marginTop: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
                 <p style={{ fontSize: 13, color: 'var(--grey-500)', margin: 0 }}>¿No encontrás juego? Activá notificaciones para tu zona.</p>
