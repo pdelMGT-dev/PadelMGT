@@ -9,6 +9,7 @@ import { startTournament } from '@/lib/tournament-engine';
 import { createInvitation, getInvitationsForGame } from '@/lib/invitation-store';
 import { searchPlayers, getFriendsForPlayer } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
+import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, type JoinRequest } from '@/lib/join-request-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -117,6 +118,9 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   // Starting_soon: adjust maxPlayers
   const [soonMaxPlayers, setSoonMaxPlayers] = useState<number>(8);
 
+  // Join requests
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
+
   // Pair builder state (for americano parejas mode)
   const [pairSlots, setPairSlots] = useState<Array<{
     name: string;
@@ -139,6 +143,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     setTournament(t ?? null);
     if (t) {
       setSoonMaxPlayers(t.maxPlayers);
+      setJoinRequests(loadJoinRequests().filter(r => r.entityId === t.id && r.status === 'pending'));
     }
   }, [id]);
 
@@ -537,6 +542,30 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     setSoonMaxPlayers(clamped);
   }
 
+  function handleApproveJoinRequest(req: JoinRequest) {
+    if (!t) return;
+    const newPlayer: GamePlayer = {
+      id: req.playerId,
+      name: req.playerName,
+      email: req.playerEmail,
+      ranking: 999,
+      isCreator: false,
+    };
+    const updated: Tournament = {
+      ...t,
+      players: [...t.players, newPlayer],
+    };
+    saveTournament(updated);
+    setTournament(updated);
+    approveJoinRequest(req.id);
+    setJoinRequests(prev => prev.filter(r => r.id !== req.id));
+  }
+
+  function handleRejectJoinRequest(req: JoinRequest) {
+    rejectJoinRequest(req.id);
+    setJoinRequests(prev => prev.filter(r => r.id !== req.id));
+  }
+
   // ── Co-creator eligible players ──────────────────────────────────────────
   const eligibleCoCreators = confirmedPlayers.filter(p =>
     p.id !== t.creatorId && !(t.coCreatorIds ?? []).includes(p.id)
@@ -840,6 +869,35 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Join Requests from public page */}
+          {joinRequests.length > 0 && t.status !== 'live' && t.status !== 'finished' && (
+            <>
+              <div style={{ marginTop: 12, paddingTop: 8, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#f5a623', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f5a623', display: 'inline-block' }} />
+                Solicitudes de Ingreso ({joinRequests.length})
+              </div>
+              {joinRequests.map(req => (
+                <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginBottom: 6, border: '1px solid #fcd34d', background: 'rgba(245,166,35,0.04)' }}>
+                  <div style={{ width: 32, height: 32, background: 'rgba(245,166,35,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#f5a623', flexShrink: 0 }}>
+                    {req.playerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{req.playerName}</div>
+                    {req.playerEmail && <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{req.playerEmail}</div>}
+                  </div>
+                  {t.players.length < t.maxPlayers && (
+                    <button onClick={() => handleApproveJoinRequest(req)} style={{ padding: '5px 12px', background: 'var(--turf-green)', color: '#fff', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', flexShrink: 0 }}>
+                      ✓ Aceptar
+                    </button>
+                  )}
+                  <button onClick={() => handleRejectJoinRequest(req)} style={{ padding: '5px 12px', background: '#fff', color: '#dc2626', border: '1px solid #fecaca', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                    ✗ Rechazar
+                  </button>
+                </div>
+              ))}
+            </>
           )}
 
           {/* Pending */}

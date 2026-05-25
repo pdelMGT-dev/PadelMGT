@@ -184,6 +184,36 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                 Ya estás inscrito ✓
               </div>
             )}
+
+            {/* Join request banners */}
+            {myRequest?.status === 'approved' && (
+              <div style={{ marginTop: 16, padding: '12px 20px', background: 'rgba(0,180,0,0.1)', border: '1px solid rgba(0,180,0,0.3)', color: 'var(--turf-green)', fontSize: 13, fontWeight: 700 }}>
+                ✓ ¡Solicitud aprobada! Fuiste confirmado en el torneo.
+              </div>
+            )}
+            {myRequest?.status === 'rejected' && (
+              <div style={{ marginTop: 16, padding: '12px 20px', background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: 13, fontWeight: 700 }}>
+                ✗ Tu solicitud fue rechazada por el organizador.
+              </div>
+            )}
+            {(requestSent || myRequest?.status === 'pending') && !['approved','rejected'].includes(myRequest?.status ?? '') && (
+              <div style={{ marginTop: 16, padding: '12px 20px', background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', fontSize: 13, fontWeight: 700 }}>
+                ⏳ Solicitud enviada — esperando aprobación del organizador.
+              </div>
+            )}
+
+            {/* Join button (logged in, not in tournament, no pending request, has space) */}
+            {currentUserId &&
+             !tournament.players.some(p => p.id === currentUserId) &&
+             !myRequest && !requestSent &&
+             tournament.players.length < tournament.maxPlayers && (
+              <button
+                onClick={handleJoinRequest}
+                style={{ marginTop: 20, padding: '12px 28px', background: 'var(--turf-green)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+              >
+                Solicitar inscripción →
+              </button>
+            )}
           </div>
         )}
 
