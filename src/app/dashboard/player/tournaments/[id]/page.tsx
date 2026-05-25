@@ -117,6 +117,14 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   // Starting_soon: adjust maxPlayers
   const [soonMaxPlayers, setSoonMaxPlayers] = useState<number>(8);
 
+  // Pair builder state (for americano parejas mode)
+  const [pairSlots, setPairSlots] = useState<Array<{
+    name: string;
+    player1Id: string | null;
+    player2Id: string | null;
+  }>>([]);
+  const [draggedPlayerId, setDraggedPlayerId] = useState<string | null>(null);
+
   // ── Load user ─────────────────────────────────────────────────────────────
   useEffect(() => {
     try {
@@ -161,6 +169,24 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     ]);
     setInviteFriends(getFriendsForPlayer(currentUser.id).filter(f => !allIds.has(f.id)));
   }, [currentUser, tournament]);
+
+  // ── Initialize pairSlots for americano parejas ────────────────────────────
+  useEffect(() => {
+    if (!tournament || tournament.format !== 'americano' || tournament.pairType !== 'parejas') return;
+    // If fixedPairs already set, restore them
+    if (tournament.fixedPairs?.length) {
+      setPairSlots(tournament.fixedPairs.map(fp => ({
+        name: fp.name ?? '',
+        player1Id: fp.player1Id,
+        player2Id: fp.player2Id,
+      })));
+    } else {
+      // Create empty slots: maxPlayers/2 slots
+      setPairSlots(Array.from({ length: Math.floor(tournament.maxPlayers / 2) }, () => ({
+        name: '', player1Id: null, player2Id: null,
+      })));
+    }
+  }, [tournament?.id, tournament?.fixedPairs?.length]);
 
   // ── Guard: loading ────────────────────────────────────────────────────────
   if (tournament === undefined) {
@@ -303,7 +329,10 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   const isStartingSoon = t.status === 'starting_soon';
   const allFilled = confirmedPlayers.length >= t.maxPlayers;
   const noPending = pendingInvited.length === 0;
-  const canStart = allFilled && noPending;
+  const isAmericanoParejas = t.format === 'americano' && t.pairType === 'parejas';
+  const completePairs = pairSlots.filter(s => s.player1Id && s.player2Id);
+  const canStartParejas = isAmericanoParejas ? completePairs.length >= 2 && noPending : false;
+  const canStart = isAmericanoParejas ? canStartParejas : (allFilled && noPending);
   const si = statusInfo(t.status);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -473,7 +502,27 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   }
 
   function handleStartTournament() {
-    const result = startTournament(t);
+    let tournamentToStart = t;
+
+    if (isAmericanoParejas) {
+      const validPairs = pairSlots.filter(s => s.player1Id && s.player2Id);
+      const activePairPlayerIds = new Set(validPairs.flatMap(s => [s.player1Id!, s.player2Id!]));
+      tournamentToStart = {
+        ...t,
+        fixedPairs: validPairs.map((s, i) => ({
+          pairIndex: i,
+          player1Id: s.player1Id!,
+          player2Id: s.player2Id!,
+          player1Name: t.players.find(p => p.id === s.player1Id)?.name ?? '',
+          player2Name: t.players.find(p => p.id === s.player2Id)?.name ?? '',
+          name: s.name.trim() || undefined,
+        })),
+        // Keep only players in valid pairs
+        players: t.players.filter(p => activePairPlayerIds.has(p.id)),
+      };
+    }
+
+    const result = startTournament(tournamentToStart);
     saveTournament(result);
     setTournament(result);
     router.push(`/dashboard/player/tournaments/${id}/live`);
@@ -979,6 +1028,143 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
           )}
         </div>
 
+        {/* ── Section 2b: Pair Builder (americano parejas) ── */}
+        {isAmericanoParejas && t.status !== 'live' && (() => {
+          // Compute unassigned players
+          const assignedIds = new Set(
+            pairSlots.flatMap(s => [s.player1Id, s.player2Id].filter(Boolean) as string[])
+          );
+          const unassigned = t.players.filter(p => !assignedIds.has(p.id));
+
+          function handleDropOnSlot(pairIdx: number, slot: 'player1Id' | 'player2Id') {
+            if (!draggedPlayerId) return;
+            setPairSlots(prev => {
+              // Remove dragged player from wherever they are
+              const next = prev.map(s => ({
+                ...s,
+                player1Id: s.player1Id === draggedPlayerId ? null : s.player1Id,
+                player2Id: s.player2Id === draggedPlayerId ? null : s.player2Id,
+              }));
+              // If target slot already occupied, swap (put displaced back to unassigned = null in that slot)
+              next[pairIdx] = { ...next[pairIdx], [slot]: draggedPlayerId };
+              return next;
+            });
+            setDraggedPlayerId(null);
+          }
+
+          function removeFromSlot(pairIdx: number, slot: 'player1Id' | 'player2Id') {
+            setPairSlots(prev => prev.map((s, i) => i === pairIdx ? { ...s, [slot]: null } : s));
+          }
+
+          const playerName = (id: string | null) => id ? (t.players.find(p => p.id === id)?.name ?? id) : null;
+
+          return (
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '20px 24px', marginBottom: 16 }}>
+              <div style={secTitle}>FORMAR EQUIPOS</div>
+
+              {/* Unassigned players pool */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
+                  Jugadores sin equipo ({unassigned.length})
+                </div>
+                <div
+                  style={{ minHeight: 44, background: 'var(--grey-50)', border: '1px dashed var(--grey-200)', padding: '8px 12px', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={() => {
+                    if (!draggedPlayerId) return;
+                    setPairSlots(prev => prev.map(s => ({
+                      ...s,
+                      player1Id: s.player1Id === draggedPlayerId ? null : s.player1Id,
+                      player2Id: s.player2Id === draggedPlayerId ? null : s.player2Id,
+                    })));
+                    setDraggedPlayerId(null);
+                  }}
+                >
+                  {unassigned.length === 0
+                    ? <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>Todos los jugadores están asignados</span>
+                    : unassigned.map(p => (
+                      <div
+                        key={p.id}
+                        draggable
+                        onDragStart={() => setDraggedPlayerId(p.id)}
+                        style={{
+                          padding: '6px 14px', background: '#fff', border: '1px solid var(--grey-300)',
+                          fontSize: 13, fontWeight: 600, cursor: 'grab', userSelect: 'none',
+                          boxShadow: draggedPlayerId === p.id ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
+                          opacity: draggedPlayerId === p.id ? 0.5 : 1,
+                        }}
+                      >
+                        {p.name}
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+
+              {/* Team slots grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {pairSlots.map((slot, i) => {
+                  const isComplete = slot.player1Id && slot.player2Id;
+                  return (
+                    <div key={i} style={{
+                      border: `2px solid ${isComplete ? 'var(--turf-green, #22c55e)' : 'var(--grey-200)'}`,
+                      padding: '12px 14px',
+                      background: isComplete ? 'rgba(34,197,94,0.04)' : '#fff',
+                    }}>
+                      {/* Team name input */}
+                      <input
+                        value={slot.name}
+                        onChange={e => setPairSlots(prev => prev.map((s, idx) => idx === i ? { ...s, name: e.target.value } : s))}
+                        placeholder={`Equipo ${i + 1}`}
+                        style={{ ...inp, fontSize: 12, fontWeight: 700, marginBottom: 10, padding: '6px 10px' }}
+                      />
+                      {/* Player slots */}
+                      {(['player1Id', 'player2Id'] as const).map(slotKey => (
+                        <div
+                          key={slotKey}
+                          onDragOver={e => e.preventDefault()}
+                          onDrop={() => handleDropOnSlot(i, slotKey)}
+                          style={{
+                            minHeight: 38, marginBottom: 6, padding: '6px 10px',
+                            background: slot[slotKey] ? 'var(--grey-50)' : 'transparent',
+                            border: `1px dashed ${slot[slotKey] ? 'var(--grey-300)' : 'var(--grey-200)'}`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            fontSize: 13,
+                          }}
+                        >
+                          {slot[slotKey] ? (
+                            <>
+                              <span
+                                draggable
+                                onDragStart={() => setDraggedPlayerId(slot[slotKey]!)}
+                                style={{ fontWeight: 600, cursor: 'grab', flex: 1 }}
+                              >
+                                {playerName(slot[slotKey])}
+                              </span>
+                              <button
+                                onClick={() => removeFromSlot(i, slotKey)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 16, padding: '0 0 0 8px', lineHeight: 1 }}
+                              >×</button>
+                            </>
+                          ) : (
+                            <span style={{ color: 'var(--grey-300)', fontSize: 12 }}>Arrastrá un jugador aquí</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Status */}
+              <div style={{ marginTop: 14, fontSize: 12, color: 'var(--grey-400)' }}>
+                {completePairs.length} equipo{completePairs.length !== 1 ? 's' : ''} completo{completePairs.length !== 1 ? 's' : ''} · {unassigned.length} jugador{unassigned.length !== 1 ? 'es' : ''} sin equipo
+                {unassigned.length > 0 && ' — los jugadores sin equipo serán excluidos al iniciar'}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ── Section 3: Co-Creadores ── */}
         <div style={card}>
           <div style={secTitle}>Co-Creadores</div>
@@ -1069,7 +1255,10 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
           </button>
           {!canStart && (
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--grey-400)', textAlign: 'center' }}>
-              Necesitás completar todos los cupos ({confirmedPlayers.length}/{t.maxPlayers}) para iniciar el torneo.
+              {isAmericanoParejas
+                ? `Necesitás al menos 2 equipos completos para iniciar (tenés ${completePairs.length}).`
+                : `Necesitás completar todos los cupos (${confirmedPlayers.length}/${t.maxPlayers}) para iniciar el torneo.`
+              }
             </div>
           )}
         </div>

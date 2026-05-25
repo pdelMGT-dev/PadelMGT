@@ -54,6 +54,7 @@ export interface FixedPair {
   player2Id: string;
   player1Name: string;
   player2Name: string;
+  name?: string;
 }
 
 export interface CourtMatch {
