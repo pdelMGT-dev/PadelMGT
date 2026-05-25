@@ -24,6 +24,7 @@ import { searchPlayers, addFriendship, areFriends, getFriendsForPlayer } from '@
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { applyGameRankingResults, getRankingHistoryForGame } from '@/lib/ranking-store';
 import type { RankingEntry } from '@/lib/ranking-store';
+import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, type JoinRequest } from '@/lib/join-request-store';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -124,6 +125,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const [shareUrl, setShareUrl] = useState('');
   const [showQR, setShowQR] = useState(false);
   const [rankingEntries, setRankingEntries] = useState<RankingEntry[]>([]);
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
 
   // Edit state
   const [editOpen, setEditOpen] = useState(false);
@@ -171,13 +173,18 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   // Load game
   useEffect(() => {
-    if (!game) setGame(getGame(id));
+    const g = game ?? getGame(id);
+    if (!game) setGame(g);
+    if (g) setJoinRequests(loadJoinRequests().filter(r => r.entityId === g.id && r.status === 'pending'));
   }, [id, game]);
 
   // Poll for invitation responses every 5s (creator sees status updates)
   const refreshGame = useCallback(() => {
     const fresh = getGame(id);
-    if (fresh) setGame(fresh);
+    if (fresh) {
+      setGame(fresh);
+      setJoinRequests(loadJoinRequests().filter(r => r.entityId === fresh.id && r.status === 'pending'));
+    }
   }, [id]);
 
   useEffect(() => {
@@ -563,6 +570,30 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     setGame(finished);
     setRankingEntries(entries);
     showToast('¡Juego finalizado! Ranking actualizado.');
+  }
+
+  function handleApproveRequest(req: JoinRequest) {
+    if (!game) return;
+    const newPlayer: GamePlayer = {
+      id: req.playerId,
+      name: req.playerName,
+      email: req.playerEmail,
+      ranking: 999,
+      isCreator: false,
+    };
+    const updated: ActiveGame = {
+      ...game,
+      players: [...game.players, newPlayer],
+    };
+    saveGame(updated);
+    setGame(updated);
+    approveJoinRequest(req.id);
+    setJoinRequests(prev => prev.filter(r => r.id !== req.id));
+  }
+
+  function handleRejectRequest(req: JoinRequest) {
+    rejectJoinRequest(req.id);
+    setJoinRequests(prev => prev.filter(r => r.id !== req.id));
   }
 
   function handleP1Change(key: string, val: string) {
@@ -1112,6 +1143,44 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               </div>
             );
           })}
+
+          {/* Join Requests from public page */}
+          {joinRequests.length > 0 && (
+            <>
+              <div style={{ marginTop: 12, marginBottom: 4, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#f5a623', paddingTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f5a623', display: 'inline-block' }} />
+                Solicitudes de Ingreso ({joinRequests.length})
+              </div>
+              {joinRequests.map(req => (
+                <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--grey-100)', background: 'rgba(245,166,35,0.04)' }}>
+                  <div style={{ width: 36, height: 36, background: 'rgba(245,166,35,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#f5a623', flexShrink: 0 }}>
+                    {req.playerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{req.playerName}</div>
+                    {req.playerEmail && <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{req.playerEmail}</div>}
+                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', background: 'rgba(245,166,35,0.15)', color: '#b45309', letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>
+                    SOLICITUD
+                  </span>
+                  {game.players.length < game.maxPlayers && (
+                    <button
+                      onClick={() => handleApproveRequest(req)}
+                      style={{ padding: '5px 12px', background: 'var(--turf-green)', color: '#fff', border: 'none', fontSize: 10, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', flexShrink: 0 }}
+                    >
+                      ✓ Aceptar
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleRejectRequest(req)}
+                    style={{ padding: '5px 12px', background: '#fff', color: '#dc2626', border: '1px solid #fecaca', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    ✗ Rechazar
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
 
           {/* Pending invitations */}
           {(game.invitedPlayers ?? []).filter(ip => ip.status === 'pending').length > 0 && (

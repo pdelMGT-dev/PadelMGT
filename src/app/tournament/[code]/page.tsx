@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getTournamentByCode } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
 import type { ScoreConfig, FixedPair } from '@/lib/game-engine';
+import { submitJoinRequest, getMyJoinRequest, type JoinRequest } from '@/lib/join-request-store';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -39,16 +40,36 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
   );
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [roundOpen, setRoundOpen] = useState<Record<number, boolean>>({});
+  const [myRequest, setMyRequest] = useState<JoinRequest | null>(null);
+  const [requestSent, setRequestSent] = useState(false);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem('padelmgt_user');
-      if (raw) { const u = JSON.parse(raw); setCurrentUserId(u?.id ?? null); }
+      if (raw) {
+        const u = JSON.parse(raw);
+        setCurrentUserId(u?.id ?? null);
+        // Also check existing request for this tournament
+        const t2 = getTournamentByCode(code);
+        if (u?.id && t2) {
+          setMyRequest(getMyJoinRequest(t2.id, u.id));
+        }
+      }
     } catch {}
-  }, []);
+  }, [code]);
 
   useEffect(() => {
-    const load = () => setTournament(getTournamentByCode(code));
+    const load = () => {
+      setTournament(getTournamentByCode(code));
+      // Refresh own request status
+      setCurrentUserId(prev => {
+        if (prev) {
+          const t2 = getTournamentByCode(code);
+          if (t2) setMyRequest(getMyJoinRequest(t2.id, prev));
+        }
+        return prev;
+      });
+    };
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
@@ -91,6 +112,16 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
 
   const currentRound = tournament.rounds.find(r => r.num === tournament.currentRound) ?? null;
   const doneRounds   = tournament.rounds.filter(r => r.status === 'completed');
+
+  function handleJoinRequest() {
+    if (!tournament || !currentUserId) return;
+    const raw = localStorage.getItem('padelmgt_user');
+    const u = raw ? JSON.parse(raw) : null;
+    if (!u) return;
+    const req = submitJoinRequest(tournament.id, 'tournament', currentUserId, u.name, u.email);
+    setMyRequest(req);
+    setRequestSent(true);
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--grey-50)', fontFamily: 'var(--font-body)' }}>

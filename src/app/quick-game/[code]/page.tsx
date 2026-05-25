@@ -4,22 +4,7 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getGameByCode, saveGame } from '@/lib/game-store';
 import type { ActiveGame, GameStatus, ScoreConfig, FixedPair } from '@/lib/game-engine';
-
-type JoinRequest = {
-  id: string;
-  gameId: string;
-  playerId: string;
-  playerName: string;
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: string;
-};
-
-function loadRequests(): JoinRequest[] {
-  try { return JSON.parse(localStorage.getItem('padelmgt_join_requests') || '[]'); } catch { return []; }
-}
-function saveRequests(reqs: JoinRequest[]) {
-  try { localStorage.setItem('padelmgt_join_requests', JSON.stringify(reqs)); } catch {}
-}
+import { loadJoinRequests, submitJoinRequest, getMyJoinRequest, type JoinRequest } from '@/lib/join-request-store';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +44,7 @@ const secTitle: React.CSSProperties = {
 interface CurrentUser {
   id: string;
   name: string;
+  email?: string;
 }
 
 // ── Public view component ──────────────────────────────────────────────────────
@@ -96,9 +82,8 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
       // Refresh own request status
       setCurrentUser(prev => {
         if (prev) {
-          const reqs = loadRequests();
           const g = getGameByCode(code);
-          const req = g ? reqs.find(r => r.gameId === g.id && r.playerId === prev.id) ?? null : null;
+          const req = g ? getMyJoinRequest(g.id, prev.id) : null;
           setMyRequest(req);
         }
         return prev;
@@ -148,16 +133,7 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
     const pid  = currentUser ? currentUser.id : `guest-${Date.now()}`;
     if (!name) { setJoinError('Ingresá tu nombre para unirte.'); return; }
 
-    const req: JoinRequest = {
-      id: crypto.randomUUID(),
-      gameId: game.id,
-      playerId: pid,
-      playerName: name,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    };
-    const reqs = loadRequests();
-    saveRequests([...reqs, req]);
+    const req = submitJoinRequest(game.id, 'game', pid, name, currentUser?.email ?? undefined);
     setMyRequest(req);
     setJoined(true);
     setShowJoin(false);
