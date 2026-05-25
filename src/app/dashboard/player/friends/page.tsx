@@ -1,59 +1,157 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import {
+  getAllPlayers,
+  getFriendsForPlayer,
+  addFriendship,
+  searchPlayers,
+  type RegisteredPlayer,
+} from '@/lib/player-store';
 
-const friends = [
-  { id: 1, slug: 'ana-rodriguez', name: 'Ana Rodríguez', city: 'Buenos Aires', ranking: '#52', pts: 1740, tournaments: 20, wins: 14, mutualTournaments: 5, lastMatch: '11 May', lastResult: 'V' },
-  { id: 2, slug: 'carlos-vega', name: 'Carlos Vega', city: 'Buenos Aires', ranking: '#38', pts: 2100, tournaments: 24, wins: 18, mutualTournaments: 3, lastMatch: '08 May', lastResult: 'D' },
-  { id: 3, slug: 'marcos-herrera', name: 'Marcos Herrera', city: 'Córdoba', ranking: '#61', pts: 1540, tournaments: 18, wins: 10, mutualTournaments: 4, lastMatch: '04 May', lastResult: 'V' },
-  { id: 4, slug: 'sofia-lopez', name: 'Sofía López', city: 'Rosario', ranking: '#29', pts: 2480, tournaments: 26, wins: 20, mutualTournaments: 2, lastMatch: '27 Abr', lastResult: 'D' },
-  { id: 5, slug: 'lucia-torres', name: 'Lucía Torres', city: 'Mendoza', ranking: '#74', pts: 1320, tournaments: 15, wins: 9, mutualTournaments: 1, lastMatch: '20 Abr', lastResult: 'V' },
-];
+type CurrentUser = { id: string; name: string };
 
-const requests = [
-  { id: 6, slug: 'pedro-mendez', name: 'Pedro Méndez', city: 'Buenos Aires', ranking: '#55', mutuals: 3 },
-  { id: 7, slug: 'valentina-cruz', name: 'Valentina Cruz', city: 'Córdoba', ranking: '#43', mutuals: 2 },
-];
+// ── Friend-request store (localStorage) ────────────────────────────────────
+const REQ_KEY = 'padelmgt_friend_requests';
 
-const suggestions = [
-  { name: 'Nicolás Cabrera', city: 'Buenos Aires', ranking: '#45', mutuals: 4 },
-  { name: 'Laura Fernández', city: 'Rosario', ranking: '#33', mutuals: 2 },
-  { name: 'Eduardo Silva', city: 'Buenos Aires', ranking: '#58', mutuals: 3 },
-  { name: 'Camila Ruiz', city: 'Mar del Plata', ranking: '#67', mutuals: 1 },
-];
+type FriendRequest = { fromId: string; toId: string; status: 'pending' | 'rejected' };
+
+function loadRequests(): FriendRequest[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem(REQ_KEY) ?? '[]');
+  } catch { return []; }
+}
+
+function saveRequests(reqs: FriendRequest[]) {
+  localStorage.setItem(REQ_KEY, JSON.stringify(reqs));
+}
+
+// Seed some incoming requests for player-001 if none exist yet
+function seedRequestsIfNeeded(userId: string) {
+  const existing = loadRequests();
+  const hasSeeded = existing.some(r => r.toId === userId);
+  if (hasSeeded) return;
+  if (userId !== 'player-001') return;
+  saveRequests([
+    { fromId: 'player-009', toId: 'player-001', status: 'pending' },
+    { fromId: 'player-010', toId: 'player-001', status: 'pending' },
+  ]);
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function initials(name: string) {
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+const AVATAR_COLORS = ['#1e3a8a', '#7c3aed', '#065f46', '#9a3412', '#1e40af', '#6b21a8'];
+function avatarColor(id: string) {
+  const n = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return AVATAR_COLORS[n % AVATAR_COLORS.length];
+}
 
 export default function PlayerFriendsPage() {
-  const [search, setSearch] = useState('');
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [friends, setFriends] = useState<RegisteredPlayer[]>([]);
+  const [requests, setRequests] = useState<RegisteredPlayer[]>([]);
+  const [rejected, setRejected] = useState<RegisteredPlayer[]>([]);
   const [tab, setTab] = useState<'friends' | 'requests' | 'search' | 'rejected'>('friends');
-  const [friendsList, setFriendsList] = useState(friends);
-  const [requestsList, setRequestsList] = useState(requests);
-  const [rejectedList, setRejectedList] = useState<typeof requests>([]);
+  const [searchQ, setSearchQ] = useState('');
+  const [searchResults, setSearchResults] = useState<RegisteredPlayer[]>([]);
+  const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
 
-  const filtered = friendsList.filter((f) =>
-    f.name.toLowerCase().includes(search.toLowerCase()) || f.city.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('padelmgt_user');
+      if (!raw) return;
+      const u = JSON.parse(raw) as CurrentUser;
+      setCurrentUser(u);
+      seedRequestsIfNeeded(u.id);
+      refresh(u.id);
+    } catch {}
+  }, []);
 
-  function acceptRequest(person: typeof requests[number]) {
-    setRequestsList((prev) => prev.filter((r) => r.id !== person.id));
-    setFriendsList((prev) => [
-      ...prev,
-      { id: person.id, slug: person.slug, name: person.name, city: person.city, ranking: person.ranking, pts: 0, tournaments: 0, wins: 0, mutualTournaments: 0, lastMatch: '–', lastResult: 'V' },
-    ]);
+  function refresh(userId: string) {
+    const reqs = loadRequests();
+    const allPlayers = getAllPlayers();
+
+    const pendingFromOthers = reqs
+      .filter(r => r.toId === userId && r.status === 'pending')
+      .map(r => allPlayers.find(p => p.id === r.fromId))
+      .filter(Boolean) as RegisteredPlayer[];
+
+    const rejectedFromOthers = reqs
+      .filter(r => r.toId === userId && r.status === 'rejected')
+      .map(r => allPlayers.find(p => p.id === r.fromId))
+      .filter(Boolean) as RegisteredPlayer[];
+
+    setFriends(getFriendsForPlayer(userId));
+    setRequests(pendingFromOthers);
+    setRejected(rejectedFromOthers);
   }
 
-  function rejectRequest(person: typeof requests[number]) {
-    setRequestsList((prev) => prev.filter((r) => r.id !== person.id));
-    setRejectedList((prev) => [...prev, person]);
+  function handleAccept(person: RegisteredPlayer) {
+    if (!currentUser) return;
+    addFriendship(currentUser.id, person.id);
+    const reqs = loadRequests().map(r =>
+      r.fromId === person.id && r.toId === currentUser.id
+        ? { ...r, status: 'pending' as const } // keep but we re-filter below
+        : r
+    ).filter(r => !(r.fromId === person.id && r.toId === currentUser.id));
+    saveRequests(reqs);
+    refresh(currentUser.id);
   }
 
-  function acceptRejected(person: typeof requests[number]) {
-    setRejectedList((prev) => prev.filter((r) => r.id !== person.id));
-    setFriendsList((prev) => [
-      ...prev,
-      { id: person.id, slug: person.slug, name: person.name, city: person.city, ranking: person.ranking, pts: 0, tournaments: 0, wins: 0, mutualTournaments: 0, lastMatch: '–', lastResult: 'V' },
-    ]);
+  function handleReject(person: RegisteredPlayer) {
+    if (!currentUser) return;
+    const reqs = loadRequests().map(r =>
+      r.fromId === person.id && r.toId === currentUser.id
+        ? { ...r, status: 'rejected' as const }
+        : r
+    );
+    saveRequests(reqs);
+    refresh(currentUser.id);
   }
+
+  function handleAcceptRejected(person: RegisteredPlayer) {
+    if (!currentUser) return;
+    addFriendship(currentUser.id, person.id);
+    const reqs = loadRequests().filter(
+      r => !(r.fromId === person.id && r.toId === currentUser.id)
+    );
+    saveRequests(reqs);
+    refresh(currentUser.id);
+  }
+
+  function handleSendRequest(person: RegisteredPlayer) {
+    if (!currentUser) return;
+    // For demo: immediately add as friend (no approval flow from the other side)
+    addFriendship(currentUser.id, person.id);
+    setSentRequests(prev => new Set([...prev, person.id]));
+    refresh(currentUser.id);
+  }
+
+  useEffect(() => {
+    if (!currentUser) return;
+    if (searchQ.trim().length < 2) { setSearchResults([]); return; }
+    const friendIds = new Set(friends.map(f => f.id));
+    const results = searchPlayers(searchQ).filter(
+      p => p.id !== currentUser.id && !friendIds.has(p.id)
+    );
+    setSearchResults(results);
+  }, [searchQ, friends, currentUser]);
+
+  // Suggestions: registered players not already friends, excluding self
+  const suggestions = currentUser
+    ? getAllPlayers()
+        .filter(p => p.id !== currentUser.id && !friends.some(f => f.id === p.id) && !requests.some(r => r.id === p.id))
+        .slice(0, 6)
+    : [];
+
+  const displayFriends = searchQ && tab === 'friends'
+    ? friends.filter(f => f.name.toLowerCase().includes(searchQ.toLowerCase()) || (f.city ?? '').toLowerCase().includes(searchQ.toLowerCase()))
+    : friends;
 
   return (
     <div style={{ padding: '40px 40px 80px' }}>
@@ -65,10 +163,10 @@ export default function PlayerFriendsPage() {
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
         {[
-          { label: 'Amigos', value: String(friendsList.length) },
-          { label: 'Solicitudes', value: String(requestsList.length) },
-          { label: 'Sugerencias', value: String(suggestions.length) },
-        ].map((s) => (
+          { label: 'Amigos',      value: friends.length },
+          { label: 'Solicitudes', value: requests.length },
+          { label: 'Sugerencias', value: suggestions.length },
+        ].map(s => (
           <div key={s.label} style={{ background: '#fff', padding: '20px 24px' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, color: 'var(--black)', lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginTop: 6 }}>{s.label}</div>
@@ -77,121 +175,174 @@ export default function PlayerFriendsPage() {
       </div>
 
       {/* Tabs + search */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={() => setTab('friends')} className={`pill-tab${tab === 'friends' ? ' active' : ''}`}>
-            {`Mis amigos (${friendsList.length})`}
+            Mis amigos ({friends.length})
           </button>
           <button onClick={() => setTab('requests')} className={`pill-tab${tab === 'requests' ? ' active' : ''}`}>
-            {`Solicitudes (${requestsList.length})`}
+            Solicitudes ({requests.length})
           </button>
           <button onClick={() => setTab('search')} className={`pill-tab${tab === 'search' ? ' active' : ''}`}>
             Buscar jugadores
           </button>
-          <button onClick={() => setTab('rejected')} className={`pill-tab${tab === 'rejected' ? ' active' : ''}`}>
-            {rejectedList.length > 0 ? `Rechazados (${rejectedList.length})` : 'Rechazados'}
-          </button>
+          {rejected.length > 0 && (
+            <button onClick={() => setTab('rejected')} className={`pill-tab${tab === 'rejected' ? ' active' : ''}`}>
+              Rechazados ({rejected.length})
+            </button>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: '1px solid var(--grey-200)', padding: '10px 16px', minWidth: 240 }}>
           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ color: 'var(--grey-400)', flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." style={{ border: 'none', background: 'none', font: 'inherit', fontSize: 13, outline: 'none', width: '100%' }} />
+          <input
+            value={searchQ}
+            onChange={e => setSearchQ(e.target.value)}
+            placeholder={tab === 'search' ? 'Buscar por nombre o ID...' : 'Filtrar amigos...'}
+            style={{ border: 'none', background: 'none', font: 'inherit', fontSize: 13, outline: 'none', width: '100%' }}
+          />
         </div>
       </div>
 
-      {/* My friends */}
+      {/* ── Mis amigos ── */}
       {tab === 'friends' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-          {filtered.map((f) => (
-            <div key={f.name} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
-              <div style={{ width: 48, height: 48, background: 'var(--court-blue)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
-                {f.name.split(' ').map(w => w[0]).join('')}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600, fontSize: 15 }}>{f.name}</span>
-                  <span className="chip" style={{ fontSize: 10 }}>{f.ranking}</span>
-                  <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>{f.city}</span>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
-                  {f.tournaments} torneos · {f.wins} victorias · {f.mutualTournaments} torneos juntos
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600 }}>{f.pts.toLocaleString()}</div>
-                <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600 }}>puntos</div>
-                <div style={{ fontSize: 11, marginTop: 4, color: 'var(--grey-400)' }}>
-                  Último partido {f.lastMatch}:{' '}
-                  <span style={{ fontWeight: 700, color: f.lastResult === 'V' ? 'var(--turf-green)' : '#ee0005' }}>{f.lastResult}</span>
-                </div>
-              </div>
-              <Link href={`/profile/${f.slug}`} style={{ background: 'none', border: '1px solid var(--grey-200)', padding: '6px 14px', cursor: 'pointer', fontSize: 12, color: 'var(--grey-500)', flexShrink: 0, textDecoration: 'none', display: 'inline-block' }}>
-                Ver perfil
-              </Link>
+        <>
+          {displayFriends.length === 0 ? (
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '48px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
+              {searchQ ? 'Sin resultados para esa búsqueda.' : 'Todavía no tenés amigos. ¡Buscá jugadores para agregar!'}
             </div>
-          ))}
-        </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+              {displayFriends.map(f => (
+                <div key={f.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
+                  <div style={{ width: 48, height: 48, background: avatarColor(f.id), borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
+                    {initials(f.name)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600, fontSize: 15 }}>{f.name}</span>
+                      <span className="chip" style={{ fontSize: 10 }}>#{f.ranking}</span>
+                      {f.city && <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>{f.city}</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
+                      {f.level} · {f.country ?? ''}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600 }}>{f.rankingPoints.toLocaleString()}</div>
+                    <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600 }}>puntos</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      {/* Requests */}
+      {/* ── Solicitudes ── */}
       {tab === 'requests' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-          {requestsList.map((r) => (
-            <div key={r.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
-              <div style={{ width: 48, height: 48, background: 'var(--grey-100)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--black)', flexShrink: 0 }}>
-                {r.name.split(' ').map(w => w[0]).join('')}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{r.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{r.ranking} · {r.city} · {r.mutuals} amigos en común</div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-primary btn-sm" style={{ borderRadius: 0 }} onClick={() => acceptRequest(r)}>Aceptar</button>
-                <button className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }} onClick={() => rejectRequest(r)}>Rechazar</button>
-              </div>
+        <>
+          {requests.length === 0 ? (
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '48px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
+              No tenés solicitudes pendientes.
             </div>
-          ))}
-        </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+              {requests.map(r => (
+                <div key={r.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
+                  <div style={{ width: 48, height: 48, background: 'var(--grey-100)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--black)', flexShrink: 0 }}>
+                    {initials(r.name)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{r.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>#{r.ranking} · {r.city ?? ''} · {r.level}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-primary btn-sm" style={{ borderRadius: 0 }} onClick={() => handleAccept(r)}>Aceptar</button>
+                    <button className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }} onClick={() => handleReject(r)}>Rechazar</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      {/* Search / suggestions */}
+      {/* ── Buscar jugadores ── */}
       {tab === 'search' && (
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 16 }}>Sugerencias para ti</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-            {suggestions.map((s) => (
-              <div key={s.name} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
-                <div style={{ width: 48, height: 48, background: 'var(--grey-50)', border: '2px solid var(--grey-200)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--black)', flexShrink: 0 }}>
-                  {s.name.split(' ').map(w => w[0]).join('')}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{s.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{s.ranking} · {s.city} · {s.mutuals} amigos en común</div>
-                </div>
-                <button className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }}>Agregar</button>
+          {searchQ.trim().length >= 2 ? (
+            <>
+              <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 16 }}>
+                Resultados ({searchResults.length})
               </div>
-            ))}
-          </div>
+              {searchResults.length === 0 ? (
+                <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '32px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
+                  No se encontraron jugadores con ese nombre o ID.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+                  {searchResults.map(p => (
+                    <PlayerSearchRow key={p.id} player={p} sent={sentRequests.has(p.id)} onAdd={handleSendRequest} />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 16 }}>
+                Sugerencias para vos
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+                {suggestions.map(p => (
+                  <PlayerSearchRow key={p.id} player={p} sent={sentRequests.has(p.id)} onAdd={handleSendRequest} />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {/* Rejected */}
+      {/* ── Rechazados ── */}
       {tab === 'rejected' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-          {rejectedList.map((r) => (
+          {rejected.map(r => (
             <div key={r.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
               <div style={{ width: 48, height: 48, background: 'var(--grey-100)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--black)', flexShrink: 0 }}>
-                {r.name.split(' ').map(w => w[0]).join('')}
+                {initials(r.name)}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{r.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{r.ranking} · {r.city} · {r.mutuals} amigos en común</div>
+                <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>#{r.ranking} · {r.city ?? ''}</div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-primary btn-sm" style={{ borderRadius: 0 }} onClick={() => acceptRejected(r)}>Aceptar</button>
-              </div>
+              <button className="btn btn-primary btn-sm" style={{ borderRadius: 0 }} onClick={() => handleAcceptRejected(r)}>Aceptar</button>
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function PlayerSearchRow({ player, sent, onAdd }: { player: RegisteredPlayer; sent: boolean; onAdd: (p: RegisteredPlayer) => void }) {
+  return (
+    <div style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
+      <div style={{ width: 48, height: 48, background: 'var(--grey-50)', border: '2px solid var(--grey-200)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--black)', flexShrink: 0 }}>
+        {player.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{player.name}</div>
+        <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>#{player.ranking} · {player.city ?? ''} · {player.level}</div>
+      </div>
+      <div style={{ textAlign: 'right', marginRight: 16 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>{player.rankingPoints.toLocaleString()}</div>
+        <div style={{ fontSize: 10, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>puntos</div>
+      </div>
+      {sent ? (
+        <span style={{ fontSize: 12, color: 'var(--turf-green)', fontWeight: 700 }}>✓ Agregado</span>
+      ) : (
+        <button className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }} onClick={() => onAdd(player)}>
+          Agregar
+        </button>
       )}
     </div>
   );
