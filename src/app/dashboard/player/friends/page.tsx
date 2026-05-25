@@ -1,44 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  getAllPlayers,
-  getFriendsForPlayer,
-  addFriendship,
-  searchPlayers,
-  type RegisteredPlayer,
+  getAllPlayers, getFriendsForPlayer, removeFriendship,
+  searchPlayers, getPlayerCountries, type RegisteredPlayer,
 } from '@/lib/player-store';
+import {
+  sendFriendRequest, acceptFriendRequest, rejectFriendRequest, cancelFriendRequest,
+  getPendingRequestsFor, getSentRequests, getRequestBetween,
+  type FriendRequest,
+} from '@/lib/friend-request-store';
 
 type CurrentUser = { id: string; name: string };
-
-// ── Friend-request store (localStorage) ────────────────────────────────────
-const REQ_KEY = 'padelmgt_friend_requests';
-
-type FriendRequest = { fromId: string; toId: string; status: 'pending' | 'rejected' };
-
-function loadRequests(): FriendRequest[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    return JSON.parse(localStorage.getItem(REQ_KEY) ?? '[]');
-  } catch { return []; }
-}
-
-function saveRequests(reqs: FriendRequest[]) {
-  localStorage.setItem(REQ_KEY, JSON.stringify(reqs));
-}
-
-// Seed some incoming requests for player-001 if none exist yet
-function seedRequestsIfNeeded(userId: string) {
-  const existing = loadRequests();
-  const hasSeeded = existing.some(r => r.toId === userId);
-  if (hasSeeded) return;
-  if (userId !== 'player-001') return;
-  saveRequests([
-    { fromId: 'player-009', toId: 'player-001', status: 'pending' },
-    { fromId: 'player-010', toId: 'player-001', status: 'pending' },
-  ]);
-}
+type Tab = 'friends' | 'requests' | 'search' | 'sent';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function initials(name: string) {
@@ -46,20 +20,57 @@ function initials(name: string) {
 }
 
 const AVATAR_COLORS = ['#1e3a8a', '#7c3aed', '#065f46', '#9a3412', '#1e40af', '#6b21a8'];
-function avatarColor(id: string) {
-  const n = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return AVATAR_COLORS[n % AVATAR_COLORS.length];
+function avatarBg(id: string) {
+  return AVATAR_COLORS[id.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
 }
+
+const LEVEL_LABEL: Record<string, string> = {
+  beginner: 'Principiante', intermediate: 'Intermedio', advanced: 'Avanzado',
+};
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function Avatar({ player, size = 48 }: { player: RegisteredPlayer; size?: number }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: avatarBg(player.id),
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--font-display)', fontSize: size * 0.35, fontWeight: 600, color: '#fff',
+    }}>
+      {initials(player.name)}
+    </div>
+  );
+}
+
+function PlayerMeta({ p }: { p: RegisteredPlayer }) {
+  return (
+    <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 2 }}>
+      {[p.level ? LEVEL_LABEL[p.level] : null, p.city, p.country].filter(Boolean).join(' · ')}
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function PlayerFriendsPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [friends, setFriends] = useState<RegisteredPlayer[]>([]);
-  const [requests, setRequests] = useState<RegisteredPlayer[]>([]);
-  const [rejected, setRejected] = useState<RegisteredPlayer[]>([]);
-  const [tab, setTab] = useState<'friends' | 'requests' | 'search' | 'rejected'>('friends');
-  const [searchQ, setSearchQ] = useState('');
+  const [tab, setTab]   = useState<Tab>('friends');
+  const [friends,       setFriends]       = useState<RegisteredPlayer[]>([]);
+  const [incoming,      setIncoming]      = useState<FriendRequest[]>([]);
+  const [sent,          setSent]          = useState<FriendRequest[]>([]);
+  const [friendSearch,  setFriendSearch]  = useState('');
+  const [searchQ,       setSearchQ]       = useState('');
+  const [searchCountry, setSearchCountry] = useState('');
   const [searchResults, setSearchResults] = useState<RegisteredPlayer[]>([]);
-  const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
+  const [countries,     setCountries]     = useState<string[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState<RegisteredPlayer | null>(null);
+
+  const refresh = useCallback((userId: string) => {
+    setFriends(getFriendsForPlayer(userId));
+    setIncoming(getPendingRequestsFor(userId));
+    setSent(getSentRequests(userId).filter(r => r.status === 'pending'));
+  }, []);
 
   useEffect(() => {
     try {
@@ -67,94 +78,103 @@ export default function PlayerFriendsPage() {
       if (!raw) return;
       const u = JSON.parse(raw) as CurrentUser;
       setCurrentUser(u);
-      seedRequestsIfNeeded(u.id);
+      setCountries(getPlayerCountries());
       refresh(u.id);
     } catch {}
-  }, []);
+  }, [refresh]);
 
-  function refresh(userId: string) {
-    const reqs = loadRequests();
-    const allPlayers = getAllPlayers();
-
-    const pendingFromOthers = reqs
-      .filter(r => r.toId === userId && r.status === 'pending')
-      .map(r => allPlayers.find(p => p.id === r.fromId))
-      .filter(Boolean) as RegisteredPlayer[];
-
-    const rejectedFromOthers = reqs
-      .filter(r => r.toId === userId && r.status === 'rejected')
-      .map(r => allPlayers.find(p => p.id === r.fromId))
-      .filter(Boolean) as RegisteredPlayer[];
-
-    setFriends(getFriendsForPlayer(userId));
-    setRequests(pendingFromOthers);
-    setRejected(rejectedFromOthers);
-  }
-
-  function handleAccept(person: RegisteredPlayer) {
-    if (!currentUser) return;
-    addFriendship(currentUser.id, person.id);
-    const reqs = loadRequests().map(r =>
-      r.fromId === person.id && r.toId === currentUser.id
-        ? { ...r, status: 'pending' as const } // keep but we re-filter below
-        : r
-    ).filter(r => !(r.fromId === person.id && r.toId === currentUser.id));
-    saveRequests(reqs);
-    refresh(currentUser.id);
-  }
-
-  function handleReject(person: RegisteredPlayer) {
-    if (!currentUser) return;
-    const reqs = loadRequests().map(r =>
-      r.fromId === person.id && r.toId === currentUser.id
-        ? { ...r, status: 'rejected' as const }
-        : r
-    );
-    saveRequests(reqs);
-    refresh(currentUser.id);
-  }
-
-  function handleAcceptRejected(person: RegisteredPlayer) {
-    if (!currentUser) return;
-    addFriendship(currentUser.id, person.id);
-    const reqs = loadRequests().filter(
-      r => !(r.fromId === person.id && r.toId === currentUser.id)
-    );
-    saveRequests(reqs);
-    refresh(currentUser.id);
-  }
-
-  function handleSendRequest(person: RegisteredPlayer) {
-    if (!currentUser) return;
-    // For demo: immediately add as friend (no approval flow from the other side)
-    addFriendship(currentUser.id, person.id);
-    setSentRequests(prev => new Set([...prev, person.id]));
-    refresh(currentUser.id);
-  }
-
+  // Live search
   useEffect(() => {
     if (!currentUser) return;
-    if (searchQ.trim().length < 2) { setSearchResults([]); return; }
     const friendIds = new Set(friends.map(f => f.id));
-    const results = searchPlayers(searchQ).filter(
-      p => p.id !== currentUser.id && !friendIds.has(p.id)
-    );
+    if (!searchQ.trim() && !searchCountry) {
+      // Suggestions: players not already friends, not self
+      const suggestions = getAllPlayers()
+        .filter(p => p.id !== currentUser.id && !friendIds.has(p.id))
+        .slice(0, 8);
+      setSearchResults(suggestions);
+      return;
+    }
+    const results = searchPlayers(searchQ, searchCountry ? { country: searchCountry } : undefined)
+      .filter(p => p.id !== currentUser.id && !friendIds.has(p.id));
     setSearchResults(results);
-  }, [searchQ, friends, currentUser]);
+  }, [searchQ, searchCountry, friends, currentUser]);
 
-  // Suggestions: registered players not already friends, excluding self
-  const suggestions = currentUser
-    ? getAllPlayers()
-        .filter(p => p.id !== currentUser.id && !friends.some(f => f.id === p.id) && !requests.some(r => r.id === p.id))
-        .slice(0, 6)
-    : [];
+  function handleAccept(req: FriendRequest) {
+    acceptFriendRequest(req.id);
+    if (currentUser) refresh(currentUser.id);
+  }
 
-  const displayFriends = searchQ && tab === 'friends'
-    ? friends.filter(f => f.name.toLowerCase().includes(searchQ.toLowerCase()) || (f.city ?? '').toLowerCase().includes(searchQ.toLowerCase()))
+  function handleReject(req: FriendRequest) {
+    rejectFriendRequest(req.id);
+    if (currentUser) refresh(currentUser.id);
+  }
+
+  function handleCancel(req: FriendRequest) {
+    cancelFriendRequest(req.id);
+    if (currentUser) refresh(currentUser.id);
+  }
+
+  function handleAdd(player: RegisteredPlayer) {
+    if (!currentUser) return;
+    sendFriendRequest(currentUser.id, currentUser.name, player.id, player.name);
+    if (currentUser) refresh(currentUser.id);
+  }
+
+  function handleConfirmDelete(player: RegisteredPlayer) {
+    setConfirmDelete(player);
+  }
+
+  function handleDeleteConfirmed() {
+    if (!currentUser || !confirmDelete) return;
+    removeFriendship(currentUser.id, confirmDelete.id);
+    setConfirmDelete(null);
+    refresh(currentUser.id);
+  }
+
+  const filteredFriends = friendSearch.trim()
+    ? friends.filter(f =>
+        f.name.toLowerCase().includes(friendSearch.toLowerCase()) ||
+        f.shortId.toLowerCase().includes(friendSearch.toLowerCase()) ||
+        (f.city ?? '').toLowerCase().includes(friendSearch.toLowerCase())
+      )
     : friends;
+
+  const pendingCount = incoming.length;
+
+  const tabs: { id: Tab; label: string; count?: number }[] = [
+    { id: 'friends',  label: `Mis amigos (${friends.length})` },
+    { id: 'requests', label: 'Solicitudes', count: pendingCount },
+    { id: 'search',   label: 'Buscar jugadores' },
+    { id: 'sent',     label: `Enviadas (${sent.length})` },
+  ];
 
   return (
     <div style={{ padding: '40px 40px 80px' }}>
+
+      {/* Confirm delete dialog */}
+      {confirmDelete && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', padding: '40px', maxWidth: 400, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, textTransform: 'uppercase', marginBottom: 12 }}>Eliminar amistad</div>
+            <div style={{ fontSize: 14, color: 'var(--grey-500)', marginBottom: 28, lineHeight: 1.6 }}>
+              ¿Seguro que querés eliminar a <strong>{confirmDelete.name}</strong> de tu lista de amigos? Se eliminará de ambos lados.
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={handleDeleteConfirmed}
+                style={{ flex: 1, padding: '12px', background: '#ee0005', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Eliminar
+              </button>
+              <button onClick={() => setConfirmDelete(null)}
+                style={{ flex: 1, padding: '12px', background: '#fff', border: '1px solid var(--grey-200)', cursor: 'pointer', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Red de jugadores</div>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>AMISTADES</h1>
@@ -164,73 +184,63 @@ export default function PlayerFriendsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
         {[
           { label: 'Amigos',      value: friends.length },
-          { label: 'Solicitudes', value: requests.length },
-          { label: 'Sugerencias', value: suggestions.length },
+          { label: 'Solicitudes', value: pendingCount },
+          { label: 'Enviadas',    value: sent.length },
         ].map(s => (
           <div key={s.label} style={{ background: '#fff', padding: '20px 24px' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, color: 'var(--black)', lineHeight: 1 }}>{s.value}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, color: s.label === 'Solicitudes' && s.value > 0 ? '#ee0005' : 'var(--black)', lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginTop: 6 }}>{s.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Tabs + search */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={() => setTab('friends')} className={`pill-tab${tab === 'friends' ? ' active' : ''}`}>
-            Mis amigos ({friends.length})
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`pill-tab${tab === t.id ? ' active' : ''}`}
+            style={{ position: 'relative' }}>
+            {t.label}
+            {t.count != null && t.count > 0 && (
+              <span style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: '#ee0005', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t.count}</span>
+            )}
           </button>
-          <button onClick={() => setTab('requests')} className={`pill-tab${tab === 'requests' ? ' active' : ''}`}>
-            Solicitudes ({requests.length})
-          </button>
-          <button onClick={() => setTab('search')} className={`pill-tab${tab === 'search' ? ' active' : ''}`}>
-            Buscar jugadores
-          </button>
-          {rejected.length > 0 && (
-            <button onClick={() => setTab('rejected')} className={`pill-tab${tab === 'rejected' ? ' active' : ''}`}>
-              Rechazados ({rejected.length})
-            </button>
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: '1px solid var(--grey-200)', padding: '10px 16px', minWidth: 240 }}>
-          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{ color: 'var(--grey-400)', flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input
-            value={searchQ}
-            onChange={e => setSearchQ(e.target.value)}
-            placeholder={tab === 'search' ? 'Buscar por nombre o ID...' : 'Filtrar amigos...'}
-            style={{ border: 'none', background: 'none', font: 'inherit', fontSize: 13, outline: 'none', width: '100%' }}
-          />
-        </div>
+        ))}
       </div>
 
       {/* ── Mis amigos ── */}
       {tab === 'friends' && (
         <>
-          {displayFriends.length === 0 ? (
+          <div style={{ marginBottom: 16 }}>
+            <input value={friendSearch} onChange={e => setFriendSearch(e.target.value)}
+              placeholder="Filtrar por nombre, ID o ciudad..."
+              style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--grey-200)', fontSize: 13, outline: 'none', fontFamily: 'var(--font-body)', boxSizing: 'border-box' }} />
+          </div>
+          {filteredFriends.length === 0 ? (
             <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '48px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
-              {searchQ ? 'Sin resultados para esa búsqueda.' : 'Todavía no tenés amigos. ¡Buscá jugadores para agregar!'}
+              {friendSearch ? 'Sin resultados.' : 'Todavía no tenés amigos. Usá "Buscar jugadores" para agregar.'}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-              {displayFriends.map(f => (
-                <div key={f.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
-                  <div style={{ width: 48, height: 48, background: avatarColor(f.id), borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
-                    {initials(f.name)}
-                  </div>
+              {filteredFriends.map(f => (
+                <div key={f.id} style={{ background: '#fff', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <Avatar player={f} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 2 }}>
                       <span style={{ fontWeight: 600, fontSize: 15 }}>{f.name}</span>
-                      <span className="chip" style={{ fontSize: 10 }}>#{f.ranking}</span>
-                      {f.city && <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>{f.city}</span>}
+                      <span className="chip" style={{ fontSize: 10 }}>{f.shortId}</span>
+                      {f.sex && <span style={{ fontSize: 10, color: 'var(--grey-400)' }}>{f.sex === 'M' ? '♂' : '♀'}</span>}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
-                      {f.level} · {f.country ?? ''}
-                    </div>
+                    <PlayerMeta p={f} />
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600 }}>{f.rankingPoints.toLocaleString()}</div>
-                    <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600 }}>puntos</div>
+                  <div style={{ textAlign: 'right', marginRight: 16 }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600 }}>{f.rankingPoints.toLocaleString()}</div>
+                    <div style={{ fontSize: 10, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>pts</div>
                   </div>
+                  <button onClick={() => handleConfirmDelete(f)}
+                    style={{ padding: '7px 14px', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', fontSize: 11, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>
+                    Eliminar
+                  </button>
                 </div>
               ))}
             </div>
@@ -238,30 +248,38 @@ export default function PlayerFriendsPage() {
         </>
       )}
 
-      {/* ── Solicitudes ── */}
+      {/* ── Solicitudes recibidas ── */}
       {tab === 'requests' && (
         <>
-          {requests.length === 0 ? (
+          {incoming.length === 0 ? (
             <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '48px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
               No tenés solicitudes pendientes.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-              {requests.map(r => (
-                <div key={r.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
-                  <div style={{ width: 48, height: 48, background: 'var(--grey-100)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--black)', flexShrink: 0 }}>
-                    {initials(r.name)}
+              {incoming.map(req => {
+                const sender = getAllPlayers().find(p => p.id === req.fromId);
+                return (
+                  <div key={req.id} style={{ background: '#fff', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                    {sender ? <Avatar player={sender} /> : (
+                      <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--grey-100)', flexShrink: 0 }} />
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>{req.fromName}</div>
+                      {sender && <PlayerMeta p={sender} />}
+                      <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 4 }}>
+                        {new Date(req.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <button onClick={() => handleAccept(req)}
+                        className="btn btn-primary btn-sm" style={{ borderRadius: 0 }}>Aceptar</button>
+                      <button onClick={() => handleReject(req)}
+                        className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }}>Rechazar</button>
+                    </div>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{r.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>#{r.ranking} · {r.city ?? ''} · {r.level}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-primary btn-sm" style={{ borderRadius: 0 }} onClick={() => handleAccept(r)}>Aceptar</button>
-                    <button className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }} onClick={() => handleReject(r)}>Rechazar</button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>
@@ -269,80 +287,113 @@ export default function PlayerFriendsPage() {
 
       {/* ── Buscar jugadores ── */}
       {tab === 'search' && (
-        <div>
-          {searchQ.trim().length >= 2 ? (
-            <>
-              <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 16 }}>
-                Resultados ({searchResults.length})
-              </div>
-              {searchResults.length === 0 ? (
-                <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '32px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
-                  No se encontraron jugadores con ese nombre o ID.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-                  {searchResults.map(p => (
-                    <PlayerSearchRow key={p.id} player={p} sent={sentRequests.has(p.id)} onAdd={handleSendRequest} />
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 16 }}>
-                Sugerencias para vos
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-                {suggestions.map(p => (
-                  <PlayerSearchRow key={p.id} player={p} sent={sentRequests.has(p.id)} onAdd={handleSendRequest} />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
+        <>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
+              placeholder="Buscar por nombre, ID (#00104) o email..."
+              style={{ flex: 1, padding: '10px 14px', border: '1px solid var(--grey-200)', fontSize: 13, outline: 'none', fontFamily: 'var(--font-body)' }} />
+            <select value={searchCountry} onChange={e => setSearchCountry(e.target.value)}
+              style={{ padding: '10px 32px 10px 12px', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: '#fff', outline: 'none', minWidth: 160,
+                appearance: 'none' as const,
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239E9EA0'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+              }}>
+              <option value="">Todos los países</option>
+              {countries.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
 
-      {/* ── Rechazados ── */}
-      {tab === 'rejected' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-          {rejected.map(r => (
-            <div key={r.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
-              <div style={{ width: 48, height: 48, background: 'var(--grey-100)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--black)', flexShrink: 0 }}>
-                {initials(r.name)}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{r.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>#{r.ranking} · {r.city ?? ''}</div>
-              </div>
-              <button className="btn btn-primary btn-sm" style={{ borderRadius: 0 }} onClick={() => handleAcceptRejected(r)}>Aceptar</button>
+          <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 12 }}>
+            {searchQ.trim() || searchCountry ? `Resultados (${searchResults.length})` : 'Sugerencias para vos'}
+          </div>
+
+          {searchResults.length === 0 ? (
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '32px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
+              No se encontraron jugadores.
             </div>
-          ))}
-        </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+              {searchResults.map(p => {
+                if (!currentUser) return null;
+                const existingReq = getRequestBetween(currentUser.id, p.id);
+                const isFriend = friends.some(f => f.id === p.id);
+                let actionEl: React.ReactNode;
+                if (isFriend) {
+                  actionEl = <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--turf-green)' }}>✓ Amigo</span>;
+                } else if (existingReq?.fromId === currentUser.id && existingReq?.status === 'pending') {
+                  actionEl = (
+                    <button onClick={() => { cancelFriendRequest(existingReq.id); refresh(currentUser.id); }}
+                      style={{ padding: '7px 14px', border: '1px solid var(--grey-200)', background: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)' }}>
+                      Cancelar solicitud
+                    </button>
+                  );
+                } else if (existingReq?.toId === currentUser.id && existingReq?.status === 'pending') {
+                  actionEl = <span style={{ fontSize: 12, fontWeight: 700, color: '#f5a623' }}>⏳ Te envió solicitud</span>;
+                } else {
+                  actionEl = (
+                    <button onClick={() => handleAdd(p)}
+                      className="btn btn-primary btn-sm" style={{ borderRadius: 0 }}>
+                      + Agregar
+                    </button>
+                  );
+                }
+                return (
+                  <div key={p.id} style={{ background: '#fff', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <Avatar player={p} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 2 }}>
+                        <span style={{ fontWeight: 600, fontSize: 15 }}>{p.name}</span>
+                        <span className="chip" style={{ fontSize: 10 }}>{p.shortId}</span>
+                        {p.sex && <span style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.sex === 'M' ? '♂' : '♀'}</span>}
+                      </div>
+                      <PlayerMeta p={p} />
+                    </div>
+                    <div style={{ textAlign: 'right', marginRight: 16 }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>{p.rankingPoints.toLocaleString()}</div>
+                      <div style={{ fontSize: 10, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>pts</div>
+                    </div>
+                    <div style={{ flexShrink: 0 }}>{actionEl}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
-    </div>
-  );
-}
 
-function PlayerSearchRow({ player, sent, onAdd }: { player: RegisteredPlayer; sent: boolean; onAdd: (p: RegisteredPlayer) => void }) {
-  return (
-    <div style={{ background: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
-      <div style={{ width: 48, height: 48, background: 'var(--grey-50)', border: '2px solid var(--grey-200)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--black)', flexShrink: 0 }}>
-        {player.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
-      </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{player.name}</div>
-        <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>#{player.ranking} · {player.city ?? ''} · {player.level}</div>
-      </div>
-      <div style={{ textAlign: 'right', marginRight: 16 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>{player.rankingPoints.toLocaleString()}</div>
-        <div style={{ fontSize: 10, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>puntos</div>
-      </div>
-      {sent ? (
-        <span style={{ fontSize: 12, color: 'var(--turf-green)', fontWeight: 700 }}>✓ Agregado</span>
-      ) : (
-        <button className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }} onClick={() => onAdd(player)}>
-          Agregar
-        </button>
+      {/* ── Solicitudes enviadas ── */}
+      {tab === 'sent' && (
+        <>
+          {sent.length === 0 ? (
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '48px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
+              No tenés solicitudes enviadas pendientes.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
+              {sent.map(req => {
+                const target = getAllPlayers().find(p => p.id === req.toId);
+                return (
+                  <div key={req.id} style={{ background: '#fff', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                    {target ? <Avatar player={target} /> : (
+                      <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--grey-100)', flexShrink: 0 }} />
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 2 }}>{req.toName}</div>
+                      {target && <PlayerMeta p={target} />}
+                      <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 4 }}>
+                        Enviada el {new Date(req.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })} · Pendiente
+                      </div>
+                    </div>
+                    <button onClick={() => handleCancel(req)}
+                      style={{ padding: '7px 14px', border: '1px solid var(--grey-200)', background: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)', flexShrink: 0 }}>
+                      Cancelar
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

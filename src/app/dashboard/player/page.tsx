@@ -10,6 +10,7 @@ import {
   type Invitation,
 } from '@/lib/invitation-store';
 import { addFriendship } from '@/lib/player-store';
+import { getPendingRequestsFor, acceptFriendRequest, rejectFriendRequest, type FriendRequest } from '@/lib/friend-request-store';
 import { getTournament, saveTournament } from '@/lib/tournament-store';
 import {
   getMatchHistoryForPlayer,
@@ -19,7 +20,7 @@ import {
   type UpcomingEvent,
 } from '@/lib/match-history';
 
-type CurrentUser = { id: string; name: string; email: string; shortId: string; role: string; sub: string; ranking?: number };
+type CurrentUser = { id: string; name: string; email: string; shortId?: string; role: string; sub?: string; firstLogin?: boolean };
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   created:       { label: 'Inscripto',     color: 'var(--grey-400)' },
@@ -44,6 +45,8 @@ export default function PlayerHomePage() {
   const [nextEvent, setNextEvent] = useState<UpcomingEvent | null>(null);
   const [recentMatches, setRecentMatches] = useState<MatchEntry[]>([]);
   const [pendingInvitations, setPendingInvitations] = useState<Invitation[]>([]);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [showProfileReminder, setShowProfileReminder] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   function showToast(msg: string) {
@@ -54,7 +57,17 @@ export default function PlayerHomePage() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem('padelmgt_user');
-      if (raw) setCurrentUser(JSON.parse(raw));
+      if (raw) {
+        const u = JSON.parse(raw) as CurrentUser;
+        setCurrentUser(u);
+        setFriendRequests(getPendingRequestsFor(u.id));
+        if (u.firstLogin) {
+          setShowProfileReminder(true);
+          // Clear firstLogin flag so reminder only shows once per session
+          const updated = { ...u, firstLogin: false };
+          localStorage.setItem('padelmgt_user', JSON.stringify(updated));
+        }
+      }
     } catch {}
   }, []);
 
@@ -93,7 +106,7 @@ export default function PlayerHomePage() {
         const alreadyConfirmed = tournament.players.some(p => p.id === currentUser.id);
         const updatedPlayers = alreadyConfirmed ? tournament.players : [
           ...tournament.players,
-          { id: currentUser.id, name: currentUser.name, ranking: currentUser.ranking ?? 1000, isCreator: false, email: currentUser.email, shortId: currentUser.shortId },
+          { id: currentUser.id, name: currentUser.name, ranking: 1000, isCreator: false, email: currentUser.email, shortId: currentUser.shortId ?? '' },
         ];
         saveTournament({ ...tournament, invitedPlayers: updatedInvitedPlayers, players: updatedPlayers });
         if (tournament.creatorId) addFriendship(currentUser.id, tournament.creatorId);
@@ -136,6 +149,52 @@ export default function PlayerHomePage() {
           HOLA,<br /><span style={{ color: 'var(--court-blue)' }}>{currentUser ? currentUser.name.split(' ')[0].toUpperCase() : 'JUGADOR'}.</span>
         </h1>
       </div>
+
+      {/* Profile completion reminder (first login) */}
+      {showProfileReminder && (
+        <div style={{ background: 'var(--neon)', padding: '16px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, textTransform: 'uppercase', color: 'var(--black)', marginBottom: 2 }}>¡Bienvenido a PadelMGT! 🎾</div>
+            <div style={{ fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>Terminá de configurar tu perfil para sacar el máximo provecho de la plataforma.</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <Link href="/dashboard/player/profile" style={{ padding: '10px 20px', background: 'var(--black)', color: '#fff', fontSize: 12, fontWeight: 700, textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Completar perfil →
+            </Link>
+            <button onClick={() => setShowProfileReminder(false)}
+              style={{ padding: '10px 14px', background: 'rgba(0,0,0,0.12)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: 'var(--black)' }}>
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Solicitudes de amistad pendientes */}
+      {friendRequests.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #fcd34d', marginBottom: 24 }}>
+          <div style={{ padding: '12px 20px', background: '#fffbeb', borderBottom: '1px solid #fcd34d', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, color: '#92400e' }}>Solicitudes de Amistad</span>
+              <span style={{ fontSize: 11, background: '#ee0005', color: '#fff', fontWeight: 800, padding: '2px 7px', lineHeight: 1.5 }}>{friendRequests.length}</span>
+            </div>
+            <Link href="/dashboard/player/friends?tab=requests" style={{ fontSize: 11, fontWeight: 700, color: '#92400e', textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Ver todas →</Link>
+          </div>
+          {friendRequests.slice(0, 3).map(req => (
+            <div key={req.id} style={{ padding: '14px 20px', borderBottom: '1px solid #fef9c3', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>{req.fromName}</span>
+                <span style={{ fontSize: 12, color: 'var(--grey-400)', marginLeft: 8 }}>quiere ser tu amigo</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button onClick={() => { acceptFriendRequest(req.id); setFriendRequests(prev => prev.filter(r => r.id !== req.id)); showToast(`¡Ahora sos amigo de ${req.fromName}!`); }}
+                  style={{ padding: '6px 14px', background: 'var(--turf-green)', color: '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}>✓ Aceptar</button>
+                <button onClick={() => { rejectFriendRequest(req.id); setFriendRequests(prev => prev.filter(r => r.id !== req.id)); }}
+                  style={{ padding: '6px 14px', background: '#fff', border: '1px solid var(--grey-200)', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: 'var(--grey-500)' }}>Rechazar</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Invitaciones Pendientes */}
       {pendingInvitations.length > 0 && (

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { getPendingCount } from '@/lib/friend-request-store';
 
 type Role = 'player' | 'club' | 'league' | 'federation' | 'super_admin';
 
@@ -74,12 +75,17 @@ interface StoredUser {
 export default function DashboardSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<StoredUser | null>(null);
+  const [user,         setUser]         = useState<StoredUser | null>(null);
+  const [friendBadge,  setFriendBadge]  = useState(0);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem('padelmgt_user');
-      if (raw) setUser(JSON.parse(raw));
+      if (raw) {
+        const u = JSON.parse(raw) as StoredUser;
+        setUser(u);
+        if (u.role === 'player') setFriendBadge(getPendingCount(u.id));
+      }
     } catch {}
   }, []);
 
@@ -164,10 +170,15 @@ export default function DashboardSidebar() {
               fontSize: 13,
               borderLeft: `3px solid ${isActive ? 'var(--neon)' : 'transparent'}`,
               background: isActive ? 'rgba(214,255,0,0.05)' : 'transparent',
-              transition: 'all 0.12s',
+              transition: 'all 0.12s', position: 'relative',
             }}>
               <span style={{ fontSize: 12, opacity: isActive ? 1 : 0.5 }}>{item.icon}</span>
               {item.label}
+              {item.href === '/dashboard/player/friends' && friendBadge > 0 && (
+                <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: '#ee0005', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                  {friendBadge}
+                </span>
+              )}
             </Link>
           );
         })}

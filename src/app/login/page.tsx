@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { authenticatePlayer } from '@/lib/player-store';
 
 type UserRole = 'player' | 'club_manager' | 'league_organizer' | 'federation' | 'super_admin';
 
@@ -105,25 +106,36 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
 
-    const user = MOCK_USERS.find(
-      (u) => u.email === email && u.password === password
-    );
+    // 1. Check built-in demo accounts (club, league, federation, super-admin)
+    const mockUser = MOCK_USERS.find(u => u.email === email && u.password === password);
 
-    if (!user) {
+    if (mockUser) {
+      const session = {
+        id: mockUser.id, name: mockUser.name, email: mockUser.email,
+        shortId: mockUser.shortId, role: mockUser.role, sub: mockUser.sub,
+      };
+      localStorage.setItem('padelmgt_user', JSON.stringify(session));
+      router.push(ROLE_REDIRECT[mockUser.role]);
+      return;
+    }
+
+    // 2. Check player-store (covers seed players + newly registered users)
+    const player = authenticatePlayer(email, password);
+    if (!player) {
       setError('Email o contraseña incorrectos.');
       return;
     }
 
     const session = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      shortId: user.shortId,
-      role: user.role,
-      sub: user.sub,
+      id:      player.id,
+      name:    player.name,
+      email:   player.email,
+      shortId: player.shortId,
+      role:    'player' as UserRole,
+      sub:     `${player.shortId} · ${player.city ?? player.country ?? ''}`,
     };
     localStorage.setItem('padelmgt_user', JSON.stringify(session));
-    router.push(ROLE_REDIRECT[user.role]);
+    router.push(ROLE_REDIRECT['player']);
   }
 
   const labelStyle: React.CSSProperties = {
