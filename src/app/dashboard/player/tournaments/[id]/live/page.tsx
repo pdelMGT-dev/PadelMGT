@@ -13,7 +13,7 @@ import {
   isGameFinished,
   calculateStandings,
 } from '@/lib/game-engine';
-import type { GameRound, GamePlayer, Standing } from '@/lib/game-engine';
+import type { GameRound, GamePlayer, Standing, FixedPair } from '@/lib/game-engine';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,13 +70,29 @@ const card: React.CSSProperties = {
 
 // ── Podium Component ──────────────────────────────────────────────────────────
 
-function PodiumSection({ standings, players }: { standings: Standing[], players: GamePlayer[] }) {
+function PodiumSection({ standings, fixedPairs }: { standings: Standing[], fixedPairs?: FixedPair[] }) {
   const top3 = standings.slice(0, 3);
   if (top3.length < 1) return null;
 
   const medals = ['🥇', '🥈', '🥉'];
-  const heights = [160, 120, 90]; // platform heights in px
+  const heights = [160, 120, 90];
   const order = [1, 0, 2]; // display order: 2nd, 1st, 3rd
+
+  function displayName(s: Standing): string {
+    if (fixedPairs?.length) {
+      const pair = fixedPairs.find(p => p.player1Id === s.playerId);
+      if (pair) return pair.name || `${pair.player1Name} / ${pair.player2Name}`;
+    }
+    return s.playerName;
+  }
+
+  function subName(s: Standing): string | null {
+    if (fixedPairs?.length) {
+      const pair = fixedPairs.find(p => p.player1Id === s.playerId);
+      if (pair && pair.name) return `${pair.player1Name} / ${pair.player2Name}`;
+    }
+    return null;
+  }
 
   return (
     <div style={{ background: 'var(--black)', padding: '40px 24px 0', marginBottom: 0 }}>
@@ -90,27 +106,30 @@ function PodiumSection({ standings, players }: { standings: Standing[], players:
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 2 }}>
         {order.map(i => {
           const s = top3[i];
-          if (!s) return <div key={i} style={{ width: 120 }} />;
+          if (!s) return <div key={i} style={{ width: 140 }} />;
           const isFirst = i === 0;
           const platH = heights[i];
-          const platColor = i === 0 ? '#c9a227' : i === 1 ? '#9e9e9e' : '#a0522d'; // gold, silver, bronze
+          const platColor = i === 0 ? '#c9a227' : i === 1 ? '#9e9e9e' : '#a0522d';
+          const sub = subName(s);
 
           return (
-            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 120 }}>
-              {/* Avatar / medal */}
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 140 }}>
               <div style={{ fontSize: isFirst ? 52 : 40, marginBottom: 8 }}>{medals[i]}</div>
-              {/* Name */}
               <div style={{
                 color: '#fff', fontSize: isFirst ? 14 : 12, fontWeight: 700,
-                textAlign: 'center', marginBottom: 4, maxWidth: 110,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-              }}>{s.playerName}</div>
-              {/* Points */}
+                textAlign: 'center', marginBottom: sub ? 2 : 4, maxWidth: 132,
+                wordBreak: 'break-word', lineHeight: 1.3,
+              }}>{displayName(s)}</div>
+              {sub && (
+                <div style={{
+                  color: 'rgba(255,255,255,0.45)', fontSize: 10, textAlign: 'center',
+                  marginBottom: 4, maxWidth: 132, wordBreak: 'break-word',
+                }}>{sub}</div>
+              )}
               <div style={{
                 fontFamily: 'var(--font-display)', fontSize: isFirst ? 22 : 18,
                 fontWeight: 700, color: platColor, marginBottom: 12
               }}>{s.pts} pts</div>
-              {/* Platform */}
               <div style={{
                 width: '100%', height: platH, background: platColor,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -340,7 +359,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
       {/* ── Podium (finished mode) ── */}
       {isFinished && (
-        <PodiumSection standings={calculateStandings(t)} players={t.players} />
+        <PodiumSection standings={calculateStandings(t)} fixedPairs={t.fixedPairs} />
       )}
 
       {/* ── Sticky top bar ── */}
@@ -818,25 +837,24 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                     </thead>
                     <tbody>
                       {isParejas && t.fixedPairs ? (
-                        // Parejas fijas: group by pair
-                        t.fixedPairs.map((pair, pairIdx) => {
-                          // Find standing for player1Id (representative of the pair)
-                          const s = liveStandings.find(st => st.playerId === pair.player1Id);
-                          if (!s) return null;
+                        // Parejas fijas: iterate standings in order (already sorted), find matching pair
+                        liveStandings.map((s, i) => {
+                          const pair = t.fixedPairs!.find(p => p.player1Id === s.playerId);
+                          if (!pair) return null;
                           const isCreatorRow = pair.player1Id === t.creatorId || pair.player2Id === t.creatorId;
                           const isMe = currentUser && (pair.player1Id === currentUser.id || pair.player2Id === currentUser.id);
+                          const teamLabel = pair.name || `${pair.player1Name} / ${pair.player2Name}`;
                           return (
                             <tr key={pair.pairIndex} style={{
                               borderBottom: '1px solid var(--grey-100)',
                               background: isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
                             }}>
                               <td style={{ ...tdCenter, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
-                                {pairIdx === 0 ? '🥇' : pairIdx + 1}
+                                {i === 0 ? '🥇' : i + 1}
                               </td>
                               <td style={{ ...tdLeft, fontWeight: isMe ? 700 : 500 }}>
-                                {pair.player1Name} / {pair.player2Name}
-                                {isCreatorRow && <span style={{ marginLeft: 4, fontSize: 12, color: '#f59e0b' }}>★</span>}
-                                {isMe && !isCreatorRow && <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--grey-400)' }}>(tú)</span>}
+                                <div>{teamLabel}{isCreatorRow && <span style={{ marginLeft: 4, fontSize: 12, color: '#f59e0b' }}>★</span>}{isMe && !isCreatorRow && <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--grey-400)' }}>(tú)</span>}</div>
+                                {pair.name && <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 1 }}>{pair.player1Name} / {pair.player2Name}</div>}
                               </td>
                               <td style={tdCenter}>{s.played}</td>
                               <td style={tdCenter}>{s.wins}</td>

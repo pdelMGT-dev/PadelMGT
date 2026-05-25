@@ -160,6 +160,7 @@ export default function PlayerTournamentsPage() {
 
   // ── My tournaments ──────────────────────────────────────────────────────────
   const [myTournaments, setMyTournaments] = useState<Tournament[]>([]);
+  const [historialFilter, setHistorialFilter] = useState<'todos' | 'finalizado' | 'cancelado' | 'organizador' | 'jugador'>('todos');
 
   // ── Success ─────────────────────────────────────────────────────────────────
   const [newTId, setNewTId] = useState('');
@@ -1190,9 +1191,20 @@ export default function PlayerTournamentsPage() {
   const activeTournaments = myTournaments.filter(t =>
     !t.cancelledAt && (t.status === 'created' || t.status === 'starting_soon' || t.status === 'live')
   );
-  const finishedTournaments = myTournaments.filter(t =>
-    t.status === 'finished' || !!t.cancelledAt
-  );
+  const allFinished = myTournaments
+    .filter(t => t.status === 'finished' || !!t.cancelledAt)
+    .sort((a, b) => {
+      const da = (a.date || '') + (a.time || '');
+      const db = (b.date || '') + (b.time || '');
+      return db.localeCompare(da);
+    });
+  const finishedTournaments = allFinished.filter(t => {
+    if (historialFilter === 'finalizado') return t.status === 'finished';
+    if (historialFilter === 'cancelado') return !!t.cancelledAt;
+    if (historialFilter === 'organizador') return currentUser && t.creatorId === currentUser.id;
+    if (historialFilter === 'jugador') return currentUser && t.creatorId !== currentUser.id && t.players.some(p => p.id === currentUser!.id);
+    return true;
+  });
 
   function statusBadge(status: string) {
     const map: Record<string, { label: string; bg: string; color: string }> = {
@@ -1311,7 +1323,25 @@ export default function PlayerTournamentsPage() {
 
       {/* Historial */}
       <div>
-        <div style={secTitle}>Historial ({finishedTournaments.length})</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
+          <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
+            Historial ({finishedTournaments.length}{historialFilter !== 'todos' ? ` de ${allFinished.length}` : ''})
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {(['todos', 'finalizado', 'cancelado', 'organizador', 'jugador'] as const).map(f => (
+              <button key={f} onClick={() => setHistorialFilter(f)} style={{
+                padding: '3px 10px', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', border: '1px solid',
+                borderColor: historialFilter === f ? 'var(--black)' : 'var(--grey-200)',
+                background: historialFilter === f ? 'var(--black)' : 'transparent',
+                color: historialFilter === f ? '#fff' : 'var(--grey-400)',
+                cursor: 'pointer',
+              }}>
+                {f === 'todos' ? 'Todos' : f === 'finalizado' ? 'Finalizado' : f === 'cancelado' ? 'Cancelado' : f === 'organizador' ? 'Organizador' : 'Jugador'}
+              </button>
+            ))}
+          </div>
+        </div>
         {finishedTournaments.length === 0 ? (
           <div style={{ padding: '32px', background: '#fff', border: '1px solid var(--grey-200)', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
             No hay torneos finalizados todavía.
