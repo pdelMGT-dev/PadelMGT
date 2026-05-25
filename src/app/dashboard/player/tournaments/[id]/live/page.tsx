@@ -457,287 +457,410 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                 marginBottom: 24,
                 overflow: 'hidden',
               }}>
-                {/* Round header */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '14px 20px',
-                  borderBottom: '1px solid var(--grey-100)',
-                  background: isActive ? '#fff' : sectionBg,
-                }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: isCompleted || isPending ? 'var(--grey-400)' : 'var(--black)' }}>
-                    Ronda {round.num}
-                  </span>
-                  {isActive && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: 'var(--turf-green, #16a34a)', background: '#dcfce7', padding: '3px 8px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                      <span style={{
-                        width: 6, height: 6, borderRadius: '50%',
-                        background: 'var(--turf-green, #16a34a)',
-                        display: 'inline-block',
-                        animation: 'pulse 1.5s infinite',
-                      }} />
-                      En Juego
-                    </span>
-                  )}
-                  {isCompleted && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', background: '#dcfce7', padding: '3px 8px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                      ✓ Completada
-                    </span>
-                  )}
-                  {isPending && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', background: 'var(--grey-100)', padding: '3px 8px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                      Pendiente
-                    </span>
-                  )}
-                </div>
-
-                {/* Court cards */}
-                <div style={{ padding: '16px 20px' }}>
-                  {round.courts.map(court => {
-                    const key = `${round.num}-${court.courtNum}`;
-                    const isCourtDone = court.status === 'completed';
-                    const isEditable = isActive && !isCompleted;
-                    const pair1Label = getPairLabel(t, court.pair1);
-                    const pair2Label = getPairLabel(t, court.pair2);
-
-                    return (
-                      <div key={court.courtNum} style={{
-                        border: `2px solid ${isCourtDone ? 'var(--turf-green, #22c55e)' : isPending ? 'var(--grey-100)' : 'var(--grey-200)'}`,
-                        padding: '14px 18px',
-                        marginBottom: 12,
-                        background: isCourtDone ? 'rgba(34,197,94,0.04)' : '#fff',
-                        opacity: isPending ? 0.6 : 1,
-                      }}>
-                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>
-                          Cancha {court.courtNum}
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          {/* Pair 1 */}
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', marginBottom: isEditable ? 8 : 4, lineHeight: 1.3 }}>
-                              {pair1Label}
-                            </div>
-                            {isEditable ? (
-                              <input
-                                type="number"
-                                min={0}
-                                max={ptTarget ?? 100}
-                                value={getInputVal(round.num, court.courtNum, 'p1', court)}
-                                onChange={e => handleP1Change(key, e.target.value)}
-                                onBlur={() => handleSaveScore(round.num, court.courtNum)}
-                                style={{
-                                  width: 80,
-                                  padding: '8px 4px',
-                                  fontSize: 28,
-                                  fontFamily: 'var(--font-display)',
-                                  fontWeight: 700,
-                                  textAlign: 'center',
-                                  border: '2px solid var(--grey-300)',
-                                  outline: 'none',
-                                  color: 'var(--black)',
-                                  background: '#fff',
-                                }}
-                                onFocus={e => { e.currentTarget.style.borderColor = 'var(--black)'; }}
-                                onBlurCapture={e => { e.currentTarget.style.borderColor = 'var(--grey-300)'; }}
-                              />
-                            ) : (
-                              <div style={{
-                                width: 80, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700,
-                                color: isCourtDone ? 'var(--turf-green, #16a34a)' : 'var(--grey-300)',
-                              }}>
-                                {court.pair1Score !== null ? court.pair1Score : '–'}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* VS divider */}
-                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>
-                            vs
-                          </div>
-
-                          {/* Pair 2 */}
-                          <div style={{ flex: 1, textAlign: 'right' }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', marginBottom: isEditable ? 8 : 4, lineHeight: 1.3 }}>
-                              {pair2Label}
-                            </div>
-                            {isEditable ? (
-                              <input
-                                type="number"
-                                min={0}
-                                max={ptTarget ?? 100}
-                                value={getInputVal(round.num, court.courtNum, 'p2', court)}
-                                onChange={e => handleP2Change(key, e.target.value)}
-                                onBlur={() => handleSaveScore(round.num, court.courtNum)}
-                                style={{
-                                  width: 80,
-                                  padding: '8px 4px',
-                                  fontSize: 28,
-                                  fontFamily: 'var(--font-display)',
-                                  fontWeight: 700,
-                                  textAlign: 'center',
-                                  border: '2px solid var(--grey-300)',
-                                  outline: 'none',
-                                  color: 'var(--black)',
-                                  background: '#fff',
-                                  float: 'right',
-                                }}
-                                onFocus={e => { e.currentTarget.style.borderColor = 'var(--black)'; }}
-                                onBlurCapture={e => { e.currentTarget.style.borderColor = 'var(--grey-300)'; }}
-                              />
-                            ) : (
-                              <div style={{
-                                width: 80, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700,
-                                color: isCourtDone ? 'var(--turf-green, #16a34a)' : 'var(--grey-300)',
-                              }}>
-                                {court.pair2Score !== null ? court.pair2Score : '–'}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Descansan */}
-                  {restingPlayers.length > 0 && (
-                    <div style={{
-                      padding: '8px 14px',
-                      background: 'var(--grey-50)',
-                      border: '1px solid var(--grey-100)',
-                      fontSize: 12,
-                      color: 'var(--grey-500)',
-                      marginTop: 4,
-                    }}>
-                      Descansan — {restingPlayers.map(p => p.name).join(', ')}
-                    </div>
-                  )}
-                </div>
-
-                {/* Action banner: only on active round when complete */}
-                {isActive && roundDone && (
-                  <div style={{
-                    padding: '18px 20px',
-                    background: 'rgba(34,197,94,0.08)',
-                    border: 'none',
-                    borderTop: '2px solid rgba(34,197,94,0.3)',
+                {/* Round header — clickable, always visible */}
+                <div
+                  onClick={() => setRoundOpen(prev => ({ ...prev, [round.num]: !prev[round.num] }))}
+                  style={{
                     display: 'flex',
-                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: 12,
-                  }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--turf-green, #16a34a)' }}>
-                      ✓ Ronda {currentRoundNum} completada
-                    </div>
-                    {!gameFinished ? (
-                      <button
-                        onClick={handleNextRound}
-                        style={{
-                          padding: '12px 24px',
-                          background: 'var(--black)',
-                          color: '#fff',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontFamily: 'var(--font-display)',
-                          fontSize: 14,
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.06em',
-                        }}>
-                        SIGUIENTE RONDA →
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleFinishTournament}
-                        style={{
-                          padding: '12px 24px',
-                          background: '#dc2626',
-                          color: '#fff',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontFamily: 'var(--font-display)',
-                          fontSize: 14,
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.06em',
-                        }}>
-                        FINALIZAR TORNEO
-                      </button>
+                    justifyContent: 'space-between',
+                    padding: '12px 20px',
+                    cursor: 'pointer',
+                    background: isActive ? '#fff' : 'var(--grey-50)',
+                    borderLeft: isActive ? '4px solid var(--turf-green, #22c55e)' : '4px solid transparent',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>
+                      RONDA {round.num}
+                    </span>
+                    {isActive && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--turf-green, #22c55e)', fontWeight: 600 }}>
+                        <span style={{
+                          width: 6, height: 6, borderRadius: '50%',
+                          background: 'var(--turf-green, #22c55e)',
+                          display: 'inline-block',
+                          animation: 'pulse 2s infinite',
+                        }} />
+                        EN JUEGO
+                      </span>
+                    )}
+                    {isCompleted && (
+                      <span style={{ fontSize: 11, color: 'var(--grey-400)', fontWeight: 600 }}>✓ COMPLETADA</span>
+                    )}
+                    {isPending && (
+                      <span style={{ fontSize: 11, color: 'var(--grey-400)', fontWeight: 600 }}>PENDIENTE</span>
                     )}
                   </div>
+                  <span style={{
+                    fontSize: 14, color: 'var(--grey-400)',
+                    transform: roundOpen[round.num] ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    transition: 'transform 0.2s',
+                    display: 'inline-block',
+                  }}>▼</span>
+                </div>
+
+                {/* Round content — collapsible */}
+                {roundOpen[round.num] && (
+                  <>
+                    {/* Court cards */}
+                    <div style={{ padding: '16px 20px' }}>
+                      {round.courts.map(court => {
+                        const key = `${round.num}-${court.courtNum}`;
+                        const isCourtDone = court.status === 'completed';
+                        const isEditable = isActive && !isCompleted;
+                        const pair1Label = getPairLabel(t, court.pair1);
+                        const pair2Label = getPairLabel(t, court.pair2);
+
+                        return (
+                          <div key={court.courtNum} style={{
+                            border: `2px solid ${isCourtDone ? 'var(--turf-green, #22c55e)' : isPending ? 'var(--grey-100)' : 'var(--grey-200)'}`,
+                            padding: '14px 18px',
+                            marginBottom: 12,
+                            background: isCourtDone ? 'rgba(34,197,94,0.04)' : '#fff',
+                            opacity: isPending ? 0.6 : 1,
+                          }}>
+                            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>
+                              Cancha {court.courtNum}
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              {/* Pair 1 */}
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', marginBottom: isEditable ? 8 : 4, lineHeight: 1.3 }}>
+                                  {pair1Label}
+                                </div>
+                                {isEditable ? (
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={ptTarget ?? 100}
+                                    value={getInputVal(round.num, court.courtNum, 'p1', court)}
+                                    onChange={e => handleP1Change(key, e.target.value)}
+                                    onBlur={() => handleSaveScore(round.num, court.courtNum)}
+                                    style={{
+                                      width: 80,
+                                      padding: '8px 4px',
+                                      fontSize: 28,
+                                      fontFamily: 'var(--font-display)',
+                                      fontWeight: 700,
+                                      textAlign: 'center',
+                                      border: '2px solid var(--grey-300)',
+                                      outline: 'none',
+                                      color: 'var(--black)',
+                                      background: '#fff',
+                                    }}
+                                    onFocus={e => { e.currentTarget.style.borderColor = 'var(--black)'; }}
+                                    onBlurCapture={e => { e.currentTarget.style.borderColor = 'var(--grey-300)'; }}
+                                  />
+                                ) : (
+                                  <div style={{
+                                    width: 80, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700,
+                                    color: isCourtDone ? 'var(--turf-green, #16a34a)' : 'var(--grey-300)',
+                                  }}>
+                                    {court.pair1Score !== null ? court.pair1Score : '–'}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* VS divider */}
+                              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>
+                                vs
+                              </div>
+
+                              {/* Pair 2 */}
+                              <div style={{ flex: 1, textAlign: 'right' }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', marginBottom: isEditable ? 8 : 4, lineHeight: 1.3 }}>
+                                  {pair2Label}
+                                </div>
+                                {isEditable ? (
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={ptTarget ?? 100}
+                                    value={getInputVal(round.num, court.courtNum, 'p2', court)}
+                                    onChange={e => handleP2Change(key, e.target.value)}
+                                    onBlur={() => handleSaveScore(round.num, court.courtNum)}
+                                    style={{
+                                      width: 80,
+                                      padding: '8px 4px',
+                                      fontSize: 28,
+                                      fontFamily: 'var(--font-display)',
+                                      fontWeight: 700,
+                                      textAlign: 'center',
+                                      border: '2px solid var(--grey-300)',
+                                      outline: 'none',
+                                      color: 'var(--black)',
+                                      background: '#fff',
+                                      float: 'right',
+                                    }}
+                                    onFocus={e => { e.currentTarget.style.borderColor = 'var(--black)'; }}
+                                    onBlurCapture={e => { e.currentTarget.style.borderColor = 'var(--grey-300)'; }}
+                                  />
+                                ) : (
+                                  <div style={{
+                                    width: 80, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700,
+                                    color: isCourtDone ? 'var(--turf-green, #16a34a)' : 'var(--grey-300)',
+                                  }}>
+                                    {court.pair2Score !== null ? court.pair2Score : '–'}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Descansan */}
+                      {restingPlayers.length > 0 && (
+                        <div style={{
+                          padding: '8px 14px',
+                          background: 'var(--grey-50)',
+                          border: '1px solid var(--grey-100)',
+                          fontSize: 12,
+                          color: 'var(--grey-500)',
+                          marginTop: 4,
+                        }}>
+                          Descansan — {restingPlayers.map(p => p.name).join(', ')}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action banner: only on active round when complete */}
+                    {isActive && roundDone && (
+                      <div style={{
+                        padding: '18px 20px',
+                        background: 'rgba(34,197,94,0.08)',
+                        border: 'none',
+                        borderTop: '2px solid rgba(34,197,94,0.3)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 12,
+                      }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--turf-green, #16a34a)' }}>
+                          ✓ Ronda {currentRoundNum} completada
+                        </div>
+                        {!gameFinished ? (
+                          <button
+                            onClick={handleNextRound}
+                            style={{
+                              padding: '12px 24px',
+                              background: 'var(--black)',
+                              color: '#fff',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-display)',
+                              fontSize: 14,
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.06em',
+                            }}>
+                            SIGUIENTE RONDA →
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleFinishTournament}
+                            style={{
+                              padding: '12px 24px',
+                              background: '#dc2626',
+                              color: '#fff',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-display)',
+                              fontSize: 14,
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.06em',
+                            }}>
+                            FINALIZAR TORNEO
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             );
           })}
         </div>
 
-        {/* ── CLASIFICACIÓN ── */}
-        {t.standings.length > 0 && (
-          <div style={card}>
-            <div style={secTitle}>Clasificación</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--grey-100)' }}>
-                  {['Pos', 'Jugador', 'W', 'Pts', 'PJ', '+/-'].map(h => (
-                    <th key={h} style={{
-                      padding: '6px 8px',
-                      textAlign: h === 'Jugador' ? 'left' : 'center',
-                      fontSize: 9,
-                      fontWeight: 700,
-                      letterSpacing: '0.12em',
-                      textTransform: 'uppercase',
-                      color: 'var(--grey-400)',
-                    }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {t.standings.map((s, i) => {
-                  const isMe = currentUser && s.playerId === currentUser.id;
-                  const isCreatorRow = s.playerId === t.creatorId || s.playerId === creatorPlayer?.id;
-                  return (
-                    <tr key={s.playerId} style={{
-                      borderBottom: '1px solid var(--grey-100)',
-                      background: isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
-                    }}>
-                      <td style={{
-                        padding: '8px',
-                        textAlign: 'center',
-                        fontFamily: 'var(--font-display)',
-                        fontWeight: 700,
-                        color: i === 0 ? '#f59e0b' : 'var(--grey-400)',
-                        fontSize: i === 0 ? 16 : 13,
-                      }}>
-                        {i === 0 ? '🥇' : i + 1}
-                      </td>
-                      <td style={{ padding: '8px', fontWeight: isMe ? 700 : 500 }}>
-                        {s.playerName}
-                        {isCreatorRow && <span style={{ marginLeft: 4, fontSize: 12, color: '#f59e0b' }}>★</span>}
-                        {isMe && !isCreatorRow && <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--grey-400)' }}>(tú)</span>}
-                      </td>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>{s.wins}</td>
-                      <td style={{ padding: '8px', textAlign: 'center', fontWeight: 700 }}>{s.pts}</td>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>{s.played}</td>
-                      <td style={{
-                        padding: '8px',
-                        textAlign: 'center',
-                        color: s.diff >= 0 ? 'var(--turf-green, #16a34a)' : '#dc2626',
-                      }}>
-                        {s.diff > 0 ? `+${s.diff}` : s.diff}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {/* ── CLASIFICACIÓN + RANKING ── */}
+        {t.standings.length > 0 && (() => {
+          const POSITION_PRIZES = [250, 175, 125, 62, 25];
+          function getProjectedRankingPts(position: number, standing: Standing): number {
+            const positionPrize = position < POSITION_PRIZES.length ? POSITION_PRIZES[position] : 0;
+            const perGameBonus = standing.wins * 3 + (standing.draws ?? 0) * 1 + (standing.losses ?? 0) * (-1);
+            return positionPrize + perGameBonus;
+          }
+
+          const liveStandings = calculateStandings(t);
+          const isParejas = t.pairType === 'parejas' && t.fixedPairs && t.fixedPairs.length > 0;
+
+          const thStyle = (leftAlign?: boolean): React.CSSProperties => ({
+            padding: '6px 8px',
+            textAlign: leftAlign ? 'left' : 'center',
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: 'var(--grey-400)',
+          });
+
+          const tdCenter: React.CSSProperties = { padding: '7px 8px', textAlign: 'center', fontSize: 12 };
+          const tdLeft: React.CSSProperties = { padding: '7px 8px', textAlign: 'left', fontSize: 12 };
+
+          const tableHeader = (label: string) => (
+            <div style={{
+              background: 'var(--black)', color: '#fff',
+              padding: '8px 12px',
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
+              marginBottom: 0,
+            }}>
+              {label}
+            </div>
+          );
+
+          return (
+            <div style={{ marginBottom: 32 }}>
+              {/* TABLE I: CLASIFICACIÓN */}
+              <div style={{ ...card, marginBottom: 16, padding: 0 }}>
+                {tableHeader('I — CLASIFICACIÓN')}
+                <div style={{ padding: '0 0 4px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid var(--grey-100)' }}>
+                        <th style={thStyle()}>POS</th>
+                        <th style={thStyle(true)}>{isParejas ? 'EQUIPO' : 'JUGADOR'}</th>
+                        <th style={thStyle()}>PJ</th>
+                        <th style={thStyle()}>W</th>
+                        <th style={thStyle()}>L</th>
+                        <th style={thStyle()}>T</th>
+                        <th style={thStyle()}>PTS W</th>
+                        <th style={thStyle()}>PTS L</th>
+                        <th style={thStyle()}>+/-</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isParejas && t.fixedPairs ? (
+                        // Parejas fijas: group by pair
+                        t.fixedPairs.map((pair, pairIdx) => {
+                          // Find standing for player1Id (representative of the pair)
+                          const s = liveStandings.find(st => st.playerId === pair.player1Id);
+                          if (!s) return null;
+                          const isCreatorRow = pair.player1Id === t.creatorId || pair.player2Id === t.creatorId;
+                          const isMe = currentUser && (pair.player1Id === currentUser.id || pair.player2Id === currentUser.id);
+                          return (
+                            <tr key={pair.pairIndex} style={{
+                              borderBottom: '1px solid var(--grey-100)',
+                              background: isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
+                            }}>
+                              <td style={{ ...tdCenter, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                                {pairIdx === 0 ? '🥇' : pairIdx + 1}
+                              </td>
+                              <td style={{ ...tdLeft, fontWeight: isMe ? 700 : 500 }}>
+                                {pair.player1Name} / {pair.player2Name}
+                                {isCreatorRow && <span style={{ marginLeft: 4, fontSize: 12, color: '#f59e0b' }}>★</span>}
+                                {isMe && !isCreatorRow && <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--grey-400)' }}>(tú)</span>}
+                              </td>
+                              <td style={tdCenter}>{s.played}</td>
+                              <td style={tdCenter}>{s.wins}</td>
+                              <td style={tdCenter}>{s.losses ?? 0}</td>
+                              <td style={tdCenter}>{s.draws ?? 0}</td>
+                              <td style={tdCenter}>{s.pointsFor}</td>
+                              <td style={tdCenter}>{s.pointsAgainst}</td>
+                              <td style={{ ...tdCenter, color: s.diff >= 0 ? 'var(--turf-green, #16a34a)' : '#dc2626' }}>
+                                {s.diff > 0 ? `+${s.diff}` : s.diff}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        // Individual
+                        liveStandings.map((s, i) => {
+                          const isMe = currentUser && s.playerId === currentUser.id;
+                          const isCreatorRow = s.playerId === t.creatorId || s.playerId === creatorPlayer?.id;
+                          return (
+                            <tr key={s.playerId} style={{
+                              borderBottom: '1px solid var(--grey-100)',
+                              background: isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
+                            }}>
+                              <td style={{ ...tdCenter, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                                {i === 0 ? '🥇' : i + 1}
+                              </td>
+                              <td style={{ ...tdLeft, fontWeight: isMe ? 700 : 500 }}>
+                                {s.playerName}
+                                {isCreatorRow && <span style={{ marginLeft: 4, fontSize: 12, color: '#f59e0b' }}>★</span>}
+                                {isMe && !isCreatorRow && <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--grey-400)' }}>(tú)</span>}
+                              </td>
+                              <td style={tdCenter}>{s.played}</td>
+                              <td style={tdCenter}>{s.wins}</td>
+                              <td style={tdCenter}>{s.losses ?? 0}</td>
+                              <td style={tdCenter}>{s.draws ?? 0}</td>
+                              <td style={tdCenter}>{s.pointsFor}</td>
+                              <td style={tdCenter}>{s.pointsAgainst}</td>
+                              <td style={{ ...tdCenter, color: s.diff >= 0 ? 'var(--turf-green, #16a34a)' : '#dc2626' }}>
+                                {s.diff > 0 ? `+${s.diff}` : s.diff}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* TABLE II: RANKING */}
+              <div style={{ ...card, padding: 0 }}>
+                {tableHeader('II — RANKING')}
+                <div style={{ padding: '0 0 4px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid var(--grey-100)' }}>
+                        <th style={thStyle()}>POS</th>
+                        <th style={thStyle(true)}>JUGADOR</th>
+                        <th style={thStyle()}>+/-</th>
+                        <th style={thStyle()}>RNK</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {liveStandings.map((s, i) => {
+                        const isMe = currentUser && s.playerId === currentUser.id;
+                        const isCreatorRow = s.playerId === t.creatorId || s.playerId === creatorPlayer?.id;
+                        const rnk = getProjectedRankingPts(i, s);
+                        return (
+                          <tr key={s.playerId} style={{
+                            borderBottom: '1px solid var(--grey-100)',
+                            background: isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
+                          }}>
+                            <td style={{ ...tdCenter, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                              {i === 0 ? '🥇' : i + 1}
+                            </td>
+                            <td style={{ ...tdLeft, fontWeight: isMe ? 700 : 500 }}>
+                              {s.playerName}
+                              {isCreatorRow && <span style={{ marginLeft: 4, fontSize: 12, color: '#f59e0b' }}>★</span>}
+                              {isMe && !isCreatorRow && <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--grey-400)' }}>(tú)</span>}
+                            </td>
+                            <td style={{ ...tdCenter, color: s.diff >= 0 ? 'var(--turf-green, #16a34a)' : '#dc2626' }}>
+                              {s.diff > 0 ? `+${s.diff}` : s.diff}
+                            </td>
+                            <td style={{ ...tdCenter, fontWeight: 700, color: 'var(--black)' }}>
+                              {rnk > 0 ? `+${rnk}` : rnk}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Pulse animation for active dot */}
