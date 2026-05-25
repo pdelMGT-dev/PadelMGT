@@ -101,10 +101,11 @@ function weekLabel(mondayStr: string): string {
 
 function getEventHref(e: CalendarEvent): string {
   if (e.type === 'quick_game') {
-    if (e.status === 'live' || e.status === 'starting_soon') {
+    if (e.isCreator) {
       return `/dashboard/player/quick-game/${e.gameId}`;
     }
-    return `/dashboard/player/quick-game/${e.gameId}/edit`;
+    // Non-creator: go to public quick-game page
+    return `/quick-game/${e.code}`;
   }
   // tournament
   if (e.isCreator) {
@@ -114,11 +115,8 @@ function getEventHref(e: CalendarEvent): string {
 }
 
 function getEventBtnLabel(e: CalendarEvent): string {
-  if (e.type === 'quick_game') {
-    if (e.status === 'live' || e.status === 'starting_soon') return 'Ver Partido';
-    return 'Gestionar';
-  }
-  return 'Ver';
+  if (e.type === 'quick_game') return e.isCreator ? 'Gestionar' : 'Ver';
+  return e.isCreator ? 'Gestionar' : 'Ver';
 }
 
 // ---------------------------------------------------------------------------
@@ -202,23 +200,24 @@ export default function PlayerCalendarPage() {
     const allGames = getAllGames();
     const myGames = allGames.filter((g: ActiveGame) => {
       if (g.cancelledAt) return false;
-      const isCreator   = g.creatorId === userId || g.isCreator === true;
-      const isConfirmed = g.players.some((p) => p.id === userId);
-      const isInvited   = g.invitedPlayers.some((p: InvitedPlayer) => p.id === userId);
+      const isCreator   = g.creatorId === userId;
+      const isConfirmed = (g.players ?? []).some((p) => p.id === userId);
+      const isInvited   = (g.invitedPlayers ?? []).some((p: InvitedPlayer) => p.id === userId);
       return isCreator || isConfirmed || isInvited;
     });
 
     for (const g of myGames) {
-      const isInvitedPending = g.invitedPlayers.some(
+      const invited = g.invitedPlayers ?? [];
+      const isInvitedPending = invited.some(
         (p: InvitedPlayer) => p.id === userId && p.status === 'pending',
       );
       const calStatus = isInvitedPending ? 'pending' : g.status;
+      const isCreator = g.creatorId === userId;
 
-      // Build playersWith
-      const confirmedOthers = g.players
+      const confirmedOthers = (g.players ?? [])
         .filter((p) => p.id !== userId)
         .map((p) => p.name);
-      const pendingCount = g.invitedPlayers.filter(
+      const pendingCount = invited.filter(
         (p: InvitedPlayer) => p.status === 'pending' && p.id !== userId,
       ).length;
       const playersWith = [
@@ -227,38 +226,39 @@ export default function PlayerCalendarPage() {
       ].join(', ') || undefined;
 
       calEvents.push({
-        id:          g.id,
-        type:        'quick_game',
-        name:        g.name,
-        date:        g.date,
-        time:        g.time,
-        club:        g.club,
-        city:        g.city,
-        status:      calStatus,
-        code:        g.code,
-        format:      FORMAT_LABEL[g.format] ?? g.format,
+        id:        g.id,
+        type:      'quick_game',
+        name:      g.name,
+        date:      g.date,
+        time:      g.time,
+        club:      g.club,
+        city:      g.city,
+        status:    calStatus,
+        code:      g.code,
+        format:    FORMAT_LABEL[g.format] ?? g.format,
         playersWith,
-        gameId:      g.id,
-        isCreator:   g.creatorId === userId || g.isCreator === true,
+        gameId:    g.id,
+        isCreator,
       });
     }
 
     // ── Tournaments ──────────────────────────────────────────────────────────
     const allTournaments = getAllTournaments();
-    const myTournaments = allTournaments.filter((t: ActiveGame) => {
+    const myTournaments = allTournaments.filter((t) => {
       if (t.cancelledAt) return false;
-      const isCreator   = t.creatorId === userId || t.isCreator === true;
-      const isConfirmed = t.players.some((p) => p.id === userId);
-      const isInvited   = t.invitedPlayers.some((p: InvitedPlayer) => p.id === userId);
+      const isCreator   = t.creatorId === userId;
+      const isConfirmed = (t.players ?? []).some((p) => p.id === userId);
+      const isInvited   = (t.invitedPlayers ?? []).some((p: InvitedPlayer) => p.id === userId);
       return isCreator || isConfirmed || isInvited;
     });
 
     for (const t of myTournaments) {
-      const isInvitedPending = t.invitedPlayers.some(
+      const invited = t.invitedPlayers ?? [];
+      const isInvitedPending = invited.some(
         (p: InvitedPlayer) => p.id === userId && p.status === 'pending',
       );
-      const isConfirmedPlayer = t.players.some((p) => p.id === userId);
-      const isCreator = t.creatorId === userId || t.isCreator === true;
+      const isConfirmedPlayer = (t.players ?? []).some((p) => p.id === userId);
+      const isCreator = t.creatorId === userId;
 
       let calStatus: string;
       if (isInvitedPending) {
@@ -269,22 +269,19 @@ export default function PlayerCalendarPage() {
         calStatus = t.status;
       }
 
-      const confirmedCount = t.players.length;
-      const maxPlayers = t.maxPlayers;
-
       calEvents.push({
         id:           t.id,
         type:         'tournament',
         name:         t.name,
         date:         t.date,
-        time:         t.time,
+        time:         t.time ?? undefined,
         club:         t.club,
         city:         t.city,
         status:       calStatus,
         format:       FORMAT_LABEL[t.format] ?? t.format,
-        spots:        `${confirmedCount}/${maxPlayers}`,
+        spots:        `${t.players.length}/${t.maxPlayers}`,
         tournamentId: t.id,
-        isCreator:    isCreator,
+        isCreator,
       });
     }
 
