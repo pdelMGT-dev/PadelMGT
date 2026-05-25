@@ -65,11 +65,13 @@ export default function PlayerFriendsPage() {
   const [searchResults, setSearchResults] = useState<RegisteredPlayer[]>([]);
   const [countries,     setCountries]     = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<RegisteredPlayer | null>(null);
+  const [reqVersion,    setReqVersion]    = useState(0);
 
   const refresh = useCallback((userId: string) => {
     setFriends(getFriendsForPlayer(userId));
     setIncoming(getPendingRequestsFor(userId));
     setSent(getSentRequests(userId).filter(r => r.status === 'pending'));
+    setReqVersion(v => v + 1);
   }, []);
 
   useEffect(() => {
@@ -98,7 +100,7 @@ export default function PlayerFriendsPage() {
     const results = searchPlayers(searchQ, searchCountry ? { country: searchCountry } : undefined)
       .filter(p => p.id !== currentUser.id && !friendIds.has(p.id));
     setSearchResults(results);
-  }, [searchQ, searchCountry, friends, currentUser]);
+  }, [searchQ, searchCountry, friends, currentUser, reqVersion]);
 
   function handleAccept(req: FriendRequest) {
     acceptFriendRequest(req.id);

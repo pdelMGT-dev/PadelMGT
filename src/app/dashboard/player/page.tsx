@@ -9,7 +9,7 @@ import {
   respondToInvitation,
   type Invitation,
 } from '@/lib/invitation-store';
-import { addFriendship } from '@/lib/player-store';
+import { addFriendship, getPlayer, getFriendsForPlayer, type RegisteredPlayer } from '@/lib/player-store';
 import { getPendingRequestsFor, acceptFriendRequest, rejectFriendRequest, type FriendRequest } from '@/lib/friend-request-store';
 import { getTournament, saveTournament } from '@/lib/tournament-store';
 import {
@@ -33,12 +33,6 @@ const FORMAT_LABEL: Record<string, string> = {
   team_league: 'Team League', knockout: 'Knockout', world_cup: 'World Cup',
 };
 
-const friends = [
-  { name: 'Ana Rodríguez', ranking: '#52', activity: 'Ganó su partido hace 2h' },
-  { name: 'Carlos Vega', ranking: '#38', activity: 'Se inscribió a Open Knockout' },
-  { name: 'Marcos Herrera', ranking: '#61', activity: 'Nuevo ranking personal' },
-];
-
 export default function PlayerHomePage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [myActiveEvents, setMyActiveEvents] = useState<ReturnType<typeof getActiveEventsForPlayer>>([]);
@@ -48,6 +42,8 @@ export default function PlayerHomePage() {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [showProfileReminder, setShowProfileReminder] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [playerData, setPlayerData] = useState<RegisteredPlayer | null>(null);
+  const [realFriends, setRealFriends] = useState<RegisteredPlayer[]>([]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -61,6 +57,8 @@ export default function PlayerHomePage() {
         const u = JSON.parse(raw) as CurrentUser;
         setCurrentUser(u);
         setFriendRequests(getPendingRequestsFor(u.id));
+        setPlayerData(getPlayer(u.id));
+        setRealFriends(getFriendsForPlayer(u.id));
         if (u.firstLogin) {
           setShowProfileReminder(true);
           // Clear firstLogin flag so reminder only shows once per session
@@ -221,14 +219,18 @@ export default function PlayerHomePage() {
         </div>
       )}
 
-      {/* Stats (mock — visual only) */}
+      {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
-        {[
-          { label: 'Torneos jugados', value: '24', delta: '+3 este mes' },
-          { label: 'Victorias', value: String(recentMatches.filter(m => m.result === 'V').length) || '0', delta: recentMatches.length > 0 ? `${Math.round(recentMatches.filter(m => m.result === 'V').length / recentMatches.length * 100)}% win rate` : '—' },
-          { label: 'Ranking', value: '#47', delta: '▲4 posiciones' },
-          { label: 'Puntos', value: '1,840', delta: '+120 esta semana' },
-        ].map((s) => (
+        {(() => {
+          const isNewPlayer = (playerData?.rankingPoints ?? 0) === 0 && recentMatches.length === 0;
+          const wins = recentMatches.filter(m => m.result === 'V').length;
+          return [
+            { label: 'Torneos jugados', value: isNewPlayer ? '0' : '24', delta: isNewPlayer ? '' : '+3 este mes' },
+            { label: 'Victorias', value: String(wins), delta: recentMatches.length > 0 ? `${Math.round(wins / recentMatches.length * 100)}% win rate` : '—' },
+            { label: 'Ranking', value: isNewPlayer ? '—' : '#47', delta: isNewPlayer ? '' : '▲4 posiciones' },
+            { label: 'Puntos', value: isNewPlayer ? '0' : '1,840', delta: isNewPlayer ? '' : '+120 esta semana' },
+          ];
+        })().map((s) => (
           <div key={s.label} style={{ background: '#fff', padding: '28px 24px' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, fontWeight: 600, letterSpacing: '-0.03em', color: 'var(--black)', lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, margin: '6px 0 4px' }}>{s.label}</div>
@@ -317,28 +319,38 @@ export default function PlayerHomePage() {
           </div>
         )}
 
-        {/* Friends activity */}
+        {/* Friends panel */}
         <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)' }}>Amigos</div>
+            <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)' }}>
+              Amigos ({realFriends.length})
+            </div>
             <Link href="/dashboard/player/friends" style={{ fontSize: 12, color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Ver todos →</Link>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {friends.map((f) => (
-              <div key={f.name} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{ width: 36, height: 36, background: 'var(--grey-100)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 600, color: 'var(--black)', flexShrink: 0 }}>
-                  {f.name.split(' ').map((w: string) => w[0]).join('')}
-                </div>
-                <div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>{f.name}</span>
-                    <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>{f.ranking}</span>
+          {realFriends.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px 0' }}>
+              <div style={{ fontSize: 13, color: 'var(--grey-400)', marginBottom: 12 }}>Todavía no tenés amigos.</div>
+              <Link href="/dashboard/player/friends?tab=search" style={{ fontSize: 12, fontWeight: 700, color: 'var(--black)', textDecoration: 'none', borderBottom: '1px solid var(--black)', paddingBottom: 2 }}>Agregar jugadores →</Link>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {realFriends.slice(0, 4).map((f) => (
+                <div key={f.id} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <div style={{ width: 36, height: 36, background: 'var(--court-blue)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
+                    {f.name.split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 2 }}>{f.activity}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{f.shortId}{f.city ? ` · ${f.city}` : ''}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600 }}>{f.rankingPoints.toLocaleString()}</div>
+                    <div style={{ fontSize: 9, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>pts</div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

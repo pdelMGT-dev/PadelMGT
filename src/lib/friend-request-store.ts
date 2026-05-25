@@ -54,15 +54,16 @@ function generateId(): string {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/** Returns any existing request between two players (either direction). */
+/** Returns any non-rejected request between two players (either direction). */
 export function getRequestBetween(
   userId: string,
   otherId: string,
 ): FriendRequest | null {
   return load().find(
     r =>
-      (r.fromId === userId && r.toId === otherId) ||
-      (r.fromId === otherId && r.toId === userId),
+      r.status !== 'rejected' &&
+      ((r.fromId === userId && r.toId === otherId) ||
+       (r.fromId === otherId && r.toId === userId)),
   ) ?? null;
 }
 
