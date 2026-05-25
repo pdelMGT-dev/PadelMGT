@@ -102,11 +102,14 @@ function computePairStandings(game: ActiveGame) {
   return game.fixedPairs.map(pair => {
     const s1 = game.standings.find(s => s.playerId === pair.player1Id);
     const s2 = game.standings.find(s => s.playerId === pair.player2Id);
-    const pts = (s1?.pts ?? 0) + (s2?.pts ?? 0);
-    const wins = (s1?.wins ?? 0) + (s2?.wins ?? 0);
+    const wins   = (s1?.wins   ?? 0) + (s2?.wins   ?? 0);
+    const losses = (s1?.losses ?? 0) + (s2?.losses ?? 0);
+    const draws  = (s1?.draws  ?? 0) + (s2?.draws  ?? 0);
     const played = Math.max(s1?.played ?? 0, s2?.played ?? 0);
-    const diff = (s1?.diff ?? 0) + (s2?.diff ?? 0);
-    return { pair, pts, wins, played, diff };
+    const diff   = (s1?.diff   ?? 0) + (s2?.diff   ?? 0);
+    const ptsW   = wins * 3 + draws;
+    const ptsL   = -losses;
+    return { pair, pts: ptsW + ptsL, wins, losses, draws, played, diff, ptsW, ptsL };
   }).sort((a, b) => b.pts - a.pts || b.diff - a.diff);
 }
 
@@ -1707,15 +1710,18 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                   <thead>
                     <tr style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
                       <th style={{ textAlign: 'left', padding: '0 8px 10px 0', fontWeight: 700 }}>Pos</th>
-                      <th style={{ textAlign: 'left', padding: '0 8px 10px 0', fontWeight: 700 }}>Pareja</th>
+                      <th style={{ textAlign: 'left', padding: '0 8px 10px 0', fontWeight: 700 }}>Equipo</th>
                       <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>PJ</th>
-                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>G</th>
-                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>Pts</th>
-                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>Dif</th>
+                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>W</th>
+                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>L</th>
+                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>T</th>
+                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>PTS W</th>
+                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>PTS L</th>
+                      <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>+/-</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pairStandings.map(({ pair, pts, wins, played, diff }, i) => (
+                    {pairStandings.map(({ pair, wins, losses, draws, played, diff, ptsW, ptsL }, i) => (
                       <tr key={pair.pairIndex} style={{ borderTop: '1px solid var(--grey-100)' }}>
                         <td style={{ padding: '10px 8px 10px 0', fontWeight: 800, fontSize: i < 3 ? 14 : 12 }}>
                           {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
@@ -1726,7 +1732,10 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                         </td>
                         <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{played}</td>
                         <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{wins}</td>
-                        <td style={{ textAlign: 'center', padding: '10px 8px', fontWeight: 700 }}>{pts}</td>
+                        <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{losses}</td>
+                        <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{draws}</td>
+                        <td style={{ textAlign: 'center', padding: '10px 8px', fontWeight: 700 }}>{ptsW}</td>
+                        <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{ptsL}</td>
                         <td style={{ textAlign: 'center', padding: '10px 8px', color: diff >= 0 ? 'var(--turf-green)' : '#ee0005', fontWeight: 600 }}>{diff > 0 ? '+' : ''}{diff}</td>
                       </tr>
                     ))}
@@ -1742,22 +1751,32 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 <th style={{ textAlign: 'left', padding: '0 8px 8px 0', fontWeight: 700 }}>Pos</th>
                 <th style={{ textAlign: 'left', padding: '0 8px 8px 0', fontWeight: 700 }}>Jugador</th>
                 <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>PJ</th>
-                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>G</th>
-                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>Pts</th>
-                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>Dif</th>
+                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>W</th>
+                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>L</th>
+                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>T</th>
+                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>PTS W</th>
+                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>PTS L</th>
+                <th style={{ textAlign: 'center', padding: '0 8px 8px', fontWeight: 700 }}>+/-</th>
               </tr>
             </thead>
             <tbody>
-              {game.standings.map((s, i) => (
-                <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
-                  <td style={{ padding: '10px 8px 10px 0', fontWeight: 700, color: i === 0 ? 'var(--turf-green)' : 'var(--grey-400)', fontSize: 12 }}>{i + 1}</td>
-                  <td style={{ padding: '10px 8px 10px 0', fontWeight: 600 }}>{s.playerName}</td>
-                  <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{s.played}</td>
-                  <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{s.wins}</td>
-                  <td style={{ textAlign: 'center', padding: '10px 8px', fontWeight: 700 }}>{s.pts}</td>
-                  <td style={{ textAlign: 'center', padding: '10px 8px', color: s.diff >= 0 ? 'var(--turf-green)' : '#ee0005' }}>{s.diff > 0 ? '+' : ''}{s.diff}</td>
-                </tr>
-              ))}
+              {game.standings.map((s, i) => {
+                const ptsW = s.wins * 3 + s.draws;
+                const ptsL = -s.losses;
+                return (
+                  <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
+                    <td style={{ padding: '10px 8px 10px 0', fontWeight: 700, color: i === 0 ? 'var(--turf-green)' : 'var(--grey-400)', fontSize: 12 }}>{i + 1}</td>
+                    <td style={{ padding: '10px 8px 10px 0', fontWeight: 600 }}>{s.playerName}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{s.played}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{s.wins}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{s.losses}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{s.draws}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', fontWeight: 700 }}>{ptsW}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{ptsL}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: s.diff >= 0 ? 'var(--turf-green)' : '#ee0005' }}>{s.diff > 0 ? '+' : ''}{s.diff}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1780,15 +1799,18 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                     <thead>
                       <tr style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
                         <th style={{ textAlign: 'left', padding: '0 8px 10px 0', fontWeight: 700 }}>Pos</th>
-                        <th style={{ textAlign: 'left', padding: '0 8px 10px 0', fontWeight: 700 }}>Pareja</th>
+                        <th style={{ textAlign: 'left', padding: '0 8px 10px 0', fontWeight: 700 }}>Equipo</th>
                         <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>PJ</th>
-                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>G</th>
-                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>Pts</th>
-                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>Dif</th>
+                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>W</th>
+                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>L</th>
+                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>T</th>
+                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>PTS W</th>
+                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>PTS L</th>
+                        <th style={{ textAlign: 'center', padding: '0 8px 10px', fontWeight: 700 }}>+/-</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {pairStandings.map(({ pair, pts, wins, played, diff }, i) => (
+                      {pairStandings.map(({ pair, wins, losses, draws, played, diff, ptsW, ptsL }, i) => (
                         <tr key={pair.pairIndex} style={{ borderTop: '1px solid var(--grey-100)' }}>
                           <td style={{ padding: '12px 8px 12px 0', fontWeight: 800, fontSize: i < 3 ? 15 : 12 }}>
                             {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
@@ -1799,7 +1821,10 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                           </td>
                           <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{played}</td>
                           <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{wins}</td>
-                          <td style={{ textAlign: 'center', padding: '12px 8px', fontWeight: 800, fontSize: 15 }}>{pts}</td>
+                          <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{losses}</td>
+                          <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{draws}</td>
+                          <td style={{ textAlign: 'center', padding: '12px 8px', fontWeight: 800, fontSize: 15 }}>{ptsW}</td>
+                          <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{ptsL}</td>
                           <td style={{ textAlign: 'center', padding: '12px 8px', color: diff >= 0 ? 'var(--turf-green)' : '#ee0005', fontWeight: 600 }}>{diff > 0 ? '+' : ''}{diff}</td>
                         </tr>
                       ))}
@@ -1815,18 +1840,18 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                   <th style={{ textAlign: 'left', padding: '0 8px 12px 0', fontWeight: 700 }}>Pos</th>
                   <th style={{ textAlign: 'left', padding: '0 8px 12px 0', fontWeight: 700 }}>Jugador</th>
                   <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>PJ</th>
-                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>G</th>
-                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>E</th>
-                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>P</th>
-                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>Pts</th>
-                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>Dif</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>W</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>L</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>T</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>PTS W</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>PTS L</th>
+                  <th style={{ textAlign: 'center', padding: '0 8px 12px', fontWeight: 700 }}>+/-</th>
                 </tr>
               </thead>
               <tbody>
                 {game.standings.map((s, i) => {
-                  const losses = s.played - s.wins - (s.played - s.wins > 0 ? 0 : 0);
-                  const draws = 0; // approximation
-                  const pLosses = s.played - s.wins - draws;
+                  const ptsW = s.wins * 3 + s.draws;
+                  const ptsL = -s.losses;
                   return (
                     <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
                       <td style={{ padding: '12px 8px 12px 0', fontWeight: 800, fontSize: i < 3 ? 15 : 12, color: i === 0 ? 'var(--turf-green)' : i === 1 ? '#b45309' : i === 2 ? '#6b7280' : 'var(--grey-400)' }}>
@@ -1835,9 +1860,10 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                       <td style={{ padding: '12px 8px 12px 0', fontWeight: 600 }}>{s.playerName}</td>
                       <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{s.played}</td>
                       <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{s.wins}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-400)' }}>{draws}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{Math.max(0, pLosses)}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', fontWeight: 800, fontSize: 15 }}>{s.pts}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{s.losses}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{s.draws}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', fontWeight: 800, fontSize: 15 }}>{ptsW}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{ptsL}</td>
                       <td style={{ textAlign: 'center', padding: '12px 8px', color: s.diff >= 0 ? 'var(--turf-green)' : '#ee0005', fontWeight: 600 }}>{s.diff > 0 ? '+' : ''}{s.diff}</td>
                     </tr>
                   );
