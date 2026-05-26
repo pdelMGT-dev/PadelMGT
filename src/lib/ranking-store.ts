@@ -1,4 +1,4 @@
-// ranking-store.ts — Quick Game ranking adjustments (W=+3, D=+1, L=-1)
+// ranking-store.ts — Quick Game ranking adjustments (actual +/- delta)
 
 import type { ActiveGame, Standing } from './game-engine';
 import { calculateStandings } from './game-engine';
@@ -89,13 +89,24 @@ function deriveResult(playerId: string, standings: Standing[]): RankingResult {
 export function applyGameRankingResults(game: ActiveGame): RankingEntry[] {
   const all = load();
   const created: RankingEntry[] = [];
+  const isTraditional = game.scoreConfig?.type === 'traditional';
 
   for (const player of game.players) {
-    // Skip if already recorded for this game
     if (all.some((e) => e.gameId === game.id && e.playerId === player.id)) continue;
 
-    const result = deriveResult(player.id, game.standings);
-    const delta = DELTA[result];
+    const s = game.standings.find(st => st.playerId === player.id);
+    let delta = 0;
+    if (s) {
+      if (isTraditional) {
+        // +/- = 3×setsWon - setsLost  (pointsFor = sets won, pointsAgainst = sets lost)
+        delta = s.pointsFor * 3 - s.pointsAgainst;
+      } else {
+        // +/- = pointsFor - pointsAgainst
+        delta = s.diff;
+      }
+    }
+
+    const result: RankingResult = delta > 0 ? 'win' : delta < 0 ? 'loss' : 'draw';
     const current = getPlayerCurrentPoints(player.id);
     const newTotal = Math.max(0, current + delta);
 
@@ -114,8 +125,6 @@ export function applyGameRankingResults(game: ActiveGame): RankingEntry[] {
 
     all.push(entry);
     created.push(entry);
-
-    // Update the player's stored ranking points
     updatePlayerRankingPoints(player.id, delta);
   }
 

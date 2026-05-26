@@ -97,20 +97,55 @@ function invStatusBadge(status: InvitedPlayer['status']) {
 
 // ── Pair standings helper ─────────────────────────────────────────────────────
 
-function computePairStandings(game: ActiveGame) {
+function computePairStandings(game: ActiveGame, isPointsMode: boolean) {
   if (!game.fixedPairs || game.fixedPairs.length === 0) return [];
   return game.fixedPairs.map(pair => {
-    const s1 = game.standings.find(s => s.playerId === pair.player1Id);
-    const s2 = game.standings.find(s => s.playerId === pair.player2Id);
-    const wins   = (s1?.wins   ?? 0) + (s2?.wins   ?? 0);
-    const losses = (s1?.losses ?? 0) + (s2?.losses ?? 0);
-    const draws  = (s1?.draws  ?? 0) + (s2?.draws  ?? 0);
-    const played = Math.max(s1?.played ?? 0, s2?.played ?? 0);
-    const diff   = (s1?.diff   ?? 0) + (s2?.diff   ?? 0);
-    const ptsW   = wins * 3 + draws;
-    const ptsL   = -losses;
-    return { pair, pts: ptsW + ptsL, wins, losses, draws, played, diff, ptsW, ptsL };
+    // Both players in a pair always have identical stats; use either one
+    const s = game.standings.find(st => st.playerId === pair.player1Id)
+           ?? game.standings.find(st => st.playerId === pair.player2Id);
+    if (!s) return { pair, pts: 0, wins: 0, losses: 0, draws: 0, played: 0, diff: 0, ptsW: 0, ptsL: 0 };
+    if (isPointsMode) {
+      const ptsW = s.pointsFor;
+      const ptsL = -s.pointsAgainst;
+      const diff = s.diff;
+      return { pair, pts: diff, wins: s.wins, losses: s.losses, draws: s.draws, played: s.played, diff, ptsW, ptsL };
+    } else {
+      const setsWon = s.pointsFor;
+      const setsLost = s.pointsAgainst;
+      const ptsW = setsWon * 3;
+      const ptsL = -setsLost;
+      const diff = ptsW + ptsL;
+      return { pair, pts: diff, wins: setsWon, losses: setsLost, draws: 0, played: setsWon + setsLost, diff, ptsW, ptsL };
+    }
   }).sort((a, b) => b.pts - a.pts || b.diff - a.diff);
+}
+
+function getDisplayStats(s: { wins: number; losses: number; draws: number; played: number; diff: number; pointsFor: number; pointsAgainst: number }, isPointsMode: boolean) {
+  if (isPointsMode) {
+    return {
+      pj: s.played,
+      w: s.wins,
+      l: s.losses,
+      t: s.draws,
+      ptsW: s.pointsFor,
+      ptsL: -s.pointsAgainst,
+      diff: s.diff,
+    };
+  } else {
+    const setsWon = s.pointsFor;
+    const setsLost = s.pointsAgainst;
+    const ptsW = setsWon * 3;
+    const ptsL = -setsLost;
+    return {
+      pj: setsWon + setsLost,
+      w: setsWon,
+      l: setsLost,
+      t: 0,
+      ptsW,
+      ptsL,
+      diff: ptsW + ptsL,
+    };
+  }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -148,6 +183,8 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const [playerSearchResults, setPlayerSearchResults] = useState<RegisteredPlayer[]>([]);
   const [addTab, setAddTab] = useState<'friends' | 'search'>('friends');
   const [friendList, setFriendList] = useState<RegisteredPlayer[]>([]);
+
+  const [roundHistOpen, setRoundHistOpen] = useState<Record<number, boolean>>({});
 
   // Score inputs (points mode): key = `${roundNum}-${courtNum}`
   const [scoreInputs, setScoreInputs] = useState<Record<string, { p1: string; p2: string }>>({});
@@ -1758,23 +1795,40 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             </div>
           )}
 
-          {/* Completed rounds history */}
-          {game.rounds.filter(r => r.status === 'completed' && r.num < game.currentRound).length > 0 && (
+          {/* Round history — collapsible, shown as soon as rounds are completed */}
+          {game.rounds.filter(r => r.status === 'completed').length > 0 && (
             <div style={{ marginTop: 8, borderTop: '1px solid var(--grey-100)', paddingTop: 16 }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>Historial de Rondas</div>
-              {game.rounds.filter(r => r.status === 'completed' && r.num < game.currentRound).map(r => (
-                <div key={r.num} style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--grey-400)', marginBottom: 6, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Ronda {r.num}</div>
-                  {r.courts.map(court => (
-                    <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', background: 'var(--grey-50)', marginBottom: 4, fontSize: 12 }}>
-                      <span style={{ fontSize: 10, color: 'var(--grey-400)', width: 56, flexShrink: 0 }}>Cancha {court.courtNum}</span>
-                      <span style={{ fontWeight: 600, flex: 1 }}>{getPairNames(court.pair1)}</span>
-                      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14 }}>{court.pair1Score} – {court.pair2Score}</span>
-                      <span style={{ fontWeight: 600, flex: 1, textAlign: 'right' }}>{getPairNames(court.pair2)}</span>
+              {game.rounds.filter(r => r.status === 'completed').map(r => {
+                const open = roundHistOpen[r.num] !== false; // default open
+                return (
+                  <div key={r.num} style={{ marginBottom: 4, border: '1px solid var(--grey-100)' }}>
+                    <div
+                      onClick={() => setRoundHistOpen(prev => ({ ...prev, [r.num]: !open }))}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', cursor: 'pointer', background: 'var(--grey-50)', userSelect: 'none' }}
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Ronda {r.num}</span>
+                      <span style={{ fontSize: 10, color: 'var(--grey-400)', transition: 'transform 0.15s', display: 'inline-block', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▼</span>
                     </div>
-                  ))}
-                </div>
-              ))}
+                    {open && (
+                      <div style={{ padding: '8px 14px 12px' }}>
+                        {r.courts.map(court => {
+                          const p1Winner = (court.pair1Score ?? 0) > (court.pair2Score ?? 0);
+                          const p2Winner = (court.pair2Score ?? 0) > (court.pair1Score ?? 0);
+                          return (
+                            <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--grey-50)', fontSize: 12 }}>
+                              <span style={{ fontSize: 9, color: 'var(--grey-400)', width: 52, flexShrink: 0, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>C{court.courtNum}</span>
+                              <span style={{ fontWeight: p1Winner ? 700 : 400, flex: 1, color: p1Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair1)}</span>
+                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, minWidth: 48, textAlign: 'center' }}>{court.pair1Score} – {court.pair2Score}</span>
+                              <span style={{ fontWeight: p2Winner ? 700 : 400, flex: 1, textAlign: 'right', color: p2Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair2)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
