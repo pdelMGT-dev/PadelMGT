@@ -147,3 +147,12 @@ CREATE POLICY "Super admin full access on tournaments"
 
 CREATE POLICY "Super admin full access on quick_games"
   ON quick_games FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- Disable RLS for super admin tables (anon key has full access)
+-- Configure proper RLS policies when enabling production auth
+ALTER TABLE IF EXISTS players DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS clubs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS admin_users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS score_corrections DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS player_field_definitions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS player_relationships DISABLE ROW LEVEL SECURITY;

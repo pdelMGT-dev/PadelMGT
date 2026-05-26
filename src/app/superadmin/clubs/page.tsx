@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getSAClubs, saveSAClubs, type SAClub } from '@/lib/superadmin-data';
+import { getSAClubs, saveSAClubs, getSAClubsFromSupabase, upsertSAClubToSupabase, deleteSAClubFromSupabase, type SAClub } from '@/lib/superadmin-data';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
@@ -172,7 +172,17 @@ export default function ClubsPage() {
   const [rejectConfirm, setRejectConfirm] = useState<{ step: number; clubId: string } | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: number; msg: string; ok: boolean }>>([]);
 
-  useEffect(() => { setClubs(getSAClubs()); }, []);
+  useEffect(() => {
+    // Immediate load from localStorage
+    setClubs(getSAClubs());
+    // Then load from Supabase in background
+    getSAClubsFromSupabase().then(sbClubs => {
+      if (sbClubs && sbClubs.length > 0) {
+        setClubs(sbClubs);
+        saveSAClubs(sbClubs); // sync to localStorage
+      }
+    });
+  }, []);
 
   function toast(msg: string, ok = true) {
     const id = Date.now();
@@ -189,6 +199,7 @@ export default function ClubsPage() {
     const exists = clubs.find(x => x.id === c.id);
     const updated = exists ? clubs.map(x => x.id === c.id ? c : x) : [c, ...clubs];
     saveAndRefresh(updated);
+    upsertSAClubToSupabase(c);
     setShowCreateModal(false);
     setEditClub(null);
     toast(exists ? 'Club actualizado' : 'Club creado correctamente');
@@ -216,6 +227,7 @@ export default function ClubsPage() {
     if (!deleteConfirm) return;
     const updated = clubs.filter(c => c.id !== deleteConfirm.clubId);
     saveAndRefresh(updated);
+    deleteSAClubFromSupabase(deleteConfirm.clubId);
     setDeleteConfirm(null);
     toast('Club eliminado');
   }

@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 export interface SAPlayer {
   id: string;
   name: string;
@@ -343,4 +345,170 @@ export function getPlayerRelationships(): PlayerRelationship[] {
 export function savePlayerRelationships(rels: PlayerRelationship[]): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem('padelmgt_sa_player_relationships', JSON.stringify(rels));
+}
+
+// ── Supabase integration ───────────────────────────────────────────────────────
+
+// Map Supabase row → SAPlayer
+function rowToSAPlayer(row: Record<string, unknown>): SAPlayer {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    email: row.email as string,
+    phone: (row.phone as string) ?? '',
+    city: (row.city as string) ?? '',
+    country: (row.country as string) ?? 'ES',
+    ranking: (row.ranking_points as number) ?? 0,
+    status: (row.status as SAPlayer['status']) ?? 'active',
+    role: (row.role as SAPlayer['role']) ?? 'player',
+    joinedAt: ((row.joined_at as string) ?? '').split('T')[0],
+    lastActive: ((row.last_active as string) ?? '').split('T')[0],
+    club: (row.club as string) ?? undefined,
+    customFields: (row.custom_fields as Record<string, string>) ?? {},
+  };
+}
+
+function playerToRow(p: SAPlayer): Record<string, unknown> {
+  return {
+    id: p.id,
+    name: p.name,
+    email: p.email,
+    phone: p.phone || null,
+    city: p.city || null,
+    country: p.country || 'ES',
+    ranking_points: p.ranking ?? 0,
+    status: p.status,
+    role: p.role,
+    club: p.club || null,
+    custom_fields: p.customFields ?? {},
+    joined_at: p.joinedAt || new Date().toISOString(),
+    last_active: p.lastActive || new Date().toISOString(),
+  };
+}
+
+function rowToSAClub(row: Record<string, unknown>): SAClub {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    city: (row.city as string) ?? '',
+    country: (row.country as string) ?? 'ES',
+    courts: (row.courts as number) ?? 0,
+    members: (row.members as number) ?? 0,
+    status: (row.status as SAClub['status']) ?? 'pending',
+    adminEmail: (row.admin_email as string) ?? '',
+    joinedAt: ((row.joined_at as string) ?? '').split('T')[0],
+    plan: (row.plan as SAClub['plan']) ?? 'free',
+  };
+}
+
+function rowToSAAdminUser(row: Record<string, unknown>): SAAdminUser {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    email: row.email as string,
+    role: row.role as SAAdminUser['role'],
+    status: (row.status as SAAdminUser['status']) ?? 'active',
+    createdAt: ((row.created_at as string) ?? '').split('T')[0],
+  };
+}
+
+// Players
+export async function getSAPlayersFromSupabase(): Promise<SAPlayer[] | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('players').select('*').order('joined_at', { ascending: false });
+    if (error) return null;
+    return (data ?? []).map(row => rowToSAPlayer(row as Record<string, unknown>));
+  } catch { return null; }
+}
+
+export async function upsertSAPlayerToSupabase(player: SAPlayer): Promise<void> {
+  if (!supabase) return;
+  try { await supabase.from('players').upsert(playerToRow(player)); } catch { /* silent */ }
+}
+
+export async function deleteSAPlayerFromSupabase(id: string): Promise<void> {
+  if (!supabase) return;
+  try { await supabase.from('players').delete().eq('id', id); } catch { /* silent */ }
+}
+
+// Clubs
+export async function getSAClubsFromSupabase(): Promise<SAClub[] | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('clubs').select('*').order('joined_at', { ascending: false });
+    if (error) return null;
+    return (data ?? []).map(row => rowToSAClub(row as Record<string, unknown>));
+  } catch { return null; }
+}
+
+export async function upsertSAClubToSupabase(club: SAClub): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('clubs').upsert({
+      id: club.id, name: club.name, city: club.city, country: club.country,
+      courts: club.courts, members: club.members, status: club.status,
+      admin_email: club.adminEmail, plan: club.plan,
+      joined_at: club.joinedAt || new Date().toISOString(),
+    });
+  } catch { /* silent */ }
+}
+
+export async function deleteSAClubFromSupabase(id: string): Promise<void> {
+  if (!supabase) return;
+  try { await supabase.from('clubs').delete().eq('id', id); } catch { /* silent */ }
+}
+
+// Admin users
+export async function getSAAdminUsersFromSupabase(): Promise<SAAdminUser[] | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('admin_users').select('*').order('created_at', { ascending: false });
+    if (error) return null;
+    return (data ?? []).map(row => rowToSAAdminUser(row as Record<string, unknown>));
+  } catch { return null; }
+}
+
+export async function upsertSAAdminUserToSupabase(user: SAAdminUser): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('admin_users').upsert({
+      id: user.id, name: user.name, email: user.email,
+      role: user.role, status: user.status,
+      created_at: user.createdAt || new Date().toISOString(),
+    });
+  } catch { /* silent */ }
+}
+
+export async function deleteSAAdminUserFromSupabase(id: string): Promise<void> {
+  if (!supabase) return;
+  try { await supabase.from('admin_users').delete().eq('id', id); } catch { /* silent */ }
+}
+
+// Bulk seed: push all localStorage players to Supabase (one-time migration)
+export async function seedPlayersToSupabase(): Promise<number> {
+  if (!supabase) return 0;
+  const players = getSAPlayers();
+  let count = 0;
+  for (const p of players) {
+    const { error } = await supabase.from('players').upsert(playerToRow(p));
+    if (!error) count++;
+  }
+  return count;
+}
+
+export async function seedClubsToSupabase(): Promise<number> {
+  if (!supabase) return 0;
+  const clubs = getSAClubs();
+  let count = 0;
+  for (const c of clubs) {
+    const { error } = await supabase.from('clubs').upsert({
+      id: c.id, name: c.name, city: c.city, country: c.country,
+      courts: c.courts, members: c.members, status: c.status,
+      admin_email: c.adminEmail, plan: c.plan,
+      joined_at: c.joinedAt || new Date().toISOString(),
+    });
+    if (!error) count++;
+  }
+  return count;
 }

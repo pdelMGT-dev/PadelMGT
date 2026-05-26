@@ -8,6 +8,9 @@ import {
   savePlayerCustomFields,
   getPlayerRelationships,
   savePlayerRelationships,
+  getSAPlayersFromSupabase,
+  upsertSAPlayerToSupabase,
+  deleteSAPlayerFromSupabase,
   type SAPlayer,
   type PlayerRelationship,
 } from '@/lib/superadmin-data';
@@ -246,8 +249,16 @@ export default function PlayersPage() {
   const [relType, setRelType] = useState<PlayerRelationship['type']>('friend');
 
   useEffect(() => {
+    // Immediate load from localStorage
     setPlayers(getSAPlayers());
     setCustomFields(getPlayerCustomFields());
+    // Then load from Supabase in background
+    getSAPlayersFromSupabase().then(sbPlayers => {
+      if (sbPlayers && sbPlayers.length > 0) {
+        setPlayers(sbPlayers);
+        saveSAPlayers(sbPlayers); // sync to localStorage
+      }
+    });
   }, []);
 
   function toast(msg: string, ok = true) {
@@ -278,6 +289,7 @@ export default function PlayersPage() {
     if (!deleteConfirm) return;
     const updated = players.filter(p => p.id !== deleteConfirm.playerId);
     saveAndRefresh(updated);
+    deleteSAPlayerFromSupabase(deleteConfirm.playerId);
     setDeleteConfirm(null);
     toast('Jugador eliminado correctamente');
   }
@@ -301,6 +313,7 @@ export default function PlayersPage() {
     const exists = players.find(x => x.id === p.id);
     const updated = exists ? players.map(x => x.id === p.id ? p : x) : [p, ...players];
     saveAndRefresh(updated);
+    upsertSAPlayerToSupabase(p);
     setShowCreateModal(false);
     setEditPlayer(null);
     toast(exists ? 'Jugador actualizado' : 'Jugador creado correctamente');

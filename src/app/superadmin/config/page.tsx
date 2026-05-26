@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getSAAdminUsers, saveSAAdminUsers, getSAPlayers, getSAClubs, getSATournaments, type SAAdminUser } from '@/lib/superadmin-data';
+import { getSAAdminUsers, saveSAAdminUsers, getSAPlayers, getSAClubs, getSATournaments, seedPlayersToSupabase, seedClubsToSupabase, type SAAdminUser } from '@/lib/superadmin-data';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
@@ -370,6 +370,39 @@ export default function ConfigPage() {
                 <span>Exportar todos los torneos</span>
                 <span style={{ fontSize: 11, color: 'var(--turf-green)', fontWeight: 700 }}>.CSV</span>
               </button>
+            </div>
+          </div>
+
+          {/* Supabase seed */}
+          <div style={{ background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6, padding: '24px 28px' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 8 }}>
+              Supabase — Sincronizacion
+            </div>
+            <div style={{ borderTop: '1px solid var(--grey-200)', paddingTop: 16, marginTop: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>Sincronizar con Supabase</div>
+              <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 12 }}>
+                Sube todos los datos de localStorage a la base de datos de Supabase. Úsalo una vez para migrar los datos existentes.
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  onClick={async () => {
+                    const count = await seedPlayersToSupabase();
+                    toast(`${count} jugadores subidos a Supabase`);
+                  }}
+                  style={{ padding: '10px 20px', background: '#0ea5e9', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
+                >
+                  Subir Jugadores a Supabase
+                </button>
+                <button
+                  onClick={async () => {
+                    const count = await seedClubsToSupabase();
+                    toast(`${count} clubes subidos a Supabase`);
+                  }}
+                  style={{ padding: '10px 20px', background: '#0ea5e9', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
+                >
+                  Subir Clubes a Supabase
+                </button>
+              </div>
             </div>
           </div>
 
