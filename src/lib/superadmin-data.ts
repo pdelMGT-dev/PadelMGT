@@ -247,9 +247,13 @@ export function getSATournaments(): SATournament[] {
       club: (t.club as string) || '',
       city: (t.city as string) || '',
       date: (t.startDate as string) || (t.date as string) || '',
-      players: typeof t.players === 'number' ? t.players : (Array.isArray(t.players) ? (t.players as unknown[]).length : 0),
-      status: (['ongoing', 'upcoming', 'completed', 'cancelled'].includes(t.status as string) ? t.status as SATournament['status'] : 'upcoming'),
-      rounds: typeof t.rounds === 'number' ? t.rounds : 0,
+      players: typeof t.players === 'number' ? t.players
+        : Array.isArray(t.players) ? (t.players as unknown[]).length : 0,
+      status: t.status === 'completed' ? 'completed'
+        : t.status === 'cancelled' ? 'cancelled'
+        : t.status === 'ongoing' ? 'ongoing' : 'upcoming',
+      rounds: Array.isArray(t.rounds) ? (t.rounds as unknown[]).length
+        : typeof t.rounds === 'number' ? t.rounds : 0,
       format: (t.format as string) || (t.formatSlug as string) || 'Americano',
     }));
   } catch {
@@ -278,11 +282,16 @@ export function getSAGames(): SAGame[] {
       id: (g.id as string) || `g-${i}`,
       name: (g.name as string) || `Juego ${i + 1}`,
       date: (g.date as string) || (g.createdAt as string) || '',
-      players: typeof g.players === 'number' ? g.players : (Array.isArray(g.players) ? (g.players as unknown[]).length : 0),
-      status: (['ongoing', 'completed', 'cancelled'].includes(g.status as string) ? g.status as SAGame['status'] : 'completed'),
-      rounds: typeof g.rounds === 'number' ? g.rounds : (typeof g.roundsPlayed === 'number' ? g.roundsPlayed : 0),
+      players: typeof g.players === 'number' ? g.players
+        : Array.isArray(g.players) ? (g.players as unknown[]).length : 0,
+      status: g.status === 'completed' ? 'completed'
+        : g.status === 'cancelled' ? 'cancelled' : 'ongoing',
+      rounds: Array.isArray(g.rounds) ? (g.rounds as unknown[]).length
+        : typeof g.rounds === 'number' ? g.rounds : 0,
       format: (g.format as string) || 'Americano',
-      scoreConfig: (g.scoreConfig as string) || (g.scoreMode as string) || 'puntos',
+      scoreConfig: typeof g.scoreConfig === 'object' && g.scoreConfig !== null
+        ? ((g.scoreConfig as Record<string, unknown>).type as string) ?? 'puntos'
+        : typeof g.scoreConfig === 'string' ? g.scoreConfig : 'puntos',
     }));
   } catch {
     return getMockGames();
