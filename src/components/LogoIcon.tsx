@@ -11,35 +11,50 @@ export default function LogoIcon({ size = 30, white = false }: LogoIconProps) {
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 100 100"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       style={{ display: 'block', flexShrink: 0 }}
       aria-hidden="true"
     >
-      {/* Teal J-hook — lower portion */}
-      <path
-        className="logo-hook"
-        d="M23 26 C23 31 16 32 11 28 C7 24 8 17 12 14"
-        stroke={hook}
-        strokeWidth="5.5"
-        strokeLinecap="round"
-        fill="none"
-      />
+      {/* Oval dots — diagonal spray, large bottom-left → small top-right */}
 
-      {/* Blue dots — upper spray pattern */}
-      <circle className="logo-dot" cx="17" cy="10" r="2.5" fill={dot}/>
-      <circle className="logo-dot" cx="23" cy="8"  r="2.2" fill={dot}/>
-      <circle className="logo-dot" cx="11" cy="9"  r="2.0" fill={dot}/>
-      <circle className="logo-dot" cx="27" cy="14" r="1.8" fill={dot}/>
-      <circle className="logo-dot" cx="19" cy="4"  r="1.8" fill={dot}/>
-      <circle className="logo-dot" cx="7"  cy="13" r="1.6" fill={dot}/>
-      <circle className="logo-dot" cx="29" cy="8"  r="1.5" fill={dot}/>
-      <circle className="logo-dot" cx="14" cy="4"  r="1.4" fill={dot}/>
-      <circle className="logo-dot" cx="25" cy="3"  r="1.3" fill={dot}/>
-      <circle className="logo-dot" cx="5"  cy="7"  r="1.2" fill={dot}/>
-      <circle className="logo-dot" cx="10" cy="2"  r="1.1" fill={dot}/>
-      <circle className="logo-dot" cx="4"  cy="18" r="0.9" fill={dot}/>
+      {/* Column 1 — largest */}
+      <ellipse cx="10" cy="80" rx="7"   ry="4.5" transform="rotate(-40 10 80)"  fill={dot} />
+      <ellipse cx="10" cy="62" rx="7"   ry="4.5" transform="rotate(-40 10 62)"  fill={dot} />
+      <ellipse cx="10" cy="44" rx="7"   ry="4.5" transform="rotate(-40 10 44)"  fill={dot} />
+
+      {/* Column 2 */}
+      <ellipse cx="27" cy="74" rx="6"   ry="4"   transform="rotate(-40 27 74)"  fill={dot} />
+      <ellipse cx="27" cy="56" rx="6"   ry="4"   transform="rotate(-40 27 56)"  fill={dot} />
+      <ellipse cx="27" cy="38" rx="6"   ry="4"   transform="rotate(-40 27 38)"  fill={dot} />
+      <ellipse cx="27" cy="20" rx="6"   ry="4"   transform="rotate(-40 27 20)"  fill={dot} />
+
+      {/* Column 3 */}
+      <ellipse cx="44" cy="65" rx="5"   ry="3.5" transform="rotate(-40 44 65)"  fill={dot} />
+      <ellipse cx="44" cy="47" rx="5"   ry="3.5" transform="rotate(-40 44 47)"  fill={dot} />
+      <ellipse cx="44" cy="29" rx="5"   ry="3.5" transform="rotate(-40 44 29)"  fill={dot} />
+      <ellipse cx="44" cy="11" rx="5"   ry="3.5" transform="rotate(-40 44 11)"  fill={dot} />
+
+      {/* Column 4 */}
+      <ellipse cx="61" cy="53" rx="4"   ry="3"   transform="rotate(-40 61 53)"  fill={dot} />
+      <ellipse cx="61" cy="35" rx="4"   ry="3"   transform="rotate(-40 61 35)"  fill={dot} />
+      <ellipse cx="61" cy="17" rx="4"   ry="3"   transform="rotate(-40 61 17)"  fill={dot} />
+
+      {/* Column 5 — smallest */}
+      <ellipse cx="78" cy="40" rx="3"   ry="2.5" transform="rotate(-40 78 40)"  fill={dot} />
+      <ellipse cx="78" cy="22" rx="3"   ry="2.5" transform="rotate(-40 78 22)"  fill={dot} />
+
+      {/*
+        Solid filled C/hook — lower-right, opening toward upper-left.
+        Center (72, 74), outer r=20, inner r=12.
+        Outer arc: top (72,54) → clockwise 270° → left (52,74).
+        Inner arc: (60,74) → counterclockwise 270° → (72,62).
+      */}
+      <path
+        d="M 72 54 A 20 20 0 1 1 52 74 L 60 74 A 12 12 0 1 0 72 62 Z"
+        fill={hook}
+      />
     </svg>
   );
 }

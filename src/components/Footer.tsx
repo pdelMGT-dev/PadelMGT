@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import LogoIcon from './LogoIcon';
 
 const cols = [
   {
@@ -45,11 +46,7 @@ export default function Footer() {
         {/* Brand */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <div style={{
-              width: 38, height: 38, background: '#fff', color: '#111',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18,
-            }}>P</div>
+            <LogoIcon white size={38} />
             <span style={{
               fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 26,
               textTransform: 'uppercase', letterSpacing: '-0.01em',
