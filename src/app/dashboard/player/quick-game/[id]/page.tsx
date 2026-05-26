@@ -1840,7 +1840,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
           <div style={secTitle}>Clasificación Actual</div>
           {/* Pairs standings (live) */}
           {game.pairType === 'parejas' && (() => {
-            const pairStandings = computePairStandings(game);
+            const pairStandings = computePairStandings(game, isPointsMode);
             if (pairStandings.length === 0) return null;
             return (
               <>
@@ -1866,8 +1866,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                           {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
                         </td>
                         <td style={{ padding: '10px 8px 10px 0' }}>
-                          <div style={{ fontWeight: 700, fontSize: 13 }}>{pair.player1Name}</div>
-                          <div style={{ fontSize: 12, color: 'var(--grey-500)' }}>{pair.player2Name}</div>
+                          <strong style={{ fontWeight: 700, fontSize: 13 }}>{pair.player1Name} / {pair.player2Name}</strong>
                         </td>
                         <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{played}</td>
                         <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{wins}</td>
@@ -1900,19 +1899,18 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             </thead>
             <tbody>
               {game.standings.map((s, i) => {
-                const ptsW = s.wins * 3 + s.draws;
-                const ptsL = -s.losses;
+                const ds = getDisplayStats(s, isPointsMode);
                 return (
                   <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
                     <td style={{ padding: '10px 8px 10px 0', fontWeight: 700, color: i === 0 ? 'var(--turf-green)' : 'var(--grey-400)', fontSize: 12 }}>{i + 1}</td>
                     <td style={{ padding: '10px 8px 10px 0', fontWeight: 600 }}>{s.playerName}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{s.played}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{s.wins}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{s.losses}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{s.draws}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', fontWeight: 700 }}>{ptsW}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{ptsL}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: s.diff >= 0 ? 'var(--turf-green)' : '#ee0005' }}>{s.diff > 0 ? '+' : ''}{s.diff}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{ds.pj}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{ds.w}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{ds.l}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{ds.t}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', fontWeight: 700 }}>{ds.ptsW}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{ds.ptsL}</td>
+                    <td style={{ textAlign: 'center', padding: '10px 8px', color: ds.diff >= 0 ? 'var(--turf-green)' : '#ee0005' }}>{ds.diff > 0 ? '+' : ''}{ds.diff}</td>
                   </tr>
                 );
               })}
@@ -1929,7 +1927,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             <div style={secTitle}>Clasificación Final</div>
             {/* Pairs standings */}
             {game.pairType === 'parejas' && (() => {
-              const pairStandings = computePairStandings(game);
+              const pairStandings = computePairStandings(game, isPointsMode);
               if (pairStandings.length === 0) return null;
               return (
                 <>
@@ -1955,8 +1953,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                             {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
                           </td>
                           <td style={{ padding: '12px 8px 12px 0' }}>
-                            <div style={{ fontWeight: 700, fontSize: 13 }}>{pair.player1Name}</div>
-                            <div style={{ fontSize: 12, color: 'var(--grey-500)' }}>{pair.player2Name}</div>
+                            <strong style={{ fontWeight: 700, fontSize: 13 }}>{pair.player1Name} / {pair.player2Name}</strong>
                           </td>
                           <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{played}</td>
                           <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{wins}</td>
@@ -1989,26 +1986,60 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               </thead>
               <tbody>
                 {game.standings.map((s, i) => {
-                  const ptsW = s.wins * 3 + s.draws;
-                  const ptsL = -s.losses;
+                  const ds = getDisplayStats(s, isPointsMode);
                   return (
                     <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
                       <td style={{ padding: '12px 8px 12px 0', fontWeight: 800, fontSize: i < 3 ? 15 : 12, color: i === 0 ? 'var(--turf-green)' : i === 1 ? '#b45309' : i === 2 ? '#6b7280' : 'var(--grey-400)' }}>
                         {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
                       </td>
                       <td style={{ padding: '12px 8px 12px 0', fontWeight: 600 }}>{s.playerName}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{s.played}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{s.wins}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{s.losses}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{s.draws}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', fontWeight: 800, fontSize: 15 }}>{ptsW}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{ptsL}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: s.diff >= 0 ? 'var(--turf-green)' : '#ee0005', fontWeight: 600 }}>{s.diff > 0 ? '+' : ''}{s.diff}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{ds.pj}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{ds.w}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{ds.l}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{ds.t}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', fontWeight: 800, fontSize: 15 }}>{ds.ptsW}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{ds.ptsL}</td>
+                      <td style={{ textAlign: 'center', padding: '12px 8px', color: ds.diff >= 0 ? 'var(--turf-green)' : '#ee0005', fontWeight: 600 }}>{ds.diff > 0 ? '+' : ''}{ds.diff}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Round history for finished game */}
+          <div style={cardStyle}>
+            <div style={secTitle}>Historial de Rondas</div>
+            {game.rounds.filter(r => r.status === 'completed').map(r => {
+              const open = roundHistOpen[r.num] !== false;
+              return (
+                <div key={r.num} style={{ marginBottom: 4, border: '1px solid var(--grey-100)' }}>
+                  <div
+                    onClick={() => setRoundHistOpen(prev => ({ ...prev, [r.num]: !open }))}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', cursor: 'pointer', background: 'var(--grey-50)', userSelect: 'none' }}
+                  >
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Ronda {r.num}</span>
+                    <span style={{ fontSize: 10, color: 'var(--grey-400)', transition: 'transform 0.15s', display: 'inline-block', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▼</span>
+                  </div>
+                  {open && (
+                    <div style={{ padding: '8px 14px 12px' }}>
+                      {r.courts.map(court => {
+                        const p1Winner = (court.pair1Score ?? 0) > (court.pair2Score ?? 0);
+                        const p2Winner = (court.pair2Score ?? 0) > (court.pair1Score ?? 0);
+                        return (
+                          <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--grey-50)', fontSize: 12 }}>
+                            <span style={{ fontSize: 9, color: 'var(--grey-400)', width: 52, flexShrink: 0, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>C{court.courtNum}</span>
+                            <span style={{ fontWeight: p1Winner ? 700 : 400, flex: 1, color: p1Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair1)}</span>
+                            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, minWidth: 48, textAlign: 'center' }}>{court.pair1Score} – {court.pair2Score}</span>
+                            <span style={{ fontWeight: p2Winner ? 700 : 400, flex: 1, textAlign: 'right', color: p2Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair2)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Ranking adjustments */}
