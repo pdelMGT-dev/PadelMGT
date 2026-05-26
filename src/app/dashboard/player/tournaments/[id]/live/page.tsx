@@ -623,102 +623,115 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                         const pair2Label = getPairLabel(t, court.pair2);
 
                         return (
-                          <div key={court.courtNum} style={{
-                            border: `2px solid ${isCourtDone ? 'var(--turf-green, #22c55e)' : isPending ? 'var(--grey-100)' : 'var(--grey-200)'}`,
-                            padding: '14px 18px',
-                            marginBottom: 12,
-                            background: isCourtDone ? 'rgba(34,197,94,0.04)' : '#fff',
-                            opacity: isPending ? 0.6 : 1,
-                          }}>
-                            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>
-                              Cancha {court.courtNum}
-                            </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              {/* Pair 1 */}
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', marginBottom: isEditable ? 8 : 4, lineHeight: 1.3 }}>
-                                  {pair1Label}
-                                </div>
-                                {isEditable ? (
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={ptTarget ?? 100}
-                                    value={getInputVal(round.num, court.courtNum, 'p1', court)}
-                                    onChange={e => handleP1Change(key, e.target.value)}
-                                    onBlur={() => handleSaveScore(round.num, court.courtNum)}
-                                    style={{
-                                      width: 80,
-                                      padding: '8px 4px',
-                                      fontSize: 28,
-                                      fontFamily: 'var(--font-display)',
-                                      fontWeight: 700,
-                                      textAlign: 'center',
-                                      border: '2px solid var(--grey-300)',
-                                      outline: 'none',
-                                      color: 'var(--black)',
-                                      background: '#fff',
-                                    }}
-                                    onFocus={e => { e.currentTarget.style.borderColor = 'var(--black)'; }}
-                                    onBlurCapture={e => { e.currentTarget.style.borderColor = 'var(--grey-300)'; }}
-                                  />
-                                ) : (
-                                  <div style={{
-                                    width: 80, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700,
-                                    color: isCourtDone ? 'var(--turf-green, #16a34a)' : 'var(--grey-300)',
-                                  }}>
-                                    {court.pair1Score !== null ? court.pair1Score : '–'}
-                                  </div>
-                                )}
+                          <div key={court.courtNum} style={{ marginBottom: 12, border: `1px solid ${isCourtDone ? 'var(--turf-green, #22c55e)' : isPending ? 'var(--grey-100)' : 'var(--grey-200)'}`, background: isCourtDone ? 'rgba(34,197,94,0.04)' : '#fff', opacity: isPending ? 0.6 : 1 }}>
+                            {/* Header */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 18px', background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-100)' }}>
+                              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>
+                                Cancha {court.courtNum}
+                                {isCourtDone && <span style={{ marginLeft: 8, color: 'var(--turf-green, #16a34a)' }}>✓</span>}
                               </div>
-
-                              {/* VS divider */}
-                              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0 }}>
-                                vs
-                              </div>
-
-                              {/* Pair 2 */}
-                              <div style={{ flex: 1, textAlign: 'right' }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', marginBottom: isEditable ? 8 : 4, lineHeight: 1.3 }}>
-                                  {pair2Label}
-                                </div>
-                                {isEditable ? (
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={ptTarget ?? 100}
-                                    value={getInputVal(round.num, court.courtNum, 'p2', court)}
-                                    onChange={e => handleP2Change(key, e.target.value)}
-                                    onBlur={() => handleSaveScore(round.num, court.courtNum)}
-                                    style={{
-                                      width: 80,
-                                      padding: '8px 4px',
-                                      fontSize: 28,
-                                      fontFamily: 'var(--font-display)',
-                                      fontWeight: 700,
-                                      textAlign: 'center',
-                                      border: '2px solid var(--grey-300)',
-                                      outline: 'none',
-                                      color: 'var(--black)',
-                                      background: '#fff',
-                                      float: 'right',
-                                    }}
-                                    onFocus={e => { e.currentTarget.style.borderColor = 'var(--black)'; }}
-                                    onBlurCapture={e => { e.currentTarget.style.borderColor = 'var(--grey-300)'; }}
-                                  />
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                {isPointsMode ? (
+                                  <div style={{ width: 56, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>PTS</div>
                                 ) : (
-                                  <div style={{
-                                    width: 80, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                    fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700,
-                                    color: isCourtDone ? 'var(--turf-green, #16a34a)' : 'var(--grey-300)',
-                                  }}>
-                                    {court.pair2Score !== null ? court.pair2Score : '–'}
-                                  </div>
+                                  Array.from({ length: setsPerMatch }, (_, i) => (
+                                    <div key={i} style={{ width: 48, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>SET {i + 1}</div>
+                                  ))
                                 )}
                               </div>
                             </div>
+
+                            {(() => {
+                              const courtWinner = isCourtDone && court.pair1Score !== null && court.pair2Score !== null
+                                ? (court.pair1Score > court.pair2Score ? 1 : court.pair2Score > court.pair1Score ? 2 : 0)
+                                : 0;
+                              const courtSetInputs = setInputs[key] ?? Array.from({ length: setsPerMatch }, () => ({ p1: '', p2: '' }));
+                              return (
+                                <>
+                                  {/* Pair 1 */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--grey-100)' }}>
+                                    <div style={{ width: 60, flexShrink: 0 }}>
+                                      {courtWinner === 1 && <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', lineHeight: 1.3 }}>{pair1Label}</div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                                      {isPointsMode ? (
+                                        isEditable ? (
+                                          <input type="number" min={0} max={ptTarget ?? 100}
+                                            value={getInputVal(round.num, court.courtNum, 'p1', court)}
+                                            onChange={e => handleP1Change(key, e.target.value)}
+                                            onBlur={() => handleSaveScore(round.num, court.courtNum)}
+                                            style={{ width: 56, height: 56, padding: '0', fontSize: 28, fontFamily: 'var(--font-display)', fontWeight: 700, textAlign: 'center', border: '2px solid var(--grey-300)', outline: 'none', color: 'var(--black)', background: '#fff' }}
+                                            onFocus={e => { e.currentTarget.style.borderColor = 'var(--black)'; }}
+                                            onBlurCapture={e => { e.currentTarget.style.borderColor = 'var(--grey-300)'; }}
+                                          />
+                                        ) : (
+                                          <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: isCourtDone ? (courtWinner === 1 ? 'var(--black)' : 'var(--grey-400)') : 'var(--grey-300)' }}>
+                                            {court.pair1Score !== null ? court.pair1Score : '–'}
+                                          </div>
+                                        )
+                                      ) : isEditable ? (
+                                        Array.from({ length: setsPerMatch }, (_, i) => (
+                                          <input key={i} type="number" min="0" max="99"
+                                            value={courtSetInputs[i]?.p1 ?? ''}
+                                            onChange={e => handleTradSetChange(key, i, 'p1', e.target.value, round.num, court.courtNum)}
+                                            onBlur={() => handleSaveScore(round.num, court.courtNum)}
+                                            placeholder="0"
+                                            style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }} />
+                                        ))
+                                      ) : (
+                                        <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: isCourtDone ? (courtWinner === 1 ? 'var(--black)' : 'var(--grey-400)') : 'var(--grey-300)' }}>
+                                          {court.pair1Score !== null ? court.pair1Score : '–'}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Pair 2 */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px' }}>
+                                    <div style={{ width: 60, flexShrink: 0 }}>
+                                      {courtWinner === 2 && <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', lineHeight: 1.3 }}>{pair2Label}</div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                                      {isPointsMode ? (
+                                        isEditable ? (
+                                          <input type="number" min={0} max={ptTarget ?? 100}
+                                            value={getInputVal(round.num, court.courtNum, 'p2', court)}
+                                            onChange={e => handleP2Change(key, e.target.value)}
+                                            onBlur={() => handleSaveScore(round.num, court.courtNum)}
+                                            style={{ width: 56, height: 56, padding: '0', fontSize: 28, fontFamily: 'var(--font-display)', fontWeight: 700, textAlign: 'center', border: '2px solid var(--grey-300)', outline: 'none', color: 'var(--black)', background: '#fff' }}
+                                            onFocus={e => { e.currentTarget.style.borderColor = 'var(--black)'; }}
+                                            onBlurCapture={e => { e.currentTarget.style.borderColor = 'var(--grey-300)'; }}
+                                          />
+                                        ) : (
+                                          <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: isCourtDone ? (courtWinner === 2 ? 'var(--black)' : 'var(--grey-400)') : 'var(--grey-300)' }}>
+                                            {court.pair2Score !== null ? court.pair2Score : '–'}
+                                          </div>
+                                        )
+                                      ) : isEditable ? (
+                                        Array.from({ length: setsPerMatch }, (_, i) => (
+                                          <input key={i} type="number" min="0" max="99"
+                                            value={courtSetInputs[i]?.p2 ?? ''}
+                                            onChange={e => handleTradSetChange(key, i, 'p2', e.target.value, round.num, court.courtNum)}
+                                            onBlur={() => handleSaveScore(round.num, court.courtNum)}
+                                            placeholder="0"
+                                            style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }} />
+                                        ))
+                                      ) : (
+                                        <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: isCourtDone ? (courtWinner === 2 ? 'var(--black)' : 'var(--grey-400)') : 'var(--grey-300)' }}>
+                                          {court.pair2Score !== null ? court.pair2Score : '–'}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
                         );
                       })}
