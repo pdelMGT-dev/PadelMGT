@@ -5,6 +5,25 @@ import { getSAClubs, saveSAClubs, getSAClubsFromSupabase, upsertSAClubToSupabase
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
+const PAGE_SIZE = 15;
+
+function exportCSV(rows: Record<string, unknown>[], filename: string) {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.join(','),
+    ...rows.map(row => headers.map(h => {
+      const val = String(row[h] ?? '').replace(/"/g, '""');
+      return val.includes(',') ? `"${val}"` : val;
+    }).join(','))
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div
@@ -66,7 +85,7 @@ function PlanBadge({ plan }: { plan: SAClub['plan'] }) {
   const cfg = {
     free:  { label: 'Free',  bg: '#f0f0f0', color: '#555' },
     basic: { label: 'Basic', bg: '#e0f2fe', color: '#0369a1' },
-    pro:   { label: 'Pro',   bg: '#f3e8ff', color: '#7c3aed' },
+    pro:   { label: 'Pro',   bg: '#fef3c7', color: '#92400e' },
   }[plan];
   return (
     <span style={{ background: cfg.bg, color: cfg.color, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
@@ -166,20 +185,23 @@ export default function ClubsPage() {
   const [clubs, setClubs] = useState<SAClub[]>([]);
   const [tab, setTab] = useState<'all' | 'pending'>('all');
   const [search, setSearch] = useState('');
+  const [planFilter, setPlanFilter] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editClub, setEditClub] = useState<SAClub | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ step: number; clubId: string } | null>(null);
   const [rejectConfirm, setRejectConfirm] = useState<{ step: number; clubId: string } | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: number; msg: string; ok: boolean }>>([]);
+  const [selectedClub, setSelectedClub] = useState<SAClub | null>(null);
+  const [sortKey, setSortKey] = useState<string>('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    // Immediate load from localStorage
     setClubs(getSAClubs());
-    // Then load from Supabase in background
     getSAClubsFromSupabase().then(sbClubs => {
       if (sbClubs && sbClubs.length > 0) {
         setClubs(sbClubs);
-        saveSAClubs(sbClubs); // sync to localStorage
+        saveSAClubs(sbClubs);
       }
     });
   }, []);
@@ -195,6 +217,17 @@ export default function ClubsPage() {
     setClubs(updated);
   }
 
+  function handleSort(key: string) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+    setPage(1);
+  }
+
+  function SortIcon({ col }: { col: string }) {
+    if (sortKey !== col) return <span style={{ color: 'var(--grey-300)', marginLeft: 4, fontSize: 9 }}>↕</span>;
+    return <span style={{ color: 'var(--turf-green)', marginLeft: 4, fontSize: 9 }}>{sortDir === 'asc' ? '▲' : '▼'}</span>;
+  }
+
   function handleSaveClub(c: SAClub) {
     const exists = clubs.find(x => x.id === c.id);
     const updated = exists ? clubs.map(x => x.id === c.id ? c : x) : [c, ...clubs];
@@ -202,12 +235,14 @@ export default function ClubsPage() {
     upsertSAClubToSupabase(c);
     setShowCreateModal(false);
     setEditClub(null);
+    if (selectedClub?.id === c.id) setSelectedClub(c);
     toast(exists ? 'Club actualizado' : 'Club creado correctamente');
   }
 
   function handleApprove(clubId: string) {
     const updated = clubs.map(c => c.id === clubId ? { ...c, status: 'active' as const } : c);
     saveAndRefresh(updated);
+    if (selectedClub?.id === clubId) setSelectedClub(prev => prev ? { ...prev, status: 'active' as const } : prev);
     toast('Club aprobado');
   }
 
@@ -217,6 +252,7 @@ export default function ClubsPage() {
     if (!rejectConfirm) return;
     const updated = clubs.map(c => c.id === rejectConfirm.clubId ? { ...c, status: 'rejected' as const } : c);
     saveAndRefresh(updated);
+    if (selectedClub?.id === rejectConfirm.clubId) setSelectedClub(prev => prev ? { ...prev, status: 'rejected' as const } : prev);
     setRejectConfirm(null);
     toast('Club rechazado');
   }
@@ -228,19 +264,81 @@ export default function ClubsPage() {
     const updated = clubs.filter(c => c.id !== deleteConfirm.clubId);
     saveAndRefresh(updated);
     deleteSAClubFromSupabase(deleteConfirm.clubId);
+    if (selectedClub?.id === deleteConfirm.clubId) setSelectedClub(null);
     setDeleteConfirm(null);
     toast('Club eliminado');
   }
 
+  function handleToggleActive(clubId: string) {
+    const club = clubs.find(c => c.id === clubId);
+    if (!club) return;
+    const newStatus: SAClub['status'] = club.status === 'active' ? 'inactive' : 'active';
+    const updated = clubs.map(c => c.id === clubId ? { ...c, status: newStatus } : c);
+    saveAndRefresh(updated);
+    if (selectedClub?.id === clubId) setSelectedClub(prev => prev ? { ...prev, status: newStatus } : prev);
+    toast(newStatus === 'active' ? 'Club activado' : 'Club desactivado');
+  }
+
+  function handleChangePlan(clubId: string, plan: SAClub['plan']) {
+    const updated = clubs.map(c => c.id === clubId ? { ...c, plan } : c);
+    saveAndRefresh(updated);
+    if (selectedClub?.id === clubId) setSelectedClub(prev => prev ? { ...prev, plan } : prev);
+    toast('Plan actualizado');
+  }
+
   const pending = clubs.filter(c => c.status === 'pending');
-  const displayed = (tab === 'pending' ? pending : clubs).filter(c => {
+
+  const baseList = tab === 'pending' ? pending : clubs;
+
+  const filtered = baseList.filter(c => {
     const q = search.toLowerCase();
-    return !q || c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.adminEmail.toLowerCase().includes(q);
+    const matchSearch = !q || c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.adminEmail.toLowerCase().includes(q);
+    const matchPlan = planFilter === 'all' || c.plan === planFilter;
+    return matchSearch && matchPlan;
   });
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (!sortKey) return 0;
+    let av: string | number = '';
+    let bv: string | number = '';
+    if (sortKey === 'name') { av = a.name; bv = b.name; }
+    else if (sortKey === 'members') { av = a.members; bv = b.members; }
+    else if (sortKey === 'courts') { av = a.courts; bv = b.courts; }
+    else if (sortKey === 'joinedAt') { av = a.joinedAt; bv = b.joinedAt; }
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, sorted.length);
+  const pageClubs = sorted.slice(pageStart, pageEnd);
+
+  function renderPageNumbers() {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+        <button key={p} onClick={() => setPage(p)} style={{ padding: '4px 10px', border: '1px solid var(--grey-200)', borderRadius: 3, cursor: 'pointer', background: p === safePage ? '#0a0a0a' : '#fff', color: p === safePage ? '#fff' : 'var(--grey-600)', fontSize: 12, fontWeight: p === safePage ? 700 : 400 }}>{p}</button>
+      ));
+    }
+    const pages: (number | '...')[] = [];
+    pages.push(1);
+    if (safePage > 3) pages.push('...');
+    for (let p = Math.max(2, safePage - 1); p <= Math.min(totalPages - 1, safePage + 1); p++) pages.push(p);
+    if (safePage < totalPages - 2) pages.push('...');
+    pages.push(totalPages);
+    return pages.map((p, i) => p === '...'
+      ? <span key={`e${i}`} style={{ padding: '4px 6px', fontSize: 12, color: 'var(--grey-400)' }}>…</span>
+      : <button key={p} onClick={() => setPage(p as number)} style={{ padding: '4px 10px', border: '1px solid var(--grey-200)', borderRadius: 3, cursor: 'pointer', background: p === safePage ? '#0a0a0a' : '#fff', color: p === safePage ? '#fff' : 'var(--grey-600)', fontSize: 12, fontWeight: p === safePage ? 700 : 400 }}>{p}</button>
+    );
+  }
 
   const clubById = Object.fromEntries(clubs.map(c => [c.id, c]));
   const deleteTarget = deleteConfirm ? clubById[deleteConfirm.clubId] : null;
   const rejectTarget = rejectConfirm ? clubById[rejectConfirm.clubId] : null;
+
+  const thStyle: React.CSSProperties = { padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', background: 'none', border: 'none', fontFamily: 'var(--font-body)' };
 
   return (
     <div style={{ padding: '32px 40px', fontFamily: 'var(--font-body)' }}>
@@ -259,15 +357,23 @@ export default function ClubsPage() {
           <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Gestion</div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)' }}>Clubes</h1>
         </div>
-        <button onClick={() => setShowCreateModal(true)} style={{ padding: '9px 20px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', textTransform: 'uppercase' }}>
-          + Nuevo Club
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={() => exportCSV(filtered.map(c => ({ Nombre: c.name, Ciudad: c.city, Pais: c.country, Canchas: c.courts, Miembros: c.members, Plan: c.plan, Estado: c.status, Admin: c.adminEmail, Fecha: c.joinedAt })), 'clubes.csv')}
+            style={{ padding: '9px 16px', border: '1px solid var(--grey-200)', borderRadius: 4, background: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', color: 'var(--grey-600)', textTransform: 'uppercase' }}
+          >
+            Exportar CSV
+          </button>
+          <button onClick={() => setShowCreateModal(true)} style={{ padding: '9px 20px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', textTransform: 'uppercase' }}>
+            + Nuevo Club
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--grey-200)', marginBottom: 20 }}>
         {(['all', 'pending'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{
+          <button key={t} onClick={() => { setTab(t); setPage(1); }} style={{
             padding: '10px 24px', border: 'none', background: 'none', cursor: 'pointer',
             fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
             color: tab === t ? 'var(--black)' : 'var(--grey-400)',
@@ -280,29 +386,40 @@ export default function ClubsPage() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center' }}>
         <input
           placeholder="Buscar por nombre, ciudad o email..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
           style={{ ...inputStyle, width: 320, flex: 'none' }}
         />
+        {tab === 'all' && (
+          <select value={planFilter} onChange={e => { setPlanFilter(e.target.value); setPage(1); }}
+            style={{ ...inputStyle, width: 150 }}>
+            <option value="all">Todos los planes</option>
+            <option value="free">Free</option>
+            <option value="basic">Basic</option>
+            <option value="pro">Pro</option>
+          </select>
+        )}
         <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--grey-400)', display: 'flex', alignItems: 'center' }}>
-          {displayed.length} club{displayed.length !== 1 ? 'es' : ''}
+          {filtered.length} club{filtered.length !== 1 ? 'es' : ''}
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table / Cards */}
       {tab === 'pending' ? (
-        /* Pending requests view */
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {displayed.length === 0 && (
+          {sorted.length === 0 && (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14, background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6 }}>
               No hay solicitudes pendientes
             </div>
           )}
-          {displayed.map(club => (
-            <div key={club.id} style={{ background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6, padding: '20px 24px', display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+          {pageClubs.map(club => (
+            <div key={club.id}
+              style={{ background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6, padding: '20px 24px', display: 'flex', gap: 24, alignItems: 'flex-start', cursor: 'pointer' }}
+              onClick={() => setSelectedClub(club)}
+            >
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, fontFamily: 'var(--font-display)' }}>{club.name}</div>
                 <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 8 }}>{club.city}, {club.country}</div>
@@ -313,7 +430,7 @@ export default function ClubsPage() {
                   <span>Plan: <PlanBadge plan={club.plan} /></span>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                 <button onClick={() => handleApprove(club.id)} style={{ padding: '8px 18px', background: 'var(--turf-green)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Aprobar
                 </button>
@@ -325,22 +442,28 @@ export default function ClubsPage() {
           ))}
         </div>
       ) : (
-        /* All clubs table */
         <div style={{ background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-200)' }}>
-                  {['Nombre del Club', 'Ciudad', 'Pais', 'Canchas', 'Miembros', 'Plan', 'Estado', 'Admin', 'Fecha', 'Acciones'].map(h => (
-                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-                      {h}
-                    </th>
-                  ))}
+                  <th onClick={() => handleSort('name')} style={thStyle}>Nombre <SortIcon col="name" /></th>
+                  <th style={{ ...thStyle, cursor: 'default' }}>Ciudad</th>
+                  <th style={{ ...thStyle, cursor: 'default' }}>Pais</th>
+                  <th onClick={() => handleSort('courts')} style={{ ...thStyle, textAlign: 'center' }}>Canchas <SortIcon col="courts" /></th>
+                  <th onClick={() => handleSort('members')} style={{ ...thStyle, textAlign: 'center' }}>Miembros <SortIcon col="members" /></th>
+                  <th style={{ ...thStyle, cursor: 'default' }}>Plan</th>
+                  <th style={{ ...thStyle, cursor: 'default' }}>Estado</th>
+                  <th style={{ ...thStyle, cursor: 'default' }}>Admin</th>
+                  <th onClick={() => handleSort('joinedAt')} style={thStyle}>Fecha <SortIcon col="joinedAt" /></th>
+                  <th style={{ ...thStyle, cursor: 'default' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {displayed.map(c => (
-                  <tr key={c.id} style={{ borderBottom: '1px solid var(--grey-100)' }}
+                {pageClubs.map(c => (
+                  <tr key={c.id}
+                    style={{ borderBottom: '1px solid var(--grey-100)', cursor: 'pointer' }}
+                    onClick={() => setSelectedClub(c)}
                     onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
                     onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
                   >
@@ -353,7 +476,7 @@ export default function ClubsPage() {
                     <td style={{ padding: '10px 14px' }}><StatusBadge status={c.status} /></td>
                     <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)' }}>{c.adminEmail}</td>
                     <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{c.joinedAt}</td>
-                    <td style={{ padding: '10px 14px' }}>
+                    <td style={{ padding: '10px 14px' }} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button onClick={() => setEditClub(c)} style={{ background: 'none', border: '1px solid var(--grey-200)', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--grey-600)' }}>EDT</button>
                         <button onClick={() => handleDeleteStep1(c.id)} style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: '#dc2626' }}>DEL</button>
@@ -361,7 +484,7 @@ export default function ClubsPage() {
                     </td>
                   </tr>
                 ))}
-                {displayed.length === 0 && (
+                {pageClubs.length === 0 && (
                   <tr>
                     <td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14 }}>No se encontraron clubes</td>
                   </tr>
@@ -370,6 +493,114 @@ export default function ClubsPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* Pagination */}
+      {sorted.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, fontSize: 12, color: 'var(--grey-500)' }}>
+          <span>Mostrando {pageStart + 1}–{pageEnd} de {sorted.length}</span>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1} style={{ padding: '4px 10px', border: '1px solid var(--grey-200)', borderRadius: 3, cursor: safePage === 1 ? 'default' : 'pointer', background: '#fff', color: safePage === 1 ? 'var(--grey-300)' : 'var(--grey-600)', fontSize: 12 }}>Anterior</button>
+            {renderPageNumbers()}
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} style={{ padding: '4px 10px', border: '1px solid var(--grey-200)', borderRadius: 3, cursor: safePage === totalPages ? 'default' : 'pointer', background: '#fff', color: safePage === totalPages ? 'var(--grey-300)' : 'var(--grey-600)', fontSize: 12 }}>Siguiente</button>
+          </div>
+        </div>
+      )}
+
+      {/* DETAIL DRAWER */}
+      {selectedClub && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 1009 }} onClick={() => setSelectedClub(null)} />
+          <div
+            style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', boxShadow: '-4px 0 40px rgba(0,0,0,0.15)', zIndex: 1010, overflowY: 'auto', padding: '32px 36px' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Club</div>
+                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', lineHeight: 1.3 }}>{selectedClub.name}</h2>
+              </div>
+              <button onClick={() => setSelectedClub(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', padding: '0 0 0 16px', lineHeight: 1 }}>×</button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+              <StatusBadge status={selectedClub.status} />
+              <PlanBadge plan={selectedClub.plan} />
+            </div>
+
+            {/* Stats tiles */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
+              <div style={{ background: 'var(--grey-50)', borderRadius: 6, padding: '14px 16px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 6 }}>Canchas</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 16, height: 16, background: 'var(--turf-green)', borderRadius: 2 }} />
+                  <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{selectedClub.courts}</div>
+                </div>
+              </div>
+              <div style={{ background: 'var(--grey-50)', borderRadius: 6, padding: '14px 16px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 6 }}>Miembros</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 16, height: 16, background: '#3b82f6', borderRadius: 2 }} />
+                  <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{selectedClub.members}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Info */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 20 }}>
+              {[
+                { label: 'Ciudad', value: selectedClub.city },
+                { label: 'Pais', value: selectedClub.country },
+                { label: 'Fecha de registro', value: selectedClub.joinedAt },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
+                  <span style={{ color: 'var(--grey-500)' }}>{label}</span>
+                  <span style={{ fontWeight: 600 }}>{value || '—'}</span>
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
+                <span style={{ color: 'var(--grey-500)' }}>Email Admin</span>
+                <a href={`mailto:${selectedClub.adminEmail}`} style={{ fontWeight: 600, color: 'var(--turf-green)', textDecoration: 'none' }}>{selectedClub.adminEmail || '—'}</a>
+              </div>
+            </div>
+
+            {/* Change Plan */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 8 }}>Cambiar Plan</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['free', 'basic', 'pro'] as const).map(plan => (
+                  <button key={plan} onClick={() => handleChangePlan(selectedClub.id, plan)} style={{
+                    flex: 1, padding: '8px', border: `2px solid ${selectedClub.plan === plan ? '#0a0a0a' : 'var(--grey-200)'}`,
+                    borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase',
+                    background: selectedClub.plan === plan ? '#0a0a0a' : '#fff',
+                    color: selectedClub.plan === plan ? '#fff' : 'var(--grey-600)',
+                  }}>
+                    {plan.charAt(0).toUpperCase() + plan.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button onClick={() => { setEditClub(selectedClub); }}
+                style={{ padding: '10px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                Editar
+              </button>
+              <button onClick={() => handleToggleActive(selectedClub.id)}
+                style={{ padding: '10px', background: 'transparent', color: selectedClub.status === 'active' ? '#dc2626' : '#166534', border: `1px solid ${selectedClub.status === 'active' ? '#fecaca' : '#bbf7d0'}`, borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                {selectedClub.status === 'active' ? 'Desactivar' : 'Activar'}
+              </button>
+              <button onClick={() => handleDeleteStep1(selectedClub.id)}
+                style={{ padding: '10px', background: 'transparent', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                Eliminar Club
+              </button>
+              <button onClick={() => setSelectedClub(null)} style={{ padding: '10px', background: 'var(--grey-50)', color: 'var(--grey-600)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, marginTop: 4 }}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* CREATE MODAL */}

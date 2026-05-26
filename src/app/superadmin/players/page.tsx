@@ -18,6 +18,32 @@ import {
 // ── helpers ──────────────────────────────────────────────────────────────────
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
+const PAGE_SIZE = 20;
+
+function exportCSV(rows: Record<string, unknown>[], filename: string) {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.join(','),
+    ...rows.map(row => headers.map(h => {
+      const val = String(row[h] ?? '').replace(/"/g, '""');
+      return val.includes(',') ? `"${val}"` : val;
+    }).join(','))
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function getInitialsColor(name: string): string {
+  const colors = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+
 function StatusBadge({ status }: { status: SAPlayer['status'] }) {
   const cfg = {
     active:    { label: 'Activo',     bg: '#dcfce7', color: '#166534' },
@@ -247,16 +273,24 @@ export default function PlayersPage() {
   // Relationship state
   const [relSearch, setRelSearch] = useState('');
   const [relType, setRelType] = useState<PlayerRelationship['type']>('friend');
+  // Detail drawer
+  const [selectedPlayer, setSelectedPlayer] = useState<SAPlayer | null>(null);
+  // Sorting
+  const [sortKey, setSortKey] = useState<string>('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // Pagination
+  const [page, setPage] = useState(1);
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<{ step: number } | null>(null);
 
   useEffect(() => {
-    // Immediate load from localStorage
     setPlayers(getSAPlayers());
     setCustomFields(getPlayerCustomFields());
-    // Then load from Supabase in background
     getSAPlayersFromSupabase().then(sbPlayers => {
       if (sbPlayers && sbPlayers.length > 0) {
         setPlayers(sbPlayers);
-        saveSAPlayers(sbPlayers); // sync to localStorage
+        saveSAPlayers(sbPlayers);
       }
     });
   }, []);
@@ -272,12 +306,59 @@ export default function PlayersPage() {
     setPlayers(updated);
   }
 
+  function handleSort(key: string) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+    setPage(1);
+  }
+
+  function SortIcon({ col }: { col: string }) {
+    if (sortKey !== col) return <span style={{ color: 'var(--grey-300)', marginLeft: 4, fontSize: 9 }}>↕</span>;
+    return <span style={{ color: 'var(--turf-green)', marginLeft: 4, fontSize: 9 }}>{sortDir === 'asc' ? '▲' : '▼'}</span>;
+  }
+
   const filtered = players.filter(p => {
     const q = search.toLowerCase();
     const matchSearch = !q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q);
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (!sortKey) return 0;
+    let av: string | number = '';
+    let bv: string | number = '';
+    if (sortKey === 'name') { av = a.name; bv = b.name; }
+    else if (sortKey === 'ranking') { av = a.ranking; bv = b.ranking; }
+    else if (sortKey === 'joinedAt') { av = a.joinedAt; bv = b.joinedAt; }
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, sorted.length);
+  const pagePlayers = sorted.slice(pageStart, pageEnd);
+
+  function renderPageNumbers() {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+        <button key={p} onClick={() => setPage(p)} style={{ padding: '4px 10px', border: '1px solid var(--grey-200)', borderRadius: 3, cursor: 'pointer', background: p === safePage ? '#0a0a0a' : '#fff', color: p === safePage ? '#fff' : 'var(--grey-600)', fontSize: 12, fontWeight: p === safePage ? 700 : 400 }}>{p}</button>
+      ));
+    }
+    const pages: (number | '...')[] = [];
+    pages.push(1);
+    if (safePage > 3) pages.push('...');
+    for (let p = Math.max(2, safePage - 1); p <= Math.min(totalPages - 1, safePage + 1); p++) pages.push(p);
+    if (safePage < totalPages - 2) pages.push('...');
+    pages.push(totalPages);
+    return pages.map((p, i) => p === '...'
+      ? <span key={`e${i}`} style={{ padding: '4px 6px', fontSize: 12, color: 'var(--grey-400)' }}>…</span>
+      : <button key={p} onClick={() => setPage(p as number)} style={{ padding: '4px 10px', border: '1px solid var(--grey-200)', borderRadius: 3, cursor: 'pointer', background: p === safePage ? '#0a0a0a' : '#fff', color: p === safePage ? '#fff' : 'var(--grey-600)', fontSize: 12, fontWeight: p === safePage ? 700 : 400 }}>{p}</button>
+    );
+  }
 
   // ── delete ─────────────────────────────────────────────────────────────────
   function handleDeleteStep1(playerId: string) { setDeleteConfirm({ step: 1, playerId }); }
@@ -291,6 +372,7 @@ export default function PlayersPage() {
     saveAndRefresh(updated);
     deleteSAPlayerFromSupabase(deleteConfirm.playerId);
     setDeleteConfirm(null);
+    if (selectedPlayer?.id === deleteConfirm.playerId) setSelectedPlayer(null);
     toast('Jugador eliminado correctamente');
   }
 
@@ -304,8 +386,16 @@ export default function PlayersPage() {
     if (!blockConfirm) return;
     const updated = players.map(p => p.id === blockConfirm.playerId ? { ...p, status: 'blocked' as const } : p);
     saveAndRefresh(updated);
+    if (selectedPlayer?.id === blockConfirm.playerId) setSelectedPlayer(prev => prev ? { ...prev, status: 'blocked' as const } : prev);
     setBlockConfirm(null);
     toast('Jugador bloqueado');
+  }
+
+  function handleUnblockPlayer(playerId: string) {
+    const updated = players.map(p => p.id === playerId ? { ...p, status: 'active' as const } : p);
+    saveAndRefresh(updated);
+    if (selectedPlayer?.id === playerId) setSelectedPlayer(prev => prev ? { ...prev, status: 'active' as const } : prev);
+    toast('Jugador desbloqueado');
   }
 
   // ── save player ────────────────────────────────────────────────────────────
@@ -316,7 +406,44 @@ export default function PlayersPage() {
     upsertSAPlayerToSupabase(p);
     setShowCreateModal(false);
     setEditPlayer(null);
+    if (selectedPlayer?.id === p.id) setSelectedPlayer(p);
     toast(exists ? 'Jugador actualizado' : 'Jugador creado correctamente');
+  }
+
+  // ── bulk ───────────────────────────────────────────────────────────────────
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (pagePlayers.every(p => selectedIds.has(p.id))) {
+      setSelectedIds(prev => { const next = new Set(prev); pagePlayers.forEach(p => next.delete(p.id)); return next; });
+    } else {
+      setSelectedIds(prev => { const next = new Set(prev); pagePlayers.forEach(p => next.add(p.id)); return next; });
+    }
+  }
+
+  function handleBulkBlock() {
+    const updated = players.map(p => selectedIds.has(p.id) ? { ...p, status: 'blocked' as const } : p);
+    saveAndRefresh(updated);
+    toast(`${selectedIds.size} jugadores bloqueados`);
+    setSelectedIds(new Set());
+  }
+
+  function handleBulkDeleteStep1() { setBulkDeleteConfirm({ step: 1 }); }
+  function handleBulkDeleteStep2() { setBulkDeleteConfirm({ step: 2 }); }
+  function handleBulkDeleteFinal() {
+    const ids = new Set(selectedIds);
+    const updated = players.filter(p => !ids.has(p.id));
+    ids.forEach(id => deleteSAPlayerFromSupabase(id));
+    saveAndRefresh(updated);
+    setBulkDeleteConfirm(null);
+    setSelectedIds(new Set());
+    toast(`${ids.size} jugadores eliminados`);
   }
 
   // ── CSV import ─────────────────────────────────────────────────────────────
@@ -335,7 +462,6 @@ export default function PlayersPage() {
       const rows = lines.map(l => l.split(sep).map(c => c.trim().replace(/^"|"$/g, '')));
       setCsvRows(rows);
       setCsvFile('csv');
-      // auto-map columns
       const headers = rows[0] ?? [];
       const map: Record<string, string> = {};
       const fieldMap: Record<string, string[]> = {
@@ -389,7 +515,7 @@ export default function PlayersPage() {
     setCsvRows([]);
     setCsvFile(null);
     toast(`${unique.length} jugadores importados correctamente`);
-    void headers; // suppress unused warning
+    void headers;
   }
 
   // ── custom fields ──────────────────────────────────────────────────────────
@@ -436,6 +562,9 @@ export default function PlayersPage() {
   const deleteTarget = deleteConfirm ? playerById[deleteConfirm.playerId] : null;
   const blockTarget = blockConfirm ? playerById[blockConfirm.playerId] : null;
 
+  const thStyle: React.CSSProperties = { padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', background: 'none', border: 'none', fontFamily: 'var(--font-body)' };
+  const allOnPageSelected = pagePlayers.length > 0 && pagePlayers.every(p => selectedIds.has(p.id));
+
   return (
     <div style={{ padding: '32px 40px', fontFamily: 'var(--font-body)' }}>
       {/* Toasts */}
@@ -465,6 +594,12 @@ export default function PlayersPage() {
           <button onClick={() => setShowImportModal(true)} style={{ padding: '9px 16px', border: '1px solid var(--grey-200)', borderRadius: 4, background: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', color: 'var(--grey-600)', textTransform: 'uppercase' }}>
             Importar CSV
           </button>
+          <button
+            onClick={() => exportCSV(filtered.map(p => ({ Nombre: p.name, Email: p.email, Telefono: p.phone, Ciudad: p.city, Pais: p.country, Ranking: p.ranking, Club: p.club ?? '', Estado: p.status, Rol: p.role, Ingreso: p.joinedAt, UltActivo: p.lastActive })), 'jugadores.csv')}
+            style={{ padding: '9px 16px', border: '1px solid var(--grey-200)', borderRadius: 4, background: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', color: 'var(--grey-600)', textTransform: 'uppercase' }}
+          >
+            Exportar CSV
+          </button>
           <button onClick={() => setShowCreateModal(true)} style={{ padding: '9px 20px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', textTransform: 'uppercase' }}>
             + Nuevo Jugador
           </button>
@@ -476,12 +611,12 @@ export default function PlayersPage() {
         <input
           placeholder="Buscar por nombre o email..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
           style={{ ...inputStyle, width: 280, flex: 'none' }}
         />
         <select
           value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
+          onChange={e => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); }}
           style={{ ...inputStyle, width: 160 }}
         >
           <option value="all">Todos los estados</option>
@@ -500,20 +635,33 @@ export default function PlayersPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-200)' }}>
-                {['#', 'Jugador', 'Ciudad / Pais', 'Ranking', 'Club', 'Estado', 'Rol', 'Ingreso', 'Ult. Actividad', 'Acciones'].map(h => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-                    {h}
-                  </th>
-                ))}
+                <th style={{ padding: '10px 14px', width: 36 }}>
+                  <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAll} style={{ cursor: 'pointer' }} />
+                </th>
+                <th style={{ ...thStyle, cursor: 'default' }}>#</th>
+                <th onClick={() => handleSort('name')} style={thStyle}>Jugador <SortIcon col="name" /></th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Ciudad / Pais</th>
+                <th onClick={() => handleSort('ranking')} style={thStyle}>Ranking <SortIcon col="ranking" /></th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Club</th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Estado</th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Rol</th>
+                <th onClick={() => handleSort('joinedAt')} style={thStyle}>Ingreso <SortIcon col="joinedAt" /></th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Ult. Actividad</th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p, i) => (
-                <tr key={p.id} style={{ borderBottom: '1px solid var(--grey-100)', transition: 'background 0.1s' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
-                  onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+              {pagePlayers.map((p, i) => (
+                <tr key={p.id}
+                  style={{ borderBottom: '1px solid var(--grey-100)', transition: 'background 0.1s', cursor: 'pointer', background: selectedIds.has(p.id) ? '#f0fdf4' : '#fff' }}
+                  onClick={() => setSelectedPlayer(p)}
+                  onMouseEnter={e => { if (!selectedIds.has(p.id)) e.currentTarget.style.background = '#fafafa'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = selectedIds.has(p.id) ? '#f0fdf4' : '#fff'; }}
                 >
-                  <td style={{ padding: '10px 14px', color: 'var(--grey-400)', fontWeight: 500 }}>{i + 1}</td>
+                  <td style={{ padding: '10px 14px' }} onClick={e => e.stopPropagation()}>
+                    <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} style={{ cursor: 'pointer' }} />
+                  </td>
+                  <td style={{ padding: '10px 14px', color: 'var(--grey-400)', fontWeight: 500 }}>{pageStart + i + 1}</td>
                   <td style={{ padding: '10px 14px' }}>
                     <div style={{ fontWeight: 600, color: 'var(--black)' }}>{p.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p.email}</div>
@@ -525,7 +673,7 @@ export default function PlayersPage() {
                   <td style={{ padding: '10px 14px' }}><RoleBadge role={p.role} /></td>
                   <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{p.joinedAt}</td>
                   <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{p.lastActive}</td>
-                  <td style={{ padding: '10px 14px' }}>
+                  <td style={{ padding: '10px 14px' }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button title="Relaciones" onClick={() => setShowRelationshipModal({ playerId: p.id })}
                         style={{ background: 'none', border: '1px solid var(--grey-200)', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--grey-500)' }}>
@@ -535,10 +683,15 @@ export default function PlayersPage() {
                         style={{ background: 'none', border: '1px solid var(--grey-200)', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--grey-600)' }}>
                         EDT
                       </button>
-                      {p.status !== 'blocked' && (
+                      {p.status !== 'blocked' ? (
                         <button title="Bloquear" onClick={() => handleBlockStep1(p.id)}
                           style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: '#dc2626' }}>
                           BLQ
+                        </button>
+                      ) : (
+                        <button title="Desbloquear" onClick={() => handleUnblockPlayer(p.id)}
+                          style={{ background: 'none', border: '1px solid #bbf7d0', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: '#166534' }}>
+                          UBL
                         </button>
                       )}
                       <button title="Eliminar" onClick={() => handleDeleteStep1(p.id)}
@@ -549,9 +702,9 @@ export default function PlayersPage() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {pagePlayers.length === 0 && (
                 <tr>
-                  <td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14 }}>
+                  <td colSpan={11} style={{ padding: '40px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14 }}>
                     No se encontraron jugadores
                   </td>
                 </tr>
@@ -560,6 +713,157 @@ export default function PlayersPage() {
           </table>
         </div>
       </div>
+
+      {/* Pagination */}
+      {sorted.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, fontSize: 12, color: 'var(--grey-500)' }}>
+          <span>Mostrando {pageStart + 1}–{pageEnd} de {sorted.length}</span>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1} style={{ padding: '4px 10px', border: '1px solid var(--grey-200)', borderRadius: 3, cursor: safePage === 1 ? 'default' : 'pointer', background: '#fff', color: safePage === 1 ? 'var(--grey-300)' : 'var(--grey-600)', fontSize: 12 }}>Anterior</button>
+            {renderPageNumbers()}
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} style={{ padding: '4px 10px', border: '1px solid var(--grey-200)', borderRadius: 3, cursor: safePage === totalPages ? 'default' : 'pointer', background: '#fff', color: safePage === totalPages ? 'var(--grey-300)' : 'var(--grey-600)', fontSize: 12 }}>Siguiente</button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0a0a0a', color: '#fff', padding: '14px 24px', borderRadius: 8, display: 'flex', gap: 16, alignItems: 'center', zIndex: 900, boxShadow: '0 8px 32px rgba(0,0,0,0.3)', fontSize: 13 }}>
+          <span style={{ fontWeight: 600 }}>{selectedIds.size} seleccionado{selectedIds.size !== 1 ? 's' : ''}</span>
+          <span style={{ color: '#555' }}>—</span>
+          <button
+            onClick={() => exportCSV(players.filter(p => selectedIds.has(p.id)).map(p => ({ Nombre: p.name, Email: p.email, Telefono: p.phone, Ciudad: p.city, Pais: p.country, Ranking: p.ranking, Club: p.club ?? '', Estado: p.status, Rol: p.role, Ingreso: p.joinedAt, UltActivo: p.lastActive })), 'jugadores_seleccion.csv')}
+            style={{ background: 'none', border: '1px solid #555', borderRadius: 4, color: '#fff', padding: '5px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+          >
+            Exportar seleccion
+          </button>
+          <button onClick={handleBulkBlock} style={{ background: 'none', border: '1px solid #f59e0b', borderRadius: 4, color: '#f59e0b', padding: '5px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+            Bloquear seleccion
+          </button>
+          <button onClick={handleBulkDeleteStep1} style={{ background: 'none', border: '1px solid #ef4444', borderRadius: 4, color: '#ef4444', padding: '5px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+            Eliminar seleccion
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 0 0 8px' }}>×</button>
+        </div>
+      )}
+
+      {/* DETAIL DRAWER */}
+      {selectedPlayer && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 1009 }} onClick={() => setSelectedPlayer(null)} />
+          <div
+            style={{ position: 'fixed', top: 0, right: 0, width: 520, height: '100vh', background: '#fff', boxShadow: '-4px 0 40px rgba(0,0,0,0.15)', zIndex: 1010, overflowY: 'auto', padding: '32px 36px' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', background: getInitialsColor(selectedPlayer.name), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, fontWeight: 700, flexShrink: 0 }}>
+                  {selectedPlayer.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                </div>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{selectedPlayer.name}</h2>
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 2 }}>{selectedPlayer.email}</div>
+                </div>
+              </div>
+              <button onClick={() => setSelectedPlayer(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', padding: '0 0 0 16px', lineHeight: 1 }}>×</button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+              <StatusBadge status={selectedPlayer.status} />
+              <RoleBadge role={selectedPlayer.role} />
+            </div>
+
+            {/* Ranking */}
+            <div style={{ background: 'var(--grey-50)', borderRadius: 8, padding: '16px 20px', marginBottom: 20, textAlign: 'center' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 6 }}>Ranking</div>
+              <div style={{ fontSize: 36, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--turf-green)' }}>{selectedPlayer.ranking.toLocaleString()}</div>
+              <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>puntos</div>
+            </div>
+
+            {/* Info rows */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 20 }}>
+              {[
+                { label: 'Telefono', value: selectedPlayer.phone || '—' },
+                { label: 'Ciudad', value: selectedPlayer.city || '—' },
+                { label: 'Pais', value: selectedPlayer.country || '—' },
+                { label: 'Club', value: selectedPlayer.club || '—' },
+                { label: 'Fecha de ingreso', value: selectedPlayer.joinedAt },
+                { label: 'Ultima actividad', value: selectedPlayer.lastActive },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
+                  <span style={{ color: 'var(--grey-500)' }}>{label}</span>
+                  <span style={{ fontWeight: 600 }}>{value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Custom fields */}
+            {customFields.length > 0 && selectedPlayer.customFields && Object.keys(selectedPlayer.customFields).length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 10 }}>Campos personalizados</div>
+                {customFields.filter(f => selectedPlayer.customFields?.[f]).map(f => (
+                  <div key={f} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
+                    <span style={{ color: 'var(--grey-500)' }}>{f}</span>
+                    <span style={{ fontWeight: 600 }}>{selectedPlayer.customFields?.[f]}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Relationships */}
+            {(() => {
+              const rels = getRelationships(selectedPlayer.id);
+              if (rels.length === 0) return null;
+              const relTypeLabels: Record<PlayerRelationship['type'], string> = { friend: 'Amigo', rival: 'Rival', teammate: 'Companero' };
+              return (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 10 }}>Relaciones</div>
+                  {rels.map(r => {
+                    const otherId = r.playerId === selectedPlayer.id ? r.relatedPlayerId : r.playerId;
+                    const other = playerById[otherId];
+                    return (
+                      <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
+                        <span style={{ fontWeight: 600 }}>{other?.name ?? otherId}</span>
+                        <span style={{ color: 'var(--grey-400)' }}>{relTypeLabels[r.type]}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+              <button onClick={() => { setEditPlayer(selectedPlayer); }}
+                style={{ padding: '10px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                Editar
+              </button>
+              {selectedPlayer.status !== 'blocked' ? (
+                <button onClick={() => handleBlockStep1(selectedPlayer.id)}
+                  style={{ padding: '10px', background: 'transparent', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  Bloquear
+                </button>
+              ) : (
+                <button onClick={() => handleUnblockPlayer(selectedPlayer.id)}
+                  style={{ padding: '10px', background: 'transparent', color: '#166534', border: '1px solid #bbf7d0', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  Desbloquear
+                </button>
+              )}
+              <button onClick={() => { toast('Correo de reseteo de contrasena enviado'); }}
+                style={{ padding: '10px', background: 'transparent', color: 'var(--grey-600)', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                Resetear Contrasena
+              </button>
+              <button onClick={() => handleDeleteStep1(selectedPlayer.id)}
+                style={{ padding: '10px', background: 'transparent', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                Eliminar Jugador
+              </button>
+              <button onClick={() => setSelectedPlayer(null)} style={{ padding: '10px', background: 'var(--grey-50)', color: 'var(--grey-600)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, marginTop: 4 }}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* CREATE MODAL */}
       {showCreateModal && (
@@ -642,6 +946,36 @@ export default function PlayersPage() {
             <button onClick={() => setBlockConfirm(null)} style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
             <button onClick={handleBlockFinal} style={{ padding: '9px 20px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
               Confirmar bloqueo
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* BULK DELETE STEP 1 */}
+      {bulkDeleteConfirm?.step === 1 && (
+        <Modal onClose={() => setBulkDeleteConfirm(null)}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 12 }}>Eliminar {selectedIds.size} Jugadores</h2>
+          <p style={{ color: 'var(--grey-600)', lineHeight: 1.6, marginBottom: 24 }}>
+            ¿Estas seguro de que deseas eliminar {selectedIds.size} jugadores? Esta accion no se puede deshacer.
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button onClick={() => setBulkDeleteConfirm(null)} style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
+            <button onClick={handleBulkDeleteStep2} style={{ padding: '9px 20px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Si, eliminar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* BULK DELETE STEP 2 */}
+      {bulkDeleteConfirm?.step === 2 && (
+        <Modal onClose={() => setBulkDeleteConfirm(null)}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 12, color: '#dc2626' }}>Confirmar eliminacion definitiva de {selectedIds.size} jugadores</h2>
+          <p style={{ color: 'var(--grey-600)', lineHeight: 1.6, marginBottom: 24 }}>
+            ¿Confirmas la eliminacion definitiva de {selectedIds.size} jugadores? Se borraran todos sus datos permanentemente.
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button onClick={() => setBulkDeleteConfirm(null)} style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
+            <button onClick={handleBulkDeleteFinal} style={{ padding: '9px 20px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+              Confirmar eliminacion definitiva
             </button>
           </div>
         </Modal>
