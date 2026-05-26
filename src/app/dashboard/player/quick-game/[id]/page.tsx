@@ -151,6 +151,8 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   // Score inputs (points mode): key = `${roundNum}-${courtNum}`
   const [scoreInputs, setScoreInputs] = useState<Record<string, { p1: string; p2: string }>>({});
+  // Per-set score inputs for traditional mode: key = `${roundNum}-${courtNum}`
+  const [setInputs, setSetInputs] = useState<Record<string, Array<{ p1: string; p2: string }>>>({});
 
   // Provisional player input
   const [provName, setProvName] = useState('');
@@ -538,6 +540,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     saveGame(updated);
     setGame(updated);
     setScoreInputs(prev => { const n = { ...prev }; delete n[key]; return n; });
+    setSetInputs(prev => { const n = { ...prev }; delete n[key]; return n; });
     const round = updated.rounds.find(r => r.num === roundNum);
     if (round && isRoundComplete(round)) {
       if (isGameFinished(updated)) showToast('¡Ronda completa! Podés finalizar el juego.');
@@ -551,6 +554,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     saveGame(next);
     setGame(next);
     setScoreInputs({});
+    setSetInputs({});
     showToast(`Ronda ${next.currentRound} iniciada`);
   }
 
@@ -640,6 +644,23 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         }
       }
       return { ...prev, [key]: { ...current, p2: val } };
+    });
+  }
+
+  function handleSetChange(key: string, setIdx: number, side: 'p1' | 'p2', val: string, numSets: number) {
+    setSetInputs(prev => {
+      const current = prev[key] ?? Array.from({ length: numSets }, () => ({ p1: '', p2: '' }));
+      const updated = current.map((s, i) => i === setIdx ? { ...s, [side]: val } : s);
+      // compute sets won and sync to scoreInputs
+      let w1 = 0, w2 = 0;
+      for (const s of updated) {
+        const a = parseInt(s.p1 || '0', 10), b = parseInt(s.p2 || '0', 10);
+        if (!isNaN(a) && !isNaN(b) && (s.p1 !== '' || s.p2 !== '')) {
+          if (a > b) w1++; else if (b > a) w2++;
+        }
+      }
+      setScoreInputs(si => ({ ...si, [key]: { p1: String(w1), p2: String(w2) } }));
+      return { ...prev, [key]: updated };
     });
   }
 
@@ -1622,57 +1643,103 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 const key = `${currentRound.num}-${court.courtNum}`;
                 const si = scoreInputs[key] ?? { p1: '', p2: '' };
                 const alreadyDone = court.status === 'completed';
+                const numSets = !isPointsMode ? (game.scoreConfig.setsPerMatch ?? 3) : 0;
+                const courtSetInputs = setInputs[key] ?? Array.from({ length: numSets }, () => ({ p1: '', p2: '' }));
+                const winner = alreadyDone
+                  ? (court.pair1Score !== null && court.pair2Score !== null
+                      ? (court.pair1Score > court.pair2Score ? 1 : court.pair2Score > court.pair1Score ? 2 : 0)
+                      : 0)
+                  : 0;
                 return (
-                  <div key={court.courtNum} style={{ marginBottom: 20, padding: 20, border: '1px solid var(--grey-200)', background: alreadyDone ? 'var(--grey-50)' : '#fff' }}>
-                    <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 700, marginBottom: 14 }}>
-                      Cancha {court.courtNum}
-                      {alreadyDone && <span style={{ marginLeft: 10, color: 'var(--turf-green)' }}>✓ Completada</span>}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                      <div style={{ flex: 1, minWidth: 120 }}>
-                        <div style={{ fontSize: 11, color: 'var(--grey-400)', marginBottom: 4 }}>Pareja A</div>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{getPairNames(court.pair1)}</div>
+                  <div key={court.courtNum} style={{ marginBottom: 16, border: '1px solid var(--grey-200)', background: alreadyDone ? 'var(--grey-50)' : '#fff' }}>
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-100)' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>
+                        Cancha {court.courtNum}
+                        {alreadyDone && <span style={{ marginLeft: 8, color: 'var(--turf-green)' }}>✓ Completada</span>}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        {alreadyDone ? (
-                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em' }}>
-                            {court.pair1Score} — {court.pair2Score}
-                          </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {isPointsMode ? (
+                          <div style={{ width: 56, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>PTS</div>
                         ) : (
-                          <>
-                            <input
-                              type="number"
-                              min="0"
-                              max={ptTarget ?? 100}
-                              value={si.p1}
-                              onChange={e => handleP1Change(key, e.target.value)}
-                              style={{ ...inp, width: 64, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, padding: '8px' }}
-                              placeholder="0"
-                            />
-                            <span style={{ fontSize: 16, color: 'var(--grey-300)', fontWeight: 600 }}>—</span>
-                            <input
-                              type="number"
-                              min="0"
-                              max={ptTarget ?? 100}
-                              value={si.p2}
-                              onChange={e => handleP2Change(key, e.target.value)}
-                              style={{ ...inp, width: 64, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, padding: '8px' }}
-                              placeholder="0"
-                            />
-                          </>
+                          Array.from({ length: numSets }, (_, i) => (
+                            <div key={i} style={{ width: 48, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>SET {i + 1}</div>
+                          ))
                         )}
                       </div>
-                      <div style={{ flex: 1, minWidth: 120, textAlign: 'right' }}>
-                        <div style={{ fontSize: 11, color: 'var(--grey-400)', marginBottom: 4 }}>Pareja B</div>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{getPairNames(court.pair2)}</div>
+                    </div>
+
+                    {/* Pair A */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderBottom: '1px solid var(--grey-100)' }}>
+                      <div style={{ width: 64, flexShrink: 0 }}>
+                        {winner === 1 && <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 10, color: 'var(--grey-400)', marginBottom: 2 }}>Pareja A</div>
+                        <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>{getPairNames(court.pair1)}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        {isPointsMode ? (
+                          alreadyDone ? (
+                            <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, color: winner === 1 ? 'var(--black)' : 'var(--grey-400)' }}>
+                              {court.pair1Score ?? '—'}
+                            </div>
+                          ) : (
+                            <input type="number" min="0" max={ptTarget ?? 100} value={si.p1} onChange={e => handleP1Change(key, e.target.value)} placeholder="0"
+                              style={{ width: 56, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }} />
+                          )
+                        ) : alreadyDone ? (
+                          <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, color: winner === 1 ? 'var(--black)' : 'var(--grey-400)' }}>
+                            {court.pair1Score ?? '—'}
+                          </div>
+                        ) : (
+                          Array.from({ length: numSets }, (_, i) => (
+                            <input key={i} type="number" min="0" max="99" value={courtSetInputs[i]?.p1 ?? ''}
+                              onChange={e => handleSetChange(key, i, 'p1', e.target.value, numSets)} placeholder="0"
+                              style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }} />
+                          ))
+                        )}
                       </div>
                     </div>
+
+                    {/* Pair B */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px' }}>
+                      <div style={{ width: 64, flexShrink: 0 }}>
+                        {winner === 2 && <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 10, color: 'var(--grey-400)', marginBottom: 2 }}>Pareja B</div>
+                        <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>{getPairNames(court.pair2)}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        {isPointsMode ? (
+                          alreadyDone ? (
+                            <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, color: winner === 2 ? 'var(--black)' : 'var(--grey-400)' }}>
+                              {court.pair2Score ?? '—'}
+                            </div>
+                          ) : (
+                            <input type="number" min="0" max={ptTarget ?? 100} value={si.p2} onChange={e => handleP2Change(key, e.target.value)} placeholder="0"
+                              style={{ width: 56, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }} />
+                          )
+                        ) : alreadyDone ? (
+                          <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, color: winner === 2 ? 'var(--black)' : 'var(--grey-400)' }}>
+                            {court.pair2Score ?? '—'}
+                          </div>
+                        ) : (
+                          Array.from({ length: numSets }, (_, i) => (
+                            <input key={i} type="number" min="0" max="99" value={courtSetInputs[i]?.p2 ?? ''}
+                              onChange={e => handleSetChange(key, i, 'p2', e.target.value, numSets)} placeholder="0"
+                              style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }} />
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Register button */}
                     {!alreadyDone && (
-                      <div style={{ marginTop: 14 }}>
-                        <button
-                          onClick={() => handleRegisterScore(currentRound.num, court.courtNum)}
-                          style={{ padding: '9px 22px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
-                        >
+                      <div style={{ padding: '4px 20px 16px', display: 'flex', justifyContent: 'center' }}>
+                        <button onClick={() => handleRegisterScore(currentRound.num, court.courtNum)}
+                          style={{ padding: '10px 28px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                           Registrar Score
                         </button>
                       </div>

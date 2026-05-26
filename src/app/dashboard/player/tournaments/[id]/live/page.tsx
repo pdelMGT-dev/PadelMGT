@@ -163,6 +163,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
   // Score inputs: key = `${roundNum}-${courtNum}`, value = { p1: string; p2: string }
   const [scoreInputs, setScoreInputs] = useState<Record<string, { p1: string; p2: string }>>({});
+  const [setInputs, setSetInputs] = useState<Record<string, Array<{ p1: string; p2: string }>>>({});
 
   // ── Load user ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -260,6 +261,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
   const isPointsMode = t.scoreConfig?.type === 'points';
   const ptTarget = isPointsMode ? (t.scoreConfig?.target ?? 24) : null;
+  const setsPerMatch = !isPointsMode ? (t.scoreConfig?.setsPerMatch ?? 3) : 0;
 
   const shareUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/tournament/${t.code}`
@@ -303,6 +305,22 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     setTournament(updated);
   }
 
+  function handleTradSetChange(key: string, setIdx: number, side: 'p1' | 'p2', val: string, roundNum: number, courtNum: number) {
+    setSetInputs(prev => {
+      const current = prev[key] ?? Array.from({ length: setsPerMatch }, () => ({ p1: '', p2: '' }));
+      const updated = current.map((s, i) => i === setIdx ? { ...s, [side]: val } : s);
+      let w1 = 0, w2 = 0;
+      for (const s of updated) {
+        const a = parseInt(s.p1 || '0', 10), b = parseInt(s.p2 || '0', 10);
+        if (!isNaN(a) && !isNaN(b) && (s.p1 !== '' || s.p2 !== '')) {
+          if (a > b) w1++; else if (b > a) w2++;
+        }
+      }
+      setScoreInputs(si => ({ ...si, [key]: { p1: String(w1), p2: String(w2) } }));
+      return { ...prev, [key]: updated };
+    });
+  }
+
   function getInputVal(
     roundNum: number,
     courtNum: number,
@@ -323,6 +341,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     saveTournament(withStandings);
     setTournament(withStandings);
     setScoreInputs({});
+    setSetInputs({});
   }
 
   // ── Finish tournament ─────────────────────────────────────────────────────
