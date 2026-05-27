@@ -107,7 +107,7 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
   if (!match) {
     return (
       <div style={{ padding: '40px', textAlign: 'center' }}>
-        <p>Partido no encontrado.</p>
+        <p>Juego no encontrado.</p>
         <Link href="/dashboard/player/matches" className="btn btn-secondary" style={{ borderRadius: 0 }}>← Volver</Link>
       </div>
     );
@@ -120,7 +120,7 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
     <div style={{ padding: '40px 40px 80px', maxWidth: 900 }}>
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24, fontSize: 12, color: 'var(--grey-400)' }}>
-        <Link href="/dashboard/player/matches" style={{ color: 'var(--grey-400)', textDecoration: 'none' }}>Mis Partidos</Link>
+        <Link href="/dashboard/player/matches" style={{ color: 'var(--grey-400)', textDecoration: 'none' }}>Mis Juegos</Link>
         <span>›</span>
         <span>{match.tournament} – {match.round}</span>
       </div>
@@ -129,7 +129,7 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
       <div style={{ marginBottom: 32, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>
-            Detalle del partido
+            Detalle del juego
           </div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 6px' }}>
             {match.tournament}
@@ -247,7 +247,7 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <Link href="/dashboard/player/matches" className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }}>← Volver a Mis Partidos</Link>
+        <Link href="/dashboard/player/matches" className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }}>← Volver a Mis Juegos</Link>
       </div>
     </div>
   );

@@ -158,7 +158,7 @@ export default function ClubTournamentsPage() {
 
             {/* Current matches */}
             <div style={{ background: '#fff' }}>
-              <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--grey-200)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)' }}>Partidos — Jornada {selectedTournament.currentRound}</div>
+              <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--grey-200)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)' }}>Juegos — Jornada {selectedTournament.currentRound}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)', margin: '1px' }}>
                 {bracket.matches.map((m, i) => (
                   <div key={i} style={{ background: m.status === 'live' ? '#111' : '#fff', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>

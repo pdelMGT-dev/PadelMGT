@@ -1416,21 +1416,39 @@ export default function PlayerTournamentsPage() {
                 <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
                   {pageTournaments.map(t => <TournamentCard key={t.id} t={t} />)}
                 </div>
-                {totalPages > 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 12 }}>
-                    <button onClick={() => setHistPage(p => Math.max(0, p - 1))} disabled={page === 0}
-                      style={{ padding: '5px 14px', fontSize: 11, fontWeight: 700, border: '1px solid var(--grey-200)', background: page === 0 ? 'var(--grey-50)' : '#fff', color: page === 0 ? 'var(--grey-300)' : 'var(--grey-600)', cursor: page === 0 ? 'default' : 'pointer', letterSpacing: '0.06em' }}>
-                      ← Ant
-                    </button>
-                    <span style={{ fontSize: 10, color: 'var(--grey-400)', fontWeight: 600, minWidth: 64, textAlign: 'center' }}>
-                      {page + 1} / {totalPages}
-                    </span>
-                    <button onClick={() => setHistPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
-                      style={{ padding: '5px 14px', fontSize: 11, fontWeight: 700, border: '1px solid var(--grey-200)', background: page === totalPages - 1 ? 'var(--grey-50)' : '#fff', color: page === totalPages - 1 ? 'var(--grey-300)' : 'var(--grey-600)', cursor: page === totalPages - 1 ? 'default' : 'pointer', letterSpacing: '0.06em' }}>
-                      Sig →
-                    </button>
-                  </div>
-                )}
+                {totalPages > 1 && (() => {
+                  const pages: (number | '…')[] = [];
+                  if (totalPages <= 7) {
+                    for (let i = 0; i < totalPages; i++) pages.push(i);
+                  } else {
+                    pages.push(0);
+                    if (page > 2) pages.push('…');
+                    for (let i = Math.max(1, page - 1); i <= Math.min(totalPages - 2, page + 1); i++) pages.push(i);
+                    if (page < totalPages - 3) pages.push('…');
+                    pages.push(totalPages - 1);
+                  }
+                  const btnBase: React.CSSProperties = { padding: '5px 10px', fontSize: 11, fontWeight: 700, border: '1px solid var(--grey-200)', cursor: 'pointer', letterSpacing: '0.04em', minWidth: 32, textAlign: 'center' };
+                  return (
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, marginTop: 12, flexWrap: 'wrap' }}>
+                      <button onClick={() => setHistPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                        style={{ ...btnBase, background: page === 0 ? 'var(--grey-50)' : '#fff', color: page === 0 ? 'var(--grey-300)' : 'var(--grey-600)', cursor: page === 0 ? 'default' : 'pointer' }}>
+                        ← Ant
+                      </button>
+                      {pages.map((p2, idx) =>
+                        p2 === '…'
+                          ? <span key={`e${idx}`} style={{ padding: '5px 4px', fontSize: 11, color: 'var(--grey-400)' }}>…</span>
+                          : <button key={p2} onClick={() => setHistPage(p2 as number)}
+                              style={{ ...btnBase, background: p2 === page ? 'var(--black)' : '#fff', color: p2 === page ? '#fff' : 'var(--grey-600)', borderColor: p2 === page ? 'var(--black)' : 'var(--grey-200)' }}>
+                              {(p2 as number) + 1}
+                            </button>
+                      )}
+                      <button onClick={() => setHistPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
+                        style={{ ...btnBase, background: page === totalPages - 1 ? 'var(--grey-50)' : '#fff', color: page === totalPages - 1 ? 'var(--grey-300)' : 'var(--grey-600)', cursor: page === totalPages - 1 ? 'default' : 'pointer' }}>
+                        Sig →
+                      </button>
+                    </div>
+                  );
+                })()}
               </>
             )}
           </div>

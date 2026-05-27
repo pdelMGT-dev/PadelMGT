@@ -142,7 +142,7 @@ export default function PlayerProfilePage({ params }: Props) {
             {/* Stats bar */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 40 }}>
               {[
-                { label: 'Partidos', value: String(p.matches) },
+                { label: 'Juegos', value: String(p.matches) },
                 { label: 'Victorias', value: String(p.wins) },
                 { label: 'Win Rate', value: `${winRate}%`, color: winRate >= 50 ? 'var(--turf-green)' : 'var(--black)' },
                 { label: 'Torneos', value: String(p.tournaments) },
@@ -156,7 +156,7 @@ export default function PlayerProfilePage({ params }: Props) {
 
             {/* Recent matches */}
             <div>
-              <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 700, marginBottom: 16 }}>Partidos Recientes</div>
+              <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 700, marginBottom: 16 }}>Juegos Recientes</div>
               {p.recentMatches.length === 0 ? (
                 <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '32px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
                   Sin partidos recientes.

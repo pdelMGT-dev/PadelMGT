@@ -1,9 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getMatchHistoryForPlayer, type MatchEntry } from '@/lib/match-history';
 
 type CurrentUser = { id: string; name: string };
+type SortField = 'date' | 'pareja' | 'rivales';
+type SortDir = 'asc' | 'desc';
+
+const PAGE_SIZE = 10;
 
 const selectStyle: React.CSSProperties = {
   padding: '7px 32px 7px 12px', fontSize: 12, fontWeight: 600,
@@ -13,12 +18,62 @@ const selectStyle: React.CSSProperties = {
   backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', color: 'var(--black)',
 };
 
+function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
+  if (sortField !== field) return <span style={{ opacity: 0.3, fontSize: 9, marginLeft: 3 }}>↕</span>;
+  return <span style={{ fontSize: 9, marginLeft: 3, color: 'var(--black)' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+}
+
+function PageNav({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+
+  const pages: (number | '…')[] = [];
+  if (totalPages <= 7) {
+    for (let i = 0; i < totalPages; i++) pages.push(i);
+  } else {
+    pages.push(0);
+    if (page > 2) pages.push('…');
+    for (let i = Math.max(1, page - 1); i <= Math.min(totalPages - 2, page + 1); i++) pages.push(i);
+    if (page < totalPages - 3) pages.push('…');
+    pages.push(totalPages - 1);
+  }
+
+  const btnBase: React.CSSProperties = {
+    padding: '5px 10px', fontSize: 11, fontWeight: 700, border: '1px solid var(--grey-200)',
+    cursor: 'pointer', letterSpacing: '0.04em', minWidth: 32, textAlign: 'center',
+  };
+
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, marginTop: 16, flexWrap: 'wrap' }}>
+      <button onClick={() => onPage(page - 1)} disabled={page === 0}
+        style={{ ...btnBase, background: page === 0 ? 'var(--grey-50)' : '#fff', color: page === 0 ? 'var(--grey-300)' : 'var(--grey-600)', cursor: page === 0 ? 'default' : 'pointer' }}>
+        ← Ant
+      </button>
+      {pages.map((p, i) =>
+        p === '…'
+          ? <span key={`e${i}`} style={{ padding: '5px 4px', fontSize: 11, color: 'var(--grey-400)' }}>…</span>
+          : <button key={p} onClick={() => onPage(p as number)}
+              style={{ ...btnBase, background: p === page ? 'var(--black)' : '#fff', color: p === page ? '#fff' : 'var(--grey-600)', borderColor: p === page ? 'var(--black)' : 'var(--grey-200)' }}>
+              {(p as number) + 1}
+            </button>
+      )}
+      <button onClick={() => onPage(page + 1)} disabled={page === totalPages - 1}
+        style={{ ...btnBase, background: page === totalPages - 1 ? 'var(--grey-50)' : '#fff', color: page === totalPages - 1 ? 'var(--grey-300)' : 'var(--grey-600)', cursor: page === totalPages - 1 ? 'default' : 'pointer' }}>
+        Sig →
+      </button>
+    </div>
+  );
+}
+
 export default function PlayerMatchesPage() {
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [allMatches, setAllMatches] = useState<MatchEntry[]>([]);
   const [resultado, setResultado] = useState('Todos');
   const [gameFilter, setGameFilter] = useState('Todos');
   const [typeFilter, setTypeFilter] = useState('Todos');
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     try {
@@ -33,18 +88,68 @@ export default function PlayerMatchesPage() {
 
   const gameNames = ['Todos', ...Array.from(new Set(allMatches.map(m => m.gameName)))];
 
-  const filtered = allMatches.filter(m => {
-    const resOk = resultado === 'Todos' || (resultado === 'Victorias' ? m.result === 'V' : resultado === 'Derrotas' ? m.result === 'D' : m.result === 'T');
-    const gameOk = gameFilter === 'Todos' || m.gameName === gameFilter;
-    const typeOk = typeFilter === 'Todos' || (typeFilter === 'Torneo' ? m.entityType === 'tournament' : m.entityType === 'game');
-    return resOk && gameOk && typeOk;
-  });
+  function handleSort(field: SortField) {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir(field === 'date' ? 'desc' : 'asc');
+    }
+    setPage(0);
+  }
+
+  function resetFilters() {
+    setResultado('Todos');
+    setGameFilter('Todos');
+    setTypeFilter('Todos');
+    setPage(0);
+  }
+
+  const filtered = allMatches
+    .filter(m => {
+      const resOk = resultado === 'Todos' || (resultado === 'Victorias' ? m.result === 'V' : resultado === 'Derrotas' ? m.result === 'D' : m.result === 'T');
+      const gameOk = gameFilter === 'Todos' || m.gameName === gameFilter;
+      const typeOk = typeFilter === 'Todos' || (typeFilter === 'Torneo' ? m.entityType === 'tournament' : m.entityType === 'game');
+      return resOk && gameOk && typeOk;
+    })
+    .sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'date') {
+        cmp = ((a.date || '') + (a.time || '')).localeCompare((b.date || '') + (b.time || ''));
+      } else if (sortField === 'pareja') {
+        cmp = (a.partner || '').localeCompare(b.partner || '');
+      } else {
+        cmp = (a.opponents || '').localeCompare(b.opponents || '');
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageItems = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
   const wins = allMatches.filter(m => m.result === 'V').length;
   const losses = allMatches.filter(m => m.result === 'D').length;
   const ties = allMatches.filter(m => m.result === 'T').length;
   const total = allMatches.length;
   const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
+
+  function getLiveUrl(m: MatchEntry): string {
+    const base = m.entityType === 'tournament'
+      ? '/dashboard/player/tournaments'
+      : '/dashboard/player/games';
+    return `${base}/${m.gameId}/live`;
+  }
+
+  const thSort = (field: SortField, children: React.ReactNode, align?: 'center') => (
+    <th
+      onClick={() => handleSort(field)}
+      style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', textAlign: align }}
+    >
+      {children}
+      <SortIcon field={field} sortField={sortField} sortDir={sortDir} />
+    </th>
+  );
 
   if (!currentUser) {
     return (
@@ -58,13 +163,13 @@ export default function PlayerMatchesPage() {
     <div style={{ padding: '40px 40px 80px' }}>
       <div style={{ marginBottom: 32 }}>
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Historial completo</div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS PARTIDOS</h1>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS JUEGOS</h1>
       </div>
 
       {/* Summary stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 24 }}>
         {[
-          { label: 'Partidos totales', value: String(total), color: undefined },
+          { label: 'Juegos totales', value: String(total), color: undefined },
           { label: 'Victorias', value: String(wins), color: 'var(--turf-green)' },
           { label: 'Derrotas', value: String(losses), color: '#ee0005' },
           { label: '% Victorias', value: `${winRate}%`, color: undefined },
@@ -93,22 +198,22 @@ export default function PlayerMatchesPage() {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
-        <select value={resultado} onChange={e => setResultado(e.target.value)} style={selectStyle}>
+        <select value={resultado} onChange={e => { setResultado(e.target.value); setPage(0); }} style={selectStyle}>
           <option>Todos</option>
           <option>Victorias</option>
           <option>Derrotas</option>
           <option>Empates</option>
         </select>
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={selectStyle}>
+        <select value={typeFilter} onChange={e => { setTypeFilter(e.target.value); setPage(0); }} style={selectStyle}>
           <option value="Todos">Todos los tipos</option>
           <option value="Torneo">Torneos</option>
           <option value="Juego">Juegos Rápidos</option>
         </select>
-        <select value={gameFilter} onChange={e => setGameFilter(e.target.value)} style={selectStyle}>
+        <select value={gameFilter} onChange={e => { setGameFilter(e.target.value); setPage(0); }} style={selectStyle}>
           {gameNames.map(n => <option key={n}>{n}</option>)}
         </select>
         {(resultado !== 'Todos' || gameFilter !== 'Todos' || typeFilter !== 'Todos') && (
-          <button onClick={() => { setResultado('Todos'); setGameFilter('Todos'); setTypeFilter('Todos'); }}
+          <button onClick={resetFilters}
             style={{ padding: '7px 12px', fontSize: 11, fontWeight: 600, border: '1px solid var(--grey-200)', background: 'transparent', cursor: 'pointer', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             Limpiar ×
           </button>
@@ -118,50 +223,66 @@ export default function PlayerMatchesPage() {
       {/* Table */}
       {allMatches.length === 0 ? (
         <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '48px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
-          Todavía no jugaste ningún partido.
+          Todavía no jugaste ningún juego.
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '32px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
-          No hay partidos con los filtros seleccionados.
+          No hay juegos con los filtros seleccionados.
         </div>
       ) : (
-        <div style={{ border: '1px solid var(--grey-200)' }}>
-          <table className="rank-table">
-            <thead>
-              <tr>
-                <th style={{ paddingLeft: 24 }}>Fecha</th>
-                <th>Juego / Torneo</th>
-                <th>Ronda</th>
-                <th>Mi pareja</th>
-                <th>Rivales</th>
-                <th style={{ textAlign: 'center' }}>Score</th>
-                <th style={{ textAlign: 'center' }}>Res.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((m) => (
-                <tr key={m.id}>
-                  <td style={{ paddingLeft: 24, fontSize: 12, color: 'var(--grey-400)', whiteSpace: 'nowrap' }}>{m.date}</td>
-                  <td style={{ fontSize: 13, fontWeight: 500 }}>
-                    <div>{m.gameName}</div>
-                    <div style={{ fontSize: 10, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 1 }}>
-                      {m.entityType === 'tournament' ? 'Torneo' : 'Juego Rápido'}
-                    </div>
-                  </td>
-                  <td style={{ fontSize: 12, color: 'var(--grey-400)' }}>R{m.roundNum}</td>
-                  <td style={{ fontSize: 13, color: 'var(--grey-500)' }}>{m.partner}</td>
-                  <td style={{ fontSize: 13, color: 'var(--grey-500)' }}>{m.opponents}</td>
-                  <td style={{ textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600 }}>{m.scoreLabel}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    <span style={{ display: 'inline-flex', width: 28, height: 28, borderRadius: '50%', background: m.result === 'V' ? 'var(--turf-green)' : m.result === 'T' ? '#f5a623' : '#ee0005', color: '#fff', fontSize: 11, fontWeight: 700, alignItems: 'center', justifyContent: 'center' }}>
-                      {m.result}
-                    </span>
-                  </td>
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: 'var(--grey-400)', fontWeight: 600 }}>
+              {filtered.length > PAGE_SIZE
+                ? `${safePage * PAGE_SIZE + 1}–${Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} de ${filtered.length} juegos`
+                : `${filtered.length} juego${filtered.length !== 1 ? 's' : ''}`}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>Click en una fila para ver el juego</div>
+          </div>
+
+          <div style={{ border: '1px solid var(--grey-200)' }}>
+            <table className="rank-table">
+              <thead>
+                <tr>
+                  {thSort('date', 'Fecha')}
+                  <th>Juego / Torneo</th>
+                  <th>Ronda</th>
+                  {thSort('pareja', 'Mi pareja')}
+                  {thSort('rivales', 'Rivales')}
+                  <th style={{ textAlign: 'center' }}>Score</th>
+                  <th style={{ textAlign: 'center' }}>Res.</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {pageItems.map((m) => (
+                  <tr key={m.id} onClick={() => router.push(getLiveUrl(m))}
+                    style={{ cursor: 'pointer' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--grey-50)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                    <td style={{ paddingLeft: 24, fontSize: 12, color: 'var(--grey-400)', whiteSpace: 'nowrap' }}>{m.date}</td>
+                    <td style={{ fontSize: 13, fontWeight: 500 }}>
+                      <div>{m.gameName}</div>
+                      <div style={{ fontSize: 10, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 1 }}>
+                        {m.entityType === 'tournament' ? 'Torneo' : 'Juego Rápido'}
+                      </div>
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--grey-400)' }}>R{m.roundNum}</td>
+                    <td style={{ fontSize: 13, color: 'var(--grey-500)' }}>{m.partner}</td>
+                    <td style={{ fontSize: 13, color: 'var(--grey-500)' }}>{m.opponents}</td>
+                    <td style={{ textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600 }}>{m.scoreLabel}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span style={{ display: 'inline-flex', width: 28, height: 28, borderRadius: '50%', background: m.result === 'V' ? 'var(--turf-green)' : m.result === 'T' ? '#f5a623' : '#ee0005', color: '#fff', fontSize: 11, fontWeight: 700, alignItems: 'center', justifyContent: 'center' }}>
+                        {m.result}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <PageNav page={safePage} totalPages={totalPages} onPage={p => setPage(p)} />
+        </>
       )}
     </div>
   );

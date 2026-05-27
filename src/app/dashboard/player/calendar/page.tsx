@@ -332,9 +332,9 @@ export default function PlayerCalendarPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
         {[
           { label: 'Torneos inscripto',  value: String(tournamentsCount) },
-          { label: 'Partidos de liga',   value: '0' },
+          { label: 'Juegos de liga',   value: '0' },
           { label: 'Juegos Rápidos',     value: String(quickGamesCount), color: '#7c3aed' },
-          { label: 'Partidos amistosos', value: '0' },
+          { label: 'Juegos amistosos', value: '0' },
         ].map((s) => (
           <div key={s.label} style={{ background: '#fff', padding: '20px 24px' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 600, color: s.color || 'var(--black)', lineHeight: 1 }}>{s.value}</div>

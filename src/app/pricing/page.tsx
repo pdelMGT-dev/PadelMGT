@@ -10,9 +10,9 @@ const plans = [
     features: [
       'Perfil de jugador',
       'Ranking personal',
-      'Historial de partidos',
+      'Historial de juegos',
       'Invitaciones por QR',
-      'Partidos rápidos',
+      'Juegos rápidos',
       'Torneos limitados (3/mes)',
     ],
     cta: 'Crear cuenta gratis',

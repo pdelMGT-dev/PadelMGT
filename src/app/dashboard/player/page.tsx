@@ -357,7 +357,7 @@ export default function PlayerHomePage() {
       {/* Recent matches */}
       <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
         <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--grey-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)' }}>Últimos Partidos</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)' }}>Últimos Juegos</div>
           <Link href="/dashboard/player/matches" style={{ fontSize: 12, color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Ver todos →</Link>
         </div>
         {recentMatches.length === 0 ? (

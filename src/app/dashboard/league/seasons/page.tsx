@@ -26,7 +26,7 @@ export default function LeagueSeasonsPage() {
             <div style={{ display: 'flex', gap: 32 }}>
               {[
                 { label: 'Equipos', v: active.teams },
-                { label: 'Partidos', v: `${active.played}/${active.matches}` },
+                { label: 'Juegos', v: `${active.played}/${active.matches}` },
                 { label: 'Inicio', v: active.start },
                 { label: 'Final', v: active.end },
               ].map(s => (

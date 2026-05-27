@@ -10,7 +10,7 @@ const courts = [
   { id: 5, name: 'Cancha 5', surface: 'Cristal', indoor: true, status: 'maintenance', until: '2026-05-14', reservation: null, maintenanceNext: '2026-05-14' },
   { id: 6, name: 'Cancha 6', surface: 'Moqueta', indoor: true, status: 'occupied', until: '20:30', reservation: 'Liga Club Interna', maintenanceNext: '2026-06-15' },
   { id: 7, name: 'Cancha 7', surface: 'Cristal', indoor: false, status: 'free', until: null, reservation: null, maintenanceNext: '2026-07-01' },
-  { id: 8, name: 'Cancha 8', surface: 'Moqueta', indoor: false, status: 'occupied', until: '21:00', reservation: 'Partido amistoso', maintenanceNext: '2026-06-01' },
+  { id: 8, name: 'Cancha 8', surface: 'Moqueta', indoor: false, status: 'occupied', until: '21:00', reservation: 'Juego amistoso', maintenanceNext: '2026-06-01' },
 ];
 
 const schedule = [
@@ -18,8 +18,8 @@ const schedule = [
   { time: '09:00', courts: ['Diego G.', 'Clase grupal', 'Carlos V.', null, null, null, null, null] },
   { time: '10:00', courts: ['Torneo', 'Torneo', 'Torneo', 'Torneo', null, null, null, null] },
   { time: '11:00', courts: ['Torneo', 'Torneo', 'Torneo', 'Torneo', null, null, null, null] },
-  { time: '19:00', courts: ['Diego G.', null, 'Torneo', null, null, 'Liga', null, 'Partido'] },
-  { time: '20:00', courts: ['Diego G.', null, 'Torneo', null, null, 'Liga', null, 'Partido'] },
+  { time: '19:00', courts: ['Diego G.', null, 'Torneo', null, null, 'Liga', null, 'Juego'] },
+  { time: '20:00', courts: ['Diego G.', null, 'Torneo', null, null, 'Liga', null, 'Juego'] },
   { time: '21:00', courts: ['Diego G.', null, 'Torneo', null, null, null, null, null] },
 ];
 

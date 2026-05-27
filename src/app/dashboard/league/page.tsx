@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 const stats = [
   { label: 'Equipos', value: '12', delta: 'Temporada 2026' },
-  { label: 'Partidos jug.', value: '48', delta: 'de 132 totales' },
+  { label: 'Juegos jug.', value: '48', delta: 'de 132 totales' },
   { label: 'Jornada actual', value: '8', delta: 'de 18 jornadas' },
   { label: 'Líder', value: '#1 Madrid', delta: '+4 pts sobre #2' },
 ];
