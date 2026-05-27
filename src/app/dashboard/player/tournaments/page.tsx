@@ -161,6 +161,7 @@ export default function PlayerTournamentsPage() {
   // ── My tournaments ──────────────────────────────────────────────────────────
   const [myTournaments, setMyTournaments] = useState<Tournament[]>([]);
   const [historialFilter, setHistorialFilter] = useState<'todos' | 'finalizado' | 'cancelado' | 'organizador' | 'jugador'>('todos');
+  const [histPage, setHistPage]     = useState(0);
   const [activeView, setActiveView] = useState<'icons' | 'list'>('icons');
 
   // ── Success ─────────────────────────────────────────────────────────────────
@@ -1373,36 +1374,68 @@ export default function PlayerTournamentsPage() {
       </div>
 
       {/* Historial */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
-          <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
-            Historial ({finishedTournaments.length}{historialFilter !== 'todos' ? ` de ${allFinished.length}` : ''})
+      {(() => {
+        const PAGE = 10;
+        const totalPages = Math.ceil(finishedTournaments.length / PAGE);
+        const page = Math.min(histPage, Math.max(0, totalPages - 1));
+        const pageTournaments = finishedTournaments.slice(page * PAGE, page * PAGE + PAGE);
+        return (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
+                  Historial ({finishedTournaments.length}{historialFilter !== 'todos' ? ` de ${allFinished.length}` : ''})
+                </div>
+                {totalPages > 1 && (
+                  <div style={{ fontSize: 10, color: 'var(--grey-400)', fontWeight: 600 }}>
+                    {page * PAGE + 1}–{Math.min((page + 1) * PAGE, finishedTournaments.length)}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {(['todos', 'finalizado', 'cancelado', 'organizador', 'jugador'] as const).map(f => (
+                  <button key={f} onClick={() => { setHistorialFilter(f); setHistPage(0); }} style={{
+                    padding: '3px 10px', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                    textTransform: 'uppercase', border: '1px solid',
+                    borderColor: historialFilter === f ? 'var(--black)' : 'var(--grey-200)',
+                    background: historialFilter === f ? 'var(--black)' : 'transparent',
+                    color: historialFilter === f ? '#fff' : 'var(--grey-400)',
+                    cursor: 'pointer',
+                  }}>
+                    {f === 'todos' ? 'Todos' : f === 'finalizado' ? 'Finalizado' : f === 'cancelado' ? 'Cancelado' : f === 'organizador' ? 'Organizador' : 'Jugador'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {finishedTournaments.length === 0 ? (
+              <div style={{ padding: '32px', background: '#fff', border: '1px solid var(--grey-200)', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
+                No hay torneos finalizados todavía.
+              </div>
+            ) : (
+              <>
+                <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+                  {pageTournaments.map(t => <TournamentCard key={t.id} t={t} />)}
+                </div>
+                {totalPages > 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 12 }}>
+                    <button onClick={() => setHistPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                      style={{ padding: '5px 14px', fontSize: 11, fontWeight: 700, border: '1px solid var(--grey-200)', background: page === 0 ? 'var(--grey-50)' : '#fff', color: page === 0 ? 'var(--grey-300)' : 'var(--grey-600)', cursor: page === 0 ? 'default' : 'pointer', letterSpacing: '0.06em' }}>
+                      ← Ant
+                    </button>
+                    <span style={{ fontSize: 10, color: 'var(--grey-400)', fontWeight: 600, minWidth: 64, textAlign: 'center' }}>
+                      {page + 1} / {totalPages}
+                    </span>
+                    <button onClick={() => setHistPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
+                      style={{ padding: '5px 14px', fontSize: 11, fontWeight: 700, border: '1px solid var(--grey-200)', background: page === totalPages - 1 ? 'var(--grey-50)' : '#fff', color: page === totalPages - 1 ? 'var(--grey-300)' : 'var(--grey-600)', cursor: page === totalPages - 1 ? 'default' : 'pointer', letterSpacing: '0.06em' }}>
+                      Sig →
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {(['todos', 'finalizado', 'cancelado', 'organizador', 'jugador'] as const).map(f => (
-              <button key={f} onClick={() => setHistorialFilter(f)} style={{
-                padding: '3px 10px', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
-                textTransform: 'uppercase', border: '1px solid',
-                borderColor: historialFilter === f ? 'var(--black)' : 'var(--grey-200)',
-                background: historialFilter === f ? 'var(--black)' : 'transparent',
-                color: historialFilter === f ? '#fff' : 'var(--grey-400)',
-                cursor: 'pointer',
-              }}>
-                {f === 'todos' ? 'Todos' : f === 'finalizado' ? 'Finalizado' : f === 'cancelado' ? 'Cancelado' : f === 'organizador' ? 'Organizador' : 'Jugador'}
-              </button>
-            ))}
-          </div>
-        </div>
-        {finishedTournaments.length === 0 ? (
-          <div style={{ padding: '32px', background: '#fff', border: '1px solid var(--grey-200)', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
-            No hay torneos finalizados todavía.
-          </div>
-        ) : (
-          <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
-            {finishedTournaments.map(t => <TournamentCard key={t.id} t={t} />)}
-          </div>
-        )}
-      </div>
+        );
+      })()}
     </div>
   );
 }

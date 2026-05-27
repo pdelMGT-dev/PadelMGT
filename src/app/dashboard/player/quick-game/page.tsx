@@ -209,6 +209,7 @@ export default function QuickGamePage() {
   const [invView, setInvView]       = useState<'icons' | 'list'>('icons');
   const [myInvitations, setMyInvitations] = useState<Invitation[]>([]);
   const [invToast, setInvToast]     = useState<string | null>(null);
+  const [histPage, setHistPage]     = useState(0);
 
   const reloadGames = useCallback(() => {
     setGames(getAllGames());
@@ -480,7 +481,9 @@ export default function QuickGamePage() {
         (uid && g.invitedPlayers?.some(p => p.id === uid && p.status === 'accepted'))
       )
     );
-    const finishedGames = games.filter(g => g.status === 'finished');
+    const finishedGames = games
+      .filter(g => g.status === 'finished')
+      .sort((a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || '')));
 
     function gameShareUrl(code: string) {
       return `${window.location.origin}/quick-game/${code}`;
@@ -718,49 +721,77 @@ export default function QuickGamePage() {
         </div>
 
         {/* ── HISTORIAL ────────────────────────────────────────────────────── */}
-        {finishedGames.length > 0 && (
-          <div>
-            <div style={secTitle}>Historial ({finishedGames.length})</div>
-            <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
-              {finishedGames.map((g, idx) => {
-                const isCreator = g.creatorId === uid || (uid && g.players.some(p => p.id === uid && p.isCreator));
-                const myRankingEntry = uid ? getRankingHistoryForGame(g.id).find(e => e.playerId === uid) : null;
-                const standing = uid ? g.standings.find(s => s.playerId === uid) : null;
-                const posIdx = uid ? g.standings.findIndex(s => s.playerId === uid) : -1;
-                return (
-                  <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', borderTop: idx === 0 ? 'none' : '1px solid var(--grey-100)' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>{g.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{g.date} · {g.time} · {g.club}, {g.city}</div>
-                      {standing && (
-                        <div style={{ fontSize: 11, color: 'var(--grey-500)', marginTop: 2 }}>
-                          Posición {posIdx + 1}/{g.standings.length} · {standing.pts} pts · {standing.wins}W
+        {finishedGames.length > 0 && (() => {
+          const PAGE = 10;
+          const totalPages = Math.ceil(finishedGames.length / PAGE);
+          const page = Math.min(histPage, totalPages - 1);
+          const pageGames = finishedGames.slice(page * PAGE, page * PAGE + PAGE);
+          return (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={secTitle}>Historial ({finishedGames.length})</div>
+                {totalPages > 1 && (
+                  <div style={{ fontSize: 10, color: 'var(--grey-400)', fontWeight: 600 }}>
+                    {page * PAGE + 1}–{Math.min((page + 1) * PAGE, finishedGames.length)} de {finishedGames.length}
+                  </div>
+                )}
+              </div>
+              <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+                {pageGames.map((g, idx) => {
+                  const isCreator = g.creatorId === uid || (uid && g.players.some(p => p.id === uid && p.isCreator));
+                  const myRankingEntry = uid ? getRankingHistoryForGame(g.id).find(e => e.playerId === uid) : null;
+                  const standing = uid ? g.standings.find(s => s.playerId === uid) : null;
+                  const posIdx = uid ? g.standings.findIndex(s => s.playerId === uid) : -1;
+                  return (
+                    <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', borderTop: idx === 0 ? 'none' : '1px solid var(--grey-100)' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>{g.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{g.date} · {g.time} · {g.club}, {g.city}</div>
+                        {standing && (
+                          <div style={{ fontSize: 11, color: 'var(--grey-500)', marginTop: 2 }}>
+                            Posición {posIdx + 1}/{g.standings.length} · {standing.pts} pts · {standing.wins}W
+                          </div>
+                        )}
+                      </div>
+                      {myRankingEntry && (
+                        <div style={{
+                          display: 'flex', flexDirection: 'column', alignItems: 'center',
+                          padding: '6px 10px',
+                          background: myRankingEntry.delta > 0 ? '#dcfce7' : myRankingEntry.delta < 0 ? '#fee2e2' : '#fef3c7',
+                          flexShrink: 0,
+                        }}>
+                          <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800, color: myRankingEntry.delta > 0 ? '#166534' : myRankingEntry.delta < 0 ? '#ee0005' : '#b45309' }}>
+                            {myRankingEntry.delta > 0 ? '+' : ''}{myRankingEntry.delta}
+                          </span>
+                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: myRankingEntry.delta > 0 ? '#166534' : myRankingEntry.delta < 0 ? '#ee0005' : '#b45309' }}>pts ranking</span>
                         </div>
                       )}
+                      <Link href={`/dashboard/player/quick-game/${g.id}`}
+                        style={{ padding: '6px 14px', background: 'var(--grey-100)', color: 'var(--grey-500)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                        {isCreator ? 'Ver' : 'Resultados'}
+                      </Link>
                     </div>
-                    {myRankingEntry && (
-                      <div style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center',
-                        padding: '6px 10px',
-                        background: myRankingEntry.delta > 0 ? '#dcfce7' : myRankingEntry.delta < 0 ? '#fee2e2' : '#fef3c7',
-                        flexShrink: 0,
-                      }}>
-                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800, color: myRankingEntry.delta > 0 ? '#166534' : myRankingEntry.delta < 0 ? '#ee0005' : '#b45309' }}>
-                          {myRankingEntry.delta > 0 ? '+' : ''}{myRankingEntry.delta}
-                        </span>
-                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: myRankingEntry.delta > 0 ? '#166534' : myRankingEntry.delta < 0 ? '#ee0005' : '#b45309' }}>pts ranking</span>
-                      </div>
-                    )}
-                    <Link href={`/dashboard/player/quick-game/${g.id}`}
-                      style={{ padding: '6px 14px', background: 'var(--grey-100)', color: 'var(--grey-500)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                      {isCreator ? 'Ver' : 'Resultados'}
-                    </Link>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              {totalPages > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 12 }}>
+                  <button onClick={() => setHistPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                    style={{ padding: '5px 14px', fontSize: 11, fontWeight: 700, border: '1px solid var(--grey-200)', background: page === 0 ? 'var(--grey-50)' : '#fff', color: page === 0 ? 'var(--grey-300)' : 'var(--grey-600)', cursor: page === 0 ? 'default' : 'pointer', letterSpacing: '0.06em' }}>
+                    ← Ant
+                  </button>
+                  <span style={{ fontSize: 10, color: 'var(--grey-400)', fontWeight: 600, minWidth: 64, textAlign: 'center' }}>
+                    {page + 1} / {totalPages}
+                  </span>
+                  <button onClick={() => setHistPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
+                    style={{ padding: '5px 14px', fontSize: 11, fontWeight: 700, border: '1px solid var(--grey-200)', background: page === totalPages - 1 ? 'var(--grey-50)' : '#fff', color: page === totalPages - 1 ? 'var(--grey-300)' : 'var(--grey-600)', cursor: page === totalPages - 1 ? 'default' : 'pointer', letterSpacing: '0.06em' }}>
+                    Sig →
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
       </div>
     );
