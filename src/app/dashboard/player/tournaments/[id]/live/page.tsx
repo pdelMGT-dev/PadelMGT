@@ -1035,11 +1035,9 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
         {/* ── CLASIFICACIÓN + RANKING ── */}
         {t.standings.length > 0 && (() => {
-          const POSITION_PRIZES = [250, 175, 125, 62, 25];
           function getProjectedRankingPts(position: number, standing: Standing): number {
-            const positionPrize = position < POSITION_PRIZES.length ? POSITION_PRIZES[position] : 0;
-            const perGameBonus = standing.wins * 3 + (standing.draws ?? 0) * 1 + (standing.losses ?? 0) * (-1);
-            return positionPrize + perGameBonus;
+            void position;
+            return standing.wins * 3 + (standing.draws ?? 0) * 1 + (standing.losses ?? 0) * (-1);
           }
 
           const liveStandings = calculateStandings(t);
