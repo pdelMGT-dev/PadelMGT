@@ -24,7 +24,7 @@ function exportCSV(rows: Record<string, unknown>[], filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+function Modal({ children, onClose, maxWidth = 560 }: { children: React.ReactNode; onClose: () => void; maxWidth?: number }) {
   return (
     <div
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
@@ -35,7 +35,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
     >
       <div style={{
         background: '#fff', borderRadius: 8, padding: '32px 36px',
-        width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
+        width: '100%', maxWidth, maxHeight: '90vh', overflowY: 'auto',
         boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
       }}>
         {children}
@@ -67,6 +67,47 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 10, marginTop: 4 }}>
+      {label}
+    </div>
+  );
+}
+
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
+      <span style={{ color: 'var(--grey-500)', flexShrink: 0, marginRight: 12 }}>{label}</span>
+      <span style={{ fontWeight: 600, textAlign: 'right' }}>{children}</span>
+    </div>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy(e: React.MouseEvent) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+  return (
+    <button onClick={handleCopy} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 10, border: '1px solid var(--grey-200)', borderRadius: 3, cursor: 'pointer', background: copied ? '#dcfce7' : '#f9fafb', color: copied ? '#166534' : 'var(--grey-500)', fontWeight: 600, lineHeight: 1.6 }}>
+      {copied ? 'Copiado' : 'Copiar'}
+    </button>
+  );
+}
+
+function Chip({ label }: { label: string }) {
+  return (
+    <span style={{ display: 'inline-block', background: 'var(--grey-100)', color: 'var(--grey-600)', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500, margin: '2px' }}>
+      {label}
+    </span>
+  );
+}
+
 function StatusBadge({ status }: { status: SAClub['status'] }) {
   const cfg = {
     active:   { label: 'Activo',   bg: '#dcfce7', color: '#166534' },
@@ -94,6 +135,7 @@ function PlanBadge({ plan }: { plan: SAClub['plan'] }) {
   );
 }
 
+// ── Club Edit Form ─────────────────────────────────────────────────────────────
 function ClubForm({
   initial,
   onSave,
@@ -106,12 +148,21 @@ function ClubForm({
   mode: 'create' | 'edit';
 }) {
   const [form, setForm] = useState<Partial<SAClub>>({
-    name: '', city: '', country: 'ES', courts: 0, members: 0,
-    status: 'pending', adminEmail: '', plan: 'free', ...initial,
+    name: '', clubType: 'Club Privado', city: '', country: 'ES',
+    address: '', description: '', courts: 0, courtTypes: [], amenities: [],
+    members: 0, status: 'pending', adminEmail: '', plan: 'free',
+    ownerName: '', ownerPhone: '', ownerEmail: '', message: '',
+    ...initial,
   });
+  const [courtTypesInput, setCourtTypesInput] = useState((initial.courtTypes ?? []).join(', '));
+  const [amenitiesInput, setAmenitiesInput] = useState((initial.amenities ?? []).join(', '));
 
   function set(k: keyof SAClub, v: unknown) {
     setForm(f => ({ ...f, [k]: v }));
+  }
+
+  function parseTags(val: string): string[] {
+    return val.split(',').map(s => s.trim()).filter(Boolean);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -120,12 +171,22 @@ function ClubForm({
     onSave({
       id: form.id ?? uid(),
       name: form.name ?? '',
+      clubType: form.clubType ?? 'Club Privado',
       city: form.city ?? '',
       country: form.country ?? 'ES',
+      address: form.address ?? '',
+      description: form.description ?? '',
       courts: form.courts ?? 0,
+      courtTypes: parseTags(courtTypesInput),
+      amenities: parseTags(amenitiesInput),
       members: form.members ?? 0,
       status: form.status ?? 'pending',
       adminEmail: form.adminEmail ?? '',
+      ownerName: form.ownerName ?? '',
+      ownerPhone: form.ownerPhone ?? '',
+      ownerEmail: form.ownerEmail ?? '',
+      message: form.message ?? '',
+      rejectReason: form.rejectReason ?? undefined,
       joinedAt: form.joinedAt ?? now,
       plan: form.plan ?? 'free',
     });
@@ -136,12 +197,16 @@ function ClubForm({
       <h2 style={{ margin: '0 0 8px', fontFamily: 'var(--font-display)', fontSize: 20 }}>
         {mode === 'create' ? 'Nuevo Club' : 'Editar Club'}
       </h2>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <Field label="Nombre del Club">
           <input style={inputStyle} required value={form.name ?? ''} onChange={e => set('name', e.target.value)} />
         </Field>
-        <Field label="Email del Admin">
-          <input style={inputStyle} type="email" value={form.adminEmail ?? ''} onChange={e => set('adminEmail', e.target.value)} />
+        <Field label="Tipo de Club">
+          <input style={inputStyle} value={form.clubType ?? ''} onChange={e => set('clubType', e.target.value)} placeholder="Club Privado, Club Publico..." />
+        </Field>
+        <Field label="Direccion">
+          <input style={inputStyle} value={form.address ?? ''} onChange={e => set('address', e.target.value)} />
         </Field>
         <Field label="Ciudad">
           <input style={inputStyle} value={form.city ?? ''} onChange={e => set('city', e.target.value)} />
@@ -149,10 +214,16 @@ function ClubForm({
         <Field label="Pais">
           <input style={inputStyle} value={form.country ?? ''} onChange={e => set('country', e.target.value)} />
         </Field>
-        <Field label="Canchas">
+        <Field label="Numero de Canchas">
           <input style={inputStyle} type="number" min={0} value={form.courts ?? 0} onChange={e => set('courts', Number(e.target.value))} />
         </Field>
-        <Field label="Miembros">
+        <Field label="Tipos de Cancha (separados por coma)">
+          <input style={inputStyle} value={courtTypesInput} onChange={e => setCourtTypesInput(e.target.value)} placeholder="Cristal, Muro, Hierba Artificial" />
+        </Field>
+        <Field label="Amenidades (separadas por coma)">
+          <input style={inputStyle} value={amenitiesInput} onChange={e => setAmenitiesInput(e.target.value)} placeholder="Vestuarios, Cafeteria, Parking" />
+        </Field>
+        <Field label="Numero de Miembros">
           <input style={inputStyle} type="number" min={0} value={form.members ?? 0} onChange={e => set('members', Number(e.target.value))} />
         </Field>
         <Field label="Plan">
@@ -170,7 +241,28 @@ function ClubForm({
             <option value="rejected">Rechazado</option>
           </select>
         </Field>
+        <Field label="Email Admin">
+          <input style={inputStyle} type="email" value={form.adminEmail ?? ''} onChange={e => set('adminEmail', e.target.value)} />
+        </Field>
+        <Field label="Nombre del Propietario">
+          <input style={inputStyle} value={form.ownerName ?? ''} onChange={e => set('ownerName', e.target.value)} />
+        </Field>
+        <Field label="Email del Propietario">
+          <input style={inputStyle} type="email" value={form.ownerEmail ?? ''} onChange={e => set('ownerEmail', e.target.value)} />
+        </Field>
+        <Field label="Telefono del Propietario">
+          <input style={inputStyle} value={form.ownerPhone ?? ''} onChange={e => set('ownerPhone', e.target.value)} />
+        </Field>
       </div>
+
+      <Field label="Descripcion del Club">
+        <textarea
+          style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
+          value={form.description ?? ''}
+          onChange={e => set('description', e.target.value)}
+        />
+      </Field>
+
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
         <button type="button" onClick={onCancel} style={{ padding: '9px 20px', background: 'transparent', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
         <button type="submit" style={{ padding: '9px 24px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
@@ -181,6 +273,7 @@ function ClubForm({
   );
 }
 
+// ── Main Page ──────────────────────────────────────────────────────────────────
 export default function ClubsPage() {
   const [clubs, setClubs] = useState<SAClub[]>([]);
   const [tab, setTab] = useState<'all' | 'pending'>('all');
@@ -189,12 +282,16 @@ export default function ClubsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editClub, setEditClub] = useState<SAClub | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ step: number; clubId: string } | null>(null);
-  const [rejectConfirm, setRejectConfirm] = useState<{ step: number; clubId: string } | null>(null);
+  const [rejectConfirm, setRejectConfirm] = useState<{ step: number; clubId: string; reason: string } | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: number; msg: string; ok: boolean }>>([]);
   const [selectedClub, setSelectedClub] = useState<SAClub | null>(null);
   const [sortKey, setSortKey] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
+  // Drawer inline states
+  const [drawerPlan, setDrawerPlan] = useState<SAClub['plan']>('free');
+  const [showDrawerRejectInput, setShowDrawerRejectInput] = useState(false);
+  const [drawerRejectReason, setDrawerRejectReason] = useState('');
 
   useEffect(() => {
     setClubs(getSAClubs());
@@ -205,6 +302,11 @@ export default function ClubsPage() {
       }
     });
   }, []);
+
+  // Sync drawer plan when selectedClub changes
+  useEffect(() => {
+    if (selectedClub) setDrawerPlan(selectedClub.plan);
+  }, [selectedClub?.id]);
 
   function toast(msg: string, ok = true) {
     const id = Date.now();
@@ -246,13 +348,13 @@ export default function ClubsPage() {
     toast('Club aprobado');
   }
 
-  function handleRejectStep1(clubId: string) { setRejectConfirm({ step: 1, clubId }); }
+  function handleRejectStep1(clubId: string) { setRejectConfirm({ step: 1, clubId, reason: '' }); }
   function handleRejectStep2() { if (!rejectConfirm) return; setRejectConfirm({ ...rejectConfirm, step: 2 }); }
   function handleRejectFinal() {
     if (!rejectConfirm) return;
-    const updated = clubs.map(c => c.id === rejectConfirm.clubId ? { ...c, status: 'rejected' as const } : c);
+    const updated = clubs.map(c => c.id === rejectConfirm.clubId ? { ...c, status: 'rejected' as const, rejectReason: rejectConfirm.reason || undefined } : c);
     saveAndRefresh(updated);
-    if (selectedClub?.id === rejectConfirm.clubId) setSelectedClub(prev => prev ? { ...prev, status: 'rejected' as const } : prev);
+    if (selectedClub?.id === rejectConfirm.clubId) setSelectedClub(prev => prev ? { ...prev, status: 'rejected' as const, rejectReason: rejectConfirm.reason || undefined } : prev);
     setRejectConfirm(null);
     toast('Club rechazado');
   }
@@ -283,16 +385,26 @@ export default function ClubsPage() {
     const updated = clubs.map(c => c.id === clubId ? { ...c, plan } : c);
     saveAndRefresh(updated);
     if (selectedClub?.id === clubId) setSelectedClub(prev => prev ? { ...prev, plan } : prev);
+    setDrawerPlan(plan);
     toast('Plan actualizado');
   }
 
-  const pending = clubs.filter(c => c.status === 'pending');
+  function handleDrawerReject() {
+    if (!selectedClub) return;
+    const updated = clubs.map(c => c.id === selectedClub.id ? { ...c, status: 'rejected' as const, rejectReason: drawerRejectReason || undefined } : c);
+    saveAndRefresh(updated);
+    setSelectedClub(prev => prev ? { ...prev, status: 'rejected' as const, rejectReason: drawerRejectReason || undefined } : prev);
+    setShowDrawerRejectInput(false);
+    setDrawerRejectReason('');
+    toast('Club rechazado');
+  }
 
+  const pending = clubs.filter(c => c.status === 'pending');
   const baseList = tab === 'pending' ? pending : clubs;
 
   const filtered = baseList.filter(c => {
     const q = search.toLowerCase();
-    const matchSearch = !q || c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.adminEmail.toLowerCase().includes(q);
+    const matchSearch = !q || c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.adminEmail.toLowerCase().includes(q) || c.ownerName.toLowerCase().includes(q);
     const matchPlan = planFilter === 'all' || c.plan === planFilter;
     return matchSearch && matchPlan;
   });
@@ -359,7 +471,7 @@ export default function ClubsPage() {
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button
-            onClick={() => exportCSV(filtered.map(c => ({ Nombre: c.name, Ciudad: c.city, Pais: c.country, Canchas: c.courts, Miembros: c.members, Plan: c.plan, Estado: c.status, Admin: c.adminEmail, Fecha: c.joinedAt })), 'clubes.csv')}
+            onClick={() => exportCSV(filtered.map(c => ({ Nombre: c.name, Tipo: c.clubType, Ciudad: c.city, Pais: c.country, Direccion: c.address, Canchas: c.courts, TiposCanchas: c.courtTypes.join(';'), Amenidades: c.amenities.join(';'), Miembros: c.members, Plan: c.plan, Estado: c.status, AdminEmail: c.adminEmail, Propietario: c.ownerName, PropietarioEmail: c.ownerEmail, PropietarioTel: c.ownerPhone, Fecha: c.joinedAt })), 'clubes.csv')}
             style={{ padding: '9px 16px', border: '1px solid var(--grey-200)', borderRadius: 4, background: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', color: 'var(--grey-600)', textTransform: 'uppercase' }}
           >
             Exportar CSV
@@ -388,10 +500,10 @@ export default function ClubsPage() {
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center' }}>
         <input
-          placeholder="Buscar por nombre, ciudad o email..."
+          placeholder="Buscar por nombre, ciudad, admin o propietario..."
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
-          style={{ ...inputStyle, width: 320, flex: 'none' }}
+          style={{ ...inputStyle, width: 360, flex: 'none' }}
         />
         {tab === 'all' && (
           <select value={planFilter} onChange={e => { setPlanFilter(e.target.value); setPage(1); }}
@@ -421,14 +533,23 @@ export default function ClubsPage() {
               onClick={() => setSelectedClub(club)}
             >
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, fontFamily: 'var(--font-display)' }}>{club.name}</div>
-                <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 8 }}>{club.city}, {club.country}</div>
-                <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--grey-500)' }}>
+                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2, fontFamily: 'var(--font-display)' }}>{club.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 6 }}>
+                  {club.clubType} — {club.city}, {club.country}
+                </div>
+                {club.address && <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 6 }}>{club.address}</div>}
+                <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--grey-500)', flexWrap: 'wrap' }}>
                   <span>Admin: <strong>{club.adminEmail}</strong></span>
+                  <span>Propietario: <strong>{club.ownerName || '—'}</strong></span>
                   <span>Canchas: <strong>{club.courts}</strong></span>
                   <span>Miembros: <strong>{club.members}</strong></span>
                   <span>Plan: <PlanBadge plan={club.plan} /></span>
                 </div>
+                {club.message && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: 'var(--grey-500)', fontStyle: 'italic', borderLeft: '3px solid var(--grey-200)', paddingLeft: 10 }}>
+                    "{club.message}"
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                 <button onClick={() => handleApprove(club.id)} style={{ padding: '8px 18px', background: 'var(--turf-green)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -447,15 +568,15 @@ export default function ClubsPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-200)' }}>
-                  <th onClick={() => handleSort('name')} style={thStyle}>Nombre <SortIcon col="name" /></th>
-                  <th style={{ ...thStyle, cursor: 'default' }}>Ciudad</th>
-                  <th style={{ ...thStyle, cursor: 'default' }}>Pais</th>
+                  <th onClick={() => handleSort('name')} style={thStyle}>Nombre + Tipo <SortIcon col="name" /></th>
+                  <th style={{ ...thStyle, cursor: 'default' }}>Ciudad / Pais</th>
+                  <th style={{ ...thStyle, cursor: 'default' }}>Direccion</th>
                   <th onClick={() => handleSort('courts')} style={{ ...thStyle, textAlign: 'center' }}>Canchas <SortIcon col="courts" /></th>
                   <th onClick={() => handleSort('members')} style={{ ...thStyle, textAlign: 'center' }}>Miembros <SortIcon col="members" /></th>
                   <th style={{ ...thStyle, cursor: 'default' }}>Plan</th>
                   <th style={{ ...thStyle, cursor: 'default' }}>Estado</th>
-                  <th style={{ ...thStyle, cursor: 'default' }}>Admin</th>
-                  <th onClick={() => handleSort('joinedAt')} style={thStyle}>Fecha <SortIcon col="joinedAt" /></th>
+                  <th style={{ ...thStyle, cursor: 'default' }}>Propietario</th>
+                  <th onClick={() => handleSort('joinedAt')} style={thStyle}>Ingreso <SortIcon col="joinedAt" /></th>
                   <th style={{ ...thStyle, cursor: 'default' }}>Acciones</th>
                 </tr>
               </thead>
@@ -467,14 +588,20 @@ export default function ClubsPage() {
                     onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
                     onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
                   >
-                    <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--black)' }}>{c.name}</td>
-                    <td style={{ padding: '10px 14px', color: 'var(--grey-600)' }}>{c.city}</td>
-                    <td style={{ padding: '10px 14px', color: 'var(--grey-600)' }}>{c.country}</td>
+                    <td style={{ padding: '10px 14px' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--black)' }}>{c.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{c.clubType}</div>
+                    </td>
+                    <td style={{ padding: '10px 14px', color: 'var(--grey-600)', whiteSpace: 'nowrap' }}>{c.city}{c.city && c.country ? ' / ' : ''}{c.country}</td>
+                    <td style={{ padding: '10px 14px', color: 'var(--grey-500)', fontSize: 12, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.address}>{c.address || '—'}</td>
                     <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 700 }}>{c.courts}</td>
                     <td style={{ padding: '10px 14px', textAlign: 'center' }}>{c.members}</td>
                     <td style={{ padding: '10px 14px' }}><PlanBadge plan={c.plan} /></td>
                     <td style={{ padding: '10px 14px' }}><StatusBadge status={c.status} /></td>
-                    <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)' }}>{c.adminEmail}</td>
+                    <td style={{ padding: '10px 14px', fontSize: 12 }}>
+                      <div style={{ color: 'var(--grey-700)', fontWeight: 600 }}>{c.ownerName || '—'}</div>
+                      <div style={{ color: 'var(--grey-400)', fontSize: 11 }}>{c.ownerEmail || c.adminEmail}</div>
+                    </td>
                     <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{c.joinedAt}</td>
                     <td style={{ padding: '10px 14px' }} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -515,81 +642,183 @@ export default function ClubsPage() {
             style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', boxShadow: '-4px 0 40px rgba(0,0,0,0.15)', zIndex: 1010, overflowY: 'auto', padding: '32px 36px' }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-              <div>
-                <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Club</div>
-                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', lineHeight: 1.3 }}>{selectedClub.name}</h2>
+            {/* Close */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+              <button onClick={() => setSelectedClub(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', lineHeight: 1 }}>×</button>
+            </div>
+
+            {/* Section 1 — Identidad del Club */}
+            <div style={{ marginBottom: 20 }}>
+              <SectionHeader label="Identidad del Club" />
+              <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', lineHeight: 1.3 }}>{selectedClub.name}</h2>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>{selectedClub.clubType}</span>
+                <StatusBadge status={selectedClub.status} />
+                <PlanBadge plan={selectedClub.plan} />
               </div>
-              <button onClick={() => setSelectedClub(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', padding: '0 0 0 16px', lineHeight: 1 }}>×</button>
+              <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--grey-400)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                <span style={{ wordBreak: 'break-all' }}>{selectedClub.id}</span>
+                <CopyButton text={selectedClub.id} />
+              </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-              <StatusBadge status={selectedClub.status} />
-              <PlanBadge plan={selectedClub.plan} />
+            {/* Section 2 — Ubicacion */}
+            <div style={{ marginBottom: 20 }}>
+              <SectionHeader label="Ubicacion" />
+              {selectedClub.address && <InfoRow label="Direccion"><span>{selectedClub.address}</span></InfoRow>}
+              <InfoRow label="Ciudad"><span>{selectedClub.city || '—'}</span></InfoRow>
+              <InfoRow label="Pais"><span>{selectedClub.country || '—'}</span></InfoRow>
             </div>
 
-            {/* Stats tiles */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
-              <div style={{ background: 'var(--grey-50)', borderRadius: 6, padding: '14px 16px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 6 }}>Canchas</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 16, height: 16, background: 'var(--turf-green)', borderRadius: 2 }} />
-                  <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{selectedClub.courts}</div>
+            {/* Section 3 — Instalaciones */}
+            <div style={{ marginBottom: 20 }}>
+              <SectionHeader label="Instalaciones" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div style={{ background: 'var(--grey-50)', borderRadius: 6, padding: '14px 16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 4 }}>Canchas</div>
+                  <div style={{ fontSize: 32, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--turf-green)' }}>{selectedClub.courts}</div>
+                </div>
+                <div style={{ background: 'var(--grey-50)', borderRadius: 6, padding: '14px 16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 4 }}>Miembros</div>
+                  <div style={{ fontSize: 32, fontWeight: 800, fontFamily: 'var(--font-display)', color: '#3b82f6' }}>{selectedClub.members}</div>
                 </div>
               </div>
-              <div style={{ background: 'var(--grey-50)', borderRadius: 6, padding: '14px 16px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 6 }}>Miembros</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 16, height: 16, background: '#3b82f6', borderRadius: 2 }} />
-                  <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{selectedClub.members}</div>
+              {selectedClub.courtTypes.length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: 'var(--grey-400)', marginBottom: 4 }}>Tipos de cancha:</div>
+                  <div>{selectedClub.courtTypes.map(ct => <Chip key={ct} label={ct} />)}</div>
                 </div>
+              )}
+              {selectedClub.amenities.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--grey-400)', marginBottom: 4 }}>Amenidades:</div>
+                  <div>{selectedClub.amenities.map(a => <Chip key={a} label={a} />)}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Section 4 — Propietario / Admin */}
+            <div style={{ marginBottom: 20 }}>
+              <SectionHeader label="Propietario / Admin" />
+              <InfoRow label="Propietario"><span>{selectedClub.ownerName || '—'}</span></InfoRow>
+              {selectedClub.ownerEmail && (
+                <InfoRow label="Email Propietario">
+                  <a href={`mailto:${selectedClub.ownerEmail}`} style={{ color: 'var(--turf-green)', textDecoration: 'none', fontWeight: 600, fontSize: 12 }}>{selectedClub.ownerEmail}</a>
+                </InfoRow>
+              )}
+              {selectedClub.ownerPhone && <InfoRow label="Telefono"><span>{selectedClub.ownerPhone}</span></InfoRow>}
+              {selectedClub.adminEmail && selectedClub.adminEmail !== selectedClub.ownerEmail && (
+                <InfoRow label="Email Admin">
+                  <a href={`mailto:${selectedClub.adminEmail}`} style={{ color: 'var(--turf-green)', textDecoration: 'none', fontWeight: 600, fontSize: 12 }}>{selectedClub.adminEmail}</a>
+                </InfoRow>
+              )}
+            </div>
+
+            {/* Section 5 — Descripcion */}
+            {selectedClub.description && (
+              <div style={{ marginBottom: 20 }}>
+                <SectionHeader label="Descripcion" />
+                <p style={{ fontSize: 13, color: 'var(--grey-600)', lineHeight: 1.7, margin: 0 }}>{selectedClub.description}</p>
+              </div>
+            )}
+
+            {/* Section 6 — Solicitud original */}
+            {(selectedClub.message || selectedClub.rejectReason) && (
+              <div style={{ marginBottom: 20 }}>
+                <SectionHeader label="Solicitud Original" />
+                {selectedClub.message && (
+                  <blockquote style={{ margin: '0 0 10px', padding: '10px 14px', borderLeft: '3px solid var(--grey-200)', color: 'var(--grey-600)', fontSize: 13, fontStyle: 'italic', background: 'var(--grey-50)', borderRadius: '0 4px 4px 0' }}>
+                    "{selectedClub.message}"
+                  </blockquote>
+                )}
+                {selectedClub.rejectReason && (
+                  <div style={{ padding: '10px 14px', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 4, color: '#991b1b', fontSize: 13 }}>
+                    <strong>Motivo de rechazo:</strong> {selectedClub.rejectReason}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Section 7 — Fecha */}
+            <div style={{ marginBottom: 20 }}>
+              <InfoRow label="Fecha de registro"><span>{selectedClub.joinedAt}</span></InfoRow>
+            </div>
+
+            {/* Quick actions: Change plan */}
+            <div style={{ marginBottom: 20 }}>
+              <SectionHeader label="Cambiar Plan" />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select
+                  value={drawerPlan}
+                  onChange={e => setDrawerPlan(e.target.value as SAClub['plan'])}
+                  style={{ ...inputStyle, flex: 1 }}
+                >
+                  <option value="free">Free</option>
+                  <option value="basic">Basic</option>
+                  <option value="pro">Pro</option>
+                </select>
+                <button
+                  onClick={() => handleChangePlan(selectedClub.id, drawerPlan)}
+                  style={{ padding: '8px 16px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+                >
+                  Guardar
+                </button>
               </div>
             </div>
 
-            {/* Info */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 20 }}>
-              {[
-                { label: 'Ciudad', value: selectedClub.city },
-                { label: 'Pais', value: selectedClub.country },
-                { label: 'Fecha de registro', value: selectedClub.joinedAt },
-              ].map(({ label, value }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
-                  <span style={{ color: 'var(--grey-500)' }}>{label}</span>
-                  <span style={{ fontWeight: 600 }}>{value || '—'}</span>
-                </div>
-              ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
-                <span style={{ color: 'var(--grey-500)' }}>Email Admin</span>
-                <a href={`mailto:${selectedClub.adminEmail}`} style={{ fontWeight: 600, color: 'var(--turf-green)', textDecoration: 'none' }}>{selectedClub.adminEmail || '—'}</a>
+            {/* Quick actions: Approve/Reject if pending */}
+            {selectedClub.status === 'pending' && (
+              <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button
+                  onClick={() => handleApprove(selectedClub.id)}
+                  style={{ padding: '10px', background: 'var(--turf-green)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                >
+                  Aprobar Club
+                </button>
+                <button
+                  onClick={() => setShowDrawerRejectInput(v => !v)}
+                  style={{ padding: '10px', background: 'transparent', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                >
+                  Rechazar Club
+                </button>
+                {showDrawerRejectInput && (
+                  <div style={{ background: 'var(--grey-50)', padding: '12px', borderRadius: 6, border: '1px solid var(--grey-200)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <input
+                      placeholder="Motivo del rechazo (opcional)..."
+                      value={drawerRejectReason}
+                      onChange={e => setDrawerRejectReason(e.target.value)}
+                      style={inputStyle}
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={handleDrawerReject}
+                        style={{ flex: 1, padding: '8px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                        Confirmar Rechazo
+                      </button>
+                      <button onClick={() => { setShowDrawerRejectInput(false); setDrawerRejectReason(''); }}
+                        style={{ padding: '8px 14px', background: 'transparent', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', fontSize: 12, color: 'var(--grey-500)' }}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
-            {/* Change Plan */}
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 8 }}>Cambiar Plan</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {(['free', 'basic', 'pro'] as const).map(plan => (
-                  <button key={plan} onClick={() => handleChangePlan(selectedClub.id, plan)} style={{
-                    flex: 1, padding: '8px', border: `2px solid ${selectedClub.plan === plan ? '#0a0a0a' : 'var(--grey-200)'}`,
-                    borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase',
-                    background: selectedClub.plan === plan ? '#0a0a0a' : '#fff',
-                    color: selectedClub.plan === plan ? '#fff' : 'var(--grey-600)',
-                  }}>
-                    {plan.charAt(0).toUpperCase() + plan.slice(1)}
-                  </button>
-                ))}
+            {/* Quick action: Activate/Deactivate if not pending */}
+            {selectedClub.status !== 'pending' && (
+              <div style={{ marginBottom: 16 }}>
+                <button onClick={() => handleToggleActive(selectedClub.id)}
+                  style={{ width: '100%', padding: '10px', background: 'transparent', color: selectedClub.status === 'active' ? '#dc2626' : '#166534', border: `1px solid ${selectedClub.status === 'active' ? '#fecaca' : '#bbf7d0'}`, borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  {selectedClub.status === 'active' ? 'Desactivar Club' : 'Activar Club'}
+                </button>
               </div>
-            </div>
+            )}
 
             {/* Action buttons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button onClick={() => { setEditClub(selectedClub); }}
                 style={{ padding: '10px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                Editar
-              </button>
-              <button onClick={() => handleToggleActive(selectedClub.id)}
-                style={{ padding: '10px', background: 'transparent', color: selectedClub.status === 'active' ? '#dc2626' : '#166534', border: `1px solid ${selectedClub.status === 'active' ? '#fecaca' : '#bbf7d0'}`, borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                {selectedClub.status === 'active' ? 'Desactivar' : 'Activar'}
+                Editar Club
               </button>
               <button onClick={() => handleDeleteStep1(selectedClub.id)}
                 style={{ padding: '10px', background: 'transparent', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
@@ -605,14 +834,14 @@ export default function ClubsPage() {
 
       {/* CREATE MODAL */}
       {showCreateModal && (
-        <Modal onClose={() => setShowCreateModal(false)}>
+        <Modal onClose={() => setShowCreateModal(false)} maxWidth={640}>
           <ClubForm mode="create" initial={{}} onSave={handleSaveClub} onCancel={() => setShowCreateModal(false)} />
         </Modal>
       )}
 
       {/* EDIT MODAL */}
       {editClub && (
-        <Modal onClose={() => setEditClub(null)}>
+        <Modal onClose={() => setEditClub(null)} maxWidth={640}>
           <ClubForm mode="edit" initial={editClub} onSave={handleSaveClub} onCancel={() => setEditClub(null)} />
         </Modal>
       )}
@@ -621,10 +850,18 @@ export default function ClubsPage() {
       {rejectConfirm?.step === 1 && rejectTarget && (
         <Modal onClose={() => setRejectConfirm(null)}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 12 }}>Rechazar Solicitud</h2>
-          <p style={{ color: 'var(--grey-600)', lineHeight: 1.6, marginBottom: 24 }}>
+          <p style={{ color: 'var(--grey-600)', lineHeight: 1.6, marginBottom: 16 }}>
             ¿Estas seguro de que deseas rechazar la solicitud de <strong>{rejectTarget.name}</strong>?
           </p>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <Field label="Motivo del rechazo (opcional)">
+            <input
+              style={inputStyle}
+              placeholder="Describe el motivo del rechazo..."
+              value={rejectConfirm.reason}
+              onChange={e => setRejectConfirm(r => r ? { ...r, reason: e.target.value } : r)}
+            />
+          </Field>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
             <button onClick={() => setRejectConfirm(null)} style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
             <button onClick={handleRejectStep2} style={{ padding: '9px 20px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Continuar</button>
           </div>

@@ -2,29 +2,46 @@ import { supabase } from './supabase';
 
 export interface SAPlayer {
   id: string;
+  shortId: string;
   name: string;
   email: string;
+  password?: string;
   phone: string;
+  sex?: 'M' | 'F';
   city: string;
   country: string;
+  level?: 'beginner' | 'intermediate' | 'advanced';
   ranking: number;
+  rankingPoints: number;
   status: 'active' | 'blocked' | 'suspended';
   role: 'player' | 'club_admin' | 'federation_admin';
+  profileCompleted?: boolean;
   joinedAt: string;
   lastActive: string;
   club?: string;
+  photoUrl?: string;
   customFields?: Record<string, string>;
 }
 
 export interface SAClub {
   id: string;
   name: string;
+  clubType: string;
   city: string;
   country: string;
+  address: string;
+  description: string;
   courts: number;
+  courtTypes: string[];
+  amenities: string[];
   members: number;
   status: 'active' | 'inactive' | 'pending' | 'rejected';
   adminEmail: string;
+  ownerName: string;
+  ownerPhone: string;
+  ownerEmail: string;
+  message: string;
+  rejectReason?: string;
   joinedAt: string;
   plan: 'free' | 'basic' | 'pro';
 }
@@ -86,24 +103,24 @@ export interface PlayerRelationship {
 }
 
 const MOCK_PLAYERS: SAPlayer[] = [
-  { id: 'mock-1', name: 'Carlos Rodríguez', email: 'carlos@padelmgt.es', phone: '+34 612 345 678', city: 'Madrid', country: 'ES', ranking: 1250, status: 'active', role: 'player', joinedAt: '2024-01-15', lastActive: '2026-05-20', club: 'Club Padel Madrid' },
-  { id: 'mock-2', name: 'María García', email: 'maria@padelmgt.es', phone: '+34 623 456 789', city: 'Barcelona', country: 'ES', ranking: 980, status: 'active', role: 'player', joinedAt: '2024-02-10', lastActive: '2026-05-22', club: 'RC Padel Barcelona' },
-  { id: 'mock-3', name: 'Alejandro Martínez', email: 'alejandro@padelmgt.es', phone: '+34 634 567 890', city: 'Valencia', country: 'ES', ranking: 760, status: 'active', role: 'club_admin', joinedAt: '2024-01-20', lastActive: '2026-05-18', club: 'Padel Valencia CF' },
-  { id: 'mock-4', name: 'Lucía Fernández', email: 'lucia@padelmgt.es', phone: '+34 645 678 901', city: 'Sevilla', country: 'ES', ranking: 1100, status: 'active', role: 'player', joinedAt: '2024-03-05', lastActive: '2026-05-21' },
-  { id: 'mock-5', name: 'Pablo López', email: 'pablo@padelmgt.es', phone: '+34 656 789 012', city: 'Málaga', country: 'ES', ranking: 450, status: 'blocked', role: 'player', joinedAt: '2024-04-12', lastActive: '2026-04-30' },
-  { id: 'mock-6', name: 'Ana Sánchez', email: 'ana@padelmgt.es', phone: '+34 667 890 123', city: 'Bilbao', country: 'ES', ranking: 820, status: 'active', role: 'player', joinedAt: '2024-02-28', lastActive: '2026-05-19', club: 'Padel Bilbao Sport' },
-  { id: 'mock-7', name: 'David González', email: 'david@padelmgt.es', phone: '+34 678 901 234', city: 'Zaragoza', country: 'ES', ranking: 630, status: 'active', role: 'player', joinedAt: '2024-03-18', lastActive: '2026-05-15' },
-  { id: 'mock-8', name: 'Elena Ruiz', email: 'elena@padelmgt.es', phone: '+34 689 012 345', city: 'Madrid', country: 'ES', ranking: 950, status: 'suspended', role: 'player', joinedAt: '2024-01-30', lastActive: '2026-05-10' },
-  { id: 'mock-9', name: 'Javier Torres', email: 'javier@padelmgt.es', phone: '+34 690 123 456', city: 'Alicante', country: 'ES', ranking: 1050, status: 'active', role: 'player', joinedAt: '2024-04-25', lastActive: '2026-05-23', club: 'Costa Padel Alicante' },
-  { id: 'mock-10', name: 'Sofía Díaz', email: 'sofia@padelmgt.es', phone: '+34 601 234 567', city: 'Barcelona', country: 'ES', ranking: 780, status: 'active', role: 'federation_admin', joinedAt: '2024-02-14', lastActive: '2026-05-24' },
+  { id: 'mock-1', shortId: '#00001', name: 'Carlos Rodriguez', email: 'carlos@padelmgt.es', phone: '+34 612 345 678', sex: 'M', city: 'Madrid', country: 'ES', level: 'advanced', ranking: 1, rankingPoints: 1250, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-01-15', lastActive: '2026-05-20', club: 'Club Padel Madrid' },
+  { id: 'mock-2', shortId: '#00002', name: 'Maria Garcia', email: 'maria@padelmgt.es', phone: '+34 623 456 789', sex: 'F', city: 'Barcelona', country: 'ES', level: 'intermediate', ranking: 2, rankingPoints: 980, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-02-10', lastActive: '2026-05-22', club: 'RC Padel Barcelona' },
+  { id: 'mock-3', shortId: '#00003', name: 'Alejandro Martinez', email: 'alejandro@padelmgt.es', phone: '+34 634 567 890', sex: 'M', city: 'Valencia', country: 'ES', level: 'advanced', ranking: 3, rankingPoints: 760, status: 'active', role: 'club_admin', profileCompleted: true, joinedAt: '2024-01-20', lastActive: '2026-05-18', club: 'Padel Valencia CF' },
+  { id: 'mock-4', shortId: '#00004', name: 'Lucia Fernandez', email: 'lucia@padelmgt.es', phone: '+34 645 678 901', sex: 'F', city: 'Sevilla', country: 'ES', level: 'advanced', ranking: 4, rankingPoints: 1100, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-03-05', lastActive: '2026-05-21' },
+  { id: 'mock-5', shortId: '#00005', name: 'Pablo Lopez', email: 'pablo@padelmgt.es', phone: '+34 656 789 012', sex: 'M', city: 'Malaga', country: 'ES', level: 'beginner', ranking: 5, rankingPoints: 450, status: 'blocked', role: 'player', profileCompleted: false, joinedAt: '2024-04-12', lastActive: '2026-04-30' },
+  { id: 'mock-6', shortId: '#00006', name: 'Ana Sanchez', email: 'ana@padelmgt.es', phone: '+34 667 890 123', sex: 'F', city: 'Bilbao', country: 'ES', level: 'intermediate', ranking: 6, rankingPoints: 820, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-02-28', lastActive: '2026-05-19', club: 'Padel Bilbao Sport' },
+  { id: 'mock-7', shortId: '#00007', name: 'David Gonzalez', email: 'david@padelmgt.es', phone: '+34 678 901 234', sex: 'M', city: 'Zaragoza', country: 'ES', level: 'intermediate', ranking: 7, rankingPoints: 630, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-03-18', lastActive: '2026-05-15' },
+  { id: 'mock-8', shortId: '#00008', name: 'Elena Ruiz', email: 'elena@padelmgt.es', phone: '+34 689 012 345', sex: 'F', city: 'Madrid', country: 'ES', level: 'advanced', ranking: 8, rankingPoints: 950, status: 'suspended', role: 'player', profileCompleted: false, joinedAt: '2024-01-30', lastActive: '2026-05-10' },
+  { id: 'mock-9', shortId: '#00009', name: 'Javier Torres', email: 'javier@padelmgt.es', phone: '+34 690 123 456', sex: 'M', city: 'Alicante', country: 'ES', level: 'advanced', ranking: 9, rankingPoints: 1050, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-04-25', lastActive: '2026-05-23', club: 'Costa Padel Alicante' },
+  { id: 'mock-10', shortId: '#00010', name: 'Sofia Diaz', email: 'sofia@padelmgt.es', phone: '+34 601 234 567', sex: 'F', city: 'Barcelona', country: 'ES', level: 'intermediate', ranking: 10, rankingPoints: 780, status: 'active', role: 'federation_admin', profileCompleted: true, joinedAt: '2024-02-14', lastActive: '2026-05-24' },
 ];
 
 const MOCK_CLUBS: SAClub[] = [
-  { id: 'mc-1', name: 'Club Padel Madrid', city: 'Madrid', country: 'ES', courts: 8, members: 245, status: 'active', adminEmail: 'alejandro@padelmgt.es', joinedAt: '2024-01-10', plan: 'pro' },
-  { id: 'mc-2', name: 'RC Padel Barcelona', city: 'Barcelona', country: 'ES', courts: 6, members: 180, status: 'active', adminEmail: 'rcpadel@barcelona.es', joinedAt: '2024-02-05', plan: 'basic' },
-  { id: 'mc-3', name: 'Padel Valencia CF', city: 'Valencia', country: 'ES', courts: 4, members: 120, status: 'active', adminEmail: 'alejandro@padelmgt.es', joinedAt: '2024-01-18', plan: 'basic' },
-  { id: 'mc-4', name: 'Padel Bilbao Sport', city: 'Bilbao', country: 'ES', courts: 3, members: 95, status: 'active', adminEmail: 'bilbaosport@padel.es', joinedAt: '2024-03-12', plan: 'free' },
-  { id: 'mc-5', name: 'Costa Padel Alicante', city: 'Alicante', country: 'ES', courts: 5, members: 150, status: 'active', adminEmail: 'costa@padel.es', joinedAt: '2024-04-20', plan: 'basic' },
+  { id: 'mc-1', name: 'Club Padel Madrid', clubType: 'Club Privado', city: 'Madrid', country: 'ES', address: 'Calle del Padel 12, 28001 Madrid', description: 'Club de padel privado con instalaciones de primer nivel en el centro de Madrid.', courts: 8, courtTypes: ['Cristal', 'Muro'], amenities: ['Vestuarios', 'Cafeteria', 'Parking', 'Tienda'], members: 245, status: 'active', adminEmail: 'alejandro@padelmgt.es', ownerName: 'Alejandro Martinez', ownerPhone: '+34 634 567 890', ownerEmail: 'alejandro@padelmgt.es', message: 'Solicito la incorporacion de nuestro club a la plataforma para gestionar torneos.', joinedAt: '2024-01-10', plan: 'pro' },
+  { id: 'mc-2', name: 'RC Padel Barcelona', clubType: 'Club Publico', city: 'Barcelona', country: 'ES', address: 'Av. Diagonal 500, 08006 Barcelona', description: 'Club deportivo con amplia tradicion en la ciudad condal.', courts: 6, courtTypes: ['Cristal'], amenities: ['Vestuarios', 'Cafeteria'], members: 180, status: 'active', adminEmail: 'rcpadel@barcelona.es', ownerName: 'Ramon Carles', ownerPhone: '+34 932 111 222', ownerEmail: 'rcpadel@barcelona.es', message: 'Club con 5 anos de historia. Queremos digitalizarnos.', joinedAt: '2024-02-05', plan: 'basic' },
+  { id: 'mc-3', name: 'Padel Valencia CF', clubType: 'Club Privado', city: 'Valencia', country: 'ES', address: 'Carrer del Padel 3, 46001 Valencia', description: 'Club moderno con pistas cubiertas y servicio profesional.', courts: 4, courtTypes: ['Cristal', 'Hierba Artificial'], amenities: ['Vestuarios', 'Parking'], members: 120, status: 'active', adminEmail: 'alejandro@padelmgt.es', ownerName: 'Vicente Pla', ownerPhone: '+34 961 234 567', ownerEmail: 'vicent@padelvalencia.es', message: 'Solicitamos acceso para organizar nuestra liga interna.', joinedAt: '2024-01-18', plan: 'basic' },
+  { id: 'mc-4', name: 'Padel Bilbao Sport', clubType: 'Club Deportivo', city: 'Bilbao', country: 'ES', address: 'Calle Autonomia 5, 48001 Bilbao', description: 'Instalaciones deportivas multidisciplinares en el corazon de Bilbao.', courts: 3, courtTypes: ['Muro'], amenities: ['Vestuarios', 'Gimnasio'], members: 95, status: 'active', adminEmail: 'bilbaosport@padel.es', ownerName: 'Iker Etxebarria', ownerPhone: '+34 944 321 654', ownerEmail: 'bilbaosport@padel.es', message: 'Queremos gestionar nuestros torneos mensuales desde la plataforma.', joinedAt: '2024-03-12', plan: 'free' },
+  { id: 'mc-5', name: 'Costa Padel Alicante', clubType: 'Club Privado', city: 'Alicante', country: 'ES', address: 'Playa de San Juan, 03016 Alicante', description: 'Club al aire libre con vistas al Mediterraneo. Ambiente familiar y profesional.', courts: 5, courtTypes: ['Cristal', 'Muro'], amenities: ['Vestuarios', 'Cafeteria', 'Piscina', 'Parking'], members: 150, status: 'active', adminEmail: 'costa@padel.es', ownerName: 'Francisco Costa', ownerPhone: '+34 965 432 876', ownerEmail: 'costa@padel.es', message: 'Somos un club de playa con gran demanda. Necesitamos herramientas de gestion.', joinedAt: '2024-04-20', plan: 'basic' },
 ];
 
 function getThisMonthStr(): string {
@@ -172,17 +189,24 @@ export function getSAPlayers(): SAPlayer[] {
       const parsed = JSON.parse(regRaw) as Array<Record<string, unknown>>;
       fromStorage = parsed.map((p, i) => ({
         id: (p.id as string) || `rp-${i}`,
+        shortId: (p.shortId as string) || `#${String(i + 1).padStart(5, '0')}`,
         name: (p.name as string) || 'Jugador',
         email: (p.email as string) || '',
+        password: (p.password as string) || undefined,
         phone: (p.phone as string) || '',
+        sex: (['M', 'F'].includes(p.sex as string) ? p.sex as 'M' | 'F' : undefined),
         city: (p.city as string) || '',
         country: (p.country as string) || 'ES',
-        ranking: typeof p.ranking === 'number' ? p.ranking : typeof p.points === 'number' ? p.points : 0,
+        level: (['beginner', 'intermediate', 'advanced'].includes(p.level as string) ? p.level as SAPlayer['level'] : undefined),
+        ranking: typeof p.ranking === 'number' ? p.ranking : 0,
+        rankingPoints: typeof p.rankingPoints === 'number' ? p.rankingPoints : typeof p.points === 'number' ? p.points : 0,
         status: (['active', 'blocked', 'suspended'].includes(p.status as string) ? p.status as SAPlayer['status'] : 'active'),
         role: (['player', 'club_admin', 'federation_admin'].includes(p.role as string) ? p.role as SAPlayer['role'] : 'player'),
+        profileCompleted: typeof p.profileCompleted === 'boolean' ? p.profileCompleted : true,
         joinedAt: (p.joinedAt as string) || (p.createdAt as string) || new Date().toISOString().split('T')[0],
         lastActive: (p.lastActive as string) || new Date().toISOString().split('T')[0],
         club: (p.club as string) || undefined,
+        photoUrl: (p.photoUrl as string) || (p.photo as string) || undefined,
         customFields: (p.customFields as Record<string, string>) || {},
       }));
     } catch {
@@ -197,6 +221,28 @@ export function getSAPlayers(): SAPlayer[] {
 export function saveSAPlayers(players: SAPlayer[]): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem('padelmgt_sa_players', JSON.stringify(players));
+  // Sync back to main app player store format
+  const regPlayers = players.map(p => ({
+    id: p.id,
+    shortId: p.shortId,
+    name: p.name,
+    email: p.email,
+    password: p.password,
+    sex: p.sex,
+    country: p.country,
+    city: p.city,
+    level: p.level,
+    ranking: p.ranking,
+    rankingPoints: p.rankingPoints,
+    profileCompleted: p.profileCompleted,
+    club: p.club,
+    phone: p.phone,
+    photoUrl: p.photoUrl,
+    customFields: p.customFields,
+    status: p.status,
+    role: p.role,
+  }));
+  localStorage.setItem('padelmgt_registered_players', JSON.stringify(regPlayers));
 }
 
 export function getSAClubs(): SAClub[] {
@@ -209,12 +255,22 @@ export function getSAClubs(): SAClub[] {
       fromStorage = parsed.map((c, i) => ({
         id: (c.id as string) || `cr-${i}`,
         name: (c.clubName as string) || (c.name as string) || 'Club',
+        clubType: (c.clubType as string) || 'Club Privado',
         city: (c.city as string) || '',
         country: (c.country as string) || 'ES',
-        courts: typeof c.courts === 'number' ? c.courts : 0,
+        address: (c.address as string) || '',
+        description: (c.description as string) || '',
+        courts: typeof c.courtsCount === 'number' ? c.courtsCount : typeof c.courts === 'number' ? c.courts : 0,
+        courtTypes: Array.isArray(c.courtTypes) ? (c.courtTypes as string[]) : [],
+        amenities: Array.isArray(c.amenities) ? (c.amenities as string[]) : [],
         members: typeof c.members === 'number' ? c.members : 0,
         status: (['active', 'inactive', 'pending', 'rejected'].includes(c.status as string) ? c.status as SAClub['status'] : 'pending'),
-        adminEmail: (c.adminEmail as string) || (c.email as string) || '',
+        adminEmail: (c.adminEmail as string) || (c.ownerEmail as string) || (c.email as string) || '',
+        ownerName: (c.ownerName as string) || '',
+        ownerPhone: (c.ownerPhone as string) || '',
+        ownerEmail: (c.ownerEmail as string) || (c.adminEmail as string) || '',
+        message: (c.message as string) || '',
+        rejectReason: (c.rejectReason as string) || undefined,
         joinedAt: (c.joinedAt as string) || (c.createdAt as string) || new Date().toISOString().split('T')[0],
         plan: (['free', 'basic', 'pro'].includes(c.plan as string) ? c.plan as SAClub['plan'] : 'free'),
       }));
@@ -230,7 +286,6 @@ export function getSAClubs(): SAClub[] {
 
 export function saveSAClubs(clubs: SAClub[]): void {
   if (typeof window === 'undefined') return;
-  // Save to club_requests format so it integrates with existing app
   localStorage.setItem('padelmgt_club_requests', JSON.stringify(clubs));
 }
 
@@ -300,11 +355,11 @@ export function getSAGames(): SAGame[] {
 
 function getMockGames(): SAGame[] {
   return [
-    { id: 'mg-1', name: 'Juego Rápido - Madrid #1', date: '2026-05-20', players: 8, status: 'completed', rounds: 4, format: 'Americano', scoreConfig: 'puntos' },
-    { id: 'mg-2', name: 'Juego Rápido - Barcelona #1', date: '2026-05-21', players: 12, status: 'completed', rounds: 5, format: 'Mexicano', scoreConfig: 'tradicional' },
-    { id: 'mg-3', name: 'Juego Rápido - Valencia #1', date: '2026-05-22', players: 8, status: 'ongoing', rounds: 2, format: 'Americano', scoreConfig: 'puntos' },
-    { id: 'mg-4', name: 'Juego Rápido - Sevilla #1', date: '2026-05-23', players: 16, status: 'completed', rounds: 6, format: 'Mexicano', scoreConfig: 'tradicional' },
-    { id: 'mg-5', name: 'Juego Rápido - Málaga #1', date: '2026-05-24', players: 8, status: 'ongoing', rounds: 1, format: 'Americano', scoreConfig: 'puntos' },
+    { id: 'mg-1', name: 'Juego Rapido - Madrid #1', date: '2026-05-20', players: 8, status: 'completed', rounds: 4, format: 'Americano', scoreConfig: 'puntos' },
+    { id: 'mg-2', name: 'Juego Rapido - Barcelona #1', date: '2026-05-21', players: 12, status: 'completed', rounds: 5, format: 'Mexicano', scoreConfig: 'tradicional' },
+    { id: 'mg-3', name: 'Juego Rapido - Valencia #1', date: '2026-05-22', players: 8, status: 'ongoing', rounds: 2, format: 'Americano', scoreConfig: 'puntos' },
+    { id: 'mg-4', name: 'Juego Rapido - Sevilla #1', date: '2026-05-23', players: 16, status: 'completed', rounds: 6, format: 'Mexicano', scoreConfig: 'tradicional' },
+    { id: 'mg-5', name: 'Juego Rapido - Malaga #1', date: '2026-05-24', players: 8, status: 'ongoing', rounds: 1, format: 'Americano', scoreConfig: 'puntos' },
   ];
 }
 
@@ -362,12 +417,14 @@ export function savePlayerRelationships(rels: PlayerRelationship[]): void {
 function rowToSAPlayer(row: Record<string, unknown>): SAPlayer {
   return {
     id: row.id as string,
+    shortId: (row.short_id as string) ?? '',
     name: row.name as string,
     email: row.email as string,
     phone: (row.phone as string) ?? '',
     city: (row.city as string) ?? '',
     country: (row.country as string) ?? 'ES',
-    ranking: (row.ranking_points as number) ?? 0,
+    ranking: (row.ranking as number) ?? 0,
+    rankingPoints: (row.ranking_points as number) ?? 0,
     status: (row.status as SAPlayer['status']) ?? 'active',
     role: (row.role as SAPlayer['role']) ?? 'player',
     joinedAt: ((row.joined_at as string) ?? '').split('T')[0],
@@ -385,13 +442,14 @@ function playerToRow(p: SAPlayer): Record<string, unknown> {
     phone: p.phone || null,
     city: p.city || null,
     country: p.country || 'ES',
-    ranking_points: p.ranking ?? 0,
+    ranking_points: p.rankingPoints ?? p.ranking ?? 0,
     status: p.status,
     role: p.role,
     club: p.club || null,
     custom_fields: p.customFields ?? {},
     joined_at: p.joinedAt || new Date().toISOString(),
     last_active: p.lastActive || new Date().toISOString(),
+    // Note: sex, level, shortId, profileCompleted stored in custom_fields or as extra columns when schema is extended
   };
 }
 
@@ -399,12 +457,22 @@ function rowToSAClub(row: Record<string, unknown>): SAClub {
   return {
     id: row.id as string,
     name: row.name as string,
+    clubType: (row.club_type as string) ?? 'Club Privado',
     city: (row.city as string) ?? '',
     country: (row.country as string) ?? 'ES',
+    address: (row.address as string) ?? '',
+    description: (row.description as string) ?? '',
     courts: (row.courts as number) ?? 0,
+    courtTypes: Array.isArray(row.court_types) ? (row.court_types as string[]) : [],
+    amenities: Array.isArray(row.amenities) ? (row.amenities as string[]) : [],
     members: (row.members as number) ?? 0,
     status: (row.status as SAClub['status']) ?? 'pending',
     adminEmail: (row.admin_email as string) ?? '',
+    ownerName: (row.owner_name as string) ?? '',
+    ownerPhone: (row.owner_phone as string) ?? '',
+    ownerEmail: (row.owner_email as string) ?? '',
+    message: (row.message as string) ?? '',
+    rejectReason: (row.reject_reason as string) ?? undefined,
     joinedAt: ((row.joined_at as string) ?? '').split('T')[0],
     plan: (row.plan as SAClub['plan']) ?? 'free',
   };

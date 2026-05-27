@@ -70,8 +70,22 @@ function RoleBadge({ role }: { role: SAPlayer['role'] }) {
   );
 }
 
+function LevelBadge({ level }: { level?: SAPlayer['level'] }) {
+  if (!level) return <span style={{ color: 'var(--grey-300)', fontSize: 12 }}>—</span>;
+  const cfg = {
+    beginner:     { label: 'Principiante', bg: '#f0f0f0', color: '#555' },
+    intermediate: { label: 'Intermedio',   bg: '#dbeafe', color: '#1d4ed8' },
+    advanced:     { label: 'Avanzado',     bg: '#fef3c7', color: '#92400e' },
+  }[level];
+  return (
+    <span style={{ background: cfg.bg, color: cfg.color, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
+      {cfg.label}
+    </span>
+  );
+}
+
 // ── modal backdrop ────────────────────────────────────────────────────────────
-function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+function Modal({ children, onClose, maxWidth = 560 }: { children: React.ReactNode; onClose: () => void; maxWidth?: number }) {
   return (
     <div
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
@@ -82,7 +96,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
     >
       <div style={{
         background: '#fff', borderRadius: 8, padding: '32px 36px',
-        width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
+        width: '100%', maxWidth, maxHeight: '90vh', overflowY: 'auto',
         boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
       }}>
         {children}
@@ -115,6 +129,42 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
+// ── section header ────────────────────────────────────────────────────────────
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 10, marginTop: 4 }}>
+      {label}
+    </div>
+  );
+}
+
+// ── info row ─────────────────────────────────────────────────────────────────
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
+      <span style={{ color: 'var(--grey-500)', flexShrink: 0, marginRight: 12 }}>{label}</span>
+      <span style={{ fontWeight: 600, textAlign: 'right' }}>{children}</span>
+    </div>
+  );
+}
+
+// ── copy button ───────────────────────────────────────────────────────────────
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy(e: React.MouseEvent) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+  return (
+    <button onClick={handleCopy} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 10, border: '1px solid var(--grey-200)', borderRadius: 3, cursor: 'pointer', background: copied ? '#dcfce7' : '#f9fafb', color: copied ? '#166534' : 'var(--grey-500)', fontWeight: 600, lineHeight: 1.6 }}>
+      {copied ? 'Copiado' : 'Copiar'}
+    </button>
+  );
+}
+
 // ── player form (create / edit) ───────────────────────────────────────────────
 function PlayerForm({
   initial,
@@ -131,9 +181,12 @@ function PlayerForm({
 }) {
   const [form, setForm] = useState<Partial<SAPlayer>>({
     name: '', email: '', phone: '', city: '', country: 'ES',
-    ranking: 0, role: 'player', status: 'active', club: '',
-    customFields: {}, ...initial,
+    ranking: 0, rankingPoints: 0, role: 'player', status: 'active', club: '',
+    sex: undefined, level: undefined, profileCompleted: true,
+    photoUrl: '', customFields: {}, ...initial,
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
 
   function set(k: keyof SAPlayer, v: unknown) {
     setForm(f => ({ ...f, [k]: v }));
@@ -145,19 +198,27 @@ function PlayerForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const now = new Date().toISOString().split('T')[0];
+    const password = newPassword.trim() ? newPassword.trim() : (form.password ?? undefined);
     onSave({
       id: form.id ?? uid(),
+      shortId: form.shortId ?? `#${uid().slice(0, 5).toUpperCase()}`,
       name: form.name ?? '',
       email: form.email ?? '',
+      password,
       phone: form.phone ?? '',
+      sex: form.sex ?? undefined,
       city: form.city ?? '',
       country: form.country ?? 'ES',
+      level: form.level ?? undefined,
       ranking: form.ranking ?? 0,
+      rankingPoints: form.rankingPoints ?? 0,
       role: form.role ?? 'player',
       status: form.status ?? 'active',
       club: form.club ?? undefined,
+      profileCompleted: form.profileCompleted ?? true,
       joinedAt: form.joinedAt ?? now,
       lastActive: form.lastActive ?? now,
+      photoUrl: form.photoUrl ?? undefined,
       customFields: form.customFields ?? {},
     });
   }
@@ -178,8 +239,20 @@ function PlayerForm({
         <Field label="Telefono">
           <input style={inputStyle} value={form.phone ?? ''} onChange={e => set('phone', e.target.value)} />
         </Field>
-        <Field label="Club">
-          <input style={inputStyle} value={form.club ?? ''} onChange={e => set('club', e.target.value)} />
+        <Field label="Sexo">
+          <select style={inputStyle} value={form.sex ?? ''} onChange={e => set('sex', e.target.value === '' ? undefined : e.target.value as SAPlayer['sex'])}>
+            <option value="">No especificar</option>
+            <option value="M">Masculino (M)</option>
+            <option value="F">Femenino (F)</option>
+          </select>
+        </Field>
+        <Field label="Nivel de juego">
+          <select style={inputStyle} value={form.level ?? ''} onChange={e => set('level', e.target.value === '' ? undefined : e.target.value as SAPlayer['level'])}>
+            <option value="">Sin nivel</option>
+            <option value="beginner">Principiante</option>
+            <option value="intermediate">Intermedio</option>
+            <option value="advanced">Avanzado</option>
+          </select>
         </Field>
         <Field label="Ciudad">
           <input style={inputStyle} value={form.city ?? ''} onChange={e => set('city', e.target.value)} />
@@ -187,8 +260,14 @@ function PlayerForm({
         <Field label="Pais">
           <input style={inputStyle} value={form.country ?? ''} onChange={e => set('country', e.target.value)} />
         </Field>
-        <Field label="Ranking (pts)">
-          <input style={inputStyle} type="number" value={form.ranking ?? 0} onChange={e => set('ranking', Number(e.target.value))} />
+        <Field label="Club">
+          <input style={inputStyle} value={form.club ?? ''} onChange={e => set('club', e.target.value)} />
+        </Field>
+        <Field label="Posicion Ranking">
+          <input style={inputStyle} type="number" min={0} value={form.ranking ?? 0} onChange={e => set('ranking', Number(e.target.value))} />
+        </Field>
+        <Field label="Puntos de Ranking">
+          <input style={inputStyle} type="number" min={0} value={form.rankingPoints ?? 0} onChange={e => set('rankingPoints', Number(e.target.value))} />
         </Field>
         <Field label="Rol">
           <select style={inputStyle} value={form.role ?? 'player'} onChange={e => set('role', e.target.value as SAPlayer['role'])}>
@@ -204,6 +283,49 @@ function PlayerForm({
             <option value="suspended">Suspendido</option>
           </select>
         </Field>
+        <Field label="URL de foto">
+          <input style={inputStyle} value={form.photoUrl ?? ''} onChange={e => set('photoUrl', e.target.value)} placeholder="https://..." />
+        </Field>
+        <Field label="Perfil completado">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 8 }}>
+            <input type="checkbox" checked={form.profileCompleted ?? true} onChange={e => set('profileCompleted', e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+            <span style={{ fontSize: 13 }}>{form.profileCompleted ? 'Completo' : 'Incompleto'}</span>
+          </div>
+        </Field>
+      </div>
+
+      {/* Password section */}
+      <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 14 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 10 }}>
+          {mode === 'create' ? 'Contrasena' : 'Establecer nueva contrasena'}
+        </div>
+        {mode === 'edit' && form.password && (
+          <Field label="Contrasena actual">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                style={{ ...inputStyle, flex: 1, fontFamily: 'monospace' }}
+                type={showPassword ? 'text' : 'password'}
+                value={form.password}
+                readOnly
+              />
+              <button type="button" onClick={() => setShowPassword(v => !v)}
+                style={{ padding: '8px 12px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#f9fafb', fontSize: 12, color: 'var(--grey-600)', fontWeight: 600, flexShrink: 0 }}>
+                {showPassword ? 'Ocultar' : 'Ver'}
+              </button>
+            </div>
+          </Field>
+        )}
+        <div style={{ marginTop: 10 }}>
+          <Field label={mode === 'create' ? 'Contrasena' : 'Nueva contrasena'}>
+            <input
+              style={inputStyle}
+              type="password"
+              placeholder="••••••••"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+            />
+          </Field>
+        </div>
       </div>
 
       {/* Custom fields */}
@@ -223,17 +345,6 @@ function PlayerForm({
               </Field>
             ))}
           </div>
-        </div>
-      )}
-
-      {mode === 'create' && (
-        <Field label="Contrasena temporal">
-          <input style={inputStyle} type="password" placeholder="••••••••" />
-        </Field>
-      )}
-      {mode === 'edit' && (
-        <div style={{ fontSize: 12, color: 'var(--grey-400)', fontStyle: 'italic' }}>
-          Para resetear la contrasena, usa la opcion correspondiente desde el perfil del jugador.
         </div>
       )}
 
@@ -275,6 +386,10 @@ export default function PlayersPage() {
   const [relType, setRelType] = useState<PlayerRelationship['type']>('friend');
   // Detail drawer
   const [selectedPlayer, setSelectedPlayer] = useState<SAPlayer | null>(null);
+  // Inline reset password in drawer
+  const [showResetPwField, setShowResetPwField] = useState(false);
+  const [resetPwValue, setResetPwValue] = useState('');
+  const [showDrawerPassword, setShowDrawerPassword] = useState(false);
   // Sorting
   const [sortKey, setSortKey] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -330,6 +445,7 @@ export default function PlayersPage() {
     let bv: string | number = '';
     if (sortKey === 'name') { av = a.name; bv = b.name; }
     else if (sortKey === 'ranking') { av = a.ranking; bv = b.ranking; }
+    else if (sortKey === 'rankingPoints') { av = a.rankingPoints; bv = b.rankingPoints; }
     else if (sortKey === 'joinedAt') { av = a.joinedAt; bv = b.joinedAt; }
     if (av < bv) return sortDir === 'asc' ? -1 : 1;
     if (av > bv) return sortDir === 'asc' ? 1 : -1;
@@ -408,6 +524,17 @@ export default function PlayersPage() {
     setEditPlayer(null);
     if (selectedPlayer?.id === p.id) setSelectedPlayer(p);
     toast(exists ? 'Jugador actualizado' : 'Jugador creado correctamente');
+  }
+
+  // ── reset password inline ──────────────────────────────────────────────────
+  function handleResetPasswordInline() {
+    if (!selectedPlayer || !resetPwValue.trim()) return;
+    const updated = players.map(p => p.id === selectedPlayer.id ? { ...p, password: resetPwValue.trim() } : p);
+    saveAndRefresh(updated);
+    setSelectedPlayer(prev => prev ? { ...prev, password: resetPwValue.trim() } : prev);
+    setResetPwValue('');
+    setShowResetPwField(false);
+    toast('Contrasena actualizada');
   }
 
   // ── bulk ───────────────────────────────────────────────────────────────────
@@ -491,14 +618,16 @@ export default function PlayersPage() {
     const reverseMap: Record<string, number> = {};
     Object.entries(columnMap).forEach(([idx, field]) => { reverseMap[field] = Number(idx); });
 
-    const newPlayers: SAPlayer[] = csvRows.slice(1).map(row => ({
+    const newPlayers: SAPlayer[] = csvRows.slice(1).map((row, i) => ({
       id: uid(),
+      shortId: `#${String(i + 1).padStart(5, '0')}`,
       name: row[reverseMap['name']] ?? '',
       email: row[reverseMap['email']] ?? '',
       phone: row[reverseMap['phone']] ?? '',
       city: row[reverseMap['city']] ?? '',
       country: row[reverseMap['country']] ?? 'ES',
       ranking: Number(row[reverseMap['ranking']]) || 0,
+      rankingPoints: 0,
       club: row[reverseMap['club']] ?? undefined,
       status: 'active' as const,
       role: 'player' as const,
@@ -595,7 +724,7 @@ export default function PlayersPage() {
             Importar CSV
           </button>
           <button
-            onClick={() => exportCSV(filtered.map(p => ({ Nombre: p.name, Email: p.email, Telefono: p.phone, Ciudad: p.city, Pais: p.country, Ranking: p.ranking, Club: p.club ?? '', Estado: p.status, Rol: p.role, Ingreso: p.joinedAt, UltActivo: p.lastActive })), 'jugadores.csv')}
+            onClick={() => exportCSV(filtered.map(p => ({ ID: p.id, ShortID: p.shortId, Nombre: p.name, Email: p.email, Telefono: p.phone, Sexo: p.sex ?? '', Nivel: p.level ?? '', Ciudad: p.city, Pais: p.country, RankingPos: p.ranking, PtsRanking: p.rankingPoints, Club: p.club ?? '', Rol: p.role, Estado: p.status, Perfil: p.profileCompleted ? 'Completo' : 'Incompleto', Ingreso: p.joinedAt, UltActivo: p.lastActive })), 'jugadores.csv')}
             style={{ padding: '9px 16px', border: '1px solid var(--grey-200)', borderRadius: 4, background: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', color: 'var(--grey-600)', textTransform: 'uppercase' }}
           >
             Exportar CSV
@@ -638,73 +767,97 @@ export default function PlayersPage() {
                 <th style={{ padding: '10px 14px', width: 36 }}>
                   <input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAll} style={{ cursor: 'pointer' }} />
                 </th>
-                <th style={{ ...thStyle, cursor: 'default' }}>#</th>
-                <th onClick={() => handleSort('name')} style={thStyle}>Jugador <SortIcon col="name" /></th>
+                <th style={{ ...thStyle, cursor: 'default' }}>#ID</th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Short ID</th>
+                <th onClick={() => handleSort('name')} style={thStyle}>Nombre + Email <SortIcon col="name" /></th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Sexo</th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Nivel</th>
                 <th style={{ ...thStyle, cursor: 'default' }}>Ciudad / Pais</th>
-                <th onClick={() => handleSort('ranking')} style={thStyle}>Ranking <SortIcon col="ranking" /></th>
+                <th onClick={() => handleSort('ranking')} style={thStyle}>Ranking Pos. <SortIcon col="ranking" /></th>
+                <th onClick={() => handleSort('rankingPoints')} style={thStyle}>Pts Ranking <SortIcon col="rankingPoints" /></th>
                 <th style={{ ...thStyle, cursor: 'default' }}>Club</th>
-                <th style={{ ...thStyle, cursor: 'default' }}>Estado</th>
                 <th style={{ ...thStyle, cursor: 'default' }}>Rol</th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Estado</th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Perfil %</th>
                 <th onClick={() => handleSort('joinedAt')} style={thStyle}>Ingreso <SortIcon col="joinedAt" /></th>
-                <th style={{ ...thStyle, cursor: 'default' }}>Ult. Actividad</th>
                 <th style={{ ...thStyle, cursor: 'default' }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {pagePlayers.map((p, i) => (
-                <tr key={p.id}
-                  style={{ borderBottom: '1px solid var(--grey-100)', transition: 'background 0.1s', cursor: 'pointer', background: selectedIds.has(p.id) ? '#f0fdf4' : '#fff' }}
-                  onClick={() => setSelectedPlayer(p)}
-                  onMouseEnter={e => { if (!selectedIds.has(p.id)) e.currentTarget.style.background = '#fafafa'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = selectedIds.has(p.id) ? '#f0fdf4' : '#fff'; }}
-                >
-                  <td style={{ padding: '10px 14px' }} onClick={e => e.stopPropagation()}>
-                    <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} style={{ cursor: 'pointer' }} />
-                  </td>
-                  <td style={{ padding: '10px 14px', color: 'var(--grey-400)', fontWeight: 500 }}>{pageStart + i + 1}</td>
-                  <td style={{ padding: '10px 14px' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--black)' }}>{p.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p.email}</div>
-                  </td>
-                  <td style={{ padding: '10px 14px', color: 'var(--grey-600)', whiteSpace: 'nowrap' }}>{p.city}{p.city && p.country ? ' / ' : ''}{p.country}</td>
-                  <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--black)' }}>{p.ranking.toLocaleString()}</td>
-                  <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)' }}>{p.club ?? '—'}</td>
-                  <td style={{ padding: '10px 14px' }}><StatusBadge status={p.status} /></td>
-                  <td style={{ padding: '10px 14px' }}><RoleBadge role={p.role} /></td>
-                  <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{p.joinedAt}</td>
-                  <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{p.lastActive}</td>
-                  <td style={{ padding: '10px 14px' }} onClick={e => e.stopPropagation()}>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button title="Relaciones" onClick={() => setShowRelationshipModal({ playerId: p.id })}
-                        style={{ background: 'none', border: '1px solid var(--grey-200)', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--grey-500)' }}>
-                        REL
-                      </button>
-                      <button title="Editar" onClick={() => setEditPlayer(p)}
-                        style={{ background: 'none', border: '1px solid var(--grey-200)', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--grey-600)' }}>
-                        EDT
-                      </button>
-                      {p.status !== 'blocked' ? (
-                        <button title="Bloquear" onClick={() => handleBlockStep1(p.id)}
+              {pagePlayers.map((p) => {
+                const shortUuid = p.id.slice(0, 8);
+                return (
+                  <tr key={p.id}
+                    style={{ borderBottom: '1px solid var(--grey-100)', transition: 'background 0.1s', cursor: 'pointer', background: selectedIds.has(p.id) ? '#f0fdf4' : '#fff' }}
+                    onClick={() => setSelectedPlayer(p)}
+                    onMouseEnter={e => { if (!selectedIds.has(p.id)) e.currentTarget.style.background = '#fafafa'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = selectedIds.has(p.id) ? '#f0fdf4' : '#fff'; }}
+                  >
+                    <td style={{ padding: '10px 14px' }} onClick={e => e.stopPropagation()}>
+                      <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} style={{ cursor: 'pointer' }} />
+                    </td>
+                    <td style={{ padding: '10px 14px' }} onClick={e => e.stopPropagation()}>
+                      <span
+                        onClick={() => { navigator.clipboard.writeText(p.id); toast('ID copiado'); }}
+                        title={p.id}
+                        style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--grey-400)', cursor: 'pointer', background: 'var(--grey-50)', padding: '2px 6px', borderRadius: 3 }}
+                      >
+                        {shortUuid}...
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: 11, color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{p.shortId}</td>
+                    <td style={{ padding: '10px 14px' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--black)' }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p.email}</div>
+                    </td>
+                    <td style={{ padding: '10px 14px', fontSize: 12, color: p.sex ? 'var(--black)' : 'var(--grey-300)', fontWeight: p.sex ? 600 : 400 }}>{p.sex ?? '—'}</td>
+                    <td style={{ padding: '10px 14px' }}><LevelBadge level={p.level} /></td>
+                    <td style={{ padding: '10px 14px', color: 'var(--grey-600)', whiteSpace: 'nowrap' }}>{p.city}{p.city && p.country ? ' / ' : ''}{p.country}</td>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--black)', whiteSpace: 'nowrap' }}>#{p.ranking}</td>
+                    <td style={{ padding: '10px 14px', color: 'var(--grey-600)', whiteSpace: 'nowrap' }}>{p.rankingPoints.toLocaleString()} pts</td>
+                    <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.club ?? '—'}</td>
+                    <td style={{ padding: '10px 14px' }}><RoleBadge role={p.role} /></td>
+                    <td style={{ padding: '10px 14px' }}><StatusBadge status={p.status} /></td>
+                    <td style={{ padding: '10px 14px' }}>
+                      {p.profileCompleted
+                        ? <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>Completo</span>
+                        : <span style={{ background: '#f0f0f0', color: '#888', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500 }}>Incompleto</span>
+                      }
+                    </td>
+                    <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{p.joinedAt}</td>
+                    <td style={{ padding: '10px 14px' }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button title="Relaciones" onClick={() => setShowRelationshipModal({ playerId: p.id })}
+                          style={{ background: 'none', border: '1px solid var(--grey-200)', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--grey-500)' }}>
+                          REL
+                        </button>
+                        <button title="Editar" onClick={() => setEditPlayer(p)}
+                          style={{ background: 'none', border: '1px solid var(--grey-200)', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--grey-600)' }}>
+                          EDT
+                        </button>
+                        {p.status !== 'blocked' ? (
+                          <button title="Bloquear" onClick={() => handleBlockStep1(p.id)}
+                            style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: '#dc2626' }}>
+                            BLQ
+                          </button>
+                        ) : (
+                          <button title="Desbloquear" onClick={() => handleUnblockPlayer(p.id)}
+                            style={{ background: 'none', border: '1px solid #bbf7d0', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: '#166534' }}>
+                            UBL
+                          </button>
+                        )}
+                        <button title="Eliminar" onClick={() => handleDeleteStep1(p.id)}
                           style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: '#dc2626' }}>
-                          BLQ
+                          DEL
                         </button>
-                      ) : (
-                        <button title="Desbloquear" onClick={() => handleUnblockPlayer(p.id)}
-                          style={{ background: 'none', border: '1px solid #bbf7d0', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: '#166534' }}>
-                          UBL
-                        </button>
-                      )}
-                      <button title="Eliminar" onClick={() => handleDeleteStep1(p.id)}
-                        style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: '#dc2626' }}>
-                        DEL
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {pagePlayers.length === 0 && (
                 <tr>
-                  <td colSpan={11} style={{ padding: '40px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14 }}>
+                  <td colSpan={15} style={{ padding: '40px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14 }}>
                     No se encontraron jugadores
                   </td>
                 </tr>
@@ -732,7 +885,7 @@ export default function PlayersPage() {
           <span style={{ fontWeight: 600 }}>{selectedIds.size} seleccionado{selectedIds.size !== 1 ? 's' : ''}</span>
           <span style={{ color: '#555' }}>—</span>
           <button
-            onClick={() => exportCSV(players.filter(p => selectedIds.has(p.id)).map(p => ({ Nombre: p.name, Email: p.email, Telefono: p.phone, Ciudad: p.city, Pais: p.country, Ranking: p.ranking, Club: p.club ?? '', Estado: p.status, Rol: p.role, Ingreso: p.joinedAt, UltActivo: p.lastActive })), 'jugadores_seleccion.csv')}
+            onClick={() => exportCSV(players.filter(p => selectedIds.has(p.id)).map(p => ({ ID: p.id, ShortID: p.shortId, Nombre: p.name, Email: p.email, Telefono: p.phone, Sexo: p.sex ?? '', Nivel: p.level ?? '', Ciudad: p.city, Pais: p.country, RankingPos: p.ranking, PtsRanking: p.rankingPoints, Club: p.club ?? '', Rol: p.role, Estado: p.status, Ingreso: p.joinedAt })), 'jugadores_seleccion.csv')}
             style={{ background: 'none', border: '1px solid #555', borderRadius: 4, color: '#fff', padding: '5px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
           >
             Exportar seleccion
@@ -755,82 +908,150 @@ export default function PlayersPage() {
             style={{ position: 'fixed', top: 0, right: 0, width: 520, height: '100vh', background: '#fff', boxShadow: '-4px 0 40px rgba(0,0,0,0.15)', zIndex: 1010, overflowY: 'auto', padding: '32px 36px' }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-              <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                <div style={{ width: 52, height: 52, borderRadius: '50%', background: getInitialsColor(selectedPlayer.name), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, fontWeight: 700, flexShrink: 0 }}>
-                  {selectedPlayer.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
-                </div>
-                <div>
-                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{selectedPlayer.name}</h2>
-                  <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 2 }}>{selectedPlayer.email}</div>
+            {/* Close */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+              <button onClick={() => setSelectedPlayer(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', lineHeight: 1 }}>×</button>
+            </div>
+
+            {/* Section 1 — Identidad */}
+            <div style={{ marginBottom: 24 }}>
+              <SectionHeader label="Identidad" />
+              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                {selectedPlayer.photoUrl ? (
+                  <img src={selectedPlayer.photoUrl} alt={selectedPlayer.name} style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: getInitialsColor(selectedPlayer.name), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 22, fontWeight: 700, flexShrink: 0 }}>
+                    {selectedPlayer.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+                  </div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{selectedPlayer.name}</h2>
+                  <span style={{ display: 'inline-block', background: 'var(--grey-100)', color: 'var(--grey-600)', padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, fontFamily: 'monospace', marginBottom: 6 }}>{selectedPlayer.shortId}</span>
+                  <div style={{ fontSize: 11, color: 'var(--grey-400)', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                    <span style={{ wordBreak: 'break-all' }}>{selectedPlayer.id}</span>
+                    <CopyButton text={selectedPlayer.id} />
+                  </div>
                 </div>
               </div>
-              <button onClick={() => setSelectedPlayer(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', padding: '0 0 0 16px', lineHeight: 1 }}>×</button>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
               <StatusBadge status={selectedPlayer.status} />
               <RoleBadge role={selectedPlayer.role} />
+              <LevelBadge level={selectedPlayer.level} />
             </div>
 
-            {/* Ranking */}
-            <div style={{ background: 'var(--grey-50)', borderRadius: 8, padding: '16px 20px', marginBottom: 20, textAlign: 'center' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 6 }}>Ranking</div>
-              <div style={{ fontSize: 36, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--turf-green)' }}>{selectedPlayer.ranking.toLocaleString()}</div>
-              <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>puntos</div>
+            {/* Section 2 — Datos Personales */}
+            <div style={{ marginBottom: 20 }}>
+              <SectionHeader label="Datos Personales" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+                <InfoRow label="Email">
+                  <a href={`mailto:${selectedPlayer.email}`} style={{ color: 'var(--turf-green)', textDecoration: 'none', fontWeight: 600, fontSize: 12, wordBreak: 'break-all' }}>{selectedPlayer.email || '—'}</a>
+                </InfoRow>
+                <InfoRow label="Telefono"><span>{selectedPlayer.phone || '—'}</span></InfoRow>
+                <InfoRow label="Sexo"><span>{selectedPlayer.sex === 'M' ? 'Masculino' : selectedPlayer.sex === 'F' ? 'Femenino' : 'No especificado'}</span></InfoRow>
+                <InfoRow label="Nivel">
+                  <span>{selectedPlayer.level === 'beginner' ? 'Principiante' : selectedPlayer.level === 'intermediate' ? 'Intermedio' : selectedPlayer.level === 'advanced' ? 'Avanzado' : '—'}</span>
+                </InfoRow>
+                <InfoRow label="Ciudad"><span>{selectedPlayer.city || '—'}</span></InfoRow>
+                <InfoRow label="Pais"><span>{selectedPlayer.country || '—'}</span></InfoRow>
+              </div>
+              <InfoRow label="Perfil completado">
+                {selectedPlayer.profileCompleted
+                  ? <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>Si</span>
+                  : <span style={{ background: '#f0f0f0', color: '#888', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 500 }}>No</span>
+                }
+              </InfoRow>
             </div>
 
-            {/* Info rows */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 20 }}>
-              {[
-                { label: 'Telefono', value: selectedPlayer.phone || '—' },
-                { label: 'Ciudad', value: selectedPlayer.city || '—' },
-                { label: 'Pais', value: selectedPlayer.country || '—' },
-                { label: 'Club', value: selectedPlayer.club || '—' },
-                { label: 'Fecha de ingreso', value: selectedPlayer.joinedAt },
-                { label: 'Ultima actividad', value: selectedPlayer.lastActive },
-              ].map(({ label, value }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
-                  <span style={{ color: 'var(--grey-500)' }}>{label}</span>
-                  <span style={{ fontWeight: 600 }}>{value}</span>
+            {/* Section 3 — Ranking */}
+            <div style={{ marginBottom: 20 }}>
+              <SectionHeader label="Ranking" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
+                <div style={{ background: 'var(--grey-50)', borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 4 }}>Posicion</div>
+                  <div style={{ fontSize: 32, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--turf-green)' }}>#{selectedPlayer.ranking}</div>
                 </div>
-              ))}
+                <div style={{ background: 'var(--grey-50)', borderRadius: 8, padding: '14px 16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 4 }}>Puntos</div>
+                  <div style={{ fontSize: 28, fontWeight: 800, fontFamily: 'var(--font-display)', color: '#3b82f6' }}>{selectedPlayer.rankingPoints.toLocaleString()}</div>
+                  <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>pts</div>
+                </div>
+              </div>
+              {selectedPlayer.club && <InfoRow label="Club"><span>{selectedPlayer.club}</span></InfoRow>}
             </div>
 
-            {/* Custom fields */}
+            {/* Section 4 — Sistema */}
+            <div style={{ marginBottom: 20 }}>
+              <SectionHeader label="Sistema" />
+              <div style={{ background: 'var(--grey-50)', padding: '8px 12px', borderRadius: 4, marginBottom: 8, fontFamily: 'monospace', fontSize: 11, color: 'var(--grey-500)', wordBreak: 'break-all' }}>
+                {selectedPlayer.id}
+                <CopyButton text={selectedPlayer.id} />
+              </div>
+              <InfoRow label="Estado"><StatusBadge status={selectedPlayer.status} /></InfoRow>
+              <InfoRow label="Rol"><RoleBadge role={selectedPlayer.role} /></InfoRow>
+              <InfoRow label="Fecha de ingreso"><span>{selectedPlayer.joinedAt}</span></InfoRow>
+              <InfoRow label="Ultima actividad"><span>{selectedPlayer.lastActive}</span></InfoRow>
+            </div>
+
+            {/* Section 5 — Campos Personalizados */}
             {customFields.length > 0 && selectedPlayer.customFields && Object.keys(selectedPlayer.customFields).length > 0 && (
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 10 }}>Campos personalizados</div>
+                <SectionHeader label="Campos Personalizados" />
                 {customFields.filter(f => selectedPlayer.customFields?.[f]).map(f => (
-                  <div key={f} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
-                    <span style={{ color: 'var(--grey-500)' }}>{f}</span>
-                    <span style={{ fontWeight: 600 }}>{selectedPlayer.customFields?.[f]}</span>
-                  </div>
+                  <InfoRow key={f} label={f}><span>{selectedPlayer.customFields?.[f]}</span></InfoRow>
                 ))}
               </div>
             )}
 
-            {/* Relationships */}
+            {/* Section 6 — Relaciones */}
             {(() => {
               const rels = getRelationships(selectedPlayer.id);
               if (rels.length === 0) return null;
               const relTypeLabels: Record<PlayerRelationship['type'], string> = { friend: 'Amigo', rival: 'Rival', teammate: 'Companero' };
               return (
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 10 }}>Relaciones</div>
+                  <SectionHeader label="Relaciones" />
                   {rels.map(r => {
                     const otherId = r.playerId === selectedPlayer.id ? r.relatedPlayerId : r.playerId;
                     const other = playerById[otherId];
                     return (
-                      <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
-                        <span style={{ fontWeight: 600 }}>{other?.name ?? otherId}</span>
-                        <span style={{ color: 'var(--grey-400)' }}>{relTypeLabels[r.type]}</span>
-                      </div>
+                      <InfoRow key={r.id} label={other?.name ?? otherId}><span style={{ color: 'var(--grey-400)' }}>{relTypeLabels[r.type]}</span></InfoRow>
                     );
                   })}
                 </div>
               );
             })()}
+
+            {/* Reset password inline */}
+            {showResetPwField && (
+              <div style={{ marginBottom: 16, padding: '14px 16px', background: 'var(--grey-50)', borderRadius: 6, border: '1px solid var(--grey-200)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Nueva Contrasena</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type={showDrawerPassword ? 'text' : 'password'}
+                    value={resetPwValue}
+                    onChange={e => setResetPwValue(e.target.value)}
+                    placeholder="Nueva contrasena..."
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button type="button" onClick={() => setShowDrawerPassword(v => !v)}
+                    style={{ padding: '8px 12px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 12, color: 'var(--grey-600)', fontWeight: 600, flexShrink: 0 }}>
+                    {showDrawerPassword ? 'Ocultar' : 'Ver'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button onClick={handleResetPasswordInline}
+                    style={{ flex: 1, padding: '8px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                    Guardar contrasena
+                  </button>
+                  <button onClick={() => { setShowResetPwField(false); setResetPwValue(''); }}
+                    style={{ padding: '8px 14px', background: 'transparent', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', fontSize: 12, color: 'var(--grey-500)' }}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Action buttons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
@@ -849,7 +1070,7 @@ export default function PlayersPage() {
                   Desbloquear
                 </button>
               )}
-              <button onClick={() => { toast('Correo de reseteo de contrasena enviado'); }}
+              <button onClick={() => { setShowResetPwField(v => !v); setResetPwValue(''); }}
                 style={{ padding: '10px', background: 'transparent', color: 'var(--grey-600)', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                 Resetear Contrasena
               </button>
@@ -867,7 +1088,7 @@ export default function PlayersPage() {
 
       {/* CREATE MODAL */}
       {showCreateModal && (
-        <Modal onClose={() => setShowCreateModal(false)}>
+        <Modal onClose={() => setShowCreateModal(false)} maxWidth={640}>
           <PlayerForm
             mode="create"
             initial={{}}
@@ -880,7 +1101,7 @@ export default function PlayersPage() {
 
       {/* EDIT MODAL */}
       {editPlayer && (
-        <Modal onClose={() => setEditPlayer(null)}>
+        <Modal onClose={() => setEditPlayer(null)} maxWidth={640}>
           <PlayerForm
             mode="edit"
             initial={editPlayer}
