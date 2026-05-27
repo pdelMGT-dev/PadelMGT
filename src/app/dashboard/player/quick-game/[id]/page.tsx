@@ -689,9 +689,9 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       const current = prev[key] ?? { p1: '', p2: '' };
       if (isPointsMode && ptTarget !== null) {
         const n = parseInt(val, 10);
-        if (!isNaN(n) && n >= 0 && n <= ptTarget) {
-          return { ...prev, [key]: { p1: val, p2: String(ptTarget - n) } };
-        }
+        if (isNaN(n) || n < 0) return { ...prev, [key]: { ...current, p1: val } };
+        const clamped = Math.min(n, ptTarget);
+        return { ...prev, [key]: { p1: String(clamped), p2: String(ptTarget - clamped) } };
       }
       return { ...prev, [key]: { ...current, p1: val } };
     });
@@ -702,9 +702,9 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       const current = prev[key] ?? { p1: '', p2: '' };
       if (isPointsMode && ptTarget !== null) {
         const n = parseInt(val, 10);
-        if (!isNaN(n) && n >= 0 && n <= ptTarget) {
-          return { ...prev, [key]: { p1: String(ptTarget - n), p2: val } };
-        }
+        if (isNaN(n) || n < 0) return { ...prev, [key]: { ...current, p2: val } };
+        const clamped = Math.min(n, ptTarget);
+        return { ...prev, [key]: { p1: String(ptTarget - clamped), p2: String(clamped) } };
       }
       return { ...prev, [key]: { ...current, p2: val } };
     });
