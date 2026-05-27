@@ -98,11 +98,11 @@ export function applyGameRankingResults(game: ActiveGame): RankingEntry[] {
     let delta = 0;
     if (s) {
       if (isTraditional) {
-        // +/- = 3×setsWon - setsLost  (pointsFor = sets won, pointsAgainst = sets lost)
+        // (setsWon × 3) + (setsLost × -1)
         delta = s.pointsFor * 3 - s.pointsAgainst;
       } else {
-        // +/- = pointsFor - pointsAgainst
-        delta = s.diff;
+        // (W × 3) + (T × 1) + (L × -1)
+        delta = s.wins * 3 + s.draws - s.losses;
       }
     }
 

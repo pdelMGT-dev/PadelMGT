@@ -120,6 +120,27 @@ function computePairStandings(game: ActiveGame, isPointsMode: boolean) {
   }).sort((a, b) => b.pts - a.pts || b.diff - a.diff);
 }
 
+function getPositions(standings: { wins: number; losses: number; draws: number; played: number; diff: number; pointsFor: number; pointsAgainst: number }[], isPointsMode: boolean): number[] {
+  const positions: number[] = [];
+  let currentPos = 1;
+  for (let i = 0; i < standings.length; i++) {
+    if (i === 0) { positions.push(1); continue; }
+    const curr = getDisplayStats(standings[i], isPointsMode);
+    const prev = getDisplayStats(standings[i - 1], isPointsMode);
+    const tied = curr.w === prev.w && curr.l === prev.l && curr.t === prev.t && curr.diff === prev.diff;
+    if (!tied) currentPos = i + 1;
+    positions.push(currentPos);
+  }
+  return positions;
+}
+
+function posMedal(pos: number): string {
+  if (pos === 1) return '🥇';
+  if (pos === 2) return '🥈';
+  if (pos === 3) return '🥉';
+  return String(pos);
+}
+
 function getDisplayStats(s: { wins: number; losses: number; draws: number; played: number; diff: number; pointsFor: number; pointsAgainst: number }, isPointsMode: boolean) {
   if (isPointsMode) {
     return {
@@ -1898,22 +1919,26 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               </tr>
             </thead>
             <tbody>
-              {game.standings.map((s, i) => {
-                const ds = getDisplayStats(s, isPointsMode);
-                return (
-                  <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
-                    <td style={{ padding: '10px 8px 10px 0', fontWeight: 700, color: i === 0 ? 'var(--turf-green)' : 'var(--grey-400)', fontSize: 12 }}>{i + 1}</td>
-                    <td style={{ padding: '10px 8px 10px 0', fontWeight: 600 }}>{s.playerName}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{ds.pj}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{ds.w}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{ds.l}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{ds.t}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', fontWeight: 700 }}>{ds.ptsW}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{ds.ptsL}</td>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', color: ds.diff >= 0 ? 'var(--turf-green)' : '#ee0005' }}>{ds.diff > 0 ? '+' : ''}{ds.diff}</td>
-                  </tr>
-                );
-              })}
+              {(() => {
+                const positions = getPositions(game.standings, isPointsMode);
+                return game.standings.map((s, i) => {
+                  const ds = getDisplayStats(s, isPointsMode);
+                  const pos = positions[i];
+                  return (
+                    <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
+                      <td style={{ padding: '10px 8px 10px 0', fontWeight: 700, fontSize: pos <= 3 ? 14 : 12 }}>{posMedal(pos)}</td>
+                      <td style={{ padding: '10px 8px 10px 0', fontWeight: 600 }}>{s.playerName}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{ds.pj}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{ds.w}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{ds.l}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 8px', color: 'var(--grey-500)' }}>{ds.t}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 8px', fontWeight: 700 }}>{ds.ptsW}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 8px', color: '#ee0005' }}>{ds.ptsL}</td>
+                      <td style={{ textAlign: 'center', padding: '10px 8px', color: ds.diff >= 0 ? 'var(--turf-green)' : '#ee0005' }}>{ds.diff > 0 ? '+' : ''}{ds.diff}</td>
+                    </tr>
+                  );
+                });
+              })()}
             </tbody>
           </table>
         </div>
@@ -1985,24 +2010,28 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 </tr>
               </thead>
               <tbody>
-                {game.standings.map((s, i) => {
-                  const ds = getDisplayStats(s, isPointsMode);
-                  return (
-                    <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
-                      <td style={{ padding: '12px 8px 12px 0', fontWeight: 800, fontSize: i < 3 ? 15 : 12, color: i === 0 ? 'var(--turf-green)' : i === 1 ? '#b45309' : i === 2 ? '#6b7280' : 'var(--grey-400)' }}>
-                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
-                      </td>
-                      <td style={{ padding: '12px 8px 12px 0', fontWeight: 600 }}>{s.playerName}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{ds.pj}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{ds.w}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{ds.l}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{ds.t}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', fontWeight: 800, fontSize: 15 }}>{ds.ptsW}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{ds.ptsL}</td>
-                      <td style={{ textAlign: 'center', padding: '12px 8px', color: ds.diff >= 0 ? 'var(--turf-green)' : '#ee0005', fontWeight: 600 }}>{ds.diff > 0 ? '+' : ''}{ds.diff}</td>
-                    </tr>
-                  );
-                })}
+                {(() => {
+                  const positions = getPositions(game.standings, isPointsMode);
+                  return game.standings.map((s, i) => {
+                    const ds = getDisplayStats(s, isPointsMode);
+                    const pos = positions[i];
+                    return (
+                      <tr key={s.playerId} style={{ borderTop: '1px solid var(--grey-100)' }}>
+                        <td style={{ padding: '12px 8px 12px 0', fontWeight: 800, fontSize: pos <= 3 ? 15 : 12 }}>
+                          {posMedal(pos)}
+                        </td>
+                        <td style={{ padding: '12px 8px 12px 0', fontWeight: 600 }}>{s.playerName}</td>
+                        <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{ds.pj}</td>
+                        <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--turf-green)', fontWeight: 600 }}>{ds.w}</td>
+                        <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{ds.l}</td>
+                        <td style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--grey-500)' }}>{ds.t}</td>
+                        <td style={{ textAlign: 'center', padding: '12px 8px', fontWeight: 800, fontSize: 15 }}>{ds.ptsW}</td>
+                        <td style={{ textAlign: 'center', padding: '12px 8px', color: '#ee0005' }}>{ds.ptsL}</td>
+                        <td style={{ textAlign: 'center', padding: '12px 8px', color: ds.diff >= 0 ? 'var(--turf-green)' : '#ee0005', fontWeight: 600 }}>{ds.diff > 0 ? '+' : ''}{ds.diff}</td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>
@@ -2043,24 +2072,27 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
           </div>
 
           {/* Ranking adjustments */}
-          {rankingEntries.length > 0 && (
+          {game.standings.length > 0 && (
             <div style={cardStyle}>
               <div style={secTitle}>Ajustes de Ranking</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-                {rankingEntries.map(entry => (
-                  <div key={entry.id} style={{ padding: '16px', border: '1px solid var(--grey-200)', background: entry.result === 'win' ? '#dcfce7' : entry.result === 'loss' ? '#fee2e2' : '#fef3c7' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{entry.playerName}</div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, color: entry.delta > 0 ? 'var(--turf-green)' : '#ee0005', letterSpacing: '-0.02em' }}>
-                      {entry.delta > 0 ? '+' : ''}{entry.delta}
+                {game.standings.map(s => {
+                  const delta = !isPointsMode
+                    ? s.pointsFor * 3 - s.pointsAgainst          // tradicional: (setsW×3) + (setsL×-1)
+                    : s.wins * 3 + s.draws - s.losses;            // puntos: (W×3) + (T×1) + (L×-1)
+                  const result = delta > 0 ? 'win' : delta < 0 ? 'loss' : 'draw';
+                  return (
+                    <div key={s.playerId} style={{ padding: '16px', border: '1px solid var(--grey-200)', background: result === 'win' ? '#dcfce7' : result === 'loss' ? '#fee2e2' : '#fef3c7' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{s.playerName}</div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, color: delta > 0 ? 'var(--turf-green)' : delta < 0 ? '#ee0005' : '#b45309', letterSpacing: '-0.02em' }}>
+                        {delta > 0 ? '+' : ''}{delta}
+                      </div>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, color: result === 'win' ? '#166534' : result === 'loss' ? '#ee0005' : '#b45309', marginTop: 4 }}>
+                        {result === 'win' ? 'Victoria' : result === 'loss' ? 'Derrota' : 'Empate'}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, color: entry.result === 'win' ? '#166534' : entry.result === 'loss' ? '#ee0005' : '#b45309', marginTop: 4 }}>
-                      {entry.result === 'win' ? 'Victoria' : entry.result === 'loss' ? 'Derrota' : 'Empate'}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 4 }}>
-                      Total: {entry.newTotal} pts
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
