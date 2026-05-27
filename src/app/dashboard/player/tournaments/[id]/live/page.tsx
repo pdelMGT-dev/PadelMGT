@@ -205,6 +205,16 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     }
   }, [tournament?.currentRound, tournament?.status]);
 
+  // ── Auto-show finish screen when tournament is already finished ───────────
+  useEffect(() => {
+    if (tournament?.status === 'finished' && !showFinishScreen) {
+      const entries = getRankingHistoryForGame(tournament.id);
+      setRankingEntries(entries);
+      setShowFinishScreen(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournament?.id, tournament?.status]);
+
   // ── Redirect if not live or finished ─────────────────────────────────────
   useEffect(() => {
     if (tournament && tournament.status !== 'live' && tournament.status !== 'finished') {
@@ -303,9 +313,21 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     const raw = scoreInputs[key] ?? { p1: '', p2: '' };
     const p1 = Math.max(0, parseInt(raw.p1 || '0', 10));
     const p2 = Math.max(0, parseInt(raw.p2 || '0', 10));
-    const updated = updateMatchScore(t, roundNum, courtNum, p1, p2);
+    const sets = !isPointsMode
+      ? (setInputs[key] ?? [])
+          .map(s => ({ p1: parseInt(s.p1 || '0', 10), p2: parseInt(s.p2 || '0', 10) }))
+          .filter(s => !isNaN(s.p1) && !isNaN(s.p2) && (s.p1 > 0 || s.p2 > 0))
+      : undefined;
+    const updated = updateMatchScore(t, roundNum, courtNum, p1, p2, sets);
     saveTournament(updated);
     setTournament(updated);
+    // When saving the last score finishes the tournament automatically, trigger finish flow
+    if (updated.status === 'finished') {
+      const applied = applyTournamentRankingResults(updated);
+      const entries = applied.length > 0 ? applied : getRankingHistoryForGame(updated.id);
+      setRankingEntries(entries);
+      setShowFinishScreen(true);
+    }
   }
 
   function handleTradSetChange(key: string, setIdx: number, side: 'p1' | 'p2', val: string, roundNum: number, courtNum: number) {
@@ -353,6 +375,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     const standings = calculateStandings(t);
     const updated: Tournament = { ...t, status: 'finished', standings };
     saveTournament(updated);
+    setTournament(updated);
     const applied = applyTournamentRankingResults(updated);
     const entries = applied.length > 0 ? applied : getRankingHistoryForGame(updated.id);
     setRankingEntries(entries);
@@ -666,7 +689,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                     <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>
                       RONDA {round.num}
                     </span>
-                    {isActive && (
+                    {isActive && !roundDone && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--turf-green, #22c55e)', fontWeight: 600 }}>
                         <span style={{
                           width: 6, height: 6, borderRadius: '50%',
@@ -677,7 +700,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                         EN JUEGO
                       </span>
                     )}
-                    {isCompleted && (
+                    {(isCompleted || roundDone) && (
                       <span style={{ fontSize: 11, color: 'var(--grey-400)', fontWeight: 600 }}>✓ COMPLETADA</span>
                     )}
                     {isPending && (
