@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import { getTournament, saveTournament } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
-import { applyTournamentRankingResults, getRankingHistoryForGame } from '@/lib/ranking-store';
-import type { RankingEntry } from '@/lib/ranking-store';
+import { applyTournamentRankingResults } from '@/lib/ranking-store';
 import {
   updateMatchScore,
   startNextRound,
@@ -14,7 +13,7 @@ import {
   isGameFinished,
   calculateStandings,
 } from '@/lib/game-engine';
-import type { GameRound, GamePlayer, Standing, FixedPair } from '@/lib/game-engine';
+import type { GameRound, GamePlayer, Standing, FixedPair, CourtMatch } from '@/lib/game-engine';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -158,10 +157,9 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [tournament, setTournament] = useState<Tournament | null | undefined>(undefined);
   const [finishConfirm, setFinishConfirm] = useState(false);
-  const [showFinishScreen, setShowFinishScreen] = useState(false);
-  const [rankingEntries, setRankingEntries] = useState<RankingEntry[]>([]);
   const [copied, setCopied] = useState(false);
   const [infoOpen, setInfoOpen] = useState(true);
+  const [roundsHistOpen, setRoundsHistOpen] = useState(true);
   const [roundOpen, setRoundOpen] = useState<Record<number, boolean>>({});
 
   // Score inputs: key = `${roundNum}-${courtNum}`, value = { p1: string; p2: string }
@@ -204,16 +202,6 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
       if (activeRound) setRoundOpen({ [activeRound.num]: true });
     }
   }, [tournament?.currentRound, tournament?.status]);
-
-  // ── Auto-show finish screen when tournament is already finished ───────────
-  useEffect(() => {
-    if (tournament?.status === 'finished' && !showFinishScreen) {
-      const entries = getRankingHistoryForGame(tournament.id);
-      setRankingEntries(entries);
-      setShowFinishScreen(true);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tournament?.id, tournament?.status]);
 
   // ── Redirect if not live or finished ─────────────────────────────────────
   useEffect(() => {
@@ -321,13 +309,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     const updated = updateMatchScore(t, roundNum, courtNum, p1, p2, sets);
     saveTournament(updated);
     setTournament(updated);
-    // When saving the last score finishes the tournament automatically, trigger finish flow
-    if (updated.status === 'finished') {
-      const applied = applyTournamentRankingResults(updated);
-      const entries = applied.length > 0 ? applied : getRankingHistoryForGame(updated.id);
-      setRankingEntries(entries);
-      setShowFinishScreen(true);
-    }
+    if (updated.status === 'finished') applyTournamentRankingResults(updated);
   }
 
   function handleTradSetChange(key: string, setIdx: number, side: 'p1' | 'p2', val: string, roundNum: number, courtNum: number) {
@@ -376,10 +358,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     const updated: Tournament = { ...t, status: 'finished', standings };
     saveTournament(updated);
     setTournament(updated);
-    const applied = applyTournamentRankingResults(updated);
-    const entries = applied.length > 0 ? applied : getRankingHistoryForGame(updated.id);
-    setRankingEntries(entries);
-    setShowFinishScreen(true);
+    applyTournamentRankingResults(updated);
     setFinishConfirm(false);
   }
 
@@ -401,90 +380,228 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
   // ── Creator player ────────────────────────────────────────────────────────
   const creatorPlayer = t.players.find(p => p.id === t.creatorId || p.isCreator);
+  const isParejas = t.pairType === 'parejas' && (t.fixedPairs?.length ?? 0) > 0;
 
-  // ── Finish screen ─────────────────────────────────────────────────────────
-  if (showFinishScreen) {
+  function getFinishedPairLabel(pids: string[]): string {
+    if (isParejas && t.fixedPairs) {
+      const pair = t.fixedPairs.find(fp => pids.includes(fp.player1Id));
+      if (pair) return pair.name || `${pair.player1Name} / ${pair.player2Name}`;
+    }
+    return pids.map(pid => t.players.find(p => p.id === pid)?.name ?? pid).join(' / ');
+  }
+
+  function getScoreDisplay(court: CourtMatch): string {
+    if (court.sets && court.sets.length > 0) return court.sets.map((s: { p1: number; p2: number }) => `${s.p1}-${s.p2}`).join('  ');
+    return `${court.pair1Score ?? '—'} – ${court.pair2Score ?? '—'}`;
+  }
+
+  // ── Permanent finished view ───────────────────────────────────────────────
+  if (isFinished) {
     const finalStandings = calculateStandings(t);
+
+    const rankingDeltas = finalStandings.map(s => {
+      const wins = s.wins;
+      const draws = s.draws ?? 0;
+      const losses = s.losses ?? (s.played - wins - draws);
+      const delta = wins * 3 + draws * 1 + losses * (-1);
+      return {
+        playerId: s.playerId,
+        playerName: s.playerName,
+        delta,
+        result: (delta > 0 ? 'win' : delta < 0 ? 'loss' : 'draw') as 'win' | 'loss' | 'draw',
+      };
+    }).sort((a, b) => b.delta - a.delta);
+
+    const secLabel: React.CSSProperties = {
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
+      color: 'var(--grey-400)', marginBottom: 0,
+    };
+
+    const thS = (left?: boolean): React.CSSProperties => ({
+      padding: '6px 8px', textAlign: left ? 'left' : 'center',
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)',
+    });
+    const tdC: React.CSSProperties = { padding: '7px 8px', textAlign: 'center', fontSize: 12 };
+    const tdL: React.CSSProperties = { padding: '7px 8px', textAlign: 'left', fontSize: 12 };
+
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--black)', paddingBottom: 60 }}>
+      <div style={{ paddingBottom: 80, background: 'var(--grey-50)', minHeight: '100vh' }}>
+
+        {/* ── Tournament name header ── */}
+        <div style={{ background: 'var(--black)', padding: '14px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Link href={`/dashboard/player/tournaments/${id}`} style={{ color: 'var(--grey-300)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+            ← Gestionar
+          </Link>
+          <div style={{ flex: 1, textAlign: 'center', padding: '0 16px' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', color: '#fff', lineHeight: 1.2 }}>{t.name}</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 3 }}>{t.date} · {t.club}, {t.city}</div>
+          </div>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--neon)', padding: '3px 10px', border: '1px solid var(--neon)', whiteSpace: 'nowrap' }}>
+            FINALIZADO
+          </span>
+        </div>
+
+        {/* ── Podium ── */}
         <PodiumSection standings={finalStandings} fixedPairs={t.fixedPairs} />
 
-        <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 32px' }}>
-          {/* Ranking adjustment matrix */}
-          {rankingEntries.length > 0 && (
-            <div style={{ marginBottom: 40 }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontWeight: 700, marginBottom: 20 }}>
-                Ajustes de Ranking
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-                {rankingEntries
-                  .sort((a, b) => b.delta - a.delta)
-                  .map(e => (
-                    <div key={e.playerId} style={{
-                      padding: '16px',
-                      background: e.result === 'win' ? '#dcfce7' : e.result === 'loss' ? '#fee2e2' : '#fef3c7',
-                      border: '1px solid transparent',
-                    }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6, color: 'var(--black)' }}>{e.playerName}</div>
-                      <div style={{
-                        fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em',
-                        color: e.delta > 0 ? '#166534' : e.delta < 0 ? '#ee0005' : '#b45309',
-                      }}>
-                        {e.delta > 0 ? '+' : ''}{e.delta}
-                      </div>
-                      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700, marginTop: 4, color: e.result === 'win' ? '#166534' : e.result === 'loss' ? '#ee0005' : '#b45309' }}>
-                        {e.result === 'win' ? 'Victoria' : e.result === 'loss' ? 'Derrota' : 'Empate'}
-                      </div>
+        {/* ── Content ── */}
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 32px' }}>
+
+          {/* ── INFO DEL TORNEO (collapsible) ── */}
+          <div style={{ background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 16 }}>
+            <button onClick={() => setInfoOpen(o => !o)}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', background: 'none', border: 'none', cursor: 'pointer' }}>
+              <span style={secLabel}>Info del Torneo</span>
+              <span style={{ fontSize: 12, color: 'var(--grey-400)', transform: infoOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
+            </button>
+            {infoOpen && (
+              <div style={{ padding: '0 20px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                <div>
+                  {[
+                    ['Formato', FORMAT_LABEL[t.format] ?? t.format],
+                    ['Modo', t.pairType === 'parejas' ? 'Parejas fijas' : 'Individual'],
+                    ['Jugadores', `${t.players.length}/${t.maxPlayers}`],
+                    ['Rondas', String(sortedRounds.length)],
+                    ['Puntuación', scoreConfigLabel],
+                    ['Club', t.club],
+                    ['Ciudad', t.city],
+                  ].map(([label, val]) => (
+                    <div key={label} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', minWidth: 90 }}>{label}</span>
+                      <span style={{ fontSize: 12, color: 'var(--black)' }}>{val}</span>
                     </div>
                   ))}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--grey-400)' }}>Código QR</span>
+                  <QRCodeSVG value={shareUrl} size={100} />
+                  <span style={{ fontSize: 10, color: 'var(--grey-400)' }}>{t.code}</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Full standings table */}
-          <div style={{ marginBottom: 40 }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontWeight: 700, marginBottom: 16 }}>
-              Tabla Final
+          {/* ── HISTORIAL DE RONDAS (collapsible section) ── */}
+          <div style={{ background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 16 }}>
+            <button onClick={() => setRoundsHistOpen(o => !o)}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', background: 'none', border: 'none', cursor: 'pointer' }}>
+              <span style={secLabel}>Historial de Rondas</span>
+              <span style={{ fontSize: 12, color: 'var(--grey-400)', transform: roundsHistOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
+            </button>
+            {roundsHistOpen && (
+              <div style={{ padding: '0 12px 12px' }}>
+                {sortedRounds.map(round => {
+                  const rOpen = roundOpen[round.num] !== false;
+                  return (
+                    <div key={round.num} style={{ marginBottom: 4, border: '1px solid var(--grey-100)' }}>
+                      <button onClick={() => setRoundOpen(prev => ({ ...prev, [round.num]: !rOpen }))}
+                        style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', background: 'var(--grey-50)', border: 'none', cursor: 'pointer' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-600)' }}>Ronda {round.num}</span>
+                        <span style={{ fontSize: 11, color: 'var(--grey-400)', transform: rOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s', display: 'inline-block' }}>▼</span>
+                      </button>
+                      {rOpen && (
+                        <div style={{ padding: '6px 14px 10px' }}>
+                          {round.courts.map(court => {
+                            const p1W = (court.pair1Score ?? 0) > (court.pair2Score ?? 0);
+                            const p2W = (court.pair2Score ?? 0) > (court.pair1Score ?? 0);
+                            return (
+                              <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--grey-50)', fontSize: 12 }}>
+                                <span style={{ fontSize: 9, color: 'var(--grey-400)', width: 48, flexShrink: 0, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>C{court.courtNum}</span>
+                                <span style={{ fontWeight: p1W ? 700 : 400, flex: 1, color: p1W ? 'var(--black)' : 'var(--grey-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getFinishedPairLabel(court.pair1)}</span>
+                                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, minWidth: 64, textAlign: 'center', letterSpacing: '0.02em', flexShrink: 0 }}>{getScoreDisplay(court)}</span>
+                                <span style={{ fontWeight: p2W ? 700 : 400, flex: 1, textAlign: 'right', color: p2W ? 'var(--black)' : 'var(--grey-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getFinishedPairLabel(court.pair2)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── TABLA FINAL DE CLASIFICACIÓN ── */}
+          <div style={{ background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 16, overflow: 'hidden' }}>
+            <div style={{ background: 'var(--black)', color: '#fff', padding: '10px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+              Tabla Final de Clasificación
             </div>
-            <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)' }}>
-              {finalStandings.map((s, i) => (
-                <div key={s.playerId} style={{
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  padding: '12px 20px',
-                  borderBottom: i < finalStandings.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--grey-100)' }}>
+                  <th style={thS()}>POS</th>
+                  <th style={thS(true)}>{isParejas ? 'EQUIPO' : 'JUGADOR'}</th>
+                  <th style={thS()}>PJ</th>
+                  <th style={thS()}>W</th>
+                  <th style={thS()}>D</th>
+                  <th style={thS()}>L</th>
+                  <th style={thS()}>PTS</th>
+                  <th style={thS()}>+/-</th>
+                </tr>
+              </thead>
+              <tbody>
+                {finalStandings.map((s, i) => {
+                  const isMe = currentUser && s.playerId === currentUser.id;
+                  let rowLabel = s.playerName;
+                  if (isParejas && t.fixedPairs) {
+                    const pair = t.fixedPairs.find(fp => fp.player1Id === s.playerId);
+                    if (pair) rowLabel = pair.name || `${pair.player1Name} / ${pair.player2Name}`;
+                  }
+                  const posIcon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1);
+                  return (
+                    <tr key={s.playerId} style={{ borderBottom: '1px solid var(--grey-100)', background: isMe ? 'rgba(214,255,0,0.06)' : 'transparent' }}>
+                      <td style={{ ...tdC, fontFamily: 'var(--font-display)', fontWeight: 700 }}>{posIcon}</td>
+                      <td style={{ ...tdL, fontWeight: isMe ? 700 : 500 }}>
+                        {rowLabel}{isMe && <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--grey-400)' }}>(tú)</span>}
+                      </td>
+                      <td style={tdC}>{s.played}</td>
+                      <td style={tdC}>{s.wins}</td>
+                      <td style={tdC}>{s.draws ?? 0}</td>
+                      <td style={tdC}>{s.losses ?? 0}</td>
+                      <td style={{ ...tdC, fontFamily: 'var(--font-display)', fontWeight: 700 }}>{s.pts}</td>
+                      <td style={{ ...tdC, color: s.diff >= 0 ? 'var(--turf-green, #16a34a)' : '#dc2626' }}>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── AJUSTES DE RANKING (matrix) ── */}
+          <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '20px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 16 }}>
+              Ajustes de Ranking
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+              {rankingDeltas.map(rd => (
+                <div key={rd.playerId} style={{
+                  padding: '16px',
+                  background: rd.result === 'win' ? '#dcfce7' : rd.result === 'loss' ? '#fee2e2' : '#fef3c7',
                 }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: i === 0 ? '#c9a227' : i === 1 ? '#9e9e9e' : i === 2 ? '#a0522d' : 'rgba(255,255,255,0.4)', minWidth: 28, textAlign: 'center' }}>
-                    {i + 1}
-                  </span>
-                  <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#fff' }}>{s.playerName}</span>
-                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
-                    {s.wins}V {s.losses}D
-                  </span>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: '#fff', minWidth: 48, textAlign: 'right' }}>{s.pts}</span>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6, color: 'var(--black)' }}>{rd.playerName}</div>
+                  <div style={{
+                    fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em',
+                    color: rd.delta > 0 ? '#166534' : rd.delta < 0 ? '#ee0005' : '#b45309',
+                  }}>
+                    {rd.delta > 0 ? '+' : ''}{rd.delta}
+                  </div>
+                  <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700, marginTop: 4, color: rd.result === 'win' ? '#166534' : rd.result === 'loss' ? '#ee0005' : '#b45309' }}>
+                    {rd.result === 'win' ? 'Victoria' : rd.result === 'loss' ? 'Derrota' : 'Empate'}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* CTA */}
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <Link href={`/dashboard/player/tournaments/${id}`}
-              style={{ padding: '14px 40px', background: 'var(--neon)', color: 'var(--black)', fontSize: 13, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}>
-              Ver Torneo →
-            </Link>
-          </div>
         </div>
+        <style>{`@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(1.3)}}`}</style>
       </div>
     );
   }
 
   return (
     <div style={{ paddingBottom: 80 }}>
-
-      {/* ── Podium (finished mode, revisiting) ── */}
-      {isFinished && (
-        <PodiumSection standings={calculateStandings(t)} fixedPairs={t.fixedPairs} />
-      )}
 
       {/* ── Sticky top bar ── */}
       <div style={{

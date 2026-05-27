@@ -137,13 +137,8 @@ export function applyGameRankingResults(game: ActiveGame): RankingEntry[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Position prizes for Americano-style tournaments (pool 250 pts).
- * Index is 0-based position. Positions >= 5 get 0 pts.
- */
-const POSITION_PRIZES = [250, 175, 125, 62, 25];
-
-/**
  * Apply tournament final standings to ranking and persist entries.
+ * Uses same formula as quick games: W×3 + D×1 + L×-1.
  * Skips if already recorded for this tournament.
  * Returns the list of entries created.
  */
@@ -155,30 +150,16 @@ export function applyTournamentRankingResults(tournament: Tournament): RankingEn
   if (all.some((e) => e.gameId === tournament.id)) return [];
 
   const standings = calculateStandings(tournament);
-  const n = standings.length;
 
-  // Sort by pts descending to determine final positions
-  const sorted = [...standings].sort((a, b) => b.pts - a.pts);
-
-  for (let position = 0; position < sorted.length; position++) {
-    const standing = sorted[position];
+  for (const standing of standings) {
     const player = tournament.players.find((p) => p.id === standing.playerId);
     if (!player) continue;
 
-    const positionPrize = position < POSITION_PRIZES.length ? POSITION_PRIZES[position] : 0;
-
-    // Per-game bonus: wins * 3, draws * 1, losses * (-1)
-    // Standing only has wins and played; derive draws = pts - wins*3 (for americano pts = scored points not match pts)
-    // Use wins directly; draws and losses approximated from played
     const wins = standing.wins;
-    const losses = standing.played - wins; // treat non-wins as losses for bonus (no draw tracking in Standing)
-    const perGameBonus = wins * 3 + losses * (-1);
-
-    const delta = positionPrize + perGameBonus;
-
-    // result: win if 1st place, loss if last place, draw otherwise
-    const result: RankingResult =
-      position === 0 ? 'win' : position === n - 1 ? 'loss' : 'draw';
+    const draws = standing.draws ?? 0;
+    const losses = standing.losses ?? (standing.played - wins - draws);
+    const delta = wins * 3 + draws * 1 + losses * (-1);
+    const result: RankingResult = delta > 0 ? 'win' : delta < 0 ? 'loss' : 'draw';
 
     const current = getPlayerCurrentPoints(player.id);
     const newTotal = Math.max(0, current + delta);

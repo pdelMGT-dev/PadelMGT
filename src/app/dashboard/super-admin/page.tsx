@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import {
+  getAllRankingConfigs,
+  saveRankingConfig,
+  createRankingConfig,
+  deleteRankingConfig,
+} from '@/lib/ranking-config-store';
+import type { RankingTableConfig } from '@/lib/ranking-config-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,7 +32,7 @@ interface ClubRequest {
   createdAt: string;
 }
 
-type Tab = 'overview' | 'requests' | 'clubs' | 'users';
+type Tab = 'overview' | 'requests' | 'clubs' | 'users' | 'ranking';
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
@@ -101,6 +108,10 @@ export default function SuperAdminPage() {
     reason: '',
   });
   const [toast, setToast] = useState('');
+  const [rankingConfigs, setRankingConfigs] = useState<RankingTableConfig[]>([]);
+  const [editingConfig, setEditingConfig] = useState<RankingTableConfig | null>(null);
+  const [newConfig, setNewConfig] = useState({ name: '', scope: 'league' as RankingTableConfig['scope'], pointsWin: 3, pointsDraw: 1, pointsLoss: -1 });
+  const [showNewConfigForm, setShowNewConfigForm] = useState(false);
 
   // Load requests from localStorage (SSR-safe)
   useEffect(() => {
@@ -114,6 +125,10 @@ export default function SuperAdminPage() {
         }
       }
     }
+  }, []);
+
+  useEffect(() => {
+    setRankingConfigs(getAllRankingConfigs());
   }, []);
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
@@ -260,6 +275,7 @@ export default function SuperAdminPage() {
             { id: 'requests',  label: `Solicitudes${pendingCount > 0 ? ` (${pendingCount})` : ''}` },
             { id: 'clubs',     label: 'Clubes' },
             { id: 'users',     label: 'Usuarios' },
+            { id: 'ranking',   label: 'Ranking' },
           ] as { id: Tab; label: string }[]
         ).map((t) => (
           <button
@@ -666,6 +682,123 @@ export default function SuperAdminPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── Tab: Ranking ──────────────────────────────────────────────────────── */}
+      {activeTab === 'ranking' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Tablas de Ranking</div>
+              <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>Configurá los puntos W/D/L por tabla. Cada tabla puede asignarse a liga, club o federación.</div>
+            </div>
+            <button onClick={() => setShowNewConfigForm(v => !v)}
+              style={{ padding: '10px 20px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              + Nueva Tabla
+            </button>
+          </div>
+
+          {showNewConfigForm && (
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '20px', marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--grey-500)', marginBottom: 16 }}>Nueva Tabla de Ranking</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 16 }}>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', display: 'block', marginBottom: 4 }}>Nombre</label>
+                  <input value={newConfig.name} onChange={e => setNewConfig(c => ({ ...c, name: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--grey-200)', fontSize: 13 }} placeholder="Ej: Liga Padel BA" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', display: 'block', marginBottom: 4 }}>Ámbito</label>
+                  <select value={newConfig.scope} onChange={e => setNewConfig(c => ({ ...c, scope: e.target.value as RankingTableConfig['scope'] }))}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--grey-200)', fontSize: 13, background: '#fff' }}>
+                    <option value="league">Liga</option>
+                    <option value="club">Club</option>
+                    <option value="federation">Federación</option>
+                  </select>
+                </div>
+                {([['Victoria (W)', 'pointsWin'], ['Empate (D)', 'pointsDraw'], ['Derrota (L)', 'pointsLoss']] as [string, keyof typeof newConfig][]).map(([label, field]) => (
+                  <div key={field}>
+                    <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', display: 'block', marginBottom: 4 }}>{label}</label>
+                    <input type="number" value={newConfig[field] as number}
+                      onChange={e => setNewConfig(c => ({ ...c, [field]: parseInt(e.target.value, 10) || 0 }))}
+                      style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--grey-200)', fontSize: 13 }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => {
+                  if (!newConfig.name.trim()) return;
+                  createRankingConfig(newConfig.name, newConfig.scope, { win: newConfig.pointsWin, draw: newConfig.pointsDraw, loss: newConfig.pointsLoss });
+                  setRankingConfigs(getAllRankingConfigs());
+                  setNewConfig({ name: '', scope: 'league', pointsWin: 3, pointsDraw: 1, pointsLoss: -1 });
+                  setShowNewConfigForm(false);
+                  setToast('Tabla creada.');
+                }} style={{ padding: '8px 20px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
+                  Guardar
+                </button>
+                <button onClick={() => setShowNewConfigForm(false)} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--grey-500)' }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+            {rankingConfigs.map(cfg => (
+              <div key={cfg.id} style={{ background: '#fff', border: `1px solid ${cfg.id === 'global' ? 'var(--black)' : 'var(--grey-200)'}`, padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{cfg.name}</div>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 8px', background: cfg.id === 'global' ? 'var(--black)' : 'var(--grey-100)', color: cfg.id === 'global' ? '#fff' : 'var(--grey-500)' }}>
+                      {cfg.scope === 'global' ? 'Global' : cfg.scope === 'league' ? 'Liga' : cfg.scope === 'club' ? 'Club' : 'Federación'}
+                    </span>
+                  </div>
+                  {cfg.id !== 'global' && (
+                    <button onClick={() => { deleteRankingConfig(cfg.id); setRankingConfigs(getAllRankingConfigs()); setToast('Tabla eliminada.'); }}
+                      style={{ padding: '3px 8px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 10, color: '#dc2626', fontWeight: 700 }}>✕</button>
+                  )}
+                </div>
+                {editingConfig?.id === cfg.id ? (
+                  <div>
+                    {([['W — Victoria', 'pointsWin'], ['D — Empate', 'pointsDraw'], ['L — Derrota', 'pointsLoss']] as [string, keyof RankingTableConfig][]).map(([label, field]) => (
+                      <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-400)', minWidth: 90 }}>{label}</span>
+                        <input type="number" value={editingConfig[field] as number}
+                          onChange={e => setEditingConfig(c => c ? { ...c, [field]: parseInt(e.target.value, 10) || 0 } : c)}
+                          style={{ width: 72, padding: '5px 8px', border: '1px solid var(--grey-200)', fontSize: 14, fontWeight: 700, textAlign: 'center' }} />
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+                      <button onClick={() => { saveRankingConfig(editingConfig); setRankingConfigs(getAllRankingConfigs()); setEditingConfig(null); setToast('Guardado.'); }}
+                        style={{ padding: '6px 16px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Guardar</button>
+                      <button onClick={() => setEditingConfig(null)}
+                        style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 10, fontWeight: 700, color: 'var(--grey-500)', textTransform: 'uppercase' }}>Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                      {([['Victoria', cfg.pointsWin, '#166534', '#dcfce7'], ['Empate', cfg.pointsDraw, '#b45309', '#fef3c7'], ['Derrota', cfg.pointsLoss, '#ee0005', '#fee2e2']] as [string, number, string, string][]).map(([label, pts, color, bg]) => (
+                        <div key={label} style={{ flex: 1, padding: '8px', background: bg, textAlign: 'center' }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color }}>{pts > 0 ? `+${pts}` : pts}</div>
+                          <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color }}>{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => setEditingConfig({ ...cfg })}
+                      style={{ width: '100%', padding: '7px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--grey-600)' }}>
+                      Editar
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 32, padding: '16px 20px', background: '#fff', border: '1px solid var(--grey-100)', fontSize: 12, color: 'var(--grey-400)' }}>
+            <strong style={{ color: 'var(--grey-600)' }}>Próximamente:</strong> asignar tablas a ligas, clubes y federaciones para calcular rankings independientes por contexto.
+          </div>
         </div>
       )}
     </div>
