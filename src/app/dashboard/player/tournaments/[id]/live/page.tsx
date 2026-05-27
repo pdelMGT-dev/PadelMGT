@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import { getTournament, saveTournament } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
-import { applyTournamentRankingResults } from '@/lib/ranking-store';
+import { applyTournamentRankingResults, getRankingHistoryForGame } from '@/lib/ranking-store';
+import type { RankingEntry } from '@/lib/ranking-store';
 import {
   updateMatchScore,
   startNextRound,
@@ -157,6 +158,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [tournament, setTournament] = useState<Tournament | null | undefined>(undefined);
   const [finishConfirm, setFinishConfirm] = useState(false);
+  const [showFinishScreen, setShowFinishScreen] = useState(false);
+  const [rankingEntries, setRankingEntries] = useState<RankingEntry[]>([]);
   const [copied, setCopied] = useState(false);
   const [infoOpen, setInfoOpen] = useState(true);
   const [roundOpen, setRoundOpen] = useState<Record<number, boolean>>({});
@@ -350,8 +353,11 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     const standings = calculateStandings(t);
     const updated: Tournament = { ...t, status: 'finished', standings };
     saveTournament(updated);
-    applyTournamentRankingResults(updated);
-    router.push(`/dashboard/player/tournaments/${id}`);
+    const applied = applyTournamentRankingResults(updated);
+    const entries = applied.length > 0 ? applied : getRankingHistoryForGame(updated.id);
+    setRankingEntries(entries);
+    setShowFinishScreen(true);
+    setFinishConfirm(false);
   }
 
   // ── Copy URL ──────────────────────────────────────────────────────────────
@@ -373,10 +379,86 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   // ── Creator player ────────────────────────────────────────────────────────
   const creatorPlayer = t.players.find(p => p.id === t.creatorId || p.isCreator);
 
+  // ── Finish screen ─────────────────────────────────────────────────────────
+  if (showFinishScreen) {
+    const finalStandings = calculateStandings(t);
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--black)', paddingBottom: 60 }}>
+        <PodiumSection standings={finalStandings} fixedPairs={t.fixedPairs} />
+
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 32px' }}>
+          {/* Ranking adjustment matrix */}
+          {rankingEntries.length > 0 && (
+            <div style={{ marginBottom: 40 }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontWeight: 700, marginBottom: 20 }}>
+                Ajustes de Ranking
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+                {rankingEntries
+                  .sort((a, b) => b.delta - a.delta)
+                  .map(e => (
+                    <div key={e.playerId} style={{
+                      padding: '16px',
+                      background: e.result === 'win' ? '#dcfce7' : e.result === 'loss' ? '#fee2e2' : '#fef3c7',
+                      border: '1px solid transparent',
+                    }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6, color: 'var(--black)' }}>{e.playerName}</div>
+                      <div style={{
+                        fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em',
+                        color: e.delta > 0 ? '#166534' : e.delta < 0 ? '#ee0005' : '#b45309',
+                      }}>
+                        {e.delta > 0 ? '+' : ''}{e.delta}
+                      </div>
+                      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700, marginTop: 4, color: e.result === 'win' ? '#166534' : e.result === 'loss' ? '#ee0005' : '#b45309' }}>
+                        {e.result === 'win' ? 'Victoria' : e.result === 'loss' ? 'Derrota' : 'Empate'}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Full standings table */}
+          <div style={{ marginBottom: 40 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontWeight: 700, marginBottom: 16 }}>
+              Tabla Final
+            </div>
+            <div style={{ background: '#111', border: '1px solid rgba(255,255,255,0.1)' }}>
+              {finalStandings.map((s, i) => (
+                <div key={s.playerId} style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '12px 20px',
+                  borderBottom: i < finalStandings.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: i === 0 ? '#c9a227' : i === 1 ? '#9e9e9e' : i === 2 ? '#a0522d' : 'rgba(255,255,255,0.4)', minWidth: 28, textAlign: 'center' }}>
+                    {i + 1}
+                  </span>
+                  <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#fff' }}>{s.playerName}</span>
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
+                    {s.wins}V {s.losses}D
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: '#fff', minWidth: 48, textAlign: 'right' }}>{s.pts}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* CTA */}
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <Link href={`/dashboard/player/tournaments/${id}`}
+              style={{ padding: '14px 40px', background: 'var(--neon)', color: 'var(--black)', fontSize: 13, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}>
+              Ver Torneo →
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ paddingBottom: 80 }}>
 
-      {/* ── Podium (finished mode) ── */}
+      {/* ── Podium (finished mode, revisiting) ── */}
       {isFinished && (
         <PodiumSection standings={calculateStandings(t)} fixedPairs={t.fixedPairs} />
       )}
