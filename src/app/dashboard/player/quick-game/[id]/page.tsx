@@ -594,7 +594,12 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     const raw = scoreInputs[key] ?? { p1: '', p2: '' };
     const p1 = Math.max(0, parseInt(raw.p1 || '0', 10));
     const p2 = Math.max(0, parseInt(raw.p2 || '0', 10));
-    const updated = engineUpdateScore(game, roundNum, courtNum, p1, p2);
+    const sets = !isPointsMode
+      ? (setInputs[key] ?? [])
+          .map(s => ({ p1: parseInt(s.p1 || '0', 10), p2: parseInt(s.p2 || '0', 10) }))
+          .filter(s => !isNaN(s.p1) && !isNaN(s.p2) && (s.p1 > 0 || s.p2 > 0))
+      : undefined;
+    const updated = engineUpdateScore(game, roundNum, courtNum, p1, p2, sets);
     saveGame(updated);
     setGame(updated);
     setScoreInputs(prev => { const n = { ...prev }; delete n[key]; return n; });
@@ -1836,11 +1841,14 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                         {r.courts.map(court => {
                           const p1Winner = (court.pair1Score ?? 0) > (court.pair2Score ?? 0);
                           const p2Winner = (court.pair2Score ?? 0) > (court.pair1Score ?? 0);
+                          const scoreDisplay = court.sets && court.sets.length > 0
+                            ? court.sets.map(s => `${s.p1}-${s.p2}`).join('  ')
+                            : `${court.pair1Score} – ${court.pair2Score}`;
                           return (
                             <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--grey-50)', fontSize: 12 }}>
                               <span style={{ fontSize: 9, color: 'var(--grey-400)', width: 52, flexShrink: 0, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>C{court.courtNum}</span>
                               <span style={{ fontWeight: p1Winner ? 700 : 400, flex: 1, color: p1Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair1)}</span>
-                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, minWidth: 48, textAlign: 'center' }}>{court.pair1Score} – {court.pair2Score}</span>
+                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, minWidth: 60, textAlign: 'center', letterSpacing: '0.02em' }}>{scoreDisplay}</span>
                               <span style={{ fontWeight: p2Winner ? 700 : 400, flex: 1, textAlign: 'right', color: p2Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair2)}</span>
                             </div>
                           );
@@ -2055,11 +2063,14 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                       {r.courts.map(court => {
                         const p1Winner = (court.pair1Score ?? 0) > (court.pair2Score ?? 0);
                         const p2Winner = (court.pair2Score ?? 0) > (court.pair1Score ?? 0);
+                        const scoreDisplay = court.sets && court.sets.length > 0
+                          ? court.sets.map(s => `${s.p1}-${s.p2}`).join('  ')
+                          : `${court.pair1Score} – ${court.pair2Score}`;
                         return (
                           <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--grey-50)', fontSize: 12 }}>
                             <span style={{ fontSize: 9, color: 'var(--grey-400)', width: 52, flexShrink: 0, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>C{court.courtNum}</span>
                             <span style={{ fontWeight: p1Winner ? 700 : 400, flex: 1, color: p1Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair1)}</span>
-                            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, minWidth: 48, textAlign: 'center' }}>{court.pair1Score} – {court.pair2Score}</span>
+                            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, minWidth: 60, textAlign: 'center', letterSpacing: '0.02em' }}>{scoreDisplay}</span>
                             <span style={{ fontWeight: p2Winner ? 700 : 400, flex: 1, textAlign: 'right', color: p2Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair2)}</span>
                           </div>
                         );

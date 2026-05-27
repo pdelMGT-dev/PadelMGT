@@ -623,13 +623,14 @@ export function updateMatchScore(
   courtNum: number,
   pair1Score: number,
   pair2Score: number,
+  sets?: Array<{ p1: number; p2: number }>,
 ): ActiveGame {
   const rounds = game.rounds.map((round) => {
     if (round.num !== roundNum) return round;
 
     const courts = round.courts.map((court) => {
       if (court.courtNum !== courtNum) return court;
-      return { ...court, pair1Score, pair2Score, status: 'completed' as const };
+      return { ...court, pair1Score, pair2Score, ...(sets ? { sets } : {}), status: 'completed' as const };
     });
 
     const allDone = courts.every((c) => c.status === 'completed');
