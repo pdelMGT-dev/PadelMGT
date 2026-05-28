@@ -52,7 +52,7 @@ const FORMAT_LABEL: Record<string, string> = {
   team_league: 'Team League', knockout: 'Knockout', world_cup: 'World Cup',
 };
 
-const PLAYER_COUNT_OPTIONS = [4, 6, 8, 12, 16, 24, 32];
+const PLAYER_COUNT_OPTIONS = Array.from({ length: 15 }, (_, i) => 4 + i * 2); // [4,6,8,...,32]
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
