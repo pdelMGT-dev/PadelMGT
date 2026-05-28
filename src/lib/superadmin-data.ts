@@ -289,6 +289,11 @@ export function saveSAClubs(clubs: SAClub[]): void {
   localStorage.setItem('padelmgt_club_requests', JSON.stringify(clubs));
 }
 
+export function saveSATournaments(tournaments: SATournament[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('padelmgt_tournaments_v2', JSON.stringify(tournaments));
+}
+
 export function getSATournaments(): SATournament[] {
   if (typeof window === 'undefined') return [];
   const raw = localStorage.getItem('padelmgt_tournaments_v2');

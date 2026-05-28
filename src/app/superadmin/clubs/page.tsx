@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getSAClubs, saveSAClubs, getSAClubsFromSupabase, upsertSAClubToSupabase, deleteSAClubFromSupabase, type SAClub } from '@/lib/superadmin-data';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -282,6 +282,12 @@ export default function ClubsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editClub, setEditClub] = useState<SAClub | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ step: number; clubId: string } | null>(null);
+  // ── CSV Import ──────────────────────────────────────────────────────────────
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [csvFile, setCsvFile] = useState<'csv' | 'xlsx' | null>(null);
+  const [columnMap, setColumnMap] = useState<Record<string, string>>({});
+  const clubFileRef = useRef<HTMLInputElement>(null);
   const [rejectConfirm, setRejectConfirm] = useState<{ step: number; clubId: string; reason: string } | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: number; msg: string; ok: boolean }>>([]);
   const [selectedClub, setSelectedClub] = useState<SAClub | null>(null);
@@ -317,6 +323,81 @@ export default function ClubsPage() {
   function saveAndRefresh(updated: SAClub[]) {
     saveSAClubs(updated);
     setClubs(updated);
+  }
+
+  // ── CSV Import handlers ────────────────────────────────────────────────────
+  function handleClubFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) { setCsvFile('xlsx'); return; }
+    setCsvFile('csv');
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const text = ev.target?.result as string;
+      const separator = text.includes(';') ? ';' : ',';
+      const rows = text.split(/\r?\n/).filter(Boolean).map(line =>
+        line.split(separator).map(cell => cell.replace(/^"|"$/g, '').trim())
+      );
+      setCsvRows(rows);
+      // Auto-map columns by header name
+      const autoMap: Record<string, string> = {};
+      const fieldMap: Record<string, string> = {
+        nombre: 'name', name: 'name', club: 'name',
+        tipo: 'clubType', type: 'clubType',
+        ciudad: 'city', city: 'city',
+        pais: 'country', country: 'country',
+        direccion: 'address', address: 'address',
+        canchas: 'courts', courts: 'courts',
+        miembros: 'members', members: 'members',
+        plan: 'plan',
+        adminemail: 'adminEmail', admin: 'adminEmail',
+        propietario: 'ownerName', owner: 'ownerName',
+        propietarioemail: 'ownerEmail', owneremail: 'ownerEmail',
+        propietariotel: 'ownerPhone', ownerphone: 'ownerPhone',
+      };
+      (rows[0] ?? []).forEach((h, i) => {
+        const key = h.toLowerCase().replace(/\s+/g, '').replace(/[^a-z]/g, '');
+        if (fieldMap[key]) autoMap[String(i)] = fieldMap[key];
+      });
+      setColumnMap(autoMap);
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  }
+
+  function handleImportClubs() {
+    if (!csvRows.length) return;
+    const reverseMap: Record<string, number> = {};
+    Object.entries(columnMap).forEach(([idx, field]) => { reverseMap[field] = Number(idx); });
+    const get = (row: string[], field: string) => (reverseMap[field] !== undefined ? row[reverseMap[field]] : '') ?? '';
+    const newClubs: SAClub[] = csvRows.slice(1).filter(r => r.some(c => c)).map((row, i) => ({
+      id: uid(),
+      name: get(row, 'name') || `Club importado ${i + 1}`,
+      clubType: get(row, 'clubType') || 'Club Privado',
+      city: get(row, 'city') || '',
+      country: get(row, 'country') || 'ES',
+      address: get(row, 'address') || '',
+      description: '',
+      courts: parseInt(get(row, 'courts'), 10) || 0,
+      courtTypes: [],
+      amenities: [],
+      members: parseInt(get(row, 'members'), 10) || 0,
+      status: 'pending' as const,
+      adminEmail: get(row, 'adminEmail') || '',
+      ownerName: get(row, 'ownerName') || '',
+      ownerPhone: get(row, 'ownerPhone') || '',
+      ownerEmail: get(row, 'ownerEmail') || '',
+      message: '',
+      joinedAt: new Date().toISOString().split('T')[0],
+      plan: (get(row, 'plan') as SAClub['plan']) || 'free',
+    }));
+    const existing = clubs.filter(c => !newClubs.some(nc => nc.name === c.name && nc.city === c.city));
+    saveAndRefresh([...existing, ...newClubs]);
+    toast(`${newClubs.length} club(es) importado(s) correctamente`);
+    setShowImportModal(false);
+    setCsvRows([]);
+    setCsvFile(null);
+    setColumnMap({});
   }
 
   function handleSort(key: string) {
@@ -469,7 +550,13 @@ export default function ClubsPage() {
           <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Gestion</div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)' }}>Clubes</h1>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowImportModal(true)}
+            style={{ padding: '9px 16px', border: '1px solid var(--grey-200)', borderRadius: 4, background: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', color: 'var(--grey-600)', textTransform: 'uppercase' }}
+          >
+            Importar CSV
+          </button>
           <button
             onClick={() => exportCSV(filtered.map(c => ({ Nombre: c.name, Tipo: c.clubType, Ciudad: c.city, Pais: c.country, Direccion: c.address, Canchas: c.courts, TiposCanchas: c.courtTypes.join(';'), Amenidades: c.amenities.join(';'), Miembros: c.members, Plan: c.plan, Estado: c.status, AdminEmail: c.adminEmail, Propietario: c.ownerName, PropietarioEmail: c.ownerEmail, PropietarioTel: c.ownerPhone, Fecha: c.joinedAt })), 'clubes.csv')}
             style={{ padding: '9px 16px', border: '1px solid var(--grey-200)', borderRadius: 4, background: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', color: 'var(--grey-600)', textTransform: 'uppercase' }}
@@ -907,6 +994,94 @@ export default function ClubsPage() {
             <button onClick={() => setDeleteConfirm(null)} style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
             <button onClick={handleDeleteFinal} style={{ padding: '9px 20px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Confirmar eliminacion definitiva</button>
           </div>
+        </Modal>
+      )}
+
+      {/* CSV IMPORT MODAL */}
+      {showImportModal && (
+        <Modal onClose={() => { setShowImportModal(false); setCsvRows([]); setCsvFile(null); }} maxWidth={680}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 20 }}>Importar Clubes — CSV</h2>
+
+          {!csvFile && (
+            <div
+              onClick={() => clubFileRef.current?.click()}
+              style={{ border: '2px dashed var(--grey-300)', borderRadius: 8, padding: '48px 24px', textAlign: 'center', cursor: 'pointer', color: 'var(--grey-400)', marginBottom: 16 }}
+            >
+              <div style={{ fontSize: 32, marginBottom: 12 }}>+</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Arrastrá un archivo CSV o hacé clic para seleccionar</div>
+              <div style={{ fontSize: 12, marginTop: 6 }}>Formato: .csv (separado por coma o punto y coma)</div>
+              <div style={{ fontSize: 11, marginTop: 8, color: 'var(--grey-300)' }}>
+                Columnas sugeridas: Nombre, Tipo, Ciudad, Pais, Canchas, Miembros, Plan, AdminEmail, Propietario
+              </div>
+              <input ref={clubFileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleClubFileSelect} />
+            </div>
+          )}
+
+          {csvFile === 'xlsx' && (
+            <div style={{ padding: '20px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6, color: '#9a3412', fontSize: 13, marginBottom: 16 }}>
+              Soporte XLSX próximamente — usá CSV por ahora. Podés exportar desde Excel como CSV.
+            </div>
+          )}
+
+          {csvFile === 'csv' && csvRows.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 10 }}>
+                Vista previa (primeras 5 filas de {csvRows.length - 1} registros)
+              </div>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--grey-200)', borderRadius: 4, marginBottom: 20 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <tbody>
+                    {csvRows.slice(0, 6).map((row, ri) => (
+                      <tr key={ri} style={{ borderBottom: '1px solid var(--grey-100)', background: ri === 0 ? 'var(--grey-50)' : '#fff' }}>
+                        {row.map((cell, ci) => (
+                          <td key={ci} style={{ padding: '6px 10px', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: ri === 0 ? 700 : 400 }}>
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 10 }}>
+                Mapeo de columnas
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+                {(csvRows[0] ?? []).map((header, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, color: 'var(--grey-600)', minWidth: 90, fontWeight: 600 }}>{header}</span>
+                    <select
+                      value={columnMap[String(idx)] ?? ''}
+                      onChange={e => setColumnMap(m => ({ ...m, [String(idx)]: e.target.value }))}
+                      style={{ ...inputStyle, flex: 1, padding: '5px 8px' }}
+                    >
+                      <option value="">— Ignorar —</option>
+                      <option value="name">Nombre del Club</option>
+                      <option value="clubType">Tipo de Club</option>
+                      <option value="city">Ciudad</option>
+                      <option value="country">País</option>
+                      <option value="address">Dirección</option>
+                      <option value="courts">Canchas</option>
+                      <option value="members">Miembros</option>
+                      <option value="plan">Plan</option>
+                      <option value="adminEmail">Email Admin</option>
+                      <option value="ownerName">Propietario</option>
+                      <option value="ownerEmail">Email Propietario</option>
+                      <option value="ownerPhone">Tel. Propietario</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button onClick={() => { setCsvRows([]); setCsvFile(null); }} style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 13, color: 'var(--grey-500)' }}>Volver</button>
+                <button onClick={handleImportClubs} style={{ padding: '9px 24px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  Importar {csvRows.length - 1} clubs
+                </button>
+              </div>
+            </div>
+          )}
         </Modal>
       )}
     </div>

@@ -73,7 +73,7 @@ function downloadCSV(filename: string, rows: string[][]) {
 }
 
 export default function ConfigPage() {
-  const [tab, setTab] = useState<'admins' | 'general' | 'database'>('admins');
+  const [tab, setTab] = useState<'admins' | 'general' | 'database' | 'stripe'>('admins');
   const [admins, setAdmins] = useState<SAAdminUser[]>([]);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [editAdmin, setEditAdmin] = useState<SAAdminUser | null>(null);
@@ -87,10 +87,74 @@ export default function ConfigPage() {
   const [newSAEmail, setNewSAEmail] = useState('');
   const [newSAPassword, setNewSAPassword] = useState('');
   const [newSAConfirm, setNewSAConfirm] = useState('');
+  // Stripe config
+  type StripeMode = 'test' | 'live';
+  const STRIPE_KEY = 'padelmgt_stripe_config';
+  const [stripeMode, setStripeMode] = useState<StripeMode>('test');
+  const [stripeTestKey, setStripeTestKey] = useState('');
+  const [stripeLiveKey, setStripeLiveKey] = useState('');
+  const [stripeWebhook, setStripeWebhook] = useState('');
+  const [stripeConnected, setStripeConnected] = useState(false);
+  const [stripeLastChecked, setStripeLastChecked] = useState<string | null>(null);
+  const [stripeChecking, setStripeChecking] = useState(false);
+  const [stripeCheckResult, setStripeCheckResult] = useState<'ok' | 'fail' | null>(null);
+  const [stripeShowKeys, setStripeShowKeys] = useState(false);
+  const [stripeSaved, setStripeSaved] = useState(false);
   // Danger zone
   const [clearCacheConfirm, setClearCacheConfirm] = useState<number>(0);
 
-  useEffect(() => { setAdmins(getSAAdminUsers()); }, []);
+  useEffect(() => {
+    setAdmins(getSAAdminUsers());
+    // Load stripe config
+    try {
+      const raw = localStorage.getItem(STRIPE_KEY);
+      if (raw) {
+        const cfg = JSON.parse(raw);
+        if (cfg.mode) setStripeMode(cfg.mode);
+        if (cfg.testPublishableKey) setStripeTestKey(cfg.testPublishableKey);
+        if (cfg.livePublishableKey) setStripeLiveKey(cfg.livePublishableKey);
+        if (cfg.webhookEndpoint) setStripeWebhook(cfg.webhookEndpoint);
+        if (cfg.connected) setStripeConnected(cfg.connected);
+        if (cfg.lastChecked) setStripeLastChecked(cfg.lastChecked);
+      }
+    } catch {}
+  }, []);
+
+  function saveStripeConfig() {
+    const cfg = {
+      mode: stripeMode,
+      testPublishableKey: stripeTestKey,
+      livePublishableKey: stripeLiveKey,
+      webhookEndpoint: stripeWebhook,
+      connected: stripeConnected,
+      lastChecked: stripeLastChecked,
+    };
+    localStorage.setItem(STRIPE_KEY, JSON.stringify(cfg));
+    setStripeSaved(true);
+    toast('Configuración de Stripe guardada');
+    setTimeout(() => setStripeSaved(false), 2500);
+  }
+
+  async function verifyStripeConnection() {
+    const key = stripeMode === 'test' ? stripeTestKey : stripeLiveKey;
+    if (!key.startsWith('pk_')) { setStripeCheckResult('fail'); return; }
+    setStripeChecking(true);
+    setStripeCheckResult(null);
+    await new Promise(r => setTimeout(r, 800));
+    const ok = stripeMode === 'test' ? key.startsWith('pk_test_') : key.startsWith('pk_live_');
+    setStripeCheckResult(ok ? 'ok' : 'fail');
+    if (ok) {
+      const now = new Date().toISOString();
+      setStripeConnected(true);
+      setStripeLastChecked(now);
+      const cfg = { mode: stripeMode, testPublishableKey: stripeTestKey, livePublishableKey: stripeLiveKey, webhookEndpoint: stripeWebhook, connected: true, lastChecked: now };
+      localStorage.setItem(STRIPE_KEY, JSON.stringify(cfg));
+      toast('Conexión verificada correctamente', true);
+    } else {
+      toast('Clave inválida — verificá el modo TEST/LIVE', false);
+    }
+    setStripeChecking(false);
+  }
 
   function toast(msg: string, ok = true) {
     const id = Date.now();
@@ -215,6 +279,7 @@ export default function ConfigPage() {
           { key: 'admins', label: 'Administradores del Sistema' },
           { key: 'general', label: 'Configuracion General' },
           { key: 'database', label: 'Base de Datos' },
+          { key: 'stripe', label: 'Stripe / Pagos' },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)} style={{
             padding: '10px 24px', border: 'none', background: 'none', cursor: 'pointer',
@@ -447,6 +512,115 @@ export default function ConfigPage() {
                 {clearCacheConfirm === 0 ? 'Limpiar cache' : 'Confirmar limpieza'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STRIPE TAB ── */}
+      {tab === 'stripe' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Status banner */}
+          <div style={{
+            padding: '14px 20px', borderRadius: 6,
+            background: stripeConnected ? '#dcfce7' : '#fef9c3',
+            border: `1px solid ${stripeConnected ? '#86efac' : '#fde047'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>{stripeConnected ? '✓' : '⚠'}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: stripeConnected ? '#166534' : '#92400e' }}>
+                  {stripeConnected ? `Conectado — modo ${stripeMode === 'test' ? 'TEST' : 'PRODUCCIÓN'}` : 'Sin configurar'}
+                </div>
+                {stripeLastChecked && (
+                  <div style={{ fontSize: 11, color: '#707072', marginTop: 2 }}>
+                    Última verificación: {new Date(stripeLastChecked).toLocaleString('es')}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['test', 'live'] as const).map(m => (
+                <button key={m} onClick={() => { setStripeMode(m); setStripeConnected(false); }}
+                  style={{ padding: '6px 14px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', background: stripeMode === m ? '#111' : '#fff', color: stripeMode === m ? '#d6ff00' : 'var(--grey-500)' }}>
+                  {m === 'test' ? 'TEST' : 'PRODUCCIÓN'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Keys */}
+          <div style={{ background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6, padding: '24px 28px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 20, paddingBottom: 12, borderBottom: '1px solid var(--grey-100)' }}>
+              Claves de API (Publishable Keys)
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <Field label="Clave TEST (pk_test_...)">
+                <input type={stripeShowKeys ? 'text' : 'password'} value={stripeTestKey}
+                  onChange={e => { setStripeTestKey(e.target.value.trim()); setStripeConnected(false); }}
+                  placeholder="pk_test_..." style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 3 }}>
+                  Stripe Dashboard → Developers → API Keys
+                </div>
+              </Field>
+              <Field label="Clave PRODUCCIÓN (pk_live_...)">
+                <input type={stripeShowKeys ? 'text' : 'password'} value={stripeLiveKey}
+                  onChange={e => { setStripeLiveKey(e.target.value.trim()); setStripeConnected(false); }}
+                  placeholder="pk_live_..." style={{ ...inputStyle, fontFamily: 'monospace' }} />
+              </Field>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: 'var(--grey-500)' }}>
+                <input type="checkbox" checked={stripeShowKeys} onChange={e => setStripeShowKeys(e.target.checked)} />
+                Mostrar claves en texto plano
+              </label>
+            </div>
+          </div>
+
+          {/* Webhook */}
+          <div style={{ background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6, padding: '24px 28px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 20, paddingBottom: 12, borderBottom: '1px solid var(--grey-100)' }}>
+              Webhook
+            </div>
+            <Field label="URL del Endpoint">
+              <input type="text" value={stripeWebhook}
+                onChange={e => setStripeWebhook(e.target.value.trim())}
+                placeholder="https://tudominio.com/api/stripe/webhook"
+                style={{ ...inputStyle, fontFamily: 'monospace' }} />
+              <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 3 }}>
+                Registrá esta URL en Stripe Dashboard → Developers → Webhooks
+              </div>
+            </Field>
+            <div style={{ marginTop: 16, background: '#f9fafb', border: '1px solid var(--grey-100)', borderRadius: 4, padding: '12px 16px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Eventos recomendados</div>
+              {['payment_intent.succeeded', 'payment_intent.payment_failed', 'customer.subscription.created', 'customer.subscription.deleted', 'invoice.paid'].map(ev => (
+                <div key={ev} style={{ fontFamily: 'monospace', fontSize: 12, color: '#1a4ed8', marginBottom: 3 }}>• {ev}</div>
+              ))}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button onClick={verifyStripeConnection} disabled={stripeChecking}
+              style={{ padding: '10px 24px', background: '#1a4ed8', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: stripeChecking ? 0.7 : 1 }}>
+              {stripeChecking ? 'Verificando...' : 'Verificar Conexión'}
+            </button>
+            <button onClick={saveStripeConfig}
+              style={{ padding: '10px 24px', background: '#111', color: '#d6ff00', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              {stripeSaved ? '¡Guardado!' : 'Guardar'}
+            </button>
+            {stripeCheckResult === 'ok' && <span style={{ color: '#166534', fontWeight: 700, fontSize: 13 }}>✓ Clave válida</span>}
+            {stripeCheckResult === 'fail' && <span style={{ color: '#ee0005', fontWeight: 700, fontSize: 13 }}>✕ Clave inválida — verificá el modo TEST/LIVE</span>}
+          </div>
+
+          {/* Guide */}
+          <div style={{ background: '#f9fafb', border: '1px solid var(--grey-200)', borderRadius: 6, padding: '24px 28px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 16 }}>Próximos pasos</div>
+            <ol style={{ margin: 0, padding: '0 0 0 18px', display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, color: '#39393b', lineHeight: 1.6 }}>
+              <li>Obtené las claves en <strong>dashboard.stripe.com → Developers → API Keys</strong></li>
+              <li>La <strong>Secret Key</strong> (<code style={{ background: '#e5e5e5', padding: '1px 5px', borderRadius: 3 }}>sk_...</code>) va en la variable de entorno <code style={{ background: '#e5e5e5', padding: '1px 5px', borderRadius: 3 }}>STRIPE_SECRET_KEY</code> en el servidor — nunca en el navegador</li>
+              <li>Instalá el SDK: <code style={{ background: '#e5e5e5', padding: '1px 5px', borderRadius: 3 }}>npm install stripe @stripe/stripe-js</code></li>
+              <li>El endpoint de webhook ya está creado en <code style={{ background: '#e5e5e5', padding: '1px 5px', borderRadius: 3 }}>/api/stripe/webhook</code></li>
+              <li>Tarjeta de prueba TEST: <code style={{ background: '#e5e5e5', padding: '1px 5px', borderRadius: 3 }}>4242 4242 4242 4242</code></li>
+            </ol>
           </div>
         </div>
       )}

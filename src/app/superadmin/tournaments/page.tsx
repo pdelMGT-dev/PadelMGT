@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { getSATournaments, type SATournament } from '@/lib/superadmin-data';
+import React, { useState, useEffect, useRef } from 'react';
+import { getSATournaments, saveSATournaments, type SATournament } from '@/lib/superadmin-data';
 
 interface ScoreCorrectionRequest {
   id: string;
@@ -96,6 +96,12 @@ export default function TournamentsPage() {
   const [sortKey, setSortKey] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
+  // ── CSV Import ──────────────────────────────────────────────────────────────
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [csvFile, setCsvFile] = useState<'csv' | 'xlsx' | null>(null);
+  const [columnMap, setColumnMap] = useState<Record<string, string>>({});
+  const tFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setTournaments(getSATournaments()); }, []);
 
@@ -103,6 +109,72 @@ export default function TournamentsPage() {
     const id = Date.now();
     setToasts(t => [...t, { id, msg, ok }]);
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
+  }
+
+  // ── CSV Import handlers ────────────────────────────────────────────────────
+  function handleTournamentFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) { setCsvFile('xlsx'); return; }
+    setCsvFile('csv');
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const text = ev.target?.result as string;
+      const separator = text.includes(';') ? ';' : ',';
+      const rows = text.split(/\r?\n/).filter(Boolean).map(line =>
+        line.split(separator).map(cell => cell.replace(/^"|"$/g, '').trim())
+      );
+      setCsvRows(rows);
+      const autoMap: Record<string, string> = {};
+      const fieldMap: Record<string, string> = {
+        nombre: 'name', name: 'name', torneo: 'name',
+        club: 'club', ciudad: 'city', city: 'city',
+        fecha: 'date', date: 'date',
+        formato: 'format', format: 'format',
+        jugadores: 'players', players: 'players',
+        rondas: 'rounds', rounds: 'rounds',
+        estado: 'status', status: 'status',
+      };
+      (rows[0] ?? []).forEach((h, i) => {
+        const key = h.toLowerCase().replace(/\s+/g, '').replace(/[^a-z]/g, '');
+        if (fieldMap[key]) autoMap[String(i)] = fieldMap[key];
+      });
+      setColumnMap(autoMap);
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  }
+
+  function handleImportTournaments() {
+    if (!csvRows.length) return;
+    const reverseMap: Record<string, number> = {};
+    Object.entries(columnMap).forEach(([idx, field]) => { reverseMap[field] = Number(idx); });
+    const get = (row: string[], field: string) => (reverseMap[field] !== undefined ? row[reverseMap[field]] : '') ?? '';
+    const statusMap: Record<string, SATournament['status']> = {
+      'en curso': 'ongoing', ongoing: 'ongoing', 'en vivo': 'ongoing',
+      proximo: 'upcoming', upcoming: 'upcoming', próximo: 'upcoming',
+      finalizado: 'completed', completed: 'completed',
+      cancelado: 'cancelled', cancelled: 'cancelled',
+    };
+    const newTs: SATournament[] = csvRows.slice(1).filter(r => r.some(c => c)).map((row, i) => ({
+      id: `t-imp-${Date.now()}-${i}`,
+      name: get(row, 'name') || `Torneo importado ${i + 1}`,
+      club: get(row, 'club') || '',
+      city: get(row, 'city') || '',
+      date: get(row, 'date') || new Date().toISOString().split('T')[0],
+      format: get(row, 'format') || 'Americano',
+      players: parseInt(get(row, 'players'), 10) || 0,
+      rounds: parseInt(get(row, 'rounds'), 10) || 0,
+      status: statusMap[get(row, 'status').toLowerCase()] ?? 'upcoming',
+    }));
+    const all = getSATournaments();
+    saveSATournaments([...all, ...newTs]);
+    setTournaments(getSATournaments());
+    toast(`${newTs.length} torneo(s) importado(s) correctamente`);
+    setShowImportModal(false);
+    setCsvRows([]);
+    setCsvFile(null);
+    setColumnMap({});
   }
 
   function handleSort(key: string) {
@@ -194,9 +266,17 @@ export default function TournamentsPage() {
       </div>
 
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Vista</div>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)' }}>Torneos</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+        <div>
+          <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Vista</div>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)' }}>Torneos</h1>
+        </div>
+        <button
+          onClick={() => setShowImportModal(true)}
+          style={{ padding: '9px 16px', border: '1px solid var(--grey-200)', borderRadius: 4, background: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', color: 'var(--grey-600)', textTransform: 'uppercase' }}
+        >
+          Importar CSV
+        </button>
       </div>
 
       {/* Tabs */}
@@ -459,6 +539,86 @@ export default function TournamentsPage() {
             <button onClick={() => setRejectConfirm(null)} style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
             <button onClick={() => handleReject(rejectConfirm.corrId)} style={{ padding: '9px 20px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Rechazar</button>
           </div>
+        </Modal>
+      )}
+
+      {/* CSV IMPORT MODAL */}
+      {showImportModal && (
+        <Modal onClose={() => { setShowImportModal(false); setCsvRows([]); setCsvFile(null); }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 20 }}>Importar Torneos — CSV</h2>
+
+          {!csvFile && (
+            <div
+              onClick={() => tFileRef.current?.click()}
+              style={{ border: '2px dashed var(--grey-300)', borderRadius: 8, padding: '48px 24px', textAlign: 'center', cursor: 'pointer', color: 'var(--grey-400)', marginBottom: 16 }}
+            >
+              <div style={{ fontSize: 32, marginBottom: 12 }}>+</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Arrastrá un archivo CSV o hacé clic para seleccionar</div>
+              <div style={{ fontSize: 12, marginTop: 6 }}>Formato: .csv (separado por coma o punto y coma)</div>
+              <div style={{ fontSize: 11, marginTop: 8, color: 'var(--grey-300)' }}>
+                Columnas: Nombre, Club, Ciudad, Fecha, Formato, Jugadores, Rondas, Estado
+              </div>
+              <input ref={tFileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleTournamentFileSelect} />
+            </div>
+          )}
+
+          {csvFile === 'xlsx' && (
+            <div style={{ padding: '20px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6, color: '#9a3412', fontSize: 13, marginBottom: 16 }}>
+              Soporte XLSX próximamente — usá CSV por ahora.
+            </div>
+          )}
+
+          {csvFile === 'csv' && csvRows.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 10 }}>
+                Vista previa ({csvRows.length - 1} torneos)
+              </div>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--grey-200)', borderRadius: 4, marginBottom: 20 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <tbody>
+                    {csvRows.slice(0, 6).map((row, ri) => (
+                      <tr key={ri} style={{ borderBottom: '1px solid var(--grey-100)', background: ri === 0 ? 'var(--grey-50)' : '#fff' }}>
+                        {row.map((cell, ci) => (
+                          <td key={ci} style={{ padding: '6px 10px', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: ri === 0 ? 700 : 400 }}>
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 10 }}>Mapeo de columnas</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+                {(csvRows[0] ?? []).map((header, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, color: 'var(--grey-600)', minWidth: 80, fontWeight: 600 }}>{header}</span>
+                    <select
+                      value={columnMap[String(idx)] ?? ''}
+                      onChange={e => setColumnMap(m => ({ ...m, [String(idx)]: e.target.value }))}
+                      style={{ border: '1px solid var(--grey-200)', borderRadius: 4, padding: '5px 8px', fontSize: 12, flex: 1, outline: 'none' }}
+                    >
+                      <option value="">— Ignorar —</option>
+                      <option value="name">Nombre</option>
+                      <option value="club">Club</option>
+                      <option value="city">Ciudad</option>
+                      <option value="date">Fecha</option>
+                      <option value="format">Formato</option>
+                      <option value="players">Jugadores</option>
+                      <option value="rounds">Rondas</option>
+                      <option value="status">Estado</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button onClick={() => { setCsvRows([]); setCsvFile(null); }} style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 13, color: 'var(--grey-500)' }}>Volver</button>
+                <button onClick={handleImportTournaments} style={{ padding: '9px 24px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  Importar {csvRows.length - 1} torneo(s)
+                </button>
+              </div>
+            </div>
+          )}
         </Modal>
       )}
     </div>
