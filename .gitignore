@@ -40,5 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# claude code
-.claude/
+# claude code — track skills and commands, ignore local settings
+.claude/settings.json
+.claude/settings.local.json
+.claude/todos/
