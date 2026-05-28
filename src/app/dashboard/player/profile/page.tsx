@@ -210,7 +210,17 @@ export default function PlayerProfilePage() {
   // Evolution chart data
   // ---------------------------------------------------------------------------
 
-  const chartData = [1840, 1720, 1760, 1800, 1750, 1820, 1840, 1900, 1860, 1920];
+  // Use real ranking history from completed games; empty for new users
+  const chartData: number[] = (() => {
+    const games = typeof window !== 'undefined' ? getAllGames().filter(g => g.status === 'finished') : [];
+    if (games.length === 0) return [];
+    return games.slice(-10).map(g => {
+      const history = getRankingHistoryForGame(g.id);
+      const userId = user?.id ?? '';
+      const entry = history.find(h => h.playerId === userId);
+      return entry?.points ?? 0;
+    }).filter(v => v > 0);
+  })();
   const chartMin = Math.min(...chartData);
   const chartMax = Math.max(...chartData);
   const chartRange = chartMax - chartMin || 1;
@@ -400,28 +410,36 @@ export default function PlayerProfilePage() {
           {/* Evolution chart */}
           <div style={{ background: '#fff', padding: 28, border: '1px solid var(--grey-100)' }}>
             <div style={{ ...lbl, marginBottom: 16 }}>Evolución de Ranking</div>
-            <svg
-              width="100%"
-              viewBox="0 0 500 80"
-              preserveAspectRatio="none"
-              style={{ display: 'block', height: 80 }}
-            >
-              <polyline
-                points={polylinePoints}
-                fill="none"
-                stroke="var(--turf-green)"
-                strokeWidth={2.5}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-              {chartPoints.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r={4} fill="var(--turf-green)" />
-              ))}
-            </svg>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--grey-400)' }}>10 juegos anteriores</span>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--grey-400)' }}>Ahora</span>
-            </div>
+            {chartData.length >= 2 ? (
+              <>
+                <svg
+                  width="100%"
+                  viewBox="0 0 500 80"
+                  preserveAspectRatio="none"
+                  style={{ display: 'block', height: 80 }}
+                >
+                  <polyline
+                    points={polylinePoints}
+                    fill="none"
+                    stroke="var(--turf-green)"
+                    strokeWidth={2.5}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                  {chartPoints.map((p, i) => (
+                    <circle key={i} cx={p.x} cy={p.y} r={4} fill="var(--turf-green)" />
+                  ))}
+                </svg>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--grey-400)' }}>Últimos {chartData.length} juegos</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--grey-400)' }}>Ahora</span>
+                </div>
+              </>
+            ) : (
+              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--grey-300)', fontSize: 13 }}>
+                Jugá partidos para ver tu evolución aquí.
+              </div>
+            )}
           </div>
 
           {/* Active games */}

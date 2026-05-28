@@ -485,28 +485,6 @@ export default function ConfigPage() {
             </div>
           </div>
 
-          {/* Supabase */}
-          <div style={{ background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6, padding: '24px 28px' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 8 }}>
-              Conectar con Supabase
-            </div>
-            <p style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 20, lineHeight: 1.6 }}>
-              Cuando el backend este listo, configura las credenciales de Supabase para migrar los datos de localStorage a la nube.
-              El esquema SQL esta disponible en <code style={{ background: 'var(--grey-100)', padding: '1px 6px', borderRadius: 3, fontSize: 12 }}>/supabase/schema.sql</code>.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <Field label="Supabase Project URL">
-                <input style={{ ...inputStyle, background: 'var(--grey-50)', color: 'var(--grey-400)' }} placeholder="https://xxxx.supabase.co" disabled />
-              </Field>
-              <Field label="Supabase Anon Key">
-                <input style={{ ...inputStyle, background: 'var(--grey-50)', color: 'var(--grey-400)' }} placeholder="eyJhbGci..." disabled />
-              </Field>
-              <button disabled style={{ padding: '9px 20px', background: 'var(--grey-200)', color: 'var(--grey-400)', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: 'not-allowed', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Conectar (Proximamente)
-              </button>
-            </div>
-          </div>
-
           {/* Danger zone */}
           <div style={{ background: '#fff', border: '1px solid #fecaca', borderRadius: 6, padding: '24px 28px' }}>
             <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#dc2626', marginBottom: 12 }}>
