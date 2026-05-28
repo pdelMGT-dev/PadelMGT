@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getSATournaments, saveSATournaments, type SATournament } from '@/lib/superadmin-data';
+import { getSATournaments, saveSATournaments, getSATournamentsFromSupabase, type SATournament } from '@/lib/superadmin-data';
 
 interface ScoreCorrectionRequest {
   id: string;
@@ -103,7 +103,15 @@ export default function TournamentsPage() {
   const [columnMap, setColumnMap] = useState<Record<string, string>>({});
   const tFileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setTournaments(getSATournaments()); }, []);
+  useEffect(() => {
+    setTournaments(getSATournaments());
+    getSATournamentsFromSupabase().then(sbT => {
+      if (sbT && sbT.length > 0) {
+        setTournaments(sbT);
+        saveSATournaments(sbT);
+      }
+    });
+  }, []);
 
   function toast(msg: string, ok = true) {
     const id = Date.now();

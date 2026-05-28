@@ -1,4 +1,5 @@
 // player-store.ts — Single source of truth for all registered players
+import { registerPlayerToSupabase } from './superadmin-data';
 
 const STORAGE_KEY = 'padelmgt_registered_players';
 
@@ -151,6 +152,7 @@ export function registerPlayer(params: RegisterParams): RegisteredPlayer | null 
     profileCompleted: false,
   };
   persist([...all, newPlayer]);
+  registerPlayerToSupabase(newPlayer).catch(() => {/* fire-and-forget */});
   return newPlayer;
 }
 

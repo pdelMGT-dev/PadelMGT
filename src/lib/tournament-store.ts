@@ -2,6 +2,7 @@
 // Re-uses the ActiveGame shape from game-engine so all engine functions work.
 
 import type { ActiveGame, GameFormat, PairType, ScoreConfig, GamePlayer, InvitedPlayer } from './game-engine';
+import { upsertTournamentToSupabase } from './superadmin-data';
 
 export type Tournament = ActiveGame;
 
@@ -59,6 +60,7 @@ export function saveTournament(tournament: Tournament): void {
   const idx = all.findIndex(t => t.id === tournament.id);
   if (idx >= 0) { all[idx] = tournament; } else { all.push(tournament); }
   persist(all);
+  upsertTournamentToSupabase(tournament as unknown as Record<string, unknown>).catch(() => {});
 }
 
 export function createTournament(params: {

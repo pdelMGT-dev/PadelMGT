@@ -594,3 +594,119 @@ export async function seedClubsToSupabase(): Promise<number> {
   }
   return count;
 }
+
+// Tournaments (requires `data JSONB` column on the tournaments table)
+export async function getSATournamentsFromSupabase(): Promise<SATournament[] | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('tournaments')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) return null;
+    return (data ?? []).map(row => ({
+      id: row.id as string,
+      name: row.name as string,
+      club: (row.club as string) ?? '',
+      city: (row.city as string) ?? '',
+      date: ((row.start_date as string) ?? '').split('T')[0],
+      players: (row.max_players as number) ?? 0,
+      status: (row.status as SATournament['status']) ?? 'upcoming',
+      rounds: ((row.data as Record<string, unknown>)?.currentRound as number) ?? 0,
+      format: (row.format as string) ?? 'Americano',
+    }));
+  } catch { return null; }
+}
+
+export async function upsertTournamentToSupabase(t: Record<string, unknown>): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('tournaments').upsert({
+      id: t.id,
+      name: t.name,
+      club: t.club ?? null,
+      city: t.city ?? null,
+      country: t.country ?? 'ES',
+      format: t.format ?? null,
+      status: t.status ?? 'upcoming',
+      start_date: t.date ?? null,
+      max_players: t.maxPlayers ?? 0,
+      data: t,
+    });
+  } catch { /* silent */ }
+}
+
+export async function deleteTournamentFromSupabase(id: string): Promise<void> {
+  if (!supabase) return;
+  try { await supabase.from('tournaments').delete().eq('id', id); } catch { /* silent */ }
+}
+
+// Quick games (requires `data JSONB` column on the quick_games table)
+export async function getSAGamesFromSupabase(): Promise<SAGame[] | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('quick_games')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) return null;
+    return (data ?? []).map(row => ({
+      id: row.id as string,
+      name: (row.name as string) ?? `Juego`,
+      date: ((row.created_at as string) ?? '').split('T')[0],
+      players: ((row.data as Record<string, unknown>)?.players as unknown[])?.length ?? 0,
+      status: (row.status as SAGame['status']) ?? 'ongoing',
+      rounds: (row.rounds_played as number) ?? 0,
+      format: (row.format as string) ?? 'Americano',
+      scoreConfig: (row.score_config as string) ?? 'puntos',
+    }));
+  } catch { return null; }
+}
+
+export async function upsertGameToSupabase(g: Record<string, unknown>): Promise<void> {
+  if (!supabase) return;
+  try {
+    const players = Array.isArray(g.players) ? g.players as unknown[] : [];
+    const rounds = Array.isArray(g.rounds) ? g.rounds as unknown[] : [];
+    const scoreConfig = g.scoreConfig && typeof g.scoreConfig === 'object'
+      ? (g.scoreConfig as Record<string, unknown>).type as string ?? 'puntos'
+      : typeof g.scoreConfig === 'string' ? g.scoreConfig : 'puntos';
+    await supabase.from('quick_games').upsert({
+      id: g.id,
+      name: g.name ?? null,
+      format: g.format ?? null,
+      score_config: scoreConfig,
+      status: g.status === 'finished' ? 'completed' : (g.status as string) ?? 'ongoing',
+      rounds_played: rounds.length,
+      data: g,
+    });
+  } catch { /* silent */ }
+}
+
+export async function deleteGameFromSupabase(id: string): Promise<void> {
+  if (!supabase) return;
+  try { await supabase.from('quick_games').delete().eq('id', id); } catch { /* silent */ }
+}
+
+// Register player (player-store write-through)
+export async function registerPlayerToSupabase(p: {
+  id: string; shortId?: string; name: string; email: string;
+  phone?: string; sex?: string; country?: string; city?: string;
+  level?: string; ranking?: number; rankingPoints?: number;
+}): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('players').upsert({
+      id: p.id,
+      name: p.name,
+      email: p.email,
+      phone: p.phone ?? null,
+      city: p.city ?? null,
+      country: p.country ?? 'ES',
+      ranking_points: p.rankingPoints ?? 0,
+      status: 'active',
+      role: 'player',
+      custom_fields: { shortId: p.shortId, sex: p.sex, level: p.level },
+    });
+  } catch { /* silent */ }
+}

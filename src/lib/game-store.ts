@@ -1,4 +1,4 @@
-// game-store.ts — localStorage-backed store. Drop-in replaceable with Supabase later.
+// game-store.ts — localStorage-backed store with Supabase write-through.
 
 import type {
   ActiveGame,
@@ -17,6 +17,7 @@ import {
   startNextRound,
   isGameFinished,
 } from './game-engine';
+import { upsertGameToSupabase, deleteGameFromSupabase } from './superadmin-data';
 
 // Re-export for convenience so consumers can import from one place.
 export {
@@ -653,6 +654,7 @@ export function saveGame(game: ActiveGame): void {
     games.push(game);
   }
   persistGames(games);
+  upsertGameToSupabase(game as unknown as Record<string, unknown>).catch(() => {});
 }
 
 export function updateGame(id: string, updates: Partial<ActiveGame>): ActiveGame | null {
@@ -662,12 +664,14 @@ export function updateGame(id: string, updates: Partial<ActiveGame>): ActiveGame
   const updated: ActiveGame = { ...games[idx], ...updates };
   games[idx] = updated;
   persistGames(games);
+  upsertGameToSupabase(updated as unknown as Record<string, unknown>).catch(() => {});
   return updated;
 }
 
 export function deleteGame(id: string): void {
   const games = loadGames().filter((g) => g.id !== id);
   persistGames(games);
+  deleteGameFromSupabase(id).catch(() => {});
 }
 
 export function createQuickGame(params: {

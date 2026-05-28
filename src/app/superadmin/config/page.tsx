@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getSAAdminUsers, saveSAAdminUsers, getSAPlayers, getSAClubs, getSATournaments, seedPlayersToSupabase, seedClubsToSupabase, type SAAdminUser } from '@/lib/superadmin-data';
+import { getSAAdminUsers, saveSAAdminUsers, getSAPlayers, getSAClubs, getSATournaments, seedPlayersToSupabase, seedClubsToSupabase, upsertTournamentToSupabase, type SAAdminUser } from '@/lib/superadmin-data';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
@@ -466,6 +466,20 @@ export default function ConfigPage() {
                   style={{ padding: '10px 20px', background: '#0ea5e9', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
                 >
                   Subir Clubes a Supabase
+                </button>
+                <button
+                  onClick={async () => {
+                    const tourneys = getSATournaments();
+                    let count = 0;
+                    for (const t of tourneys) {
+                      await upsertTournamentToSupabase(t as unknown as Record<string, unknown>);
+                      count++;
+                    }
+                    toast(`${count} torneos subidos a Supabase`);
+                  }}
+                  style={{ padding: '10px 20px', background: '#0ea5e9', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}
+                >
+                  Subir Torneos a Supabase
                 </button>
               </div>
             </div>
