@@ -513,9 +513,51 @@ html, body {
 
   /* Calendar */
   .cal-cell { min-height: 60px; padding: 4px; }
+
+  /* Dashboard — reduce side padding */
+  .dashboard-main > * { padding-left: 16px !important; padding-right: 16px !important; }
+
+  /* Toast — reposition to bottom-center on mobile */
+  .toast-container { right: 50% !important; transform: translateX(50%); bottom: 16px !important; }
+
+  /* Touch targets — ensure min 44px height for all buttons */
+  button, a[role="button"] { min-height: 44px; }
 }
 
-/* ── TOAST ANIMATIONS ── */
+/* ── RESPONSIVE UTILITIES ── */
+
+/* Court grid: 1 col on mobile, 2 on tablet+ */
+.courts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 640px) {
+  .courts-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 900px) {
+  .courts-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+}
+
+/* Wizard container — full width on mobile */
+.wizard-container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+@media (min-width: 640px) {
+  .wizard-container { padding: 32px 40px; }
+}
+
+/* Overflow table — horizontal scroll on mobile */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table-scroll::-webkit-scrollbar { height: 4px; }
+.table-scroll::-webkit-scrollbar-thumb { background: var(--grey-200); border-radius: 2px; }
+
+/* TOAST ANIMATIONS ── */
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(24px) scale(0.95); }
   to   { opacity: 1; transform: translateX(0) scale(1); }

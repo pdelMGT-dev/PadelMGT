@@ -560,6 +560,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
             <div style={{ background: 'var(--black)', color: '#fff', padding: '10px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
               Tabla Final de Clasificación
             </div>
+            <div className="table-scroll">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--grey-100)' }}>
@@ -599,6 +600,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                 })}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* ── AJUSTES DE RANKING (matrix) ── */}
@@ -1148,7 +1150,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
               {/* TABLE I: CLASIFICACIÓN */}
               <div style={{ ...card, marginBottom: 16, padding: 0 }}>
                 {tableHeader('I — CLASIFICACIÓN')}
-                <div style={{ padding: '0 0 4px' }}>
+                <div className="table-scroll" style={{ padding: '0 0 4px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ borderBottom: '2px solid var(--grey-100)' }}>
@@ -1236,7 +1238,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
               {/* TABLE II: RANKING */}
               <div style={{ ...card, padding: 0 }}>
                 {tableHeader('II — RANKING')}
-                <div style={{ padding: '0 0 4px' }}>
+                <div className="table-scroll" style={{ padding: '0 0 4px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ borderBottom: '2px solid var(--grey-100)' }}>
