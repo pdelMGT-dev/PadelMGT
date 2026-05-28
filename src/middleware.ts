@@ -17,6 +17,9 @@ const ROLE_PATHS: Record<string, string[]> = {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Allow superadmin login page through without auth check
+  if (pathname === '/superadmin/login') return NextResponse.next();
+
   const isProtected = PROTECTED_PREFIXES.some(prefix => pathname.startsWith(prefix));
   if (!isProtected) return NextResponse.next();
 
