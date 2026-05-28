@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { registerPlayer, type PlayerSex } from '@/lib/player-store';
+import { sanitizeText, isValidEmail } from '@/lib/sanitize';
 
 const COUNTRIES: string[] = [
   'Argentina', 'Bolivia', 'Brasil', 'Chile', 'Colombia', 'Costa Rica', 'Cuba',
@@ -41,14 +42,16 @@ function SignupForm() {
     e.preventDefault();
     setError('');
 
-    if (!name.trim())        { setError('Ingresá tu nombre completo.'); return; }
-    if (!email.trim())       { setError('Ingresá un email válido.'); return; }
+    const cleanName = sanitizeText(name, 100);
+    const cleanEmail = email.trim().toLowerCase().slice(0, 200);
+    if (!cleanName)          { setError('Ingresá tu nombre completo.'); return; }
+    if (!isValidEmail(cleanEmail)) { setError('Ingresá un email válido.'); return; }
     if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
     if (!country)            { setError('Seleccioná tu país.'); return; }
     if (!sex)                { setError('Seleccioná tu sexo.'); return; }
 
     setLoading(true);
-    const player = registerPlayer({ name: name.trim(), email: email.trim(), password, country, sex });
+    const player = registerPlayer({ name: cleanName, email: cleanEmail, password, country, sex });
 
     if (!player) {
       setError('Ya existe una cuenta con ese email.');

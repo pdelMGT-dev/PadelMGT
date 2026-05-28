@@ -98,6 +98,7 @@ export default function DashboardSidebar() {
 
   function handleLogout() {
     localStorage.removeItem('padelmgt_user');
+    document.cookie = 'padelmgt_session=; path=/; max-age=0';
     router.push('/login');
   }
 
