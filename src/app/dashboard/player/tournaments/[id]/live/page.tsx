@@ -165,6 +165,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   // Score inputs: key = `${roundNum}-${courtNum}`, value = { p1: string; p2: string }
   const [scoreInputs, setScoreInputs] = useState<Record<string, { p1: string; p2: string }>>({});
   const [setInputs, setSetInputs] = useState<Record<string, Array<{ p1: string; p2: string }>>>({});
+  // Courts in temporary edit mode (key = `${roundNum}-${courtNum}`)
+  const [editingCourts, setEditingCourts] = useState<Set<string>>(new Set());
 
   // ── Load user ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -309,7 +311,23 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     const updated = updateMatchScore(t, roundNum, courtNum, p1, p2, sets);
     saveTournament(updated);
     setTournament(updated);
+    // Exit edit mode for this court after saving
+    setEditingCourts(prev => { const next = new Set(prev); next.delete(key); return next; });
     if (updated.status === 'finished') applyTournamentRankingResults(updated);
+  }
+
+  function handleEditCourt(roundNum: number, courtNum: number) {
+    const key = `${roundNum}-${courtNum}`;
+    // Pre-populate inputs with current saved scores
+    const round = tournament?.rounds.find(r => r.num === roundNum);
+    const court = round?.courts.find(c => c.courtNum === courtNum);
+    if (court) {
+      setScoreInputs(prev => ({
+        ...prev,
+        [key]: { p1: String(court.pair1Score ?? ''), p2: String(court.pair2Score ?? '') },
+      }));
+    }
+    setEditingCourts(prev => new Set(prev).add(key));
   }
 
   function handleTradSetChange(key: string, setIdx: number, side: 'p1' | 'p2', val: string, roundNum: number, courtNum: number) {
@@ -840,7 +858,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                       {round.courts.map(court => {
                         const key = `${round.num}-${court.courtNum}`;
                         const isCourtDone = court.status === 'completed';
-                        const isEditable = isActive && !isCompleted && !isFinished;
+                        const isInEditMode = editingCourts.has(key);
+                        const isEditable = (isActive && !isCompleted && !isFinished) || isInEditMode;
                         const pair1Label = getPairLabel(t, court.pair1);
                         const pair2Label = getPairLabel(t, court.pair2);
 
@@ -848,9 +867,21 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                           <div key={court.courtNum} style={{ marginBottom: 12, border: `1px solid ${isCourtDone ? 'var(--turf-green, #22c55e)' : isPending ? 'var(--grey-100)' : 'var(--grey-200)'}`, background: isCourtDone ? 'rgba(34,197,94,0.04)' : '#fff', opacity: isPending ? 0.6 : 1 }}>
                             {/* Header */}
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 18px', background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-100)' }}>
-                              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>
-                                Cancha {court.courtNum}
-                                {isCourtDone && <span style={{ marginLeft: 8, color: 'var(--turf-green, #16a34a)' }}>✓</span>}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>
+                                  Cancha {court.courtNum}
+                                  {isCourtDone && !isInEditMode && <span style={{ marginLeft: 8, color: 'var(--turf-green, #16a34a)' }}>✓</span>}
+                                </div>
+                                {isCourtDone && isActive && !isFinished && !isInEditMode && (
+                                  <button
+                                    onClick={() => handleEditCourt(round.num, court.courtNum)}
+                                    style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-500)', background: 'transparent', border: '1px solid var(--grey-300)', padding: '2px 8px', cursor: 'pointer' }}>
+                                    Editar
+                                  </button>
+                                )}
+                                {isInEditMode && (
+                                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#f59e0b' }}>EDITANDO</span>
+                                )}
                               </div>
                               <div style={{ display: 'flex', gap: 8 }}>
                                 {isPointsMode ? (
@@ -951,6 +982,21 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                       )}
                                     </div>
                                   </div>
+                                  {/* Save button — shown only in explicit edit mode */}
+                                  {isInEditMode && (
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 18px', borderTop: '1px solid var(--grey-100)', gap: 8 }}>
+                                      <button
+                                        onClick={() => { setEditingCourts(prev => { const next = new Set(prev); next.delete(key); return next; }); }}
+                                        style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)', background: 'transparent', border: '1px solid var(--grey-300)', padding: '6px 14px', cursor: 'pointer' }}>
+                                        Cancelar
+                                      </button>
+                                      <button
+                                        onClick={() => handleSaveScore(round.num, court.courtNum)}
+                                        style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fff', background: 'var(--black)', border: 'none', padding: '6px 14px', cursor: 'pointer' }}>
+                                        Guardar
+                                      </button>
+                                    </div>
+                                  )}
                                 </>
                               );
                             })()}
