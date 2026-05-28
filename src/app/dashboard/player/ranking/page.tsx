@@ -2,23 +2,27 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getLoggedInPlayer } from '@/lib/player-store';
+import { getPlayerByEmail } from '@/lib/player-store';
 
 export default function PlayerRankingPage() {
-  const [pts, setPts] = useState<number | null>(null);
+  const [pts, setPts] = useState<number>(0);
   const [rank, setRank] = useState<number | null>(null);
   const [name, setName] = useState('');
 
   useEffect(() => {
-    const p = getLoggedInPlayer();
-    if (p) {
-      setPts(p.rankingPoints ?? 0);
-      setRank(p.ranking ?? null);
-      setName(p.name ?? '');
-    }
+    try {
+      const raw = localStorage.getItem('padelmgt_user');
+      if (raw) {
+        const u = JSON.parse(raw) as { email?: string; name?: string; rankingPoints?: number; ranking?: number };
+        const full = u.email ? getPlayerByEmail(u.email) : null;
+        setPts(full?.rankingPoints ?? u.rankingPoints ?? 0);
+        setRank(full?.ranking ?? u.ranking ?? null);
+        setName(full?.name ?? u.name ?? '');
+      }
+    } catch { /* silent */ }
   }, []);
 
-  const hasData = pts !== null && pts > 0;
+  const hasData = pts > 0;
 
   return (
     <div style={{ padding: '40px 40px 80px' }}>
@@ -41,7 +45,7 @@ export default function PlayerRankingPage() {
         <div style={{ background: '#fff', padding: '40px 32px' }}>
           <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 700, marginBottom: 8 }}>Puntos Totales</div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 64, fontWeight: 600, letterSpacing: '-0.04em', color: hasData ? 'var(--black)' : 'var(--grey-300)', lineHeight: 0.9, marginBottom: 12 }}>
-            {pts !== null ? pts.toLocaleString() : '0'}
+            {pts.toLocaleString()}
           </div>
           <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>
             {hasData ? 'acumulados en torneos' : 'Jugá torneos para sumar puntos'}
@@ -58,7 +62,7 @@ export default function PlayerRankingPage() {
         </div>
       </div>
 
-      {/* Empty state if no points */}
+      {/* Empty state */}
       {!hasData && (
         <div style={{ border: '1px dashed var(--grey-300)', padding: '48px 40px', textAlign: 'center', background: 'var(--grey-50)' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, textTransform: 'uppercase', color: 'var(--grey-300)', marginBottom: 12 }}>
@@ -78,7 +82,6 @@ export default function PlayerRankingPage() {
         </div>
       )}
 
-      {/* Ranking table link */}
       <div style={{ marginTop: 24, padding: '16px 24px', background: '#fff', border: '1px solid var(--grey-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontSize: 13, color: 'var(--grey-500)' }}>Consultá la tabla de ranking global de la plataforma</div>
         <Link href="/ranking" style={{ fontSize: 13, color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Ver ranking completo →</Link>
