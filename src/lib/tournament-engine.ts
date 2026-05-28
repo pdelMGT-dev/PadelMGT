@@ -227,8 +227,8 @@ export function startTournament(tournament: Tournament): Tournament {
       fixedPairs,
     );
   } else if (format === 'mexicano') {
-    // Only generate first round; subsequent rounds generated dynamically
-    const firstRound = generateMexicanoRound(players, [], courts, 1);
+    // Only generate first round (random); subsequent rounds generated dynamically
+    const firstRound = generateMexicanoRound(players, [], courts, 1, pairType, fixedPairs);
     rounds = [firstRound];
   }
 

@@ -247,51 +247,108 @@ export function generateMexicanoRound(
   standings: Standing[],
   numCourts: number,
   roundNum: number,
+  pairType?: PairType,
+  fixedPairs?: FixedPair[],
 ): GameRound {
-  if (roundNum === 1 || standings.length === 0) {
-    // Round 1: use the first round of Americano (random order)
-    const allRounds = generateAmericanoRounds(players, numCourts);
-    return { ...allRounds[0], num: roundNum, status: 'pending' };
+  const isParejas = pairType === 'parejas' && fixedPairs && fixedPairs.length > 0;
+
+  if (isParejas) {
+    return generateMexicanoParejas(fixedPairs!, standings, roundNum);
   }
 
-  // Rounds 2+: sort players by pts descending, then pair by rank position
-  const sorted = [...players].sort((a, b) => {
-    const sA = standings.find((s) => s.playerId === a.id);
-    const sB = standings.find((s) => s.playerId === b.id);
-    const ptsA = sA?.pts ?? 0;
-    const ptsB = sB?.pts ?? 0;
-    if (ptsB !== ptsA) return ptsB - ptsA;
-    const diffA = sA?.diff ?? 0;
-    const diffB = sB?.diff ?? 0;
-    return diffB - diffA;
-  });
+  // Individual mode — new partners every round
+  let sorted: GamePlayer[];
 
+  if (roundNum === 1 || standings.length === 0) {
+    // R1: random shuffle
+    sorted = fisherYates([...players]);
+  } else {
+    // R2+: sort by pts desc, then diff desc as tiebreaker
+    sorted = [...players].sort((a, b) => {
+      const sA = standings.find(s => s.playerId === a.id);
+      const sB = standings.find(s => s.playerId === b.id);
+      if ((sB?.pts ?? 0) !== (sA?.pts ?? 0)) return (sB?.pts ?? 0) - (sA?.pts ?? 0);
+      return (sB?.diff ?? 0) - (sA?.diff ?? 0);
+    });
+  }
+
+  const N = sorted.length;
+  const numCts = Math.floor(N / 4);
   const courts: CourtMatch[] = [];
   const restingIds: string[] = [];
 
-  for (let i = 0; i < sorted.length; i += 4) {
-    if (i + 3 < sorted.length && courts.length < numCourts) {
-      courts.push({
-        courtNum: courts.length + 1,
-        pair1: [sorted[i].id, sorted[i + 1].id],
-        pair2: [sorted[i + 2].id, sorted[i + 3].id],
-        pair1Score: null,
-        pair2Score: null,
-        status: 'pending',
-      });
-    } else {
-      for (let j = i; j < Math.min(i + 4, sorted.length); j++) {
-        restingIds.push(sorted[j].id);
-      }
-    }
+  // Mexicano pairing: for court i (0-indexed, out of numCts):
+  //   pair1 = [rank(i+1), rank(i+1 + numCts)]  — e.g., ranks 1&3 for i=0 with numCts=2
+  //   pair2 = [rank(i+1 + 2*numCts), rank(i+1 + 3*numCts)]  — e.g., ranks 5&7
+  for (let i = 0; i < numCts; i++) {
+    courts.push({
+      courtNum: i + 1,
+      pair1: [sorted[i].id, sorted[i + numCts].id],
+      pair2: [sorted[i + 2 * numCts].id, sorted[i + 3 * numCts].id],
+      pair1Score: null,
+      pair2Score: null,
+      status: 'pending',
+    });
   }
 
-  return {
-    num: roundNum,
-    status: 'pending',
-    courts,
-    resting: restingIds,
-  };
+  for (let i = numCts * 4; i < N; i++) {
+    restingIds.push(sorted[i].id);
+  }
+
+  return { num: roundNum, status: 'pending', courts, resting: restingIds };
+}
+
+function generateMexicanoParejas(
+  fixedPairs: FixedPair[],
+  standings: Standing[],
+  roundNum: number,
+): GameRound {
+  let sortedPairs: FixedPair[];
+
+  if (roundNum === 1 || standings.length === 0) {
+    sortedPairs = fisherYates([...fixedPairs]);
+  } else {
+    sortedPairs = [...fixedPairs].sort((a, b) => {
+      const sA = standings.find(s => s.playerId === a.player1Id);
+      const sB = standings.find(s => s.playerId === b.player1Id);
+      if ((sB?.pts ?? 0) !== (sA?.pts ?? 0)) return (sB?.pts ?? 0) - (sA?.pts ?? 0);
+      return (sB?.diff ?? 0) - (sA?.diff ?? 0);
+    });
+  }
+
+  const N = sortedPairs.length;
+  const numCts = Math.floor(N / 2);
+  const courts: CourtMatch[] = [];
+  const restingIds: string[] = [];
+
+  // Mexicano for pairs: pair[i] vs pair[i + numCts]
+  for (let i = 0; i < numCts; i++) {
+    const fp1 = sortedPairs[i];
+    const fp2 = sortedPairs[i + numCts];
+    courts.push({
+      courtNum: i + 1,
+      pair1: [fp1.player1Id, fp1.player2Id],
+      pair2: [fp2.player1Id, fp2.player2Id],
+      pair1Score: null,
+      pair2Score: null,
+      status: 'pending',
+    });
+  }
+
+  if (N % 2 !== 0) {
+    const last = sortedPairs[N - 1];
+    restingIds.push(last.player1Id, last.player2Id);
+  }
+
+  return { num: roundNum, status: 'pending', courts, resting: restingIds };
+}
+
+function fisherYates<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 // ---------------------------------------------------------------------------
@@ -646,11 +703,21 @@ export function updateMatchScore(
 
   const allDone = rounds.every((r) => r.status === 'completed');
 
-  return {
-    ...updated,
-    standings,
-    status: allDone ? 'finished' : updated.status,
-  };
+  let newStatus = updated.status;
+  if (allDone) {
+    if (game.format === 'mexicano') {
+      // For Mexicano, only auto-finish when max rounds reached
+      const maxRounds = game.pairType === 'parejas' && (game.fixedPairs?.length ?? 0) > 0
+        ? game.fixedPairs!.length
+        : game.players.length;
+      if (game.currentRound >= maxRounds) newStatus = 'finished';
+      // Otherwise keep 'live' — next round generated on demand
+    } else {
+      newStatus = 'finished';
+    }
+  }
+
+  return { ...updated, standings, status: newStatus };
 }
 
 // ---------------------------------------------------------------------------
@@ -679,6 +746,8 @@ export function startNextRound(game: ActiveGame): ActiveGame {
       game.standings,
       game.courts,
       nextRoundNum,
+      game.pairType,
+      game.fixedPairs,
     );
     const activeRound: GameRound = { ...newRound, status: 'active' };
     return {

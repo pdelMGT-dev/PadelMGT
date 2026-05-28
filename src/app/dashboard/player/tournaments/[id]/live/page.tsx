@@ -988,39 +988,34 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                       }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--turf-green, #16a34a)' }}>
                           ✓ Ronda {currentRoundNum} completada
+                          {isMexicano && <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--grey-500)', marginLeft: 8 }}>({currentRoundNum}/{expectedTotalRounds} máx.)</span>}
                         </div>
-                        {!gameFinished ? (
-                          <button
-                            onClick={handleNextRound}
-                            style={{
-                              padding: '12px 24px',
-                              background: 'var(--black)',
-                              color: '#fff',
-                              border: 'none',
-                              cursor: 'pointer',
-                              fontFamily: 'var(--font-display)',
-                              fontSize: 14,
-                              fontWeight: 700,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.06em',
-                            }}>
+                        {isMexicano ? (
+                          currentRoundNum >= expectedTotalRounds ? (
+                            <button onClick={handleFinishTournament}
+                              style={{ padding: '12px 24px', background: '#dc2626', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              FINALIZAR TORNEO
+                            </button>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                              <button onClick={handleNextRound}
+                                style={{ padding: '12px 24px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                SIGUIENTE RONDA →
+                              </button>
+                              <button onClick={handleFinishTournament}
+                                style={{ padding: '12px 24px', background: 'transparent', color: '#dc2626', border: '2px solid #dc2626', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                FINALIZAR AQUÍ
+                              </button>
+                            </div>
+                          )
+                        ) : !gameFinished ? (
+                          <button onClick={handleNextRound}
+                            style={{ padding: '12px 24px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                             SIGUIENTE RONDA →
                           </button>
                         ) : (
-                          <button
-                            onClick={handleFinishTournament}
-                            style={{
-                              padding: '12px 24px',
-                              background: '#dc2626',
-                              color: '#fff',
-                              border: 'none',
-                              cursor: 'pointer',
-                              fontFamily: 'var(--font-display)',
-                              fontSize: 14,
-                              fontWeight: 700,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.06em',
-                            }}>
+                          <button onClick={handleFinishTournament}
+                            style={{ padding: '12px 24px', background: '#dc2626', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                             FINALIZAR TORNEO
                           </button>
                         )}
