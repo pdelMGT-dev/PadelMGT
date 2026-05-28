@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import ConditionalFooter from "@/components/ConditionalFooter";
+import { ClientProviders } from "@/components/ClientProviders";
 
 export const metadata: Metadata = {
   title: "PadelMGT — Crea. Juega. Rankea.",
@@ -16,9 +17,11 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
-        <Navbar />
-        <main>{children}</main>
-        <ConditionalFooter />
+        <ClientProviders>
+          <Navbar />
+          <main>{children}</main>
+          <ConditionalFooter />
+        </ClientProviders>
       </body>
     </html>
   );

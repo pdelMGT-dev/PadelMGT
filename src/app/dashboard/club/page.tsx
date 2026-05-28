@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
+import { useToast } from '@/components/ToastProvider';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -209,6 +210,7 @@ function ResumenSection({ players, games }: { players: ClubPlayer[]; games: Acti
 }
 
 function PlayersSection({ players, setPlayers }: { players: ClubPlayer[]; setPlayers: React.Dispatch<React.SetStateAction<ClubPlayer[]>> }) {
+  const { showToast } = useToast();
   const [mode, setMode] = useState<'list' | 'add' | 'import'>('list');
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('Todos');
@@ -217,14 +219,11 @@ function PlayersSection({ players, setPlayers }: { players: ClubPlayer[]; setPla
   const [csvPreview, setCsvPreview] = useState<ClubPlayer[]>([]);
   const [csvParsed, setCsvParsed] = useState(false);
   const [justImported, setJustImported] = useState<ClubPlayer[]>([]);
-  const [toast, setToast] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', email: '', phone: '', level: '3', points: '' });
   const [inviteLink, setInviteLink] = useState('');
   const [inviteForId, setInviteForId] = useState<string | null>(null);
   const [copiedInvite, setCopiedInvite] = useState(false);
-
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 4000); }
 
   function handleAdd() {
     if (!form.name.trim()) return;
@@ -287,8 +286,6 @@ function PlayersSection({ players, setPlayers }: { players: ClubPlayer[]; setPla
 
   return (
     <div>
-      {toast && <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 9999, background: 'var(--turf-green)', color: '#fff', padding: '12px 20px', fontSize: 13, fontWeight: 600, boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>{toast}</div>}
-
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>Base de Jugadores</div>
@@ -494,6 +491,7 @@ function PlayersSection({ players, setPlayers }: { players: ClubPlayer[]; setPla
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function ClubDashboardPage() {
+  const { showToast } = useToast();
   const [tab, setTab] = useState<Tab>('resumen');
 
   const [players, setPlayers] = useState<ClubPlayer[]>(() => {

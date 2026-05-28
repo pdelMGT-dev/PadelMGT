@@ -7,6 +7,8 @@ import type { Tournament } from '@/lib/tournament-store';
 import type { FixedPair } from '@/lib/game-engine';
 import { getFriendsForPlayer, searchPlayers } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
+import { useToast } from '@/components/ToastProvider';
+import { SkeletonCard } from '@/components/Skeleton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -92,36 +94,45 @@ function today(): string {
 const STEP_LABELS = ['I INFORMACIÓN', 'II FORMATO', 'III JUGADORES'];
 
 function WizardSteps({ current }: { current: number }) {
+  const progress = Math.round(((current - 1) / (STEP_LABELS.length - 1)) * 100);
   return (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 32, overflowX: 'auto', paddingBottom: 4 }}>
-      {STEP_LABELS.map((label, i) => {
-        const num = i + 1;
-        const done = current > num;
-        const active = current === num;
-        return (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center',
-                justifyContent: 'center',
-                background: done ? 'var(--turf-green)' : active ? 'var(--black)' : 'var(--grey-100)',
-                color: done || active ? '#fff' : 'var(--grey-400)',
-                fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700,
-              }}>
-                {done ? '✓' : num}
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', paddingBottom: 4 }}>
+        {STEP_LABELS.map((label, i) => {
+          const num = i + 1;
+          const done = current > num;
+          const active = current === num;
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div style={{
+                  width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center',
+                  background: done ? 'var(--turf-green)' : active ? 'var(--black)' : 'var(--grey-100)',
+                  color: done || active ? '#fff' : 'var(--grey-400)',
+                  fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700,
+                  boxShadow: active ? '0 0 0 4px rgba(0,0,0,0.1)' : 'none',
+                  transition: 'all 0.2s',
+                }}>
+                  {done ? '✓' : num}
+                </div>
+                <span style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                  color: active ? 'var(--black)' : done ? 'var(--turf-green)' : 'var(--grey-300)',
+                  whiteSpace: 'nowrap',
+                }}>{label}</span>
               </div>
-              <span style={{
-                fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                color: active ? 'var(--black)' : done ? 'var(--turf-green)' : 'var(--grey-300)',
-                whiteSpace: 'nowrap',
-              }}>{label}</span>
+              {i < STEP_LABELS.length - 1 && (
+                <div style={{ width: 40, height: 2, background: done ? 'var(--turf-green)' : 'var(--grey-200)', margin: '0 4px', marginBottom: 18, flexShrink: 0, transition: 'background 0.3s' }} />
+              )}
             </div>
-            {i < STEP_LABELS.length - 1 && (
-              <div style={{ width: 40, height: 2, background: done ? 'var(--turf-green)' : 'var(--grey-200)', margin: '0 4px', marginBottom: 18, flexShrink: 0 }} />
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      {/* Progress bar */}
+      <div style={{ height: 3, background: 'var(--grey-100)', borderRadius: 2, marginTop: 8, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${progress}%`, background: 'var(--turf-green)', borderRadius: 2, transition: 'width 0.4s ease' }} />
+      </div>
     </div>
   );
 }
@@ -151,6 +162,8 @@ function NavBtns({
 // ══════════════════════════════════════════════════════════════════════════════
 
 export default function PlayerTournamentsPage() {
+  const { showToast } = useToast();
+
   // ── View ────────────────────────────────────────────────────────────────────
   const [view, setView] = useState<'dashboard' | 'wizard'>('dashboard');
   const [step, setStep] = useState(1);
@@ -160,6 +173,7 @@ export default function PlayerTournamentsPage() {
 
   // ── My tournaments ──────────────────────────────────────────────────────────
   const [myTournaments, setMyTournaments] = useState<Tournament[]>([]);
+  const [tournamentsLoading, setTournamentsLoading] = useState(true);
   const [historialFilter, setHistorialFilter] = useState<'todos' | 'finalizado' | 'cancelado' | 'organizador' | 'jugador'>('todos');
   const [histPage, setHistPage]     = useState(0);
   const [activeView, setActiveView] = useState<'icons' | 'list'>('icons');
@@ -229,6 +243,7 @@ export default function PlayerTournamentsPage() {
       t.players.some(p => p.id === currentUser.id) ||
       (t.invitedPlayers ?? []).some(p => p.id === currentUser.id)
     ));
+    setTournamentsLoading(false);
   }, [currentUser]);
 
   // Load friends when entering step 3
@@ -394,6 +409,7 @@ export default function PlayerTournamentsPage() {
     setNewTId(tournament.id);
     setNewTCode(tournament.code);
     setStep(99);
+    showToast('¡Torneo creado exitosamente!', 'success');
 
     setMyTournaments(getAllTournaments().filter(t =>
       t.creatorId === currentUser.id ||
@@ -1418,7 +1434,7 @@ export default function PlayerTournamentsPage() {
       {/* Torneos Activos */}
       <div style={{ marginBottom: 40 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div style={secTitle}>Torneos Activos ({activeTournaments.length})</div>
+          <div style={secTitle}>Torneos Activos ({tournamentsLoading ? '...' : activeTournaments.length})</div>
           {activeTournaments.length > 0 && (
             <div style={{ display: 'flex', gap: 2 }}>
               {(['icons', 'list'] as const).map(mode => (
@@ -1431,7 +1447,11 @@ export default function PlayerTournamentsPage() {
           )}
         </div>
 
-        {activeTournaments.length === 0 ? (
+        {tournamentsLoading ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 16 }}>
+            {[1, 2, 3].map(i => <SkeletonCard key={i} rows={3} />)}
+          </div>
+        ) : activeTournaments.length === 0 ? (
           <div style={{ padding: '32px', background: '#fff', border: '1px solid var(--grey-200)', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
             No tenés torneos activos. ¡Creá uno!
           </div>
@@ -1513,7 +1533,11 @@ export default function PlayerTournamentsPage() {
                 ))}
               </div>
             </div>
-            {finishedTournaments.length === 0 ? (
+            {tournamentsLoading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {[1, 2, 3].map(i => <SkeletonCard key={i} rows={2} style={{ borderRadius: 0 }} />)}
+              </div>
+            ) : finishedTournaments.length === 0 ? (
               <div style={{ padding: '32px', background: '#fff', border: '1px solid var(--grey-200)', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
                 No hay torneos finalizados todavía.
               </div>

@@ -3,6 +3,8 @@ import React, { use, useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
+import { SkeletonCard } from '@/components/Skeleton';
+import { useToast } from '@/components/ToastProvider';
 import { getTournament, saveTournament } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
 import { applyTournamentRankingResults } from '@/lib/ranking-store';
@@ -153,6 +155,7 @@ function PodiumSection({ standings, fixedPairs }: { standings: Standing[], fixed
 export default function LiveTorneoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { showToast } = useToast();
 
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [tournament, setTournament] = useState<Tournament | null | undefined>(undefined);
@@ -215,8 +218,14 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   // ── Guard: loading ────────────────────────────────────────────────────────
   if (tournament === undefined) {
     return (
-      <div style={{ padding: '80px 40px', textAlign: 'center', color: 'var(--grey-400)' }}>
-        Cargando...
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px' }}>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+          <SkeletonCard style={{ flex: 1 }} rows={2} />
+          <SkeletonCard style={{ flex: 1 }} rows={2} />
+          <SkeletonCard style={{ flex: 1 }} rows={2} />
+        </div>
+        <SkeletonCard rows={4} style={{ marginBottom: 16 }} />
+        <SkeletonCard rows={6} />
       </div>
     );
   }
@@ -830,17 +839,24 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                     <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>
                       RONDA {round.num}
                     </span>
-                    {isActive && !roundDone && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--turf-green, #22c55e)', fontWeight: 600 }}>
-                        <span style={{
-                          width: 6, height: 6, borderRadius: '50%',
-                          background: 'var(--turf-green, #22c55e)',
-                          display: 'inline-block',
-                          animation: 'pulse 2s infinite',
-                        }} />
-                        EN JUEGO
-                      </span>
-                    )}
+                    {isActive && !roundDone && (() => {
+                      const doneCourts = round.courts.filter(c => c.status === 'completed').length;
+                      const totalCourts = round.courts.length;
+                      return (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--turf-green, #22c55e)', fontWeight: 600 }}>
+                          <span style={{
+                            width: 6, height: 6, borderRadius: '50%',
+                            background: 'var(--turf-green, #22c55e)',
+                            display: 'inline-block',
+                            animation: 'pulse 2s infinite',
+                          }} />
+                          EN JUEGO
+                          <span style={{ color: 'var(--grey-400)', fontWeight: 500 }}>
+                            {doneCourts}/{totalCourts} canchas
+                          </span>
+                        </span>
+                      );
+                    })()}
                     {(isCompleted || roundDone) && (
                       <span style={{ fontSize: 11, color: 'var(--grey-400)', fontWeight: 600 }}>✓ COMPLETADA</span>
                     )}
@@ -1188,7 +1204,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                           return (
                             <tr key={s.playerId} style={{
                               borderBottom: '1px solid var(--grey-100)',
-                              background: isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
+                              background: isMe ? 'rgba(26,78,216,0.07)' : isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
+                              outline: isMe ? '2px solid rgba(26,78,216,0.2)' : undefined,
                             }}>
                               <td style={{ ...tdCenter, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
                                 {i === 0 ? '🥇' : i + 1}
@@ -1196,7 +1213,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                               <td style={{ ...tdLeft, fontWeight: isMe ? 700 : 500 }}>
                                 {s.playerName}
                                 {isCreatorRow && <span style={{ marginLeft: 4, fontSize: 12, color: '#f59e0b' }}>★</span>}
-                                {isMe && !isCreatorRow && <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--grey-400)' }}>(tú)</span>}
+                                {isMe && <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 700, color: 'var(--court-blue)' }}>TÚ</span>}
                               </td>
                               <td style={tdCenter}>{s.played}</td>
                               <td style={tdCenter}>{s.wins}</td>
@@ -1237,7 +1254,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                         return (
                           <tr key={s.playerId} style={{
                             borderBottom: '1px solid var(--grey-100)',
-                            background: isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
+                            background: isMe ? 'rgba(26,78,216,0.07)' : isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
+                            outline: isMe ? '2px solid rgba(26,78,216,0.2)' : undefined,
                           }}>
                             <td style={{ ...tdCenter, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
                               {i === 0 ? '🥇' : i + 1}
@@ -1245,7 +1263,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                             <td style={{ ...tdLeft, fontWeight: isMe ? 700 : 500 }}>
                               {s.playerName}
                               {isCreatorRow && <span style={{ marginLeft: 4, fontSize: 12, color: '#f59e0b' }}>★</span>}
-                              {isMe && !isCreatorRow && <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--grey-400)' }}>(tú)</span>}
+                              {isMe && <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 700, color: 'var(--court-blue)' }}>TÚ</span>}
                             </td>
                             <td style={{ ...tdCenter, color: s.diff >= 0 ? 'var(--turf-green, #16a34a)' : '#dc2626' }}>
                               {s.diff > 0 ? `+${s.diff}` : s.diff}
