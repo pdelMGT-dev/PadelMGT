@@ -40,7 +40,7 @@ const CREATOR_CLUBS: PlayerClub[] = [
 const FORMAT_INFO: Record<FormatKey, { label: string; desc: string; functional: boolean }> = {
   americano:   { label: 'Americano',   desc: 'Rotación de parejas, puntos acumulados. Rondas pre-generadas.',         functional: true  },
   mexicano:    { label: 'Mexicano',    desc: 'Rotación dinámica según posición en el ranking del torneo.',              functional: true  },
-  round_robin: { label: 'Round Robin', desc: 'Todos contra todos en un mismo grupo.',                                  functional: false },
+  round_robin: { label: 'Round Robin', desc: 'Todos contra todos. Puntuación tradicional (sets/games). Parejas rotan.',  functional: true  },
   team_league: { label: 'Team League', desc: 'Liga por equipos con jornadas semanales.',                               functional: false },
   knockout:    { label: 'Knockout',    desc: 'Eliminación directa, un perdedor queda afuera.',                         functional: false },
   world_cup:   { label: 'World Cup',   desc: 'Fase de grupos seguida de eliminatorias directas.',                      functional: false },
@@ -193,6 +193,7 @@ export default function PlayerTournamentsPage() {
   const [tGames, setTGames] = useState(6);
   const [tTiebreak, setTTiebreak] = useState(7);
   const [tDeuce, setTDeuce] = useState<'ventaja' | 'oro'>('oro');
+  const [tPjTarget, setTPjTarget] = useState(4); // round_robin: games per player
 
   // ── Step 3 ──────────────────────────────────────────────────────────────────
   const [tPlayers, setTPlayers] = useState<TournamentPlayer[]>([]);
@@ -375,6 +376,7 @@ export default function PlayerTournamentsPage() {
       players: confirmedPlayers,
       invitedPlayers: allInvited,
       creatorId: currentUser.id,
+      pjTarget: tFormat === 'round_robin' ? tPjTarget : undefined,
     });
 
     if (tPairsLocked && tPairAssignments.length > 0) {
@@ -638,6 +640,8 @@ export default function PlayerTournamentsPage() {
                       if (fk === 'americano' || fk === 'mexicano') {
                         setTScoreType('points');
                         setTPtTarget(24);
+                      } else if (fk === 'round_robin') {
+                        setTScoreType('traditional');
                       }
                     }}
                     style={{ padding: '16px', border: `2px solid ${active ? 'var(--black)' : 'var(--grey-200)'}`, background: active ? 'var(--black)' : f.functional ? '#fff' : 'var(--grey-50)', cursor: f.functional ? 'pointer' : 'default', textAlign: 'left', position: 'relative', opacity: f.functional ? 1 : 0.65 }}>
@@ -712,6 +716,25 @@ export default function PlayerTournamentsPage() {
             </div>
           )}
 
+          {/* Card 3b: PJ selector — only for Round Robin */}
+          {tFormat === 'round_robin' && (
+            <div style={card}>
+              <div style={secTitle}>Partidos por jugador / equipo (PJ)</div>
+              <label style={lbl}>Juegos por jugador o equipo</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                  <button key={n} onClick={() => setTPjTarget(n)}
+                    style={{ width: 44, height: 44, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tPjTarget === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tPjTarget === n ? 'var(--black)' : '#fff', color: tPjTarget === n ? '#fff' : 'var(--black)' }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 10 }}>
+                Rondas totales: {tCourts > 0 ? Math.ceil((tMaxPlayers * tPjTarget) / (tCourts * 4)) : '–'}
+              </div>
+            </div>
+          )}
+
           {/* Card 4: Puntuación */}
           {tFormat && (
             <div style={card}>
@@ -728,6 +751,57 @@ export default function PlayerTournamentsPage() {
                         {n}
                       </button>
                     ))}
+                  </div>
+                </div>
+              ) : tFormat === 'round_robin' ? (
+                /* Round Robin: traditional only */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{ fontSize: 11, color: 'var(--grey-500)', padding: '8px 12px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)' }}>
+                    Puntuación tradicional (sets y games). V: +3 pts · Empate: +1 pt · Derrota: -1 pt
+                  </div>
+                  <div>
+                    <label style={lbl}>Sets por partido</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[1, 3].map(n => (
+                        <button key={n} onClick={() => setTSets(n)}
+                          style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tSets === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tSets === n ? 'var(--black)' : '#fff', color: tSets === n ? '#fff' : 'var(--black)' }}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={lbl}>Games por set</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[4, 5, 6].map(n => (
+                        <button key={n} onClick={() => setTGames(n)}
+                          style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tGames === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tGames === n ? 'var(--black)' : '#fff', color: tGames === n ? '#fff' : 'var(--black)' }}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={lbl}>Tiebreak a</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[7, 10].map(n => (
+                        <button key={n} onClick={() => setTTiebreak(n)}
+                          style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tTiebreak === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tTiebreak === n ? 'var(--black)' : '#fff', color: tTiebreak === n ? '#fff' : 'var(--black)' }}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={lbl}>Regla de Deuce</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[{ v: 'ventaja', label: 'Ventaja' }, { v: 'oro', label: 'Punto de Oro' }].map(o => (
+                        <button key={o.v} onClick={() => setTDeuce(o.v as 'ventaja' | 'oro')}
+                          style={{ padding: '10px 18px', border: `2px solid ${tDeuce === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tDeuce === o.v ? 'var(--black)' : '#fff', color: tDeuce === o.v ? '#fff' : 'var(--black)', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ) : (

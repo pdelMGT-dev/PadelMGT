@@ -121,6 +121,7 @@ export interface ActiveGame {
   pairType: PairType;
   mixto: boolean;
   scoreConfig: ScoreConfig;
+  pjTarget?: number;           // for round_robin: target games per player/pair
   maxPlayers: number;
   courts: number;
   players: GamePlayer[];      // confirmed players (including creator)
@@ -358,9 +359,126 @@ function fisherYates<T>(arr: T[]): T[] {
 export function generateRoundRobinRounds(
   players: GamePlayer[],
   numCourts: number,
+  pjTarget: number,
 ): GameRound[] {
-  // Same circle method as Americano — each player meets every other player exactly once
-  return generateAmericanoRounds(players, numCourts);
+  const N = players.length;
+  const playPerRound = Math.min(numCourts * 4, N);
+  const effectiveCourts = Math.floor(playPerRound / 4);
+  const totalRounds = effectiveCourts === 0
+    ? 0
+    : Math.ceil((N * pjTarget) / (effectiveCourts * 4));
+
+  // Track how many games each player still needs to play
+  const gamesLeft = new Map<string, number>(players.map(p => [p.id, pjTarget]));
+
+  // Partner and opponent frequency maps for variety optimization
+  const partnerFreq = new Map<string, Map<string, number>>();
+  const opponentFreq = new Map<string, Map<string, number>>();
+  for (const p of players) {
+    partnerFreq.set(p.id, new Map());
+    opponentFreq.set(p.id, new Map());
+  }
+
+  const rounds: GameRound[] = [];
+
+  for (let r = 0; r < totalRounds; r++) {
+    // Sort players by gamesLeft DESC (most needed first), shuffle within ties
+    const sorted = [...players]
+      .map(p => ({ p, left: gamesLeft.get(p.id) ?? 0, rnd: Math.random() }))
+      .sort((a, b) => b.left - a.left || a.rnd - b.rnd)
+      .map(x => x.p);
+
+    const active = sorted.slice(0, effectiveCourts * 4);
+    const resting = sorted.slice(effectiveCourts * 4);
+
+    // Decrement gamesLeft for active players
+    for (const p of active) {
+      gamesLeft.set(p.id, Math.max(0, (gamesLeft.get(p.id) ?? 0) - 1));
+    }
+
+    // Assign courts using greedy partner/opponent variety
+    const courts = rrAssignCourts(active, effectiveCourts, partnerFreq, opponentFreq);
+
+    // Update frequency maps
+    for (const court of courts) {
+      const [a, b] = court.pair1;
+      const [c, d] = court.pair2;
+      incFreq(partnerFreq, a, b); incFreq(partnerFreq, b, a);
+      incFreq(partnerFreq, c, d); incFreq(partnerFreq, d, c);
+      for (const p of [a, b]) for (const q of [c, d]) { incFreq(opponentFreq, p, q); incFreq(opponentFreq, q, p); }
+    }
+
+    rounds.push({
+      num: r + 1,
+      status: r === 0 ? 'active' : 'pending',
+      courts,
+      resting: resting.map(p => p.id),
+    });
+  }
+
+  return rounds;
+}
+
+function incFreq(freq: Map<string, Map<string, number>>, a: string, b: string) {
+  let inner = freq.get(a);
+  if (!inner) { inner = new Map(); freq.set(a, inner); }
+  inner.set(b, (inner.get(b) ?? 0) + 1);
+}
+
+function getFreq(freq: Map<string, Map<string, number>>, a: string, b: string): number {
+  return freq.get(a)?.get(b) ?? 0;
+}
+
+function rrAssignCourts(
+  players: GamePlayer[],
+  numCourts: number,
+  partnerFreq: Map<string, Map<string, number>>,
+  opponentFreq: Map<string, Map<string, number>>,
+): CourtMatch[] {
+  const courts: CourtMatch[] = [];
+  const remaining = [...players];
+
+  for (let c = 0; c < numCourts && remaining.length >= 4; c++) {
+    const p1 = remaining.shift()!;
+
+    // Best partner for p1: least-used partner from remaining
+    let bestPartnerIdx = 0;
+    let minPart = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const f = getFreq(partnerFreq, p1.id, remaining[i].id);
+      if (f < minPart) { minPart = f; bestPartnerIdx = i; }
+    }
+    const p2 = remaining.splice(bestPartnerIdx, 1)[0];
+
+    // Best opposing pair from remaining: minimize partner repetition + opponent repetition
+    let bestScore = Infinity;
+    let bestI = 0, bestJ = 1;
+    for (let i = 0; i < remaining.length; i++) {
+      for (let j = i + 1; j < remaining.length; j++) {
+        const p3 = remaining[i]; const p4 = remaining[j];
+        const partScore = getFreq(partnerFreq, p3.id, p4.id);
+        const oppScore =
+          getFreq(opponentFreq, p1.id, p3.id) + getFreq(opponentFreq, p1.id, p4.id) +
+          getFreq(opponentFreq, p2.id, p3.id) + getFreq(opponentFreq, p2.id, p4.id);
+        const total = partScore * 4 + oppScore;
+        if (total < bestScore) { bestScore = total; bestI = i; bestJ = j; }
+      }
+    }
+
+    const p4 = remaining.splice(bestJ, 1)[0];
+    const p3 = remaining.splice(bestI, 1)[0];
+
+    courts.push({
+      courtNum: c + 1,
+      pair1: [p1.id, p2.id],
+      pair2: [p3.id, p4.id],
+      pair1Score: null,
+      pair2Score: null,
+      status: 'pending',
+    });
+  }
+
+  return courts;
 }
 
 // ---------------------------------------------------------------------------
@@ -582,6 +700,12 @@ export function calculateStandings(game: ActiveGame): Standing[] {
 
   const isRoundRobin = game.format === 'round_robin' || game.format === 'team_league';
 
+  // head-to-head record: matchRecord[pidA][pidB] = net match pts (positive = A beat B overall)
+  const matchRecord = new Map<string, Map<string, number>>();
+  const initH2H = (pid: string) => {
+    if (!matchRecord.has(pid)) matchRecord.set(pid, new Map());
+  };
+
   for (const round of game.rounds) {
     for (const court of round.courts) {
       if (court.status !== 'completed') continue;
@@ -590,24 +714,39 @@ export function calculateStandings(game: ActiveGame): Standing[] {
       const s1 = court.pair1Score;
       const s2 = court.pair2Score;
 
-      const allInMatch = [...court.pair1, ...court.pair2];
+      // For round_robin with traditional scoring, use games from sets for diff/pointsFor
+      let gamesFor1 = s1;
+      let gamesFor2 = s2;
+      if (isRoundRobin && court.sets && court.sets.length > 0) {
+        gamesFor1 = court.sets.reduce((sum, set) => sum + set.p1, 0);
+        gamesFor2 = court.sets.reduce((sum, set) => sum + set.p2, 0);
+      }
 
       for (const pid of court.pair1) {
         const s = map.get(pid);
         if (!s) continue;
         s.played += 1;
-        s.pointsFor += s1;
-        s.pointsAgainst += s2;
-        s.diff += s1 - s2;
+        s.pointsFor += gamesFor1;
+        s.pointsAgainst += gamesFor2;
+        s.diff += gamesFor1 - gamesFor2;
         if (isRoundRobin) {
           if (s1 > s2) { s.wins += 1; s.pts += 3; }
           else if (s1 === s2) { s.draws += 1; s.pts += 1; }
-          else s.losses += 1;
+          else { s.losses += 1; s.pts -= 1; }
         } else {
           s.pts += s1;
           if (s1 > s2) s.wins += 1;
           else if (s1 === s2) s.draws += 1;
           else s.losses += 1;
+        }
+        // h2h
+        if (isRoundRobin) {
+          for (const opp of court.pair2) {
+            initH2H(pid); initH2H(opp);
+            const delta = s1 > s2 ? 1 : s1 < s2 ? -1 : 0;
+            matchRecord.get(pid)!.set(opp, (matchRecord.get(pid)!.get(opp) ?? 0) + delta);
+            matchRecord.get(opp)!.set(pid, (matchRecord.get(opp)!.get(pid) ?? 0) - delta);
+          }
         }
       }
 
@@ -615,13 +754,13 @@ export function calculateStandings(game: ActiveGame): Standing[] {
         const s = map.get(pid);
         if (!s) continue;
         s.played += 1;
-        s.pointsFor += s2;
-        s.pointsAgainst += s1;
-        s.diff += s2 - s1;
+        s.pointsFor += gamesFor2;
+        s.pointsAgainst += gamesFor1;
+        s.diff += gamesFor2 - gamesFor1;
         if (isRoundRobin) {
           if (s2 > s1) { s.wins += 1; s.pts += 3; }
           else if (s2 === s1) { s.draws += 1; s.pts += 1; }
-          else s.losses += 1;
+          else { s.losses += 1; s.pts -= 1; }
         } else {
           s.pts += s2;
           if (s2 > s1) s.wins += 1;
@@ -629,8 +768,6 @@ export function calculateStandings(game: ActiveGame): Standing[] {
           else s.losses += 1;
         }
       }
-
-      void allInMatch; // suppress unused warning
     }
   }
 
@@ -638,9 +775,14 @@ export function calculateStandings(game: ActiveGame): Standing[] {
 
   standings.sort((a, b) => {
     if (b.pts !== a.pts) return b.pts - a.pts;
-    if (b.wins !== a.wins) return b.wins - a.wins;
     if (b.diff !== a.diff) return b.diff - a.diff;
-    return b.pointsFor - a.pointsFor;
+    if (b.pointsFor !== a.pointsFor) return b.pointsFor - a.pointsFor;
+    // Head-to-head tiebreaker (only for exactly 2 tied players)
+    if (isRoundRobin) {
+      const h2h = matchRecord.get(a.playerId)?.get(b.playerId);
+      if (h2h !== undefined && h2h !== 0) return h2h > 0 ? -1 : 1;
+    }
+    return 0;
   });
 
   return standings;

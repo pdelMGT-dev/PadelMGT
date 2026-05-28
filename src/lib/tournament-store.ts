@@ -78,6 +78,7 @@ export function createTournament(params: {
   invitedPlayers: InvitedPlayer[];
   creatorId: string;
   levelLabel?: string;
+  pjTarget?: number;
 }): Tournament {
   const t: Tournament = {
     id: generateId(),
@@ -103,6 +104,7 @@ export function createTournament(params: {
     creatorId: params.creatorId,
     coCreatorIds: [],
     levelLabel: params.levelLabel,
+    pjTarget: params.pjTarget,
   };
   saveTournament(t);
   return t;

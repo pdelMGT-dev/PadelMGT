@@ -8,6 +8,7 @@ import {
   FixedPair,
   calculateStandings,
   generateMexicanoRound,
+  generateRoundRobinRounds,
 } from './game-engine';
 import type { Tournament } from './tournament-store';
 
@@ -214,7 +215,7 @@ export function generateTournamentAmericanoRounds(
 // ---------------------------------------------------------------------------
 
 export function startTournament(tournament: Tournament): Tournament {
-  const { format, players, courts, pairType, mixto, fixedPairs } = tournament;
+  const { format, players, courts, pairType, mixto, fixedPairs, pjTarget } = tournament;
 
   let rounds: GameRound[] = [];
 
@@ -230,6 +231,32 @@ export function startTournament(tournament: Tournament): Tournament {
     // Only generate first round (random); subsequent rounds generated dynamically
     const firstRound = generateMexicanoRound(players, [], courts, 1, pairType, fixedPairs);
     rounds = [firstRound];
+  } else if (format === 'round_robin') {
+    const pj = pjTarget ?? 4;
+    if (pairType === 'parejas' && fixedPairs && fixedPairs.length >= 2) {
+      // Treat each fixed pair as one "player" entity
+      const pairPlayers: GamePlayer[] = fixedPairs.map(fp => ({
+        id: fp.player1Id,
+        name: `${fp.player1Name} / ${fp.player2Name}`,
+        email: '',
+        ranking: 999,
+        isCreator: false,
+      }));
+      rounds = generateRoundRobinRounds(pairPlayers, courts, pj).map(round => ({
+        ...round,
+        courts: round.courts.map(court => ({
+          ...court,
+          pair1: fixedPairs.find(fp => fp.player1Id === court.pair1[0])
+            ? [court.pair1[0], fixedPairs.find(fp => fp.player1Id === court.pair1[0])!.player2Id]
+            : court.pair1,
+          pair2: fixedPairs.find(fp => fp.player1Id === court.pair2[0])
+            ? [court.pair2[0], fixedPairs.find(fp => fp.player1Id === court.pair2[0])!.player2Id]
+            : court.pair2,
+        })),
+      }));
+    } else {
+      rounds = generateRoundRobinRounds(players, courts, pj);
+    }
   }
 
   // Make round 1 active
