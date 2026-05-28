@@ -25,6 +25,7 @@ export interface ScoreConfig {
   gamesPerSet?: number;
   tiebreak?: number;
   deuce?: 'ventaja' | 'oro';
+  allowTies?: boolean;   // round_robin: allow set to end equal (e.g. 6-6)
 }
 
 export interface GamePlayer {

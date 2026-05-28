@@ -318,7 +318,6 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
   function handleEditCourt(roundNum: number, courtNum: number) {
     const key = `${roundNum}-${courtNum}`;
-    // Pre-populate inputs with current saved scores
     const round = tournament?.rounds.find(r => r.num === roundNum);
     const court = round?.courts.find(c => c.courtNum === courtNum);
     if (court) {
@@ -326,6 +325,13 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
         ...prev,
         [key]: { p1: String(court.pair1Score ?? ''), p2: String(court.pair2Score ?? '') },
       }));
+      // Pre-populate per-set inputs from saved set data
+      if (court.sets && court.sets.length > 0) {
+        setSetInputs(prev => ({
+          ...prev,
+          [key]: court.sets!.map(s => ({ p1: String(s.p1), p2: String(s.p2) })),
+        }));
+      }
     }
     setEditingCourts(prev => new Set(prev).add(key));
   }
@@ -935,9 +941,16 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                             style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }} />
                                         ))
                                       ) : (
-                                        <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: isCourtDone ? (courtWinner === 1 ? 'var(--black)' : 'var(--grey-400)') : 'var(--grey-300)' }}>
-                                          {court.pair1Score !== null ? court.pair1Score : '–'}
-                                        </div>
+                                        // Completed traditional: show actual games per set
+                                        court.sets && court.sets.length > 0
+                                          ? court.sets.map((s, i) => (
+                                              <div key={i} style={{ width: 48, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${courtWinner === 1 ? 'rgba(34,197,94,0.3)' : 'var(--grey-200)'}`, fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: courtWinner === 1 ? 'var(--black)' : 'var(--grey-400)' }}>
+                                                {s.p1}
+                                              </div>
+                                            ))
+                                          : (
+                                              <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: 'var(--grey-300)' }}>–</div>
+                                            )
                                       )}
                                     </div>
                                   </div>
@@ -976,9 +989,15 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                             style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }} />
                                         ))
                                       ) : (
-                                        <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: isCourtDone ? (courtWinner === 2 ? 'var(--black)' : 'var(--grey-400)') : 'var(--grey-300)' }}>
-                                          {court.pair2Score !== null ? court.pair2Score : '–'}
-                                        </div>
+                                        court.sets && court.sets.length > 0
+                                          ? court.sets.map((s, i) => (
+                                              <div key={i} style={{ width: 48, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${courtWinner === 2 ? 'rgba(34,197,94,0.3)' : 'var(--grey-200)'}`, fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: courtWinner === 2 ? 'var(--black)' : 'var(--grey-400)' }}>
+                                                {s.p2}
+                                              </div>
+                                            ))
+                                          : (
+                                              <div style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--grey-200)', fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: 'var(--grey-300)' }}>–</div>
+                                            )
                                       )}
                                     </div>
                                   </div>

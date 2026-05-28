@@ -193,7 +193,8 @@ export default function PlayerTournamentsPage() {
   const [tGames, setTGames] = useState(6);
   const [tTiebreak, setTTiebreak] = useState(7);
   const [tDeuce, setTDeuce] = useState<'ventaja' | 'oro'>('oro');
-  const [tPjTarget, setTPjTarget] = useState(4); // round_robin: games per player
+  const [tPjTarget, setTPjTarget] = useState(4);      // round_robin: games per player
+  const [tAllowTies, setTAllowTies] = useState(false); // round_robin: allow set tie (6-6)
 
   // ── Step 3 ──────────────────────────────────────────────────────────────────
   const [tPlayers, setTPlayers] = useState<TournamentPlayer[]>([]);
@@ -328,7 +329,14 @@ export default function PlayerTournamentsPage() {
     if (!currentUser) return;
     const scoreConfig = tScoreType === 'points'
       ? { type: 'points' as const, target: tPtTarget }
-      : { type: 'traditional' as const, setsPerMatch: tSets, gamesPerSet: tGames, tiebreak: tTiebreak, deuce: tDeuce };
+      : {
+          type: 'traditional' as const,
+          setsPerMatch: tSets,
+          gamesPerSet: tGames,
+          tiebreak: tAllowTies ? undefined : tTiebreak,
+          deuce: tDeuce,
+          ...(tFormat === 'round_robin' ? { allowTies: tAllowTies } : {}),
+        };
 
     // Only creator + provisionals go to confirmed players
     const confirmedPlayers = tPlayers.filter(p => p.isCreator || p.id.startsWith('prov-'));
@@ -784,6 +792,19 @@ export default function PlayerTournamentsPage() {
                     </div>
                   </div>
                   <div>
+                    <label style={lbl}>¿Se permiten empates (T) en el set? — ej. 6-6</label>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      {([{ v: false, label: 'No', sub: 'Siempre hay ganador' }, { v: true, label: 'Sí', sub: 'Empate válido (T)' }] as const).map(o => (
+                        <button key={String(o.v)} onClick={() => setTAllowTies(o.v)}
+                          style={{ flex: 1, padding: '14px', border: `2px solid ${tAllowTies === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tAllowTies === o.v ? 'var(--black)' : '#fff', color: tAllowTies === o.v ? '#fff' : 'var(--black)', cursor: 'pointer', textAlign: 'center' }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{o.label}</div>
+                          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4, color: tAllowTies === o.v ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{o.sub}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {!tAllowTies && (
+                  <div>
                     <label style={lbl}>Tiebreak (puntos para ganar)</label>
                     <div style={{ display: 'flex', gap: 10 }}>
                       {[7, 10].map(n => (
@@ -795,6 +816,7 @@ export default function PlayerTournamentsPage() {
                       ))}
                     </div>
                   </div>
+                  )}
                   <div>
                     <label style={lbl}>Regla de Deuce / Ventaja</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
