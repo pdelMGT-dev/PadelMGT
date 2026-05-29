@@ -506,7 +506,10 @@ export async function getSAPlayersFromSupabase(): Promise<SAPlayer[] | null> {
 
 export async function upsertSAPlayerToSupabase(player: SAPlayer): Promise<void> {
   if (!supabase) return;
-  try { await supabase.from('players').upsert(playerToRow(player)); } catch { /* silent */ }
+  try {
+    const { error } = await supabase.from('players').upsert(playerToRow(player));
+    if (error) console.error('[Supabase] upsertPlayer error:', error.message, error.details);
+  } catch (err) { console.error('[Supabase] upsertPlayer exception:', err); }
 }
 
 export async function deleteSAPlayerFromSupabase(id: string): Promise<void> {
@@ -696,7 +699,7 @@ export async function registerPlayerToSupabase(p: {
 }): Promise<void> {
   if (!supabase) return;
   try {
-    await supabase.from('players').upsert({
+    const { error } = await supabase.from('players').upsert({
       id: p.id,
       name: p.name,
       email: p.email,
@@ -708,5 +711,6 @@ export async function registerPlayerToSupabase(p: {
       role: 'player',
       custom_fields: { shortId: p.shortId, sex: p.sex, level: p.level },
     });
-  } catch { /* silent */ }
+    if (error) console.error('[Supabase] registerPlayer error:', error.message, error.details);
+  } catch (err) { console.error('[Supabase] registerPlayer exception:', err); }
 }

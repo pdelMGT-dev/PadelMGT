@@ -2,8 +2,9 @@
 -- Generated for migration from localStorage when backend is ready
 
 -- Players
+-- Note: id is TEXT (not UUID) so app-generated IDs like "player-00119" are accepted
 CREATE TABLE players (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   phone TEXT,
@@ -20,7 +21,7 @@ CREATE TABLE players (
 
 -- Clubs
 CREATE TABLE clubs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   city TEXT,
   country TEXT DEFAULT 'ES',
@@ -34,9 +35,9 @@ CREATE TABLE clubs (
 
 -- Player relationships
 CREATE TABLE player_relationships (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  player_id UUID REFERENCES players(id) ON DELETE CASCADE,
-  related_player_id UUID REFERENCES players(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  player_id TEXT REFERENCES players(id) ON DELETE CASCADE,
+  related_player_id TEXT REFERENCES players(id) ON DELETE CASCADE,
   relationship_type TEXT CHECK (relationship_type IN ('friend', 'rival', 'teammate')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(player_id, related_player_id)
@@ -44,7 +45,7 @@ CREATE TABLE player_relationships (
 
 -- Admin users
 CREATE TABLE admin_users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('score_corrections', 'player_db', 'transactions', 'clubs')),
@@ -78,7 +79,7 @@ CREATE TABLE player_field_definitions (
 
 -- Tournaments
 CREATE TABLE tournaments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   club TEXT,
   city TEXT,
@@ -93,7 +94,7 @@ CREATE TABLE tournaments (
 
 -- Quick games
 CREATE TABLE quick_games (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   name TEXT,
   format TEXT,
   score_config TEXT DEFAULT 'puntos',
