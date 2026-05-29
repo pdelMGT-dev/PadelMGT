@@ -26,6 +26,7 @@ export default function Navbar() {
   const isHome = pathname === '/';
 
   if (pathname.startsWith('/dashboard')) return null;
+  if (pathname.startsWith('/superadmin')) return null;
 
   return (
     <>

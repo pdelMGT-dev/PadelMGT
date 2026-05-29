@@ -261,7 +261,10 @@ function PlayerForm({
           <input style={inputStyle} value={form.country ?? ''} onChange={e => set('country', e.target.value)} />
         </Field>
         <Field label="Club">
-          <input style={inputStyle} value={form.club ?? ''} onChange={e => set('club', e.target.value)} />
+          <select style={{ ...inputStyle, appearance: 'auto' }} value={form.club ?? ''} onChange={e => set('club', e.target.value)}>
+            <option value="">— Sin club —</option>
+            {getSAClubs().map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
         </Field>
         <Field label="Posicion Ranking">
           <input style={inputStyle} type="number" min={0} value={form.ranking ?? 0} onChange={e => set('ranking', Number(e.target.value))} />
@@ -402,12 +405,19 @@ export default function PlayersPage() {
   useEffect(() => {
     setPlayers(getSAPlayers());
     setCustomFields(getPlayerCustomFields());
-    getSAPlayersFromSupabase().then(sbPlayers => {
-      if (sbPlayers && sbPlayers.length > 0) {
-        setPlayers(sbPlayers);
-        saveSAPlayers(sbPlayers);
-      }
-    });
+
+    function fetchFromSupabase() {
+      getSAPlayersFromSupabase().then(sbPlayers => {
+        if (sbPlayers && sbPlayers.length > 0) {
+          setPlayers(sbPlayers);
+          saveSAPlayers(sbPlayers);
+        }
+      });
+    }
+
+    fetchFromSupabase();
+    const interval = setInterval(fetchFromSupabase, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   function toast(msg: string, ok = true) {
@@ -1007,16 +1017,34 @@ export default function PlayersPage() {
             {/* Section 6 — Relaciones */}
             {(() => {
               const rels = getRelationships(selectedPlayer.id);
-              if (rels.length === 0) return null;
               const relTypeLabels: Record<PlayerRelationship['type'], string> = { friend: 'Amigo', rival: 'Rival', teammate: 'Companero' };
               return (
                 <div style={{ marginBottom: 20 }}>
-                  <SectionHeader label="Relaciones" />
-                  {rels.map(r => {
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <SectionHeader label="Relaciones" />
+                    <button
+                      onClick={() => setShowRelationshipModal({ playerId: selectedPlayer.id })}
+                      style={{ fontSize: 11, fontWeight: 700, color: 'var(--turf-green)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.06em' }}
+                    >
+                      + Agregar
+                    </button>
+                  </div>
+                  {rels.length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'var(--grey-300)', fontStyle: 'italic' }}>Sin relaciones registradas.</div>
+                  ) : rels.map(r => {
                     const otherId = r.playerId === selectedPlayer.id ? r.relatedPlayerId : r.playerId;
                     const other = playerById[otherId];
                     return (
-                      <InfoRow key={r.id} label={other?.name ?? otherId}><span style={{ color: 'var(--grey-400)' }}>{relTypeLabels[r.type]}</span></InfoRow>
+                      <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--grey-100)' }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>{other?.name ?? otherId}</span>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <span style={{ fontSize: 11, color: 'var(--grey-400)', background: 'var(--grey-100)', padding: '2px 8px', borderRadius: 10 }}>{relTypeLabels[r.type]}</span>
+                          <button onClick={() => removeRelationship(r.id)}
+                            style={{ fontSize: 11, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600 }}>
+                            ✕
+                          </button>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

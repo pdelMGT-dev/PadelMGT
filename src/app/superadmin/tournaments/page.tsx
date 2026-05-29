@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { getSATournaments, saveSATournaments, getSATournamentsFromSupabase, type SATournament } from '@/lib/superadmin-data';
+import { getTournament, saveTournament, getAllTournaments } from '@/lib/tournament-store';
+import type { Tournament } from '@/lib/tournament-store';
+import type { CourtMatch, GameRound } from '@/lib/game-engine';
 
 interface ScoreCorrectionRequest {
   id: string;
@@ -82,6 +85,221 @@ function exportCSV(rows: Record<string, unknown>[], filename: string) {
   URL.revokeObjectURL(url);
 }
 
+// ── Tournament Detail Drawer ──────────────────────────────────────────────────
+
+function TournamentDetailDrawer({
+  summary,
+  onClose,
+  onStatusChange,
+}: {
+  summary: SATournament;
+  onClose: () => void;
+  onStatusChange: (id: string, status: SATournament['status']) => void;
+}) {
+  const [full, setFull] = useState<Tournament | null>(null);
+  const [editScore, setEditScore] = useState<{ roundIdx: number; courtIdx: number; p1: string; p2: string } | null>(null);
+  const [scoreInput, setScoreInput] = useState({ p1: '', p2: '' });
+
+  useEffect(() => {
+    // Try to load full tournament from local store, then all tournaments
+    const t = getTournament(summary.id) ?? getAllTournaments().find(t => t.name === summary.name) ?? null;
+    setFull(t);
+  }, [summary.id, summary.name]);
+
+  function playerName(id: string): string {
+    return full?.players.find(p => p.id === id)?.name ?? id;
+  }
+
+  function handleSaveScore() {
+    if (!full || !editScore) return;
+    const p1Score = Number(editScore.p1);
+    const p2Score = Number(editScore.p2);
+    if (isNaN(p1Score) || isNaN(p2Score)) return;
+
+    const rounds: GameRound[] = full.rounds.map((r, ri) => {
+      if (ri !== editScore.roundIdx) return r;
+      const courts: CourtMatch[] = r.courts.map((c, ci) => {
+        if (ci !== editScore.courtIdx) return c;
+        return { ...c, pair1Score: p1Score, pair2Score: p2Score, status: 'completed' as const };
+      });
+      return { ...r, courts };
+    });
+    const updated: Tournament = { ...full, rounds };
+    setFull(updated);
+    saveTournament(updated);
+    setEditScore(null);
+  }
+
+  const statusColors: Record<SATournament['status'], { bg: string; color: string; label: string }> = {
+    ongoing:   { bg: '#dcfce7', color: '#166534', label: 'En curso' },
+    upcoming:  { bg: '#dbeafe', color: '#1e40af', label: 'Próximo' },
+    completed: { bg: '#f3f4f6', color: '#374151', label: 'Completado' },
+    cancelled: { bg: '#fee2e2', color: '#991b1b', label: 'Cancelado' },
+  };
+
+  return (
+    <>
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 1009 }} onClick={onClose} />
+      <div
+        style={{ position: 'fixed', top: 0, right: 0, width: 560, height: '100vh', background: '#fff', boxShadow: '-4px 0 40px rgba(0,0,0,0.15)', zIndex: 1010, overflowY: 'auto', padding: '32px 36px' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Torneo</div>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', lineHeight: 1.3 }}>{summary.name}</h2>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Status + date */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 20 }}>
+          <span style={{ background: statusColors[summary.status].bg, color: statusColors[summary.status].color, padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
+            {statusColors[summary.status].label}
+          </span>
+          <span style={{ fontSize: 13, color: 'var(--grey-400)' }}>{summary.date}</span>
+        </div>
+
+        {/* Info rows */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 20 }}>
+          {[
+            { label: 'Club', value: summary.club || '—' },
+            { label: 'Ciudad', value: summary.city || '—' },
+            { label: 'Formato', value: summary.format || '—' },
+            { label: 'Jugadores', value: String(summary.players) },
+            { label: 'Rondas jugadas', value: String(summary.rounds) },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
+              <span style={{ color: 'var(--grey-500)' }}>{label}</span>
+              <span style={{ fontWeight: 600 }}>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Status change */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 8 }}>Cambiar Estado</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {(['ongoing', 'upcoming', 'completed', 'cancelled'] as const).map(s => (
+              <button key={s} onClick={() => onStatusChange(summary.id, s)}
+                style={{ padding: '6px 14px', borderRadius: 4, border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 11, fontWeight: 700, background: summary.status === s ? '#0a0a0a' : '#fff', color: summary.status === s ? '#fff' : 'var(--grey-600)' }}>
+                {statusColors[s].label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Participants */}
+        {full && full.players.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 10 }}>
+              Participantes ({full.players.length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, border: '1px solid var(--grey-200)', borderRadius: 4, overflow: 'hidden' }}>
+              {full.players.map((p, i) => (
+                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: i % 2 === 0 ? '#fff' : 'var(--grey-50)', fontSize: 13 }}>
+                  <span style={{ fontWeight: 500 }}>{p.name}</span>
+                  <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p.level ?? '—'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Rounds & scores */}
+        {full && full.rounds.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 12 }}>
+              Rondas y Scores
+            </div>
+            {full.rounds.map((round, ri) => (
+              <div key={ri} style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--grey-600)', letterSpacing: '0.08em', marginBottom: 6 }}>
+                  RONDA {round.num} — {round.status === 'completed' ? 'Completada' : round.status === 'active' ? 'En curso' : 'Pendiente'}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {round.courts.map((court, ci) => {
+                    const isEditing = editScore?.roundIdx === ri && editScore?.courtIdx === ci;
+                    const names1 = court.pair1.map(playerName).join(' / ');
+                    const names2 = court.pair2.map(playerName).join(' / ');
+                    return (
+                      <div key={ci} style={{ background: 'var(--grey-50)', border: '1px solid var(--grey-100)', borderRadius: 4, padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isEditing ? 10 : 0 }}>
+                          <div style={{ fontSize: 12 }}>
+                            <span style={{ fontWeight: 600 }}>{names1}</span>
+                            <span style={{ color: 'var(--grey-400)', margin: '0 8px' }}>vs</span>
+                            <span style={{ fontWeight: 600 }}>{names2}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>
+                              {court.pair1Score ?? '—'} – {court.pair2Score ?? '—'}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setEditScore({ roundIdx: ri, courtIdx: ci, p1: String(court.pair1Score ?? ''), p2: String(court.pair2Score ?? '') });
+                                setScoreInput({ p1: String(court.pair1Score ?? ''), p2: String(court.pair2Score ?? '') });
+                              }}
+                              style={{ fontSize: 11, color: 'var(--turf-green)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                            >
+                              Editar
+                            </button>
+                          </div>
+                        </div>
+                        {isEditing && (
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+                            <input type="number" min={0} value={scoreInput.p1}
+                              onChange={e => setScoreInput(s => ({ ...s, p1: e.target.value }))}
+                              style={{ width: 60, padding: '6px 10px', border: '1px solid var(--grey-300)', borderRadius: 4, fontSize: 14, fontWeight: 700, textAlign: 'center' }} />
+                            <span style={{ color: 'var(--grey-400)' }}>–</span>
+                            <input type="number" min={0} value={scoreInput.p2}
+                              onChange={e => setScoreInput(s => ({ ...s, p2: e.target.value }))}
+                              style={{ width: 60, padding: '6px 10px', border: '1px solid var(--grey-300)', borderRadius: 4, fontSize: 14, fontWeight: 700, textAlign: 'center' }} />
+                            <button onClick={() => {
+                              if (!full) return;
+                              const rounds = full.rounds.map((r, rIdx) => rIdx !== ri ? r : {
+                                ...r,
+                                courts: r.courts.map((c, cIdx) => cIdx !== ci ? c : {
+                                  ...c, pair1Score: Number(scoreInput.p1), pair2Score: Number(scoreInput.p2), status: 'completed' as const,
+                                }),
+                              });
+                              const updated = { ...full, rounds };
+                              setFull(updated);
+                              saveTournament(updated);
+                              setEditScore(null);
+                            }}
+                              style={{ padding: '6px 14px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                              Guardar
+                            </button>
+                            <button onClick={() => setEditScore(null)}
+                              style={{ padding: '6px 10px', background: 'transparent', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', fontSize: 12, color: 'var(--grey-500)' }}>
+                              ✕
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!full && (
+          <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: 'var(--grey-300)' }}>
+            Este torneo fue creado antes de la versión actual o sus datos no están disponibles localmente.
+          </div>
+        )}
+
+        <button onClick={onClose} style={{ padding: '10px 20px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          Cerrar
+        </button>
+      </div>
+    </>
+  );
+}
+
 export default function TournamentsPage() {
   const [tournaments, setTournaments] = useState<SATournament[]>([]);
   const [corrections, setCorrections] = useState<ScoreCorrectionRequest[]>(MOCK_CORRECTIONS);
@@ -105,12 +323,19 @@ export default function TournamentsPage() {
 
   useEffect(() => {
     setTournaments(getSATournaments());
-    getSATournamentsFromSupabase().then(sbT => {
-      if (sbT && sbT.length > 0) {
-        setTournaments(sbT);
-        saveSATournaments(sbT);
-      }
-    });
+
+    function fetchFromSupabase() {
+      getSATournamentsFromSupabase().then(sbT => {
+        if (sbT && sbT.length > 0) {
+          setTournaments(sbT);
+          saveSATournaments(sbT);
+        }
+      });
+    }
+
+    fetchFromSupabase();
+    const interval = setInterval(fetchFromSupabase, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   function toast(msg: string, ok = true) {
@@ -449,58 +674,15 @@ export default function TournamentsPage() {
 
       {/* DETAIL DRAWER */}
       {selectedTournament && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 1009 }} onClick={() => setSelectedTournament(null)} />
-          <div
-            style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', boxShadow: '-4px 0 40px rgba(0,0,0,0.15)', zIndex: 1010, overflowY: 'auto', padding: '32px 36px' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-              <div>
-                <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Torneo</div>
-                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', lineHeight: 1.3 }}>{selectedTournament.name}</h2>
-              </div>
-              <button onClick={() => setSelectedTournament(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', padding: '0 0 0 16px', lineHeight: 1 }}>×</button>
-            </div>
-
-            <div style={{ marginBottom: 20 }}>
-              <StatusBadge status={selectedTournament.status} />
-              <span style={{ marginLeft: 10, fontSize: 13, color: 'var(--grey-500)' }}>{selectedTournament.date}</span>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
-              {[
-                { label: 'Club', value: selectedTournament.club },
-                { label: 'Ciudad', value: selectedTournament.city },
-                { label: 'Formato', value: selectedTournament.format },
-              ].map(({ label, value }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
-                  <span style={{ color: 'var(--grey-500)', fontWeight: 600 }}>{label}</span>
-                  <span style={{ fontWeight: 600 }}>{value}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Stats grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
-              {[
-                { label: 'Jugadores', value: selectedTournament.players },
-                { label: 'Rondas Jugadas', value: selectedTournament.rounds },
-              ].map(({ label, value }) => (
-                <div key={label} style={{ background: 'var(--grey-50)', borderRadius: 6, padding: '14px 16px' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 6 }}>{label}</div>
-                  <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{value}</div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ marginTop: 8 }}>
-              <button onClick={() => setSelectedTournament(null)} style={{ padding: '10px 20px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </>
+        <TournamentDetailDrawer
+          summary={selectedTournament}
+          onClose={() => setSelectedTournament(null)}
+          onStatusChange={(id, status) => {
+            const updated = tournaments.map(t => t.id === id ? { ...t, status } : t);
+            setTournaments(updated);
+            saveSATournaments(updated);
+          }}
+        />
       )}
 
       {/* APPROVE STEP 1 */}

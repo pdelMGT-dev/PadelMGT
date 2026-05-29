@@ -301,12 +301,19 @@ export default function ClubsPage() {
 
   useEffect(() => {
     setClubs(getSAClubs());
-    getSAClubsFromSupabase().then(sbClubs => {
-      if (sbClubs && sbClubs.length > 0) {
-        setClubs(sbClubs);
-        saveSAClubs(sbClubs);
-      }
-    });
+
+    function fetchFromSupabase() {
+      getSAClubsFromSupabase().then(sbClubs => {
+        if (sbClubs && sbClubs.length > 0) {
+          setClubs(sbClubs);
+          saveSAClubs(sbClubs);
+        }
+      });
+    }
+
+    fetchFromSupabase();
+    const interval = setInterval(fetchFromSupabase, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Sync drawer plan when selectedClub changes
