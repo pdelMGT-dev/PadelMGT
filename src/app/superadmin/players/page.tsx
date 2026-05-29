@@ -409,8 +409,17 @@ export default function PlayersPage() {
     function fetchFromSupabase() {
       getSAPlayersFromSupabase().then(sbPlayers => {
         if (sbPlayers && sbPlayers.length > 0) {
-          setPlayers(sbPlayers);
-          saveSAPlayers(sbPlayers);
+          // Merge: Supabase is authoritative, but keep localStorage-only players
+          // (seed players not yet uploaded) so no data is lost between sources.
+          const local = getSAPlayers();
+          const sbIds = new Set(sbPlayers.map(p => p.id));
+          const sbEmails = new Set(sbPlayers.map(p => p.email.toLowerCase()));
+          const localOnly = local.filter(
+            p => !sbIds.has(p.id) && !sbEmails.has(p.email.toLowerCase()),
+          );
+          const merged = [...sbPlayers, ...localOnly];
+          setPlayers(merged);
+          saveSAPlayers(merged);
         }
       });
     }
