@@ -334,7 +334,7 @@ export default function TournamentsPage() {
     }
 
     fetchFromSupabase();
-    const interval = setInterval(fetchFromSupabase, 30000);
+    const interval = setInterval(fetchFromSupabase, 5000);
     return () => clearInterval(interval);
   }, []);
 

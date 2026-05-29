@@ -1,5 +1,5 @@
 // player-store.ts — Single source of truth for all registered players
-import { registerPlayerToSupabase } from './superadmin-data';
+import { registerPlayerToSupabase, upsertSAPlayerToSupabase } from './superadmin-data';
 
 const STORAGE_KEY = 'padelmgt_registered_players';
 
@@ -245,4 +245,29 @@ export function updatePlayerRankingPoints(playerId: string, delta: number): void
   if (idx < 0) return;
   all[idx] = { ...all[idx], rankingPoints: Math.max(0, all[idx].rankingPoints + delta) };
   persist(all);
+  upsertSAPlayerToSupabase(all[idx]).catch(() => {});
+}
+
+/** Update any fields on an existing player and sync to Supabase. */
+export function updatePlayer(playerId: string, updates: Partial<RegisteredPlayer>): RegisteredPlayer | null {
+  const all = load();
+  const idx = all.findIndex(p => p.id === playerId);
+  if (idx < 0) return null;
+  const updated = { ...all[idx], ...updates };
+  all[idx] = updated;
+  persist(all);
+  // Also update padelmgt_user session if it's the same player
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('padelmgt_user');
+      if (raw) {
+        const session = JSON.parse(raw) as { id?: string };
+        if (session.id === playerId) {
+          localStorage.setItem('padelmgt_user', JSON.stringify({ ...session, ...updates }));
+        }
+      }
+    } catch { /* silent */ }
+  }
+  upsertSAPlayerToSupabase(updated).catch(() => {});
+  return updated;
 }

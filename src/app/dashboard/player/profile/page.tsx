@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
+import { updatePlayer } from '@/lib/player-store';
 import { getRankingHistoryForGame } from '@/lib/ranking-store';
 
 // ---------------------------------------------------------------------------
@@ -159,6 +160,7 @@ export default function PlayerProfilePage() {
     };
     try { localStorage.setItem('padelmgt_user', JSON.stringify(updated)); } catch {}
     setUser(updated);
+    if (updated.id) updatePlayer(updated.id, updated);
     setSaveMsg('¡Perfil actualizado!');
     setTimeout(() => setSaveMsg(''), 3000);
   }
