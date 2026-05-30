@@ -132,7 +132,7 @@ export default function PlayerHomePage() {
   }
 
   return (
-    <div style={{ padding: '40px 40px 80px' }}>
+    <div className="player-dashboard-page" style={{ padding: '40px 40px 80px' }}>
       {/* Toast */}
       {toast && (
         <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none', letterSpacing: '0.04em' }}>
@@ -143,7 +143,7 @@ export default function PlayerHomePage() {
       {/* Header */}
       <div style={{ marginBottom: 40 }}>
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Bienvenido de vuelta</div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', lineHeight: 0.95, margin: 0 }}>
+        <h1 className="player-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', lineHeight: 0.95, margin: 0 }}>
           HOLA,<br /><span style={{ color: 'var(--court-blue)' }}>{currentUser ? currentUser.name.split(' ')[0].toUpperCase() : 'JUGADOR'}.</span>
         </h1>
       </div>
@@ -220,7 +220,7 @@ export default function PlayerHomePage() {
       )}
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
+      <div className="player-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
         {(() => {
           const isNewPlayer = (playerData?.rankingPoints ?? 0) === 0 && recentMatches.length === 0;
           const wins = recentMatches.filter(m => m.result === 'V').length;
@@ -231,8 +231,8 @@ export default function PlayerHomePage() {
             { label: 'Puntos', value: isNewPlayer ? '0' : '1,840', delta: isNewPlayer ? '' : '+120 esta semana' },
           ];
         })().map((s) => (
-          <div key={s.label} style={{ background: '#fff', padding: '28px 24px' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, fontWeight: 600, letterSpacing: '-0.03em', color: 'var(--black)', lineHeight: 1 }}>{s.value}</div>
+          <div key={s.label} className="player-stats-card" style={{ background: '#fff', padding: '28px 24px' }}>
+            <div className="player-stats-value" style={{ fontFamily: 'var(--font-display)', fontSize: 44, fontWeight: 600, letterSpacing: '-0.03em', color: 'var(--black)', lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, margin: '6px 0 4px' }}>{s.label}</div>
             <div style={{ fontSize: 12, color: s.delta.startsWith('▲') ? 'var(--turf-green)' : 'var(--grey-400)' }}>{s.delta}</div>
           </div>
@@ -258,14 +258,14 @@ export default function PlayerHomePage() {
               const si = STATUS_LABEL[ev.status] ?? { label: ev.status, color: 'var(--grey-400)' };
               const typeLabel = ev.entityType === 'tournament' ? (FORMAT_LABEL[ev.format] ?? ev.format) : 'Juego Rápido';
               return (
-                <div key={ev.id} style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--grey-100)', gap: 16 }}>
+                <div key={ev.id} className="player-event-row" style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--grey-100)', gap: 16 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--black)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</span>
                       {ev.isCreator && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--neon)', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.08em', flexShrink: 0 }}>CREADOR</span>}
                       <span style={{ fontSize: 9, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.06em', flexShrink: 0, textTransform: 'uppercase' }}>{typeLabel}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{ev.date} · {ev.time} · {ev.club}, {ev.city}</div>
+                    <div className="player-event-date" style={{ fontSize: 12, color: 'var(--grey-400)' }}>{ev.date} · {ev.time} · {ev.club}, {ev.city}</div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
                       <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: si.color }}>{si.label}</span>
                       <span style={{ fontSize: 9, color: 'var(--grey-400)' }}>·</span>
@@ -285,7 +285,7 @@ export default function PlayerHomePage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, marginBottom: 24 }}>
+      <div className="player-split-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, marginBottom: 24 }}>
         {/* Próximo evento */}
         {nextEvent ? (
           <div style={{ background: 'var(--black)', padding: '32px' }}>

@@ -412,11 +412,11 @@ html, body {
   display: none;
   position: sticky; top: 0; z-index: 90;
   background: #0a0a0a; border-bottom: 1px solid rgba(255,255,255,0.06);
-  padding: 0 20px; height: 56px;
-  align-items: center; justify-content: flex-end;
+  padding: 0 16px; height: 56px;
+  align-items: center; justify-content: space-between;
 }
 .dash-mobile-bar .logo {
-  position: absolute; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
 }
 .dash-backdrop {
   display: none;
@@ -525,6 +525,16 @@ html, body {
 
   /* Touch targets — ensure min 44px height for all buttons */
   button, a[role="button"] { min-height: 44px; }
+
+  /* Player dashboard responsive */
+  .player-dashboard-page { padding: 20px 16px 60px !important; }
+  .player-h1 { font-size: 30px !important; }
+  .player-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .player-stats-card { padding: 16px 14px !important; }
+  .player-stats-value { font-size: 28px !important; }
+  .player-split-grid { grid-template-columns: 1fr !important; }
+  .player-event-row { flex-wrap: wrap !important; gap: 10px !important; }
+  .player-event-date { font-size: 11px !important; }
 }
 
 /* ── RESPONSIVE UTILITIES ── */

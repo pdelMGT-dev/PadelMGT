@@ -200,16 +200,16 @@ export default function DashboardSidebar() {
     <>
       {/* Mobile top bar */}
       <div className="dash-mobile-bar">
-        <Link href="/" className="logo" style={{ color: '#fff', gap: 8 }}>
-          <LogoIcon white size={26} />
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 17, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>PadelMGT</span>
+        <Link href="/" className="logo" style={{ color: '#fff', textDecoration: 'none' }}>
+          <LogoIcon white size={24} />
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>PadelMGT</span>
         </Link>
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4 }}
+          style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', cursor: 'pointer', padding: '8px', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           aria-label="Menú"
         >
-          {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
