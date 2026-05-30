@@ -265,12 +265,12 @@ export default function PlayerProfilePage() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div style={{ padding: '40px 40px 80px' }}>
+    <div className="dash-page" style={{ padding: '40px 40px 80px' }}>
 
       {/* ------------------------------------------------------------------ */}
       {/* 1. Profile Header                                                   */}
       {/* ------------------------------------------------------------------ */}
-      <div style={{
+      <div className="profile-header-block" style={{
         background: 'var(--black)', padding: 32,
         display: 'flex', gap: 24, alignItems: 'flex-start',
         marginBottom: 24, position: 'relative',
@@ -349,7 +349,7 @@ export default function PlayerProfilePage() {
       {/* ------------------------------------------------------------------ */}
       {/* 2. Stats row                                                        */}
       {/* ------------------------------------------------------------------ */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+      <div className="profile-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
         {[
           { label: 'Juegos', value: totalGames },
           { label: 'Victorias', value: wins },
@@ -377,7 +377,7 @@ export default function PlayerProfilePage() {
       {/* ------------------------------------------------------------------ */}
       {/* 3. Tabs                                                             */}
       {/* ------------------------------------------------------------------ */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--grey-200)', marginBottom: 28 }}>
+      <div className="profile-tabs-row" style={{ display: 'flex', borderBottom: '1px solid var(--grey-200)', marginBottom: 28 }}>
         {(['perfil', 'historial', 'config'] as Tab[]).map(t => {
           const labels: Record<Tab, string> = { perfil: 'Perfil', historial: 'Historial', config: 'Configuración' };
           const active = tab === t;
@@ -613,7 +613,7 @@ export default function PlayerProfilePage() {
             <div style={{ ...lbl, fontSize: 12, marginBottom: 20 }}>Información Personal</div>
 
             {/* Row 1: Name + Email */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div className="profile-form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={lbl}>Nombre</label>
                 <input style={inp} value={fName} onChange={e => setFName(e.target.value)} placeholder="Tu nombre" />
@@ -625,7 +625,7 @@ export default function PlayerProfilePage() {
             </div>
 
             {/* Row 2: Phone + Nationality */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div className="profile-form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={lbl}>Teléfono</label>
                 <input style={inp} value={fPhone} onChange={e => setFPhone(e.target.value)} placeholder="+34 600 000 000" />
@@ -657,7 +657,7 @@ export default function PlayerProfilePage() {
             </div>
 
             {/* Row 3: Sex + Birth Date */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="profile-form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
                 <label style={lbl}>Sexo</label>
                 <div style={{ display: 'flex', gap: 8 }}>

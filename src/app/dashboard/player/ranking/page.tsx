@@ -25,33 +25,33 @@ export default function PlayerRankingPage() {
   const hasData = pts > 0;
 
   return (
-    <div style={{ padding: '40px 40px 80px' }}>
+    <div className="dash-page" style={{ padding: '40px 40px 80px' }}>
       <div style={{ marginBottom: 40 }}>
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Posición actual</div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MI RANKING</h1>
+        <h1 className="dash-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MI RANKING</h1>
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
-        <div style={{ background: 'var(--black)', padding: '40px 36px' }}>
+      <div className="ranking-stats-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
+        <div className="ranking-stat-cell" style={{ background: 'var(--black)', padding: '40px 36px' }}>
           <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 700, marginBottom: 8 }}>Ranking General</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 96, fontWeight: 600, letterSpacing: '-0.05em', color: hasData ? '#fff' : 'rgba(255,255,255,0.2)', lineHeight: 0.85, marginBottom: 12 }}>
+          <div className="ranking-big-num" style={{ fontFamily: 'var(--font-display)', fontSize: 96, fontWeight: 600, letterSpacing: '-0.05em', color: hasData ? '#fff' : 'rgba(255,255,255,0.2)', lineHeight: 0.85, marginBottom: 12 }}>
             {hasData && rank ? `#${rank}` : '—'}
           </div>
           {!hasData && (
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Sin torneos jugados aún</div>
           )}
         </div>
-        <div style={{ background: '#fff', padding: '40px 32px' }}>
+        <div className="ranking-stat-cell" style={{ background: '#fff', padding: '40px 32px' }}>
           <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 700, marginBottom: 8 }}>Puntos Totales</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 64, fontWeight: 600, letterSpacing: '-0.04em', color: hasData ? 'var(--black)' : 'var(--grey-300)', lineHeight: 0.9, marginBottom: 12 }}>
+          <div className="ranking-mid-num" style={{ fontFamily: 'var(--font-display)', fontSize: 64, fontWeight: 600, letterSpacing: '-0.04em', color: hasData ? 'var(--black)' : 'var(--grey-300)', lineHeight: 0.9, marginBottom: 12 }}>
             {pts.toLocaleString()}
           </div>
           <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>
             {hasData ? 'acumulados en torneos' : 'Jugá torneos para sumar puntos'}
           </div>
         </div>
-        <div style={{ background: '#fff', padding: '40px 32px' }}>
+        <div className="ranking-stat-cell" style={{ background: '#fff', padding: '40px 32px' }}>
           <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 700, marginBottom: 8 }}>Jugador</div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, color: 'var(--black)', lineHeight: 1.1, marginBottom: 12 }}>
             {name || '—'}
@@ -82,7 +82,7 @@ export default function PlayerRankingPage() {
         </div>
       )}
 
-      <div style={{ marginTop: 24, padding: '16px 24px', background: '#fff', border: '1px solid var(--grey-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="ranking-footer-bar" style={{ marginTop: 24, padding: '16px 24px', background: '#fff', border: '1px solid var(--grey-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontSize: 13, color: 'var(--grey-500)' }}>Consultá la tabla de ranking global de la plataforma</div>
         <Link href="/ranking" style={{ fontSize: 13, color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Ver ranking completo →</Link>
       </div>

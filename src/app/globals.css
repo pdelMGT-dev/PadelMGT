@@ -538,6 +538,69 @@ html, body {
   .player-split-grid { grid-template-columns: 1fr !important; }
   .player-event-row { flex-wrap: wrap !important; gap: 10px !important; }
   .player-event-date { font-size: 11px !important; }
+
+  /* ── Dashboard page shared ── */
+  .dash-page { padding: 20px 16px 60px !important; }
+  .dash-h1   { font-size: 28px !important; }
+
+  /* ── Profile page ── */
+  .profile-header-block {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 20px !important;
+    gap: 16px !important;
+  }
+  .profile-header-block > button {
+    align-self: flex-start !important;
+  }
+  .profile-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  .profile-tabs-row {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap !important;
+    padding-bottom: 0;
+  }
+  .profile-tabs-row::-webkit-scrollbar { display: none; }
+  .profile-form-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ── Ranking page ── */
+  .ranking-stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1px !important;
+  }
+  .ranking-stat-cell {
+    padding: 24px 20px !important;
+  }
+  .ranking-big-num { font-size: 56px !important; }
+  .ranking-mid-num { font-size: 40px !important; }
+  .ranking-footer-bar {
+    flex-direction: column !important;
+    gap: 10px !important;
+    text-align: center !important;
+  }
+
+  /* ── Friends page ── */
+  .friends-stats-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 1px !important;
+  }
+  .friends-list-item {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    padding: 14px 16px !important;
+  }
+  .friends-search-row {
+    flex-direction: column !important;
+  }
+  .friends-search-row select {
+    min-width: unset !important;
+    width: 100% !important;
+  }
 }
 
 /* ── RESPONSIVE UTILITIES ── */

@@ -224,7 +224,7 @@ export default function DashboardSidebar() {
         <button
           className="dash-sidebar-close"
           onClick={() => setMobileOpen(false)}
-          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '16px 20px 0', display: 'none', alignSelf: 'flex-end' }}
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '16px 20px 0', alignSelf: 'flex-end' }}
         >
           <X size={20} />
         </button>

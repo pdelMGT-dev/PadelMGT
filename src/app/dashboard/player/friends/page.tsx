@@ -152,7 +152,7 @@ export default function PlayerFriendsPage() {
   ];
 
   return (
-    <div style={{ padding: '40px 40px 80px' }}>
+    <div className="dash-page" style={{ padding: '40px 40px 80px' }}>
 
       {/* Confirm delete dialog */}
       {confirmDelete && (
@@ -179,11 +179,11 @@ export default function PlayerFriendsPage() {
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Red de jugadores</div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>AMISTADES</h1>
+        <h1 className="dash-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>AMISTADES</h1>
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
+      <div className="friends-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
         {[
           { label: 'Amigos',      value: friends.length },
           { label: 'Solicitudes', value: pendingCount },
@@ -225,7 +225,7 @@ export default function PlayerFriendsPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
               {filteredFriends.map(f => (
-                <div key={f.id} style={{ background: '#fff', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div key={f.id} className="friends-list-item" style={{ background: '#fff', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
                   <Avatar player={f} />
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 2 }}>
@@ -290,7 +290,7 @@ export default function PlayerFriendsPage() {
       {/* ── Buscar jugadores ── */}
       {tab === 'search' && (
         <>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <div className="friends-search-row" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
               placeholder="Buscar por nombre, ID (#00104) o email..."
               style={{ flex: 1, padding: '10px 14px', border: '1px solid var(--grey-200)', fontSize: 13, outline: 'none', fontFamily: 'var(--font-body)' }} />
