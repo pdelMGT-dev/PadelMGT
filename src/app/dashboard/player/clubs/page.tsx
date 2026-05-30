@@ -1,27 +1,368 @@
 'use client';
 
-import Link from 'next/link';
+import { useEffect, useState, useMemo } from 'react';
+import { getSAClubs, type SAClub } from '@/lib/superadmin-data';
+import {
+  joinClub, leaveClub, isClubMember, getPlayerClubs,
+  type ClubMembership,
+} from '@/lib/club-membership-store';
+
+interface StoredUser { id: string; name: string; email: string; }
+
+interface GeoLocation { country: string; city: string; }
+
+function getInitials(name: string) {
+  return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+}
+
+const COURT_TYPE_LABEL: Record<string, string> = {
+  Cristal: 'Cristal', Muro: 'Muro', 'Hierba Artificial': 'Hierba',
+};
+
+const PLAN_LABEL: Record<string, string> = { free: 'Gratis', basic: 'Basic', pro: 'Pro' };
+
+function ClubCard({
+  club,
+  memberId,
+  onJoin,
+  onLeave,
+  badge,
+}: {
+  club: SAClub;
+  memberId: string | null;
+  onJoin: (club: SAClub) => void;
+  onLeave: (clubId: string) => void;
+  badge?: string;
+}) {
+  const joined = memberId ? isClubMember(memberId, club.id) : false;
+
+  return (
+    <div style={{
+      background: '#fff', border: '1px solid var(--grey-200)',
+      display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden',
+    }}>
+      {/* Color header */}
+      <div style={{
+        background: 'var(--black)', padding: '20px 20px 16px',
+        display: 'flex', alignItems: 'center', gap: 14,
+      }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: '50%', background: 'var(--court-blue)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: '#fff', flexShrink: 0,
+        }}>
+          {getInitials(club.name)}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {club.name}
+          </div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+            {club.city}{club.country ? ` · ${club.country}` : ''}
+          </div>
+        </div>
+        {badge && (
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', background: 'var(--neon)', color: 'var(--black)', padding: '3px 8px', flexShrink: 0, textTransform: 'uppercase' }}>
+            {badge}
+          </span>
+        )}
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: '14px 20px', flex: 1 }}>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: 12, color: 'var(--grey-500)' }}>
+          <span>🏟 {club.courts} canchas</span>
+          <span>👥 {club.members} miembros</span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            {PLAN_LABEL[club.plan] ?? club.plan}
+          </span>
+        </div>
+        {club.courtTypes?.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            {club.courtTypes.map(t => (
+              <span key={t} style={{ fontSize: 10, background: 'var(--grey-100)', color: 'var(--grey-600)', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
+                {COURT_TYPE_LABEL[t] ?? t}
+              </span>
+            ))}
+          </div>
+        )}
+        {club.description && (
+          <p style={{ fontSize: 12, color: 'var(--grey-500)', margin: 0, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {club.description}
+          </p>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{ padding: '12px 20px', borderTop: '1px solid var(--grey-100)' }}>
+        {joined ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ flex: 1, fontSize: 12, color: 'var(--turf-green)', fontWeight: 700 }}>✓ Ya sos miembro</span>
+            <button
+              onClick={() => memberId && onLeave(club.id)}
+              style={{ fontSize: 11, color: 'var(--grey-400)', background: 'none', border: '1px solid var(--grey-200)', padding: '5px 12px', cursor: 'pointer', fontWeight: 600 }}
+            >
+              Salir
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => onJoin(club)}
+            style={{
+              width: '100%', padding: '10px', background: 'var(--black)', color: '#fff',
+              border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              letterSpacing: '0.04em', textTransform: 'uppercase',
+            }}
+          >
+            Seleccionar Club →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function PlayerClubsPage() {
+  const [user, setUser] = useState<StoredUser | null>(null);
+  const [allClubs, setAllClubs] = useState<SAClub[]>([]);
+  const [myMemberships, setMyMemberships] = useState<ClubMembership[]>([]);
+  const [geo, setGeo] = useState<GeoLocation | null>(null);
+  const [geoLoading, setGeoLoading] = useState(true);
+  const [searchCountry, setSearchCountry] = useState('');
+  const [searchCity, setSearchCity] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('padelmgt_user');
+      if (raw) setUser(JSON.parse(raw) as StoredUser);
+    } catch {}
+
+    const active = getSAClubs().filter(c => c.status === 'active');
+    setAllClubs(active);
+
+    // IP geolocation
+    fetch('https://ipapi.co/json/')
+      .then(r => r.json())
+      .then((d: Record<string, unknown>) => {
+        const country = (d.country_name as string) || (d.country as string) || '';
+        const city = (d.city as string) || '';
+        setGeo({ country, city });
+      })
+      .catch(() => setGeo(null))
+      .finally(() => setGeoLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (user) setMyMemberships(getPlayerClubs(user.id));
+  }, [user]);
+
+  function refreshMemberships() {
+    if (user) setMyMemberships(getPlayerClubs(user.id));
+  }
+
+  function handleJoin(club: SAClub) {
+    if (!user) return;
+    joinClub(user.id, { id: club.id, name: club.name, city: club.city, country: club.country });
+    refreshMemberships();
+    showToast(`¡Te uniste a ${club.name}!`);
+  }
+
+  function handleLeave(clubId: string) {
+    if (!user) return;
+    leaveClub(user.id, clubId);
+    refreshMemberships();
+    showToast('Saliste del club');
+  }
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  // Clubs the player is NOT a member of (for browsing)
+  const memberClubIds = new Set(myMemberships.map(m => m.clubId));
+
+  // Recommended: same country as IP, not already member
+  const recommended = useMemo(() => {
+    if (!geo?.country) return [];
+    const geoCountry = geo.country.toLowerCase();
+    return allClubs.filter(c =>
+      !memberClubIds.has(c.id) &&
+      (c.country?.toLowerCase().includes(geoCountry) || geoCountry.includes(c.country?.toLowerCase() ?? ''))
+    );
+  }, [allClubs, geo, myMemberships]);
+
+  // Filtered results
+  const filtered = useMemo(() => {
+    let list = allClubs.filter(c => !memberClubIds.has(c.id));
+    if (searchCountry.trim()) {
+      const q = searchCountry.trim().toLowerCase();
+      list = list.filter(c => c.country?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q));
+    }
+    if (searchCity.trim()) {
+      const q = searchCity.trim().toLowerCase();
+      list = list.filter(c => c.city?.toLowerCase().includes(q));
+    }
+    return list;
+  }, [allClubs, searchCountry, searchCity, myMemberships]);
+
+  const hasSearch = searchCountry.trim() || searchCity.trim();
+
+  // My club details
+  const myClubDetails = myMemberships.map(m => allClubs.find(c => c.id === m.clubId)).filter(Boolean) as SAClub[];
+
   return (
-    <div style={{ padding: '40px 40px 80px' }}>
+    <div className="dash-page" style={{ padding: '40px 40px 80px' }}>
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none', borderLeft: '3px solid var(--neon)' }}>
+          {toast}
+        </div>
+      )}
+
+      {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Membresías activas</div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS CLUBES</h1>
+        <h1 className="dash-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS CLUBES</h1>
       </div>
 
-      {/* Empty state */}
-      <div style={{ border: '1px dashed var(--grey-300)', padding: '64px 40px', textAlign: 'center', background: 'var(--grey-50)' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', color: 'var(--grey-300)', letterSpacing: '-0.02em', marginBottom: 12 }}>
-          Todavía no pertenecés a ningún club
+      {/* My clubs */}
+      {myClubDetails.length > 0 && (
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)', marginBottom: 14 }}>
+            Mis clubes ({myClubDetails.length})
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+            {myClubDetails.map(club => (
+              <ClubCard
+                key={club.id}
+                club={club}
+                memberId={user?.id ?? null}
+                onJoin={handleJoin}
+                onLeave={handleLeave}
+              />
+            ))}
+          </div>
         </div>
-        <div style={{ fontSize: 14, color: 'var(--grey-400)', marginBottom: 28, maxWidth: 400, margin: '0 auto 28px' }}>
-          Buscá clubes y ligas cerca tuyo para unirte y participar en sus torneos y rankings.
+      )}
+
+      {/* Search */}
+      <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '20px 24px', marginBottom: 32 }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)', marginBottom: 14 }}>
+          Buscar clubes
         </div>
-        <Link href="/clubs" className="btn btn-primary btn-sm" style={{ borderRadius: 0 }}>
-          Explorar clubes y ligas →
-        </Link>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>País</label>
+            <input
+              value={searchCountry}
+              onChange={e => setSearchCountry(e.target.value)}
+              placeholder="ej. Argentina, España..."
+              style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, outline: 'none', boxSizing: 'border-box' as const }}
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>Ciudad</label>
+            <input
+              value={searchCity}
+              onChange={e => setSearchCity(e.target.value)}
+              placeholder="ej. Buenos Aires, Madrid..."
+              style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, outline: 'none', boxSizing: 'border-box' as const }}
+            />
+          </div>
+          {hasSearch && (
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button
+                onClick={() => { setSearchCountry(''); setSearchCity(''); }}
+                style={{ padding: '9px 16px', background: 'transparent', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--grey-500)', whiteSpace: 'nowrap' }}
+              >
+                Limpiar
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Search results */}
+      {hasSearch && (
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)', marginBottom: 14 }}>
+            Resultados ({filtered.length})
+          </div>
+          {filtered.length === 0 ? (
+            <div style={{ padding: '32px', textAlign: 'center', background: 'var(--grey-50)', border: '1px dashed var(--grey-300)' }}>
+              <div style={{ fontSize: 14, color: 'var(--grey-400)' }}>No se encontraron clubes con esos criterios.</div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+              {filtered.map(club => (
+                <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Recommended */}
+      {!hasSearch && (
+        <>
+          {geoLoading ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
+              Detectando tu ubicación...
+            </div>
+          ) : recommended.length > 0 ? (
+            <div style={{ marginBottom: 40 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)' }}>
+                  Recomendados cerca tuyo
+                </div>
+                {geo && (
+                  <span style={{ fontSize: 11, color: 'var(--grey-400)', background: 'var(--grey-100)', padding: '2px 8px', borderRadius: 10 }}>
+                    📍 {geo.city ? `${geo.city}, ` : ''}{geo.country}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                {recommended.map(club => (
+                  <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} badge="Cerca tuyo" />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* All clubs (not yet member, not in recommended) */}
+          {(() => {
+            const recIds = new Set(recommended.map(c => c.id));
+            const rest = allClubs.filter(c => !memberClubIds.has(c.id) && !recIds.has(c.id));
+            if (rest.length === 0 && recommended.length === 0 && myClubDetails.length === 0) {
+              return (
+                <div style={{ padding: '64px 40px', textAlign: 'center', border: '1px dashed var(--grey-300)', background: 'var(--grey-50)' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: 'var(--grey-300)', marginBottom: 12 }}>
+                    No hay clubes disponibles aún
+                  </div>
+                  <div style={{ fontSize: 14, color: 'var(--grey-400)' }}>
+                    Los clubes aparecerán aquí una vez que sean aprobados por el administrador.
+                  </div>
+                </div>
+              );
+            }
+            if (rest.length === 0) return null;
+            return (
+              <div style={{ marginBottom: 40 }}>
+                <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)', marginBottom: 14 }}>
+                  Todos los clubes ({rest.length})
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                  {rest.map(club => (
+                    <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+        </>
+      )}
     </div>
   );
 }

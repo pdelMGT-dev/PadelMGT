@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
 import { useToast } from '@/components/ToastProvider';
+import { getClubMembersByName } from '@/lib/club-membership-store';
+import { getAllPlayers } from '@/lib/player-store';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -500,6 +502,7 @@ export default function ClubDashboardPage() {
   });
 
   const [games, setGames] = useState<ActiveGame[]>([]);
+  const [platformMembers, setPlatformMembers] = useState<{ id: string; name: string; email: string; shortId?: string; level?: string; rankingPoints: number; joinedAt: string }[]>([]);
 
   const [Sections, setSections] = useState<{
     GallerySection: React.ComponentType;
@@ -514,12 +517,26 @@ export default function ClubDashboardPage() {
   useEffect(() => { setGames(getAllGames()); }, []);
 
   useEffect(() => {
+    const memberships = getClubMembersByName(CLUB_NAME);
+    const allPlayers = getAllPlayers();
+    const members = memberships.map(m => {
+      const p = allPlayers.find(p => p.id === m.playerId);
+      return p ? {
+        id: p.id, name: p.name, email: p.email,
+        shortId: p.shortId, level: p.level,
+        rankingPoints: p.rankingPoints, joinedAt: m.joinedAt,
+      } : null;
+    }).filter(Boolean) as typeof platformMembers;
+    setPlatformMembers(members);
+  }, []);
+
+  useEffect(() => {
     import('./sections').then(m => setSections({ GallerySection: m.GallerySection, CourtsSection: m.CourtsSection, AnnouncementsSection: m.AnnouncementsSection })).catch(() => {});
   }, []);
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'resumen',     label: 'Resumen' },
-    { key: 'jugadores',   label: `Jugadores (${players.length})` },
+    { key: 'jugadores',   label: `Jugadores (${players.length + platformMembers.length})` },
     { key: 'galeria',     label: 'Galería' },
     { key: 'canchas',     label: 'Canchas' },
     { key: 'torneos',     label: 'Torneos' },
@@ -557,7 +574,39 @@ export default function ClubDashboardPage() {
       {/* Content */}
       <div style={{ padding: '40px 40px 0' }}>
         {tab === 'resumen'     && <ResumenSection players={players} games={games} />}
-        {tab === 'jugadores'   && <PlayersSection players={players} setPlayers={setPlayers} />}
+        {tab === 'jugadores' && (
+          <div>
+            {/* Platform members (joined via Mis Clubes) */}
+            {platformMembers.length > 0 && (
+              <div style={{ marginBottom: 32 }}>
+                <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--turf-green)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--turf-green)', display: 'inline-block' }} />
+                  Miembros de la plataforma ({platformMembers.length})
+                </div>
+                <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+                  {platformMembers.map((pm, i) => (
+                    <div key={pm.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', borderBottom: i < platformMembers.length - 1 ? '1px solid var(--grey-100)' : 'none' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                        {pm.name.split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pm.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{pm.shortId ?? ''}{pm.email ? ` · ${pm.email}` : ''}</div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{pm.rankingPoints.toLocaleString()} pts</div>
+                        <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>Unido {pm.joinedAt}</div>
+                      </div>
+                      <span style={{ fontSize: 10, background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 10, fontWeight: 700, flexShrink: 0 }}>Plataforma</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Manually added players */}
+            <PlayersSection players={players} setPlayers={setPlayers} />
+          </div>
+        )}
         {tab === 'galeria'     && (Sections ? <Sections.GallerySection /> : <div style={{ padding: 40, textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>Cargando galería...</div>)}
         {tab === 'canchas'     && (Sections ? <Sections.CourtsSection /> : <div style={{ padding: 40, textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>Cargando canchas...</div>)}
         {tab === 'comunicados' && (Sections ? <Sections.AnnouncementsSection /> : <div style={{ padding: 40, textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>Cargando comunicados...</div>)}
