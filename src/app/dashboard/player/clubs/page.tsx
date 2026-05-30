@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { LayoutGrid, List } from 'lucide-react';
 import { getSAClubs, type SAClub } from '@/lib/superadmin-data';
 import {
   joinClub, leaveClub, isClubMember, getPlayerClubs,
@@ -93,6 +94,21 @@ function ClubCard({
         )}
       </div>
 
+      {/* Maps embed */}
+      {club.mapsUrl && (
+        <div style={{ padding: '0 20px 14px' }}>
+          <iframe
+            src={club.mapsUrl}
+            width="100%"
+            height="160"
+            style={{ border: 0, display: 'block' }}
+            allowFullScreen
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        </div>
+      )}
+
       {/* Footer */}
       <div style={{ padding: '12px 20px', borderTop: '1px solid var(--grey-100)' }}>
         {joined ? (
@@ -122,6 +138,80 @@ function ClubCard({
   );
 }
 
+function ClubListRow({
+  club,
+  memberId,
+  onJoin,
+  onLeave,
+  badge,
+}: {
+  club: SAClub;
+  memberId: string | null;
+  onJoin: (club: SAClub) => void;
+  onLeave: (clubId: string) => void;
+  badge?: string;
+}) {
+  const joined = memberId ? isClubMember(memberId, club.id) : false;
+  return (
+    <div style={{
+      background: '#fff', border: '1px solid var(--grey-200)',
+      display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px',
+    }}>
+      <div style={{
+        width: 36, height: 36, borderRadius: '50%', background: 'var(--black)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0,
+      }}>
+        {getInitials(club.name)}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--black)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {club.name}
+          {badge && <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 700, background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{badge}</span>}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 1 }}>
+          {club.city}{club.country ? ` · ${club.country}` : ''} &nbsp;·&nbsp; {club.courts} canchas &nbsp;·&nbsp; {club.members} miembros
+          {club.mapsUrl && (
+            <a
+              href={club.mapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{ marginLeft: 8, color: 'var(--turf-green)', fontSize: 11, fontWeight: 600, textDecoration: 'none' }}
+            >
+              📍 Ver mapa
+            </a>
+          )}
+        </div>
+      </div>
+      <div style={{ flexShrink: 0 }}>
+        {joined ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: 'var(--turf-green)', fontWeight: 700 }}>✓ Miembro</span>
+            <button
+              onClick={() => memberId && onLeave(club.id)}
+              style={{ fontSize: 11, color: 'var(--grey-400)', background: 'none', border: '1px solid var(--grey-200)', padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}
+            >
+              Salir
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => onJoin(club)}
+            style={{
+              padding: '7px 16px', background: 'var(--black)', color: '#fff',
+              border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap',
+            }}
+          >
+            Unirse →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function PlayerClubsPage() {
   const [user, setUser] = useState<StoredUser | null>(null);
   const [allClubs, setAllClubs] = useState<SAClub[]>([]);
@@ -130,6 +220,10 @@ export default function PlayerClubsPage() {
   const [geoLoading, setGeoLoading] = useState(true);
   const [searchCountry, setSearchCountry] = useState('');
   const [searchCity, setSearchCity] = useState('');
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
+    if (typeof window === 'undefined') return 'cards';
+    return (localStorage.getItem('padelmgt_clubs_view') as 'cards' | 'list') ?? 'cards';
+  });
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -222,9 +316,33 @@ export default function PlayerClubsPage() {
       )}
 
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Membresías activas</div>
-        <h1 className="dash-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS CLUBES</h1>
+      <div style={{ marginBottom: 32, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Membresías activas</div>
+          <h1 className="dash-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS CLUBES</h1>
+        </div>
+        {/* View toggle */}
+        <div style={{ display: 'flex', border: '1px solid var(--grey-200)', overflow: 'hidden' }}>
+          {(['cards', 'list'] as const).map(mode => (
+            <button
+              key={mode}
+              onClick={() => {
+                setViewMode(mode);
+                localStorage.setItem('padelmgt_clubs_view', mode);
+              }}
+              title={mode === 'cards' ? 'Vista tarjetas' : 'Vista lista'}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 38, height: 38, cursor: 'pointer', border: 'none',
+                background: viewMode === mode ? 'var(--black)' : '#fff',
+                color: viewMode === mode ? '#fff' : 'var(--grey-400)',
+                transition: 'background 0.15s, color 0.15s',
+              }}
+            >
+              {mode === 'cards' ? <LayoutGrid size={16} /> : <List size={16} />}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* My clubs */}
@@ -233,17 +351,19 @@ export default function PlayerClubsPage() {
           <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)', marginBottom: 14 }}>
             Mis clubes ({myClubDetails.length})
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-            {myClubDetails.map(club => (
-              <ClubCard
-                key={club.id}
-                club={club}
-                memberId={user?.id ?? null}
-                onJoin={handleJoin}
-                onLeave={handleLeave}
-              />
-            ))}
-          </div>
+          {viewMode === 'cards' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+              {myClubDetails.map(club => (
+                <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {myClubDetails.map(club => (
+                <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -294,10 +414,16 @@ export default function PlayerClubsPage() {
             <div style={{ padding: '32px', textAlign: 'center', background: 'var(--grey-50)', border: '1px dashed var(--grey-300)' }}>
               <div style={{ fontSize: 14, color: 'var(--grey-400)' }}>No se encontraron clubes con esos criterios.</div>
             </div>
-          ) : (
+          ) : viewMode === 'cards' ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
               {filtered.map(club => (
                 <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {filtered.map(club => (
+                <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
               ))}
             </div>
           )}
@@ -323,11 +449,19 @@ export default function PlayerClubsPage() {
                   </span>
                 )}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-                {recommended.map(club => (
-                  <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} badge="Cerca tuyo" />
-                ))}
-              </div>
+              {viewMode === 'cards' ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                  {recommended.map(club => (
+                    <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} badge="Cerca tuyo" />
+                  ))}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {recommended.map(club => (
+                    <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} badge="Cerca tuyo" />
+                  ))}
+                </div>
+              )}
             </div>
           ) : null}
 
@@ -353,11 +487,19 @@ export default function PlayerClubsPage() {
                 <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-500)', marginBottom: 14 }}>
                   Todos los clubes ({rest.length})
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-                  {rest.map(club => (
-                    <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
-                  ))}
-                </div>
+                {viewMode === 'cards' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                    {rest.map(club => (
+                      <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {rest.map(club => (
+                      <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })()}

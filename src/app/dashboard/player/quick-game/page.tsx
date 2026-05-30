@@ -12,6 +12,7 @@ import type { RegisteredPlayer } from '@/lib/player-store';
 import type { ActiveGame, GamePlayer as EnginePlayer, InvitedPlayer, ScoreConfig } from '@/lib/game-engine';
 import { getRankingHistoryForGame } from '@/lib/ranking-store';
 import type { RankingEntry } from '@/lib/ranking-store';
+import { getPlayerClubs } from '@/lib/club-membership-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,12 +58,7 @@ const CLUBS: Record<string, Club[]> = {
   Madrid:     [{ id: 'c8', name: 'World Padel Tour',      courts: 12 }],
 };
 
-// Clubs the current player belongs to (courts > 0 = physical clubs, excluding leagues)
-const CREATOR_REGISTERED_CLUBS: PlayerClub[] = [
-  { id: 'c1', name: 'Club Barrio Norte',  city: 'Buenos Aires', country: 'Argentina', courts: 6  },
-  { id: 'c2', name: 'Padel Arena',        city: 'Buenos Aires', country: 'Argentina', courts: 10 },
-  { id: 'c5', name: 'Club La Cantera',    city: 'Córdoba',      country: 'Argentina', courts: 8  },
-];
+// Clubs are loaded dynamically from club-membership-store (see myClubs state)
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 
@@ -202,6 +198,7 @@ export default function QuickGamePage() {
   const [view, setView] = useState<View>('dashboard');
   const [games, setGames] = useState<ActiveGame[]>([]);
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string; shortId: string } | null>(null);
+  const [myClubs, setMyClubs] = useState<PlayerClub[]>([]);
   const [qrGame, setQrGame]     = useState<ActiveGame | null>(null);
   const [copied, setCopied]     = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
@@ -222,6 +219,9 @@ export default function QuickGamePage() {
       if (u) {
         const parsed = JSON.parse(u);
         setCurrentUser(parsed);
+        // load player's clubs from membership store
+        const memberships = getPlayerClubs(parsed.id);
+        setMyClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
         // load invitations for this player
         const invs = getInvitationsForPlayer(parsed.id).filter(i => i.status === 'pending');
         setMyInvitations(invs);
@@ -878,15 +878,20 @@ export default function QuickGamePage() {
 
               {isRegisteredClub === true && (
                 <div>
-                  {CREATOR_REGISTERED_CLUBS.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 10 }}>No tenés clubes registrados. Seleccioná una ubicación desde el mapa.</div>
+                  {myClubs.length === 0 ? (
+                    <div style={{ padding: '16px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 13, color: 'var(--grey-500)', lineHeight: 1.5 }}>
+                      No tenés clubes registrados.{' '}
+                      <a href="/dashboard/player/clubs" style={{ color: 'var(--court-blue)', fontWeight: 600, textDecoration: 'none' }}>
+                        Ir a Mis Clubes →
+                      </a>
+                    </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {CREATOR_REGISTERED_CLUBS.map(c => (
+                      {myClubs.map(c => (
                         <button key={c.id} onClick={() => setSelectedRegClub(c)}
                           style={{ padding: '14px 18px', textAlign: 'left', border: `2px solid ${selectedRegClub?.id === c.id ? 'var(--black)' : 'var(--grey-200)'}`, background: selectedRegClub?.id === c.id ? 'var(--black)' : '#fff', color: selectedRegClub?.id === c.id ? '#fff' : 'var(--black)', cursor: 'pointer' }}>
                           <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase' }}>{c.name}</div>
-                          <div style={{ fontSize: 11, marginTop: 2, color: selectedRegClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{c.city}, {c.country} · {c.courts} canchas</div>
+                          <div style={{ fontSize: 11, marginTop: 2, color: selectedRegClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{c.city}, {c.country}</div>
                         </button>
                       ))}
                     </div>

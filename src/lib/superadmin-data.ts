@@ -44,6 +44,7 @@ export interface SAClub {
   rejectReason?: string;
   joinedAt: string;
   plan: 'free' | 'basic' | 'pro';
+  mapsUrl?: string;
 }
 
 export interface SATournament {
@@ -273,6 +274,7 @@ export function getSAClubs(): SAClub[] {
         rejectReason: (c.rejectReason as string) || undefined,
         joinedAt: (c.joinedAt as string) || (c.createdAt as string) || new Date().toISOString().split('T')[0],
         plan: (['free', 'basic', 'pro'].includes(c.plan as string) ? c.plan as SAClub['plan'] : 'free'),
+        mapsUrl: (c.mapsUrl as string) || undefined,
       }));
     } catch {
       // fallthrough
@@ -329,6 +331,11 @@ function getMockTournaments(): SATournament[] {
     { id: 'mt-4', name: 'Torneo Verano Bilbao', club: 'Padel Bilbao Sport', city: 'Bilbao', date: '2026-04-20', players: 12, status: 'completed', rounds: 4, format: 'Americano' },
     { id: 'mt-5', name: 'Alicante Padel Open', club: 'Costa Padel Alicante', city: 'Alicante', date: '2026-05-01', players: 20, status: 'completed', rounds: 5, format: 'Mexicano' },
   ];
+}
+
+export function saveSAGames(games: SAGame[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('padelmgt_games', JSON.stringify(games));
 }
 
 export function getSAGames(): SAGame[] {
@@ -480,6 +487,7 @@ function rowToSAClub(row: Record<string, unknown>): SAClub {
     rejectReason: (row.reject_reason as string) ?? undefined,
     joinedAt: ((row.joined_at as string) ?? '').split('T')[0],
     plan: (row.plan as SAClub['plan']) ?? 'free',
+    mapsUrl: (row.maps_url as string) ?? undefined,
   };
 }
 
@@ -535,6 +543,7 @@ export async function upsertSAClubToSupabase(club: SAClub): Promise<void> {
       courts: club.courts, members: club.members, status: club.status,
       admin_email: club.adminEmail, plan: club.plan,
       joined_at: club.joinedAt || new Date().toISOString(),
+      maps_url: club.mapsUrl ?? null,
     });
   } catch { /* silent */ }
 }

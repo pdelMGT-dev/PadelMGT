@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getSAGames, type SAGame } from '@/lib/superadmin-data';
+import { getSAGames, saveSAGames, getSAGamesFromSupabase, type SAGame } from '@/lib/superadmin-data';
 
 interface ScoreCorrectionRequest {
   id: string;
@@ -95,7 +95,22 @@ export default function GamesPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
 
-  useEffect(() => { setGames(getSAGames()); }, []);
+  useEffect(() => {
+    setGames(getSAGames());
+
+    function fetchFromSupabase() {
+      getSAGamesFromSupabase().then(sbGames => {
+        if (sbGames && sbGames.length > 0) {
+          setGames(sbGames);
+          saveSAGames(sbGames);
+        }
+      });
+    }
+
+    fetchFromSupabase();
+    const interval = setInterval(fetchFromSupabase, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   function toast(msg: string, ok = true) {
     const id = Date.now();

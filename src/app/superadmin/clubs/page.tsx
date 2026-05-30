@@ -151,7 +151,7 @@ function ClubForm({
     name: '', clubType: 'Club Privado', city: '', country: 'ES',
     address: '', description: '', courts: 0, courtTypes: [], amenities: [],
     members: 0, status: 'pending', adminEmail: '', plan: 'free',
-    ownerName: '', ownerPhone: '', ownerEmail: '', message: '',
+    ownerName: '', ownerPhone: '', ownerEmail: '', message: '', mapsUrl: '',
     ...initial,
   });
   const [courtTypesInput, setCourtTypesInput] = useState((initial.courtTypes ?? []).join(', '));
@@ -189,6 +189,7 @@ function ClubForm({
       rejectReason: form.rejectReason ?? undefined,
       joinedAt: form.joinedAt ?? now,
       plan: form.plan ?? 'free',
+      mapsUrl: form.mapsUrl || undefined,
     });
   }
 
@@ -261,6 +262,19 @@ function ClubForm({
           value={form.description ?? ''}
           onChange={e => set('description', e.target.value)}
         />
+      </Field>
+
+      <Field label="Link de Google Maps (opcional)">
+        <input
+          style={inputStyle}
+          type="url"
+          value={form.mapsUrl ?? ''}
+          onChange={e => set('mapsUrl', e.target.value)}
+          placeholder="https://www.google.com/maps/embed?pb=..."
+        />
+        <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 3 }}>
+          En Google Maps: Compartir → Insertar un mapa → copiar la URL del iframe src="..."
+        </div>
       </Field>
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
@@ -762,6 +776,19 @@ export default function ClubsPage() {
               {selectedClub.address && <InfoRow label="Direccion"><span>{selectedClub.address}</span></InfoRow>}
               <InfoRow label="Ciudad"><span>{selectedClub.city || '—'}</span></InfoRow>
               <InfoRow label="Pais"><span>{selectedClub.country || '—'}</span></InfoRow>
+              {selectedClub.mapsUrl && (
+                <div style={{ marginTop: 12 }}>
+                  <iframe
+                    src={selectedClub.mapsUrl}
+                    width="100%"
+                    height="200"
+                    style={{ border: 0, borderRadius: 4 }}
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Section 3 — Instalaciones */}

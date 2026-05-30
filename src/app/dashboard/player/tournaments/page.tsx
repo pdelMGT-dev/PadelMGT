@@ -7,6 +7,7 @@ import type { Tournament } from '@/lib/tournament-store';
 import type { FixedPair } from '@/lib/game-engine';
 import { getFriendsForPlayer, searchPlayers } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
+import { getPlayerClubs } from '@/lib/club-membership-store';
 import { useToast } from '@/components/ToastProvider';
 import { SkeletonCard } from '@/components/Skeleton';
 
@@ -33,11 +34,7 @@ const CLUBS_BY_CITY: Record<string, ClubEntry[]> = {
   Montevideo: [{ id: 'c7', name: 'Club Carrasco', courts: 4 }],
   Madrid: [{ id: 'c8', name: 'World Padel Tour', courts: 12 }],
 };
-const CREATOR_CLUBS: PlayerClub[] = [
-  { id: 'c1', name: 'Club Barrio Norte', city: 'Buenos Aires', country: 'Argentina', courts: 6 },
-  { id: 'c2', name: 'Padel Arena', city: 'Buenos Aires', country: 'Argentina', courts: 10 },
-  { id: 'c5', name: 'Club La Cantera', city: 'Córdoba', country: 'Argentina', courts: 8 },
-];
+// Clubs loaded dynamically from club-membership-store (see myTClubs state)
 
 const FORMAT_INFO: Record<FormatKey, { label: string; desc: string; functional: boolean }> = {
   americano:   { label: 'Americano',   desc: 'Rotación de parejas, puntos acumulados. Rondas pre-generadas.',         functional: true  },
@@ -190,6 +187,7 @@ export default function PlayerTournamentsPage() {
   const [tHasLocation, setTHasLocation] = useState<boolean | null>(null);
   const [tIsRegClub, setTIsRegClub] = useState<boolean | null>(null);
   const [tSelectedRegClub, setTSelectedRegClub] = useState<PlayerClub | null>(null);
+  const [myTClubs, setMyTClubs] = useState<PlayerClub[]>([]);
   const [tCountry, setTCountry] = useState('');
   const [tCity, setTCity] = useState('');
   const [tClubId, setTClubId] = useState('');
@@ -232,7 +230,12 @@ export default function PlayerTournamentsPage() {
   useEffect(() => {
     try {
       const u = localStorage.getItem('padelmgt_user');
-      if (u) setCurrentUser(JSON.parse(u));
+      if (u) {
+        const parsed = JSON.parse(u);
+        setCurrentUser(parsed);
+        const memberships = getPlayerClubs(parsed.id);
+        setMyTClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
+      }
     } catch {}
   }, []);
 
@@ -579,11 +582,18 @@ export default function PlayerTournamentsPage() {
 
                 {tIsRegClub === true && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {CREATOR_CLUBS.map(c => (
+                    {myTClubs.length === 0 ? (
+                      <div style={{ padding: '16px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 13, color: 'var(--grey-500)', lineHeight: 1.5 }}>
+                        No tenés clubes registrados.{' '}
+                        <a href="/dashboard/player/clubs" style={{ color: 'var(--court-blue)', fontWeight: 600, textDecoration: 'none' }}>
+                          Ir a Mis Clubes →
+                        </a>
+                      </div>
+                    ) : myTClubs.map(c => (
                       <button key={c.id} onClick={() => setTSelectedRegClub(c)}
                         style={{ padding: '14px 18px', textAlign: 'left', border: `2px solid ${tSelectedRegClub?.id === c.id ? 'var(--black)' : 'var(--grey-200)'}`, background: tSelectedRegClub?.id === c.id ? 'var(--black)' : '#fff', color: tSelectedRegClub?.id === c.id ? '#fff' : 'var(--black)', cursor: 'pointer' }}>
                         <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase' }}>{c.name}</div>
-                        <div style={{ fontSize: 11, marginTop: 2, color: tSelectedRegClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{c.city}, {c.country} · {c.courts} canchas</div>
+                        <div style={{ fontSize: 11, marginTop: 2, color: tSelectedRegClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{c.city}, {c.country}</div>
                       </button>
                     ))}
                   </div>
