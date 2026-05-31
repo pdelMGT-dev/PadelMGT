@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { LayoutGrid, List } from 'lucide-react';
-import { getSAClubs, type SAClub } from '@/lib/superadmin-data';
+import { getSAClubs, getSAClubsFromSupabase, type SAClub } from '@/lib/superadmin-data';
 import {
   joinClub, leaveClub, isClubMember, getPlayerClubs,
   type ClubMembership,
@@ -233,8 +233,20 @@ export default function PlayerClubsPage() {
       if (raw) setUser(JSON.parse(raw) as StoredUser);
     } catch {}
 
-    const active = getSAClubs().filter(c => c.status === 'active');
-    setAllClubs(active);
+    // Load from localStorage first (instant), then fetch Supabase to get all SA-registered clubs
+    const localActive = getSAClubs().filter(c => c.status === 'active');
+    setAllClubs(localActive);
+
+    getSAClubsFromSupabase().then(sbClubs => {
+      if (!sbClubs || sbClubs.length === 0) return;
+      const active = sbClubs.filter(c => c.status === 'active');
+      if (active.length === 0) return;
+      // Merge: local fills in rich fields (description, courtTypes, mapsUrl...),
+      // Supabase is the source of truth for which clubs exist and their status.
+      const localMap = Object.fromEntries(localActive.map(c => [c.id, c]));
+      const merged = active.map(sb => ({ ...sb, ...(localMap[sb.id] ?? {}) } as SAClub));
+      setAllClubs(merged);
+    }).catch(() => { /* keep local fallback */ });
 
     // IP geolocation
     fetch('https://ipapi.co/json/')
