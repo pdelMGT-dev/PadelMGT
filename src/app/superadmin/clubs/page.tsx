@@ -308,6 +308,8 @@ export default function ClubsPage() {
   const [sortKey, setSortKey] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState('');
   // Drawer inline states
   const [drawerPlan, setDrawerPlan] = useState<SAClub['plan']>('free');
   const [showDrawerRejectInput, setShowDrawerRejectInput] = useState(false);
@@ -319,8 +321,18 @@ export default function ClubsPage() {
     function fetchFromSupabase() {
       getSAClubsFromSupabase().then(sbClubs => {
         if (sbClubs && sbClubs.length > 0) {
-          setClubs(sbClubs);
-          saveSAClubs(sbClubs);
+          // Merge: keep local data for fields Supabase doesn't store (description, owner info, etc.)
+          const local = getSAClubs();
+          const localMap = Object.fromEntries(local.map(c => [c.id, c]));
+          const sbIds = new Set(sbClubs.map(c => c.id));
+          const merged = sbClubs.map(sb => ({
+            ...(localMap[sb.id] ?? {}),  // local data fills in rich fields
+            ...sb,                        // Supabase is authoritative for its columns
+          } as SAClub));
+          const localOnly = local.filter(c => !sbIds.has(c.id));
+          const all = [...merged, ...localOnly];
+          setClubs(all);
+          saveSAClubs(all);
         }
       });
     }
@@ -501,6 +513,36 @@ export default function ClubsPage() {
     toast('Club rechazado');
   }
 
+  function handleBulkApply() {
+    if (!bulkAction || bulkSelected.size === 0) return;
+    let updated = [...clubs];
+    if (bulkAction === 'delete') {
+      const ids = new Set(bulkSelected);
+      updated = clubs.filter(c => !ids.has(c.id));
+      ids.forEach(id => deleteSAClubFromSupabase(id));
+    } else if (['active', 'inactive', 'pending', 'rejected'].includes(bulkAction)) {
+      updated = clubs.map(c => bulkSelected.has(c.id) ? { ...c, status: bulkAction as SAClub['status'] } : c);
+    } else if (['free', 'basic', 'pro'].includes(bulkAction)) {
+      updated = clubs.map(c => bulkSelected.has(c.id) ? { ...c, plan: bulkAction as SAClub['plan'] } : c);
+    }
+    saveAndRefresh(updated);
+    setBulkSelected(new Set());
+    setBulkAction('');
+    toast(`Acción aplicada a ${bulkSelected.size} club(es)`);
+  }
+
+  function toggleBulkSelect(id: string) {
+    setBulkSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(ids: string[]) {
+    setBulkSelected(prev => ids.every(id => prev.has(id)) ? new Set() : new Set(ids));
+  }
+
   const pending = clubs.filter(c => c.status === 'pending');
   const baseList = tab === 'pending' ? pending : clubs;
 
@@ -676,6 +718,14 @@ export default function ClubsPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-200)' }}>
+                  <th style={{ ...thStyle, width: 36, cursor: 'default', paddingRight: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={pageClubs.length > 0 && pageClubs.every(c => bulkSelected.has(c.id))}
+                      onChange={() => toggleSelectAll(pageClubs.map(c => c.id))}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </th>
                   <th onClick={() => handleSort('name')} style={thStyle}>Nombre + Tipo <SortIcon col="name" /></th>
                   <th style={{ ...thStyle, cursor: 'default' }}>Ciudad / Pais</th>
                   <th style={{ ...thStyle, cursor: 'default' }}>Direccion</th>
@@ -691,11 +741,14 @@ export default function ClubsPage() {
               <tbody>
                 {pageClubs.map(c => (
                   <tr key={c.id}
-                    style={{ borderBottom: '1px solid var(--grey-100)', cursor: 'pointer' }}
+                    style={{ borderBottom: '1px solid var(--grey-100)', cursor: 'pointer', background: bulkSelected.has(c.id) ? '#f0fdf4' : undefined }}
                     onClick={() => setSelectedClub(c)}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
-                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                    onMouseEnter={e => { if (!bulkSelected.has(c.id)) e.currentTarget.style.background = '#fafafa'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = bulkSelected.has(c.id) ? '#f0fdf4' : '#fff'; }}
                   >
+                    <td style={{ padding: '10px 14px', paddingRight: 0 }} onClick={e => { e.stopPropagation(); toggleBulkSelect(c.id); }}>
+                      <input type="checkbox" checked={bulkSelected.has(c.id)} onChange={() => toggleBulkSelect(c.id)} style={{ cursor: 'pointer' }} />
+                    </td>
                     <td style={{ padding: '10px 14px' }}>
                       <div style={{ fontWeight: 600, color: 'var(--black)' }}>{c.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{c.clubType}</div>
@@ -727,6 +780,47 @@ export default function ClubsPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Bulk action bar */}
+      {bulkSelected.size > 0 && (
+        <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: '#0a0a0a', color: '#fff', padding: '12px 20px', borderRadius: 8, boxShadow: '0 8px 32px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: 12, zIndex: 500 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>{bulkSelected.size} seleccionado{bulkSelected.size !== 1 ? 's' : ''}</span>
+          <select
+            value={bulkAction}
+            onChange={e => setBulkAction(e.target.value)}
+            style={{ padding: '6px 10px', fontSize: 12, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', borderRadius: 4, outline: 'none' }}
+          >
+            <option value="">— Acción masiva —</option>
+            <optgroup label="Estado">
+              <option value="active">Activar</option>
+              <option value="inactive">Desactivar</option>
+              <option value="pending">Marcar Pendiente</option>
+              <option value="rejected">Rechazar</option>
+            </optgroup>
+            <optgroup label="Plan">
+              <option value="free">Plan Free</option>
+              <option value="basic">Plan Basic</option>
+              <option value="pro">Plan Pro</option>
+            </optgroup>
+            <optgroup label="Peligroso">
+              <option value="delete">Eliminar seleccionados</option>
+            </optgroup>
+          </select>
+          <button
+            onClick={handleBulkApply}
+            disabled={!bulkAction}
+            style={{ padding: '6px 16px', background: bulkAction === 'delete' ? '#dc2626' : 'var(--turf-green)', color: '#fff', border: 'none', borderRadius: 4, cursor: bulkAction ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 700, opacity: bulkAction ? 1 : 0.5 }}
+          >
+            Aplicar
+          </button>
+          <button
+            onClick={() => setBulkSelected(new Set())}
+            style={{ padding: '6px 12px', background: 'transparent', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
+          >
+            Cancelar
+          </button>
         </div>
       )}
 

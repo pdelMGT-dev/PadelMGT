@@ -402,6 +402,7 @@ export default function PlayersPage() {
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<{ step: number } | null>(null);
+  const [bulkAction, setBulkAction] = useState('');
 
   useEffect(() => {
     setPlayers(getSAPlayers());
@@ -579,6 +580,25 @@ export default function PlayersPage() {
     saveAndRefresh(updated);
     toast(`${selectedIds.size} jugadores bloqueados`);
     setSelectedIds(new Set());
+  }
+
+  function handleBulkApply() {
+    if (!bulkAction || selectedIds.size === 0) return;
+    const statusOpts = ['active', 'blocked', 'suspended'];
+    const levelOpts = ['beginner', 'intermediate', 'advanced'];
+    const roleOpts = ['player', 'club_admin', 'federation_admin'];
+    let updated = [...players];
+    if (statusOpts.includes(bulkAction)) {
+      updated = players.map(p => selectedIds.has(p.id) ? { ...p, status: bulkAction as SAPlayer['status'] } : p);
+    } else if (levelOpts.includes(bulkAction)) {
+      updated = players.map(p => selectedIds.has(p.id) ? { ...p, level: bulkAction as SAPlayer['level'] } : p);
+    } else if (roleOpts.includes(bulkAction)) {
+      updated = players.map(p => selectedIds.has(p.id) ? { ...p, role: bulkAction as SAPlayer['role'] } : p);
+    }
+    saveAndRefresh(updated);
+    setBulkAction('');
+    setSelectedIds(new Set());
+    toast(`Acción aplicada a ${selectedIds.size} jugador(es)`);
   }
 
   function handleBulkDeleteStep1() { setBulkDeleteConfirm({ step: 1 }); }
@@ -901,22 +921,47 @@ export default function PlayersPage() {
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
-        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0a0a0a', color: '#fff', padding: '14px 24px', borderRadius: 8, display: 'flex', gap: 16, alignItems: 'center', zIndex: 900, boxShadow: '0 8px 32px rgba(0,0,0,0.3)', fontSize: 13 }}>
-          <span style={{ fontWeight: 600 }}>{selectedIds.size} seleccionado{selectedIds.size !== 1 ? 's' : ''}</span>
-          <span style={{ color: '#555' }}>—</span>
-          <button
-            onClick={() => exportCSV(players.filter(p => selectedIds.has(p.id)).map(p => ({ ID: p.id, ShortID: p.shortId, Nombre: p.name, Email: p.email, Telefono: p.phone, Sexo: p.sex ?? '', Nivel: p.level ?? '', Ciudad: p.city, Pais: p.country, RankingPos: p.ranking, PtsRanking: p.rankingPoints, Club: p.club ?? '', Rol: p.role, Estado: p.status, Ingreso: p.joinedAt })), 'jugadores_seleccion.csv')}
-            style={{ background: 'none', border: '1px solid #555', borderRadius: 4, color: '#fff', padding: '5px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0a0a0a', color: '#fff', padding: '12px 20px', borderRadius: 8, display: 'flex', gap: 12, alignItems: 'center', zIndex: 900, boxShadow: '0 8px 32px rgba(0,0,0,0.3)', fontSize: 13, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{selectedIds.size} seleccionado{selectedIds.size !== 1 ? 's' : ''}</span>
+          <select
+            value={bulkAction}
+            onChange={e => setBulkAction(e.target.value)}
+            style={{ padding: '6px 10px', fontSize: 12, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#fff', borderRadius: 4, outline: 'none' }}
           >
-            Exportar seleccion
+            <option value="">— Acción masiva —</option>
+            <optgroup label="Estado">
+              <option value="active">Activar</option>
+              <option value="blocked">Bloquear</option>
+              <option value="suspended">Suspender</option>
+            </optgroup>
+            <optgroup label="Nivel">
+              <option value="beginner">Principiante</option>
+              <option value="intermediate">Intermedio</option>
+              <option value="advanced">Avanzado</option>
+            </optgroup>
+            <optgroup label="Rol">
+              <option value="player">Jugador</option>
+              <option value="club_admin">Admin Club</option>
+              <option value="federation_admin">Admin Fed</option>
+            </optgroup>
+          </select>
+          <button
+            onClick={handleBulkApply}
+            disabled={!bulkAction}
+            style={{ padding: '6px 14px', background: 'var(--turf-green)', color: '#fff', border: 'none', borderRadius: 4, cursor: bulkAction ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 700, opacity: bulkAction ? 1 : 0.5 }}
+          >
+            Aplicar
           </button>
-          <button onClick={handleBulkBlock} style={{ background: 'none', border: '1px solid #f59e0b', borderRadius: 4, color: '#f59e0b', padding: '5px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-            Bloquear seleccion
+          <button
+            onClick={() => exportCSV(players.filter(p => selectedIds.has(p.id)).map(p => ({ ID: p.id, Nombre: p.name, Email: p.email, Nivel: p.level ?? '', Estado: p.status, Club: p.club ?? '' })), 'jugadores_seleccion.csv')}
+            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 4, color: '#ccc', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}
+          >
+            Exportar
           </button>
-          <button onClick={handleBulkDeleteStep1} style={{ background: 'none', border: '1px solid #ef4444', borderRadius: 4, color: '#ef4444', padding: '5px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-            Eliminar seleccion
+          <button onClick={handleBulkDeleteStep1} style={{ background: 'none', border: '1px solid #ef4444', borderRadius: 4, color: '#ef4444', padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+            Eliminar
           </button>
-          <button onClick={() => setSelectedIds(new Set())} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 0 0 8px' }}>×</button>
+          <button onClick={() => { setSelectedIds(new Set()); setBulkAction(''); }} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>×</button>
         </div>
       )}
 

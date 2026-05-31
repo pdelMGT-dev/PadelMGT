@@ -218,6 +218,7 @@ export default function PlayerClubsPage() {
   const [myMemberships, setMyMemberships] = useState<ClubMembership[]>([]);
   const [geo, setGeo] = useState<GeoLocation | null>(null);
   const [geoLoading, setGeoLoading] = useState(true);
+  const [searchName, setSearchName] = useState('');
   const [searchCountry, setSearchCountry] = useState('');
   const [searchCity, setSearchCity] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
@@ -290,18 +291,22 @@ export default function PlayerClubsPage() {
   // Filtered results
   const filtered = useMemo(() => {
     let list = allClubs.filter(c => !memberClubIds.has(c.id));
+    if (searchName.trim()) {
+      const q = searchName.trim().toLowerCase();
+      list = list.filter(c => c.name?.toLowerCase().includes(q));
+    }
     if (searchCountry.trim()) {
       const q = searchCountry.trim().toLowerCase();
-      list = list.filter(c => c.country?.toLowerCase().includes(q) || c.name?.toLowerCase().includes(q));
+      list = list.filter(c => c.country?.toLowerCase().includes(q));
     }
     if (searchCity.trim()) {
       const q = searchCity.trim().toLowerCase();
       list = list.filter(c => c.city?.toLowerCase().includes(q));
     }
     return list;
-  }, [allClubs, searchCountry, searchCity, myMemberships]);
+  }, [allClubs, searchName, searchCountry, searchCity, myMemberships]);
 
-  const hasSearch = searchCountry.trim() || searchCity.trim();
+  const hasSearch = searchName.trim() || searchCountry.trim() || searchCity.trim();
 
   // My club details
   const myClubDetails = myMemberships.map(m => allClubs.find(c => c.id === m.clubId)).filter(Boolean) as SAClub[];
@@ -373,28 +378,37 @@ export default function PlayerClubsPage() {
           Buscar clubes
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ flex: 2, minWidth: 200 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>Nombre del club</label>
+            <input
+              value={searchName}
+              onChange={e => setSearchName(e.target.value)}
+              placeholder="ej. Club Padel Madrid..."
+              style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, outline: 'none', boxSizing: 'border-box' as const }}
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: 150 }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>País</label>
             <input
               value={searchCountry}
               onChange={e => setSearchCountry(e.target.value)}
-              placeholder="ej. Argentina, España..."
+              placeholder="ej. Argentina..."
               style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, outline: 'none', boxSizing: 'border-box' as const }}
             />
           </div>
-          <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ flex: 1, minWidth: 150 }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>Ciudad</label>
             <input
               value={searchCity}
               onChange={e => setSearchCity(e.target.value)}
-              placeholder="ej. Buenos Aires, Madrid..."
+              placeholder="ej. Buenos Aires..."
               style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, outline: 'none', boxSizing: 'border-box' as const }}
             />
           </div>
           {hasSearch && (
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
               <button
-                onClick={() => { setSearchCountry(''); setSearchCity(''); }}
+                onClick={() => { setSearchName(''); setSearchCountry(''); setSearchCity(''); }}
                 style={{ padding: '9px 16px', background: 'transparent', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: 'var(--grey-500)', whiteSpace: 'nowrap' }}
               >
                 Limpiar
