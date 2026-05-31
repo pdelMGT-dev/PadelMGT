@@ -13,6 +13,7 @@ import type { ActiveGame, GamePlayer as EnginePlayer, InvitedPlayer, ScoreConfig
 import { getRankingHistoryForGame } from '@/lib/ranking-store';
 import type { RankingEntry } from '@/lib/ranking-store';
 import { getPlayerClubs } from '@/lib/club-membership-store';
+import { getSAClubs } from '@/lib/superadmin-data';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,32 +34,8 @@ type InvitedLocal = {
 
 // ── Mock / static data ────────────────────────────────────────────────────────
 
-const COUNTRIES_WITH_CLUBS = ['Argentina', 'Chile', 'Uruguay', 'España'];
-
-const CITIES_WITH_CLUBS: Record<string, string[]> = {
-  Argentina: ['Buenos Aires', 'Rosario', 'Córdoba'],
-  Chile:     ['Santiago'],
-  Uruguay:   ['Montevideo'],
-  España:    ['Madrid'],
-};
-
 type Club = { id: string; name: string; courts: number };
 type PlayerClub = Club & { city: string; country: string };
-
-const CLUBS: Record<string, Club[]> = {
-  'Buenos Aires': [
-    { id: 'c1', name: 'Club Barrio Norte',  courts: 6  },
-    { id: 'c2', name: 'Padel Arena',        courts: 10 },
-    { id: 'c3', name: 'Club Deportivo Sur', courts: 4  },
-  ],
-  Rosario:    [{ id: 'c4', name: 'Padel Rosario Central', courts: 5  }],
-  Córdoba:    [{ id: 'c5', name: 'Club La Cantera',       courts: 8  }],
-  Santiago:   [{ id: 'c6', name: 'Padel Santiago',        courts: 6  }],
-  Montevideo: [{ id: 'c7', name: 'Club Carrasco',         courts: 4  }],
-  Madrid:     [{ id: 'c8', name: 'World Padel Tour',      courts: 12 }],
-};
-
-// Clubs are loaded dynamically from club-membership-store (see myClubs state)
 
 // ── Label maps ────────────────────────────────────────────────────────────────
 
@@ -222,6 +199,7 @@ export default function QuickGamePage() {
         // load player's clubs from membership store
         const memberships = getPlayerClubs(parsed.id);
         setMyClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
+        setAllClubs(getSAClubs().filter(c => c.status === 'active').map(c => ({ id: c.id, name: c.name, city: c.city || '', country: c.country || '', courts: c.courts || 0 })));
         // load invitations for this player
         const invs = getInvitationsForPlayer(parsed.id).filter(i => i.status === 'pending');
         setMyInvitations(invs);
@@ -236,13 +214,14 @@ export default function QuickGamePage() {
   const [gameName, setGameName]         = useState('');
   const [date, setDate]                 = useState('');
   const [time, setTime]                 = useState('');
-  const [hasLocation, setHasLocation]   = useState<boolean | null>(null);
+  const [hasLocation, setHasLocation]         = useState<boolean | null>(null);
   const [isRegisteredClub, setIsRegisteredClub] = useState<boolean | null>(null);
   const [selectedRegClub, setSelectedRegClub]   = useState<PlayerClub | null>(null);
-  const [country, setCountry]           = useState('');
-  const [city, setCity]                 = useState('');
-  const [clubId, setClubId]             = useState('');
-  const [customClub, setCustomClub]     = useState('');
+  const [clubSearch, setClubSearch]             = useState('');
+  const [selectedSearchClub, setSelectedSearchClub] = useState<PlayerClub | null>(null);
+  const [isPrivateCourt, setIsPrivateCourt]     = useState(false);
+  const [customClub, setCustomClub]             = useState('');
+  const [allClubs, setAllClubs]                 = useState<PlayerClub[]>([]);
 
   // Step II — Nivel
   const [level, setLevel] = useState<Level | null>(null);
@@ -284,26 +263,27 @@ export default function QuickGamePage() {
   }, [searchQuery]);
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const clubs = city ? (CLUBS[city] || []) : [];
-  const isCustomLoc = clubId === '__custom__';
-  const selectedClub = isCustomLoc ? null : (clubs.find(c => c.id === clubId) ?? null);
 
   function resolvedClubName(): string {
     if (hasLocation === false) return '–';
-    if (isRegisteredClub && selectedRegClub) return selectedRegClub.name;
-    if (isCustomLoc && customClub.trim()) return customClub.trim();
-    if (selectedClub) return selectedClub.name;
+    if (isRegisteredClub === true && selectedRegClub) return selectedRegClub.name;
+    if (isRegisteredClub === false) {
+      if (isPrivateCourt) return customClub.trim() || '–';
+      if (selectedSearchClub) return selectedSearchClub.name;
+    }
     return '–';
   }
 
   function resolvedCity(): string {
-    if (isRegisteredClub && selectedRegClub) return selectedRegClub.city;
-    return city || '–';
+    if (isRegisteredClub === true && selectedRegClub) return selectedRegClub.city;
+    if (isRegisteredClub === false && !isPrivateCourt && selectedSearchClub) return selectedSearchClub.city;
+    return '–';
   }
 
   function resolvedCountry(): string {
-    if (isRegisteredClub && selectedRegClub) return selectedRegClub.country;
-    return country || '–';
+    if (isRegisteredClub === true && selectedRegClub) return selectedRegClub.country;
+    if (isRegisteredClub === false && !isPrivateCourt && selectedSearchClub) return selectedSearchClub.country;
+    return '–';
   }
 
   const step1Valid = useMemo(() => {
@@ -311,14 +291,12 @@ export default function QuickGamePage() {
     if (date < today()) return false;
     if (hasLocation === null) return false;
     if (hasLocation === false) return true;
-    // has location
     if (isRegisteredClub === null) return false;
     if (isRegisteredClub === true) return selectedRegClub !== null;
-    // not registered club → dropdown
-    if (!country || !city || !clubId) return false;
-    if (isCustomLoc && !customClub.trim()) return false;
-    return true;
-  }, [gameName, date, time, hasLocation, isRegisteredClub, selectedRegClub, country, city, clubId, isCustomLoc, customClub]);
+    // not registered club
+    if (isPrivateCourt) return customClub.trim().length > 0;
+    return selectedSearchClub !== null;
+  }, [gameName, date, time, hasLocation, isRegisteredClub, selectedRegClub, isPrivateCourt, customClub, selectedSearchClub]);
 
   function isAlreadyInvited(id: string) {
     return invitedList.some(p => p.id === id);
@@ -345,7 +323,7 @@ export default function QuickGamePage() {
     setStep(1);
     setGameName(''); setDate(''); setTime('');
     setHasLocation(null); setIsRegisteredClub(null); setSelectedRegClub(null);
-    setCountry(''); setCity(''); setClubId(''); setCustomClub('');
+    setClubSearch(''); setSelectedSearchClub(null); setIsPrivateCourt(false); setCustomClub('');
     setLevel(null);
     setMaxPlayers(4); setInvitedList([]); setPlayerTab('friends');
     setSearchQuery(''); setSearchResults([]); setFriendList([]);
@@ -851,7 +829,7 @@ export default function QuickGamePage() {
                 const val = opt === 'SÍ';
                 const active = hasLocation === val;
                 return (
-                  <button key={opt} onClick={() => { setHasLocation(val); if (!val) { setIsRegisteredClub(null); setSelectedRegClub(null); setCountry(''); setCity(''); setClubId(''); setCustomClub(''); } }}
+                  <button key={opt} onClick={() => { setHasLocation(val); if (!val) { setIsRegisteredClub(null); setSelectedRegClub(null); setSelectedSearchClub(null); setClubSearch(''); setIsPrivateCourt(false); setCustomClub(''); } }}
                     style={{ flex: 1, padding: '14px', border: `2px solid ${active ? 'var(--black)' : 'var(--grey-200)'}`, background: active ? 'var(--black)' : '#fff', color: active ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>
                     {opt}
                   </button>
@@ -868,7 +846,7 @@ export default function QuickGamePage() {
                   const val = opt === 'SÍ';
                   const active = isRegisteredClub === val;
                   return (
-                    <button key={opt} onClick={() => { setIsRegisteredClub(val); setSelectedRegClub(null); setCountry(''); setCity(''); setClubId(''); setCustomClub(''); }}
+                    <button key={opt} onClick={() => { setIsRegisteredClub(val); setSelectedRegClub(null); setSelectedSearchClub(null); setClubSearch(''); setIsPrivateCourt(false); setCustomClub(''); }}
                       style={{ flex: 1, padding: '12px', border: `2px solid ${active ? 'var(--black)' : 'var(--grey-200)'}`, background: active ? 'var(--black)' : '#fff', color: active ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>
                       {opt}
                     </button>
@@ -886,14 +864,28 @@ export default function QuickGamePage() {
                       </a>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {myClubs.map(c => (
-                        <button key={c.id} onClick={() => setSelectedRegClub(c)}
-                          style={{ padding: '14px 18px', textAlign: 'left', border: `2px solid ${selectedRegClub?.id === c.id ? 'var(--black)' : 'var(--grey-200)'}`, background: selectedRegClub?.id === c.id ? 'var(--black)' : '#fff', color: selectedRegClub?.id === c.id ? '#fff' : 'var(--black)', cursor: 'pointer' }}>
-                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase' }}>{c.name}</div>
-                          <div style={{ fontSize: 11, marginTop: 2, color: selectedRegClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{c.city}, {c.country}</div>
-                        </button>
-                      ))}
+                    <div>
+                      <input
+                        type="text"
+                        value={clubSearch}
+                        onChange={e => { setClubSearch(e.target.value); setSelectedRegClub(null); }}
+                        placeholder="Buscar por nombre, ciudad…"
+                        style={{ ...inp, marginBottom: 10 }}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {myClubs
+                          .filter(c => {
+                            const q = clubSearch.toLowerCase();
+                            return !q || c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.country.toLowerCase().includes(q);
+                          })
+                          .map(c => (
+                            <button key={c.id} onClick={() => setSelectedRegClub(c)}
+                              style={{ padding: '14px 18px', textAlign: 'left', border: `2px solid ${selectedRegClub?.id === c.id ? 'var(--black)' : 'var(--grey-200)'}`, background: selectedRegClub?.id === c.id ? 'var(--black)' : '#fff', color: selectedRegClub?.id === c.id ? '#fff' : 'var(--black)', cursor: 'pointer' }}>
+                              <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase' }}>{c.name}</div>
+                              <div style={{ fontSize: 11, marginTop: 2, color: selectedRegClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{c.city}, {c.country}</div>
+                            </button>
+                          ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -901,36 +893,54 @@ export default function QuickGamePage() {
 
               {isRegisteredClub === false && (
                 <div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={lbl}>País</label>
-                    <select value={country} onChange={e => { setCountry(e.target.value); setCity(''); setClubId(''); }} style={sel}>
-                      <option value="">Seleccioná un país</option>
-                      {COUNTRIES_WITH_CLUBS.map(c => <option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  {country && (
-                    <div style={{ marginBottom: 12 }}>
-                      <label style={lbl}>Ciudad</label>
-                      <select value={city} onChange={e => { setCity(e.target.value); setClubId(''); }} style={sel}>
-                        <option value="">Seleccioná una ciudad</option>
-                        {(CITIES_WITH_CLUBS[country] || []).map(c => <option key={c}>{c}</option>)}
-                      </select>
+                  {!isPrivateCourt ? (
+                    <div>
+                      <input
+                        type="text"
+                        value={clubSearch}
+                        onChange={e => { setClubSearch(e.target.value); setSelectedSearchClub(null); }}
+                        placeholder="Buscar club por nombre, país, ciudad…"
+                        style={{ ...inp, marginBottom: 10 }}
+                      />
+                      {selectedSearchClub && (
+                        <div style={{ padding: '12px 16px', background: 'var(--grey-50)', border: '2px solid var(--black)', marginBottom: 10, fontSize: 13, fontWeight: 600 }}>
+                          ✓ {selectedSearchClub.name} · {selectedSearchClub.city}, {selectedSearchClub.country}
+                        </div>
+                      )}
+                      {clubSearch.trim().length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                          {allClubs
+                            .filter(c => {
+                              const q = clubSearch.toLowerCase();
+                              return c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.country.toLowerCase().includes(q);
+                            })
+                            .slice(0, 8)
+                            .map(c => (
+                              <button key={c.id} onClick={() => { setSelectedSearchClub(c); setClubSearch(''); }}
+                                style={{ padding: '12px 16px', textAlign: 'left', border: `2px solid ${selectedSearchClub?.id === c.id ? 'var(--black)' : 'var(--grey-200)'}`, background: selectedSearchClub?.id === c.id ? 'var(--black)' : '#fff', color: selectedSearchClub?.id === c.id ? '#fff' : 'var(--black)', cursor: 'pointer' }}>
+                                <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 600, textTransform: 'uppercase' }}>{c.name}</div>
+                                <div style={{ fontSize: 11, marginTop: 2, color: selectedSearchClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{c.city}, {c.country}</div>
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => { setIsPrivateCourt(true); setSelectedSearchClub(null); setClubSearch(''); }}
+                        style={{ display: 'block', width: '100%', padding: '10px 14px', textAlign: 'left', border: '1px dashed var(--grey-300)', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--grey-500)' }}
+                      >
+                        Es una pista privada / No encontré el club →
+                      </button>
                     </div>
-                  )}
-                  {city && clubs.length > 0 && (
-                    <div style={{ marginBottom: 12 }}>
-                      <label style={lbl}>Club</label>
-                      <select value={clubId} onChange={e => { setClubId(e.target.value); if (e.target.value !== '__custom__') setCustomClub(''); }} style={sel}>
-                        <option value="">Seleccioná un club</option>
-                        {clubs.map(c => <option key={c.id} value={c.id}>{c.name} · {c.courts} canchas</option>)}
-                        <option value="__custom__">Otros / Pista Privada</option>
-                      </select>
-                    </div>
-                  )}
-                  {isCustomLoc && (
+                  ) : (
                     <div>
                       <label style={lbl}>Nombre del lugar *</label>
-                      <input type="text" value={customClub} onChange={e => setCustomClub(e.target.value)} placeholder="Ej: Cancha de Lucas, Club privado…" style={inp} />
+                      <input type="text" value={customClub} onChange={e => setCustomClub(e.target.value)} placeholder="Ej: Cancha de Lucas, Club privado…" style={{ ...inp, marginBottom: 10 }} />
+                      <button
+                        onClick={() => { setIsPrivateCourt(false); setCustomClub(''); }}
+                        style={{ fontSize: 12, color: 'var(--grey-500)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 0', textDecoration: 'underline' }}
+                      >
+                        ← Volver a buscar un club
+                      </button>
                     </div>
                   )}
                 </div>

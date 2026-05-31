@@ -8,6 +8,7 @@ import type { FixedPair } from '@/lib/game-engine';
 import { getFriendsForPlayer, searchPlayers } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { getPlayerClubs } from '@/lib/club-membership-store';
+import { getSAClubs } from '@/lib/superadmin-data';
 import { useToast } from '@/components/ToastProvider';
 import { SkeletonCard } from '@/components/Skeleton';
 
@@ -20,21 +21,7 @@ type InvitedEntry = { id: string; name: string; email?: string; shortId?: string
 
 // ── Static data ───────────────────────────────────────────────────────────────
 
-const COUNTRIES_WITH_CLUBS = ['Argentina', 'Chile', 'Uruguay', 'España'];
-const CITIES_WITH_CLUBS: Record<string, string[]> = {
-  Argentina: ['Buenos Aires', 'Rosario', 'Córdoba'],
-  Chile: ['Santiago'], Uruguay: ['Montevideo'], España: ['Madrid'],
-};
-type ClubEntry = { id: string; name: string; courts: number };
-const CLUBS_BY_CITY: Record<string, ClubEntry[]> = {
-  'Buenos Aires': [{ id: 'c1', name: 'Club Barrio Norte', courts: 6 }, { id: 'c2', name: 'Padel Arena', courts: 10 }, { id: 'c3', name: 'Club Deportivo Sur', courts: 4 }],
-  Rosario: [{ id: 'c4', name: 'Padel Rosario Central', courts: 5 }],
-  Córdoba: [{ id: 'c5', name: 'Club La Cantera', courts: 8 }],
-  Santiago: [{ id: 'c6', name: 'Padel Santiago', courts: 6 }],
-  Montevideo: [{ id: 'c7', name: 'Club Carrasco', courts: 4 }],
-  Madrid: [{ id: 'c8', name: 'World Padel Tour', courts: 12 }],
-};
-// Clubs loaded dynamically from club-membership-store (see myTClubs state)
+// Clubs loaded dynamically from club-membership-store and SA store
 
 const FORMAT_INFO: Record<FormatKey, { label: string; desc: string; functional: boolean }> = {
   americano:   { label: 'Americano',   desc: 'Rotación de parejas, puntos acumulados. Rondas pre-generadas.',         functional: true  },
@@ -188,9 +175,10 @@ export default function PlayerTournamentsPage() {
   const [tIsRegClub, setTIsRegClub] = useState<boolean | null>(null);
   const [tSelectedRegClub, setTSelectedRegClub] = useState<PlayerClub | null>(null);
   const [myTClubs, setMyTClubs] = useState<PlayerClub[]>([]);
-  const [tCountry, setTCountry] = useState('');
-  const [tCity, setTCity] = useState('');
-  const [tClubId, setTClubId] = useState('');
+  const [tAllClubs, setTAllClubs] = useState<PlayerClub[]>([]);
+  const [tClubSearch, setTClubSearch] = useState('');
+  const [tSelectedSearchClub, setTSelectedSearchClub] = useState<PlayerClub | null>(null);
+  const [tIsPrivateCourt, setTIsPrivateCourt] = useState(false);
   const [tCustomClub, setTCustomClub] = useState('');
 
   // ── Step 2 ──────────────────────────────────────────────────────────────────
@@ -235,6 +223,7 @@ export default function PlayerTournamentsPage() {
         setCurrentUser(parsed);
         const memberships = getPlayerClubs(parsed.id);
         setMyTClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
+        setTAllClubs(getSAClubs().filter(c => c.status === 'active').map(c => ({ id: c.id, name: c.name, city: c.city || '', country: c.country || '', courts: c.courts || 0 })));
       }
     } catch {}
   }, []);
@@ -294,18 +283,22 @@ export default function PlayerTournamentsPage() {
   // ── Location helpers ─────────────────────────────────────────────────────────
   function resolvedClub(): string {
     if (!tHasLocation) return '';
-    if (tIsRegClub && tSelectedRegClub) return tSelectedRegClub.name;
-    if (tClubId === '__custom__') return tCustomClub.trim() || '';
-    const cityClubs = tCity ? (CLUBS_BY_CITY[tCity] || []) : [];
-    return cityClubs.find(c => c.id === tClubId)?.name || '';
+    if (tIsRegClub === true && tSelectedRegClub) return tSelectedRegClub.name;
+    if (tIsRegClub === false) {
+      if (tIsPrivateCourt) return tCustomClub.trim() || '';
+      if (tSelectedSearchClub) return tSelectedSearchClub.name;
+    }
+    return '';
   }
   function resolvedCity(): string {
-    if (tIsRegClub && tSelectedRegClub) return tSelectedRegClub.city;
-    return tCity || '';
+    if (tIsRegClub === true && tSelectedRegClub) return tSelectedRegClub.city;
+    if (tIsRegClub === false && !tIsPrivateCourt && tSelectedSearchClub) return tSelectedSearchClub.city;
+    return '';
   }
   function resolvedCountry(): string {
-    if (tIsRegClub && tSelectedRegClub) return tSelectedRegClub.country;
-    return tCountry || '';
+    if (tIsRegClub === true && tSelectedRegClub) return tSelectedRegClub.country;
+    if (tIsRegClub === false && !tIsPrivateCourt && tSelectedSearchClub) return tSelectedSearchClub.country;
+    return '';
   }
 
   // ── Validation ───────────────────────────────────────────────────────────────
@@ -315,10 +308,10 @@ export default function PlayerTournamentsPage() {
     if (tHasLocation === false) return true;
     if (tIsRegClub === null) return false;
     if (tIsRegClub === true) return tSelectedRegClub !== null;
-    if (!tCountry || !tCity || !tClubId) return false;
-    if (tClubId === '__custom__' && !tCustomClub.trim()) return false;
-    return true;
-  }, [tName, tDate, tTime, tHasLocation, tIsRegClub, tSelectedRegClub, tCountry, tCity, tClubId, tCustomClub]);
+    // not registered club
+    if (tIsPrivateCourt) return tCustomClub.trim().length > 0;
+    return tSelectedSearchClub !== null;
+  }, [tName, tDate, tTime, tHasLocation, tIsRegClub, tSelectedRegClub, tIsPrivateCourt, tCustomClub, tSelectedSearchClub]);
 
   const step2Valid = useMemo(() => {
     if (!tFormat) return false;
@@ -330,7 +323,7 @@ export default function PlayerTournamentsPage() {
     setStep(1);
     setTName(''); setTDate(''); setTTime('');
     setTHasLocation(null); setTIsRegClub(null); setTSelectedRegClub(null);
-    setTCountry(''); setTCity(''); setTClubId(''); setTCustomClub('');
+    setTClubSearch(''); setTSelectedSearchClub(null); setTIsPrivateCourt(false); setTCustomClub('');
     setTFormat(null); setTModalidad('individual'); setTMixto(false);
     setTMaxPlayers(8); setTCourts(2); setTScoreType('points');
     setTPtTarget(24); setTSets(1); setTGames(6); setTTiebreak(7); setTDeuce('oro');
@@ -510,8 +503,6 @@ export default function PlayerTournamentsPage() {
 
     // ── STEP 1: Información Básica ─────────────────────────────────────────
     if (step === 1) {
-      const cityClubs = tCity ? (CLUBS_BY_CITY[tCity] || []) : [];
-
       return (
         <div style={{ padding: '40px 40px 80px', maxWidth: 660 }}>
           {wizardHeader}
@@ -551,7 +542,7 @@ export default function PlayerTournamentsPage() {
                   return (
                     <button key={opt} onClick={() => {
                       setTHasLocation(val);
-                      if (!val) { setTIsRegClub(null); setTSelectedRegClub(null); setTCountry(''); setTCity(''); setTClubId(''); setTCustomClub(''); }
+                      if (!val) { setTIsRegClub(null); setTSelectedRegClub(null); setTSelectedSearchClub(null); setTClubSearch(''); setTIsPrivateCourt(false); setTCustomClub(''); }
                     }}
                       style={{ flex: 1, padding: '14px', border: `2px solid ${active ? 'var(--black)' : 'var(--grey-200)'}`, background: active ? 'var(--black)' : '#fff', color: active ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>
                       {opt}
@@ -571,7 +562,7 @@ export default function PlayerTournamentsPage() {
                     return (
                       <button key={opt} onClick={() => {
                         setTIsRegClub(val);
-                        setTSelectedRegClub(null); setTCountry(''); setTCity(''); setTClubId(''); setTCustomClub('');
+                        setTSelectedRegClub(null); setTSelectedSearchClub(null); setTClubSearch(''); setTIsPrivateCourt(false); setTCustomClub('');
                       }}
                         style={{ flex: 1, padding: '12px', border: `2px solid ${active ? 'var(--black)' : 'var(--grey-200)'}`, background: active ? 'var(--black)' : '#fff', color: active ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>
                         {opt}
@@ -581,7 +572,7 @@ export default function PlayerTournamentsPage() {
                 </div>
 
                 {tIsRegClub === true && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div>
                     {myTClubs.length === 0 ? (
                       <div style={{ padding: '16px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 13, color: 'var(--grey-500)', lineHeight: 1.5 }}>
                         No tenés clubes registrados.{' '}
@@ -589,48 +580,84 @@ export default function PlayerTournamentsPage() {
                           Ir a Mis Clubes →
                         </a>
                       </div>
-                    ) : myTClubs.map(c => (
-                      <button key={c.id} onClick={() => setTSelectedRegClub(c)}
-                        style={{ padding: '14px 18px', textAlign: 'left', border: `2px solid ${tSelectedRegClub?.id === c.id ? 'var(--black)' : 'var(--grey-200)'}`, background: tSelectedRegClub?.id === c.id ? 'var(--black)' : '#fff', color: tSelectedRegClub?.id === c.id ? '#fff' : 'var(--black)', cursor: 'pointer' }}>
-                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase' }}>{c.name}</div>
-                        <div style={{ fontSize: 11, marginTop: 2, color: tSelectedRegClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{c.city}, {c.country}</div>
-                      </button>
-                    ))}
+                    ) : (
+                      <div>
+                        <input
+                          type="text"
+                          value={tClubSearch}
+                          onChange={e => { setTClubSearch(e.target.value); setTSelectedRegClub(null); }}
+                          placeholder="Buscar por nombre, ciudad…"
+                          style={{ ...inp, marginBottom: 10 }}
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {myTClubs
+                            .filter(c => {
+                              const q = tClubSearch.toLowerCase();
+                              return !q || c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.country.toLowerCase().includes(q);
+                            })
+                            .map(c => (
+                              <button key={c.id} onClick={() => setTSelectedRegClub(c)}
+                                style={{ padding: '14px 18px', textAlign: 'left', border: `2px solid ${tSelectedRegClub?.id === c.id ? 'var(--black)' : 'var(--grey-200)'}`, background: tSelectedRegClub?.id === c.id ? 'var(--black)' : '#fff', color: tSelectedRegClub?.id === c.id ? '#fff' : 'var(--black)', cursor: 'pointer' }}>
+                                <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase' }}>{c.name}</div>
+                                <div style={{ fontSize: 11, marginTop: 2, color: tSelectedRegClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{c.city}, {c.country}</div>
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {tIsRegClub === false && (
                   <div>
-                    <div style={{ marginBottom: 12 }}>
-                      <label style={lbl}>País</label>
-                      <select value={tCountry} onChange={e => { setTCountry(e.target.value); setTCity(''); setTClubId(''); }} style={sel}>
-                        <option value="">Seleccioná un país</option>
-                        {COUNTRIES_WITH_CLUBS.map(c => <option key={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    {tCountry && (
-                      <div style={{ marginBottom: 12 }}>
-                        <label style={lbl}>Ciudad</label>
-                        <select value={tCity} onChange={e => { setTCity(e.target.value); setTClubId(''); }} style={sel}>
-                          <option value="">Seleccioná una ciudad</option>
-                          {(CITIES_WITH_CLUBS[tCountry] || []).map(c => <option key={c}>{c}</option>)}
-                        </select>
+                    {!tIsPrivateCourt ? (
+                      <div>
+                        <input
+                          type="text"
+                          value={tClubSearch}
+                          onChange={e => { setTClubSearch(e.target.value); setTSelectedSearchClub(null); }}
+                          placeholder="Buscar club por nombre, país, ciudad…"
+                          style={{ ...inp, marginBottom: 10 }}
+                        />
+                        {tSelectedSearchClub && (
+                          <div style={{ padding: '12px 16px', background: 'var(--grey-50)', border: '2px solid var(--black)', marginBottom: 10, fontSize: 13, fontWeight: 600 }}>
+                            ✓ {tSelectedSearchClub.name} · {tSelectedSearchClub.city}, {tSelectedSearchClub.country}
+                          </div>
+                        )}
+                        {tClubSearch.trim().length > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                            {tAllClubs
+                              .filter(c => {
+                                const q = tClubSearch.toLowerCase();
+                                return c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.country.toLowerCase().includes(q);
+                              })
+                              .slice(0, 8)
+                              .map(c => (
+                                <button key={c.id} onClick={() => { setTSelectedSearchClub(c); setTClubSearch(''); }}
+                                  style={{ padding: '12px 16px', textAlign: 'left', border: `2px solid ${tSelectedSearchClub?.id === c.id ? 'var(--black)' : 'var(--grey-200)'}`, background: tSelectedSearchClub?.id === c.id ? 'var(--black)' : '#fff', color: tSelectedSearchClub?.id === c.id ? '#fff' : 'var(--black)', cursor: 'pointer' }}>
+                                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 600, textTransform: 'uppercase' }}>{c.name}</div>
+                                  <div style={{ fontSize: 11, marginTop: 2, color: tSelectedSearchClub?.id === c.id ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{c.city}, {c.country}</div>
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                        <button
+                          onClick={() => { setTIsPrivateCourt(true); setTSelectedSearchClub(null); setTClubSearch(''); }}
+                          style={{ display: 'block', width: '100%', padding: '10px 14px', textAlign: 'left', border: '1px dashed var(--grey-300)', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--grey-500)' }}
+                        >
+                          Es una pista privada / No encontré el club →
+                        </button>
                       </div>
-                    )}
-                    {tCity && cityClubs.length > 0 && (
-                      <div style={{ marginBottom: 12 }}>
-                        <label style={lbl}>Club</label>
-                        <select value={tClubId} onChange={e => { setTClubId(e.target.value); if (e.target.value !== '__custom__') setTCustomClub(''); }} style={sel}>
-                          <option value="">Seleccioná un club</option>
-                          {cityClubs.map(c => <option key={c.id} value={c.id}>{c.name} · {c.courts} canchas</option>)}
-                          <option value="__custom__">Otros / Pista Privada</option>
-                        </select>
-                      </div>
-                    )}
-                    {tClubId === '__custom__' && (
+                    ) : (
                       <div>
                         <label style={lbl}>Nombre del lugar *</label>
-                        <input type="text" value={tCustomClub} onChange={e => setTCustomClub(e.target.value)} placeholder="Ej: Cancha de Lucas, Club privado…" style={inp} />
+                        <input type="text" value={tCustomClub} onChange={e => setTCustomClub(e.target.value)} placeholder="Ej: Cancha de Lucas, Club privado…" style={{ ...inp, marginBottom: 10 }} />
+                        <button
+                          onClick={() => { setTIsPrivateCourt(false); setTCustomClub(''); }}
+                          style={{ fontSize: 12, color: 'var(--grey-500)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 0', textDecoration: 'underline' }}
+                        >
+                          ← Volver a buscar un club
+                        </button>
                       </div>
                     )}
                   </div>
