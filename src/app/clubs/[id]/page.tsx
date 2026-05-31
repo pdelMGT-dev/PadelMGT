@@ -1,20 +1,11 @@
+'use client';
+
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { clubs } from '@/lib/data';
-
-interface Props {
-  params: Promise<{ id: string }>;
-}
-
-export async function generateStaticParams() {
-  return clubs.map((c) => ({ id: c.id }));
-}
-
-export async function generateMetadata({ params }: Props) {
-  const { id } = await params;
-  const club = clubs.find((c) => c.id === id);
-  return { title: `${club?.name ?? 'Club'} – PadelMGT` };
-}
+import type { Club } from '@/lib/types';
+import { getSAClubsFromSupabase } from '@/lib/superadmin-data';
 
 const mockTournaments = [
   { name: 'Americano de Mayo', format: 'Americano', date: '2026-05-18', players: 12, maxPlayers: 16, status: 'upcoming' },
@@ -22,10 +13,65 @@ const mockTournaments = [
   { name: 'Abierto de Abril', format: 'Knockout', date: '2026-04-20', players: 16, maxPlayers: 16, status: 'completed' },
 ];
 
-export default async function ClubDetailPage({ params }: Props) {
-  const { id } = await params;
-  const club = clubs.find((c) => c.id === id);
-  if (!club) notFound();
+export default function ClubDetailPage() {
+  const params = useParams();
+  const id = params?.id as string;
+
+  const [club, setClub] = useState<Club | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+
+    // 1. Check hardcoded clubs first (fast, sync)
+    const local = clubs.find(c => c.id === id);
+    if (local) {
+      setClub(local);
+      setLoading(false);
+      return;
+    }
+
+    // 2. Fetch from Supabase and find by id
+    getSAClubsFromSupabase()
+      .then(sbClubs => {
+        if (!sbClubs) return;
+        const found = sbClubs.find(c => c.id === id);
+        if (found) {
+          setClub({
+            id: found.id,
+            name: found.name,
+            country: found.country || '–',
+            city: found.city || '–',
+            address: found.address || found.city || '–',
+            courts: found.courts || 0,
+            members: found.members || 0,
+            rating: 4.5,
+            amenities: found.amenities?.length ? found.amenities : ['Canchas cubiertas', 'Vestuarios', 'Estacionamiento'],
+            phone: found.ownerPhone || undefined,
+            email: found.adminEmail || found.ownerEmail || undefined,
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: 14, color: 'var(--grey-400)' }}>Cargando club…</div>
+      </div>
+    );
+  }
+
+  if (!club) {
+    return (
+      <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-display)' }}>Club no encontrado</div>
+        <Link href="/clubs" className="btn btn-secondary btn-sm">← Volver a Clubes</Link>
+      </div>
+    );
+  }
 
   return (
     <div>
