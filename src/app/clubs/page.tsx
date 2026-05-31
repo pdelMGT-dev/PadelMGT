@@ -1,14 +1,37 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { clubs, countries, cities } from '@/lib/data';
+import { useState, useEffect } from 'react';
+import { clubs as initialClubs, countries, cities } from '@/lib/data';
+import { getSAClubsFromSupabase } from '@/lib/superadmin-data';
 
 export default function ClubsPage() {
   const [search, setSearch] = useState('');
   const [country, setCountry] = useState('All Countries');
   const [city, setCity] = useState('All Cities');
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [clubs, setClubs] = useState(initialClubs as {
+    id: string; name: string; country: string; city: string; address: string;
+    courts: number; members: number; rating: number; amenities: string[];
+  }[]);
+
+  useEffect(() => {
+    getSAClubsFromSupabase().then(sb => {
+      if (sb && sb.length > 0) {
+        setClubs(sb.filter(c => c.status === 'active').map(c => ({
+          id: c.id,
+          name: c.name,
+          country: c.country,
+          city: c.city,
+          address: c.city,
+          courts: c.courts ?? 0,
+          members: c.members ?? 0,
+          rating: 0,
+          amenities: [],
+        })));
+      }
+    });
+  }, []);
 
   const available = cities[country] || ['All Cities'];
 

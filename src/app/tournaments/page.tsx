@@ -1,13 +1,38 @@
+'use client';
+
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import { tournamentFormats, ongoingTournaments } from '@/lib/data';
+import { getSATournamentsFromSupabase } from '@/lib/superadmin-data';
 
-export const metadata = {
-  title: 'Torneos — PadelMGT',
-};
-
-const statusLabel: Record<string, string> = { ongoing: 'En Vivo', upcoming: 'Por Empezar', completed: 'Finalizado' };
+const statusLabel: Record<string, string> = { ongoing: 'En Vivo', upcoming: 'Por Empezar', completed: 'Finalizado', active: 'En Vivo', upcoming_sa: 'Por Empezar' };
 
 export default function TournamentsPage() {
+  const [tournaments, setTournaments] = useState(ongoingTournaments as {
+    id: string; name: string; format: string; club: string; city: string;
+    players: number; maxPlayers: number; level: string; prize?: string; startDate: string; status: string;
+  }[]);
+
+  useEffect(() => {
+    getSATournamentsFromSupabase().then(sb => {
+      if (sb && sb.length > 0) {
+        setTournaments(sb.map(t => ({
+          id: t.id,
+          name: t.name,
+          format: t.format,
+          club: t.club,
+          city: t.city,
+          players: 0,
+          maxPlayers: t.max_players ?? 0,
+          level: '',
+          prize: undefined,
+          startDate: t.start_date ?? '',
+          status: t.status === 'active' ? 'ongoing' : t.status,
+        })));
+      }
+    });
+  }, []);
+
   return (
     <div>
       {/* Page header */}
@@ -85,7 +110,7 @@ export default function TournamentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {[...ongoingTournaments].sort((a, b) => {
+                {[...tournaments].sort((a, b) => {
                   const order: Record<string, number> = { ongoing: 0, upcoming: 1, completed: 2 };
                   return (order[a.status] ?? 3) - (order[b.status] ?? 3);
                 }).map((t) => (

@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getSAPlayersFromSupabase } from '@/lib/superadmin-data';
 
 const categories = ['General', 'Masculino', 'Femenino', 'Sub-23', 'Veteranos'];
 const countries = ['Todos', 'Argentina', 'España', 'México', 'Colombia', 'Chile', 'Brasil', 'Uruguay'];
 
-const players = [
+const initialPlayers = [
   { pos: 1, prev: 1, name: 'Alejandro Galán', country: 'ES', city: 'Madrid', pts: 8450, tournaments: 22, wins: 18, club: 'RC Padel Madrid' },
   { pos: 2, prev: 3, name: 'Juan Lebrón', country: 'ES', city: 'Sevilla', pts: 8100, tournaments: 22, wins: 16, club: 'Club Sevilla Padel' },
   { pos: 3, prev: 2, name: 'Federico Chingotto', country: 'AR', city: 'Buenos Aires', pts: 7850, tournaments: 21, wins: 15, club: 'Buenos Aires PC' },
@@ -26,6 +27,27 @@ const flags: Record<string, string> = { ES: '🇪🇸', AR: '🇦🇷', BR: '�
 export default function RankingPage() {
   const [category, setCategory] = useState('General');
   const [country, setCountry] = useState('Todos');
+  const [players, setPlayers] = useState(initialPlayers);
+
+  useEffect(() => {
+    getSAPlayersFromSupabase().then(sb => {
+      if (sb && sb.length > 0) {
+        const active = sb.filter(p => p.status === 'active');
+        active.sort((a, b) => (b.rankingPoints ?? 0) - (a.rankingPoints ?? 0));
+        setPlayers(active.map((p, i) => ({
+          pos: i + 1,
+          prev: i + 1,
+          name: p.name,
+          country: p.country,
+          city: p.city,
+          pts: p.rankingPoints ?? 0,
+          tournaments: 0,
+          wins: 0,
+          club: p.club ?? '',
+        })));
+      }
+    });
+  }, []);
 
   const filtered = players.filter((p) => country === 'Todos' || true);
 
@@ -45,7 +67,7 @@ export default function RankingPage() {
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>
           {/* Top 3 podium */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, background: 'var(--grey-200)', marginBottom: 56 }}>
-            {players.slice(0, 3).map((p, i) => (
+            {players.slice(0, 3).map((p: typeof players[number], i) => (
               <div key={p.pos} style={{ background: i === 0 ? 'var(--black)' : '#fff', padding: '40px 32px', position: 'relative' }}>
                 {i === 0 && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'var(--neon)' }} />}
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 80, fontWeight: 600, lineHeight: 0.9, color: i === 0 ? 'var(--neon)' : 'var(--grey-200)', letterSpacing: '-0.03em', marginBottom: 16 }}>#{p.pos}</div>

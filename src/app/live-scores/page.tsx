@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { getSAGamesFromSupabase } from '@/lib/superadmin-data';
 
 const initial = [
   { id: '1', tournament: 'Open Buenos Aires 2026', court: 'Court Center', t1: 'Martínez / Pérez', t2: 'García / López', s1: [6, 4, 3], s2: [3, 6, 5], status: 'live' },
@@ -16,6 +17,23 @@ export default function LiveScoresPage() {
   const [matches, setMatches] = useState(initial);
   const [filter, setFilter] = useState('Todos');
   const [updated, setUpdated] = useState(new Date());
+
+  useEffect(() => {
+    getSAGamesFromSupabase().then(sb => {
+      if (sb && sb.length > 0) {
+        setMatches(sb.map(g => ({
+          id: g.id,
+          tournament: g.name,
+          court: 'Cancha 1',
+          t1: '–',
+          t2: '–',
+          s1: [] as number[],
+          s2: [] as number[],
+          status: g.status === 'ongoing' ? 'live' : 'completed',
+        })));
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => {

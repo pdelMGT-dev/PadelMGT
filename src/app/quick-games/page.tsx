@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
+import { getSAGamesFromSupabase } from '@/lib/superadmin-data';
 
 const levels = ['Todos los niveles', 'Principiante', 'Intermedio', 'Avanzado'];
 
@@ -18,6 +19,30 @@ export default function QuickGamesPage() {
   const [allCountries, setAllCountries] = useState<string[]>([]);
 
   useEffect(() => {
+    getSAGamesFromSupabase().then(sb => {
+      if (sb && sb.length > 0) {
+        const saGames = sb.map(g => ({
+          id: g.id,
+          name: g.name,
+          date: g.date ?? '',
+          country: '',
+          city: '',
+          status: g.status === 'ongoing' ? 'open' : 'finished',
+          format: g.format,
+          players: [] as { id: string }[],
+          maxPlayers: typeof g.players === 'number' ? g.players : 0,
+        } as unknown as ActiveGame));
+        const localGames = getAllGames().filter(g => g.status !== 'finished');
+        const localIds = new Set(localGames.map(g => g.id));
+        const merged = [...localGames, ...saGames.filter(g => !localIds.has(g.id))];
+        const countryList = [...new Set(merged.map(g => g.country).filter(Boolean))] as string[];
+        setAllCountries(countryList);
+        setNearbyGames(merged);
+        setLocationLoading(false);
+        return;
+      }
+    });
+
     const games = getAllGames().filter(g => g.status !== 'finished');
     const countryList = [...new Set(games.map(g => g.country).filter(Boolean))] as string[];
     setAllCountries(countryList);

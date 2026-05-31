@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { leagues, countries, cities } from '@/lib/data';
+import { leagues as initialLeagues, countries, cities } from '@/lib/data';
+import { getSATournamentsFromSupabase } from '@/lib/superadmin-data';
 
 export default function LeaguesPage() {
   const [search, setSearch] = useState('');
@@ -10,6 +11,28 @@ export default function LeaguesPage() {
   const [city, setCity] = useState('All Cities');
   const [status, setStatus] = useState('Todos');
   const [detectedCountry, setDetectedCountry] = useState<string | null>(null);
+  const [leagues, setLeagues] = useState(initialLeagues as {
+    id: string; name: string; organizer: string; country: string; city: string;
+    teams: number; category: string; status: string; season: string;
+  }[]);
+
+  useEffect(() => {
+    getSATournamentsFromSupabase().then(sb => {
+      if (sb && sb.length > 0) {
+        setLeagues(sb.map(t => ({
+          id: t.id,
+          name: t.name,
+          organizer: t.club,
+          country: t.country,
+          city: t.city,
+          teams: t.max_players ?? 0,
+          category: t.format,
+          status: t.status === 'active' ? 'active' : t.status === 'upcoming' ? 'upcoming' : 'completed',
+          season: t.start_date ? t.start_date.slice(0, 4) : '',
+        })));
+      }
+    });
+  }, []);
 
   useEffect(() => {
     fetch('https://ip-api.com/json')

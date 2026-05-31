@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getSATournamentsFromSupabase } from '@/lib/superadmin-data';
 
 const months = ['Mayo 2026', 'Junio 2026', 'Julio 2026'];
 
-const events = [
+const initialEvents = [
   { date: '2026-05-14', day: 14, name: 'Americano Barrio Norte', type: 'tournament', format: 'Americano', club: 'Club Barrio Norte', city: 'Buenos Aires', spots: 4 },
   { date: '2026-05-15', day: 15, name: 'Liga Premier LATAM – J8', type: 'league', format: 'Round Robin', club: 'Sede Central', city: 'Buenos Aires', spots: 0 },
   { date: '2026-05-17', day: 17, name: 'Mexicano del Club', type: 'tournament', format: 'Mexicano', club: 'Club La Cantera', city: 'Córdoba', spots: 6 },
@@ -37,6 +38,27 @@ const filters = ['Todos', 'Torneos', 'Ligas', 'Federación'];
 export default function CalendarPage() {
   const [filter, setFilter] = useState('Todos');
   const [month, setMonth] = useState('Mayo 2026');
+  const [events, setEvents] = useState(initialEvents);
+
+  useEffect(() => {
+    getSATournamentsFromSupabase().then(sb => {
+      if (sb && sb.length > 0) {
+        const sbEvents = sb.map(t => ({
+          date: t.start_date ?? '',
+          day: t.start_date ? parseInt(t.start_date.slice(8, 10)) : 0,
+          name: t.name,
+          type: 'tournament' as const,
+          format: t.format,
+          club: t.club,
+          city: t.city,
+          spots: 0,
+        }));
+        const existingNames = new Set(initialEvents.map(e => e.name));
+        const newEvents = sbEvents.filter(e => !existingNames.has(e.name));
+        setEvents([...initialEvents, ...newEvents]);
+      }
+    });
+  }, []);
 
   const filtered = events.filter((e) => {
     const matchMonth = e.date.startsWith(month === 'Mayo 2026' ? '2026-05' : month === 'Junio 2026' ? '2026-06' : '2026-07');
