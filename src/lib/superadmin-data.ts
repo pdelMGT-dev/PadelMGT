@@ -538,14 +538,14 @@ export async function getSAClubsFromSupabase(): Promise<SAClub[] | null> {
 export async function upsertSAClubToSupabase(club: SAClub): Promise<void> {
   if (!supabase) return;
   try {
-    await supabase.from('clubs').upsert({
+    const { error } = await supabase.from('clubs').upsert({
       id: club.id, name: club.name, city: club.city, country: club.country,
       courts: club.courts, members: club.members, status: club.status,
       admin_email: club.adminEmail, plan: club.plan,
       joined_at: club.joinedAt || new Date().toISOString(),
-      maps_url: club.mapsUrl ?? null,
     });
-  } catch { /* silent */ }
+    if (error) console.error('[Supabase] upsertClub error:', error.message);
+  } catch (err) { console.error('[Supabase] upsertClub exception:', err); }
 }
 
 export async function deleteSAClubFromSupabase(id: string): Promise<void> {

@@ -320,17 +320,15 @@ export default function ClubsPage() {
 
     function fetchFromSupabase() {
       getSAClubsFromSupabase().then(sbClubs => {
-        if (sbClubs && sbClubs.length > 0) {
-          // Merge: keep local data for fields Supabase doesn't store (description, owner info, etc.)
-          const local = getSAClubs();
-          const localMap = Object.fromEntries(local.map(c => [c.id, c]));
-          const sbIds = new Set(sbClubs.map(c => c.id));
-          const merged = sbClubs.map(sb => ({
-            ...(localMap[sb.id] ?? {}),  // local data fills in rich fields
-            ...sb,                        // Supabase is authoritative for its columns
-          } as SAClub));
-          const localOnly = local.filter(c => !sbIds.has(c.id));
-          const all = [...merged, ...localOnly];
+        if (!sbClubs || sbClubs.length === 0) return;
+        // Local is authoritative (SA edits persist there).
+        // Only bring in clubs from Supabase that don't exist locally yet
+        // (e.g. new registration requests from the public form).
+        const local = getSAClubs();
+        const localIds = new Set(local.map(c => c.id));
+        const newFromSb = sbClubs.filter(c => !localIds.has(c.id));
+        if (newFromSb.length > 0) {
+          const all = [...local, ...newFromSb];
           setClubs(all);
           saveSAClubs(all);
         }
