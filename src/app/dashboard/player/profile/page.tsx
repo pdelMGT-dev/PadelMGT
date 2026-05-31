@@ -160,7 +160,7 @@ export default function PlayerProfilePage() {
     };
     try { localStorage.setItem('padelmgt_user', JSON.stringify(updated)); } catch {}
     setUser(updated);
-    if (updated.id) updatePlayer(updated.id, updated);
+    if (updated.id) updatePlayer(updated.id, { ...updated, country: updated.nationality });
     setSaveMsg('¡Perfil actualizado!');
     setTimeout(() => setSaveMsg(''), 3000);
   }

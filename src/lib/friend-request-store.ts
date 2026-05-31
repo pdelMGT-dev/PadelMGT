@@ -1,6 +1,7 @@
 // friend-request-store.ts — Two-way friend request management
 
 import { addFriendship } from './player-store';
+import { upsertFriendRequestToSupabase } from './superadmin-data';
 
 const KEY = 'padelmgt_friend_requests';
 
@@ -85,6 +86,7 @@ export function sendFriendRequest(
   };
   const all = load();
   save([...all, req]);
+  upsertFriendRequestToSupabase(req).catch(() => {});
   return req;
 }
 
@@ -94,8 +96,10 @@ export function acceptFriendRequest(requestId: string): void {
   const idx = all.findIndex(r => r.id === requestId);
   if (idx < 0) return;
   const req = all[idx];
-  all[idx] = { ...req, status: 'accepted' };
+  const accepted = { ...req, status: 'accepted' };
+  all[idx] = accepted;
   save(all);
+  upsertFriendRequestToSupabase(accepted).catch(() => {});
   addFriendship(req.fromId, req.toId);
 }
 
@@ -104,8 +108,10 @@ export function rejectFriendRequest(requestId: string): void {
   const all = load();
   const idx = all.findIndex(r => r.id === requestId);
   if (idx < 0) return;
-  all[idx] = { ...all[idx], status: 'rejected' };
+  const rejected = { ...all[idx], status: 'rejected' };
+  all[idx] = rejected;
   save(all);
+  upsertFriendRequestToSupabase(rejected).catch(() => {});
 }
 
 /** Cancel (delete) a request the current user sent. */

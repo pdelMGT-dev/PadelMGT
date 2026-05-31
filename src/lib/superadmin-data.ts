@@ -723,3 +723,22 @@ export async function registerPlayerToSupabase(p: {
     if (error) console.error('[Supabase] registerPlayer error:', error.message, error.details);
   } catch (err) { console.error('[Supabase] registerPlayer exception:', err); }
 }
+
+export async function upsertFriendRequestToSupabase(req: {
+  id: string; fromId: string; fromName: string;
+  toId: string; toName: string; status: string; createdAt: string;
+}): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from('friend_requests').upsert({
+      id: req.id,
+      from_id: req.fromId,
+      from_name: req.fromName,
+      to_id: req.toId,
+      to_name: req.toName,
+      status: req.status,
+      created_at: req.createdAt,
+    });
+    if (error) console.error('[Supabase] upsertFriendRequest error:', error.message);
+  } catch (err) { console.error('[Supabase] upsertFriendRequest exception:', err); }
+}
