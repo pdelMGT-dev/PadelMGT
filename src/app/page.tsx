@@ -34,17 +34,59 @@ const topPlayers = [
   { pos: 12, name: 'Pablo Fernández',      country: '🇦🇷', countryName: 'Argentina', club: 'Buenos Aires Padel', level: 'Federado',    wins: 19, losses: 15, points: 1800 },
 ];
 
-const countries = [...new Set(topPlayers.map(p => p.countryName))];
-
 const marqueeItems = ['CREA', 'JUEGA', 'RANKEA', 'TORNEOS', 'LIGAS', 'CLUBES', 'AUTOMATIZA', 'GANA'];
+
+const flags: Record<string, string> = { ES: '🇪🇸', AR: '🇦🇷', BR: '🇧🇷', CO: '🇨🇴', UY: '🇺🇾', MX: '🇲🇽', CL: '🇨🇱' };
 
 export default function HomePage() {
   const [rankTab, setRankTab] = useState<'latam' | 'country'>('latam');
-  const [selectedCountry, setSelectedCountry] = useState(countries[0]);
+  const [players, setPlayers] = useState(topPlayers);
+  const [matches, setMatches] = useState(liveMatches);
+  const [selectedCountry, setSelectedCountry] = useState(topPlayers[0].countryName);
+
+  useEffect(() => {
+    getSAPlayersFromSupabase().then(sb => {
+      if (sb && sb.length > 0) {
+        const active = sb.filter(p => p.status === 'active');
+        active.sort((a, b) => (b.rankingPoints ?? 0) - (a.rankingPoints ?? 0));
+        setPlayers(active.slice(0, 9).map((p, i) => ({
+          pos: i + 1,
+          name: p.name,
+          country: flags[p.country] ?? p.country,
+          countryName: p.country,
+          club: p.club ?? '',
+          level: p.level ?? '',
+          wins: 0,
+          losses: 0,
+          points: p.rankingPoints ?? 0,
+        })));
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    getSATournamentsFromSupabase().then(sb => {
+      if (sb && sb.length > 0) {
+        const active = sb.filter(t => t.status === 'ongoing');
+        if (active.length > 0) {
+          setMatches(active.map(t => ({
+            tournament: t.name,
+            t1: '–',
+            t2: '–',
+            s1: [] as number[],
+            s2: [] as number[],
+            court: t.club,
+          })));
+        }
+      }
+    });
+  }, []);
+
+  const countries = [...new Set(players.map(p => p.countryName))];
 
   const visiblePlayers = rankTab === 'latam'
-    ? topPlayers.slice(0, 8)
-    : topPlayers.filter(p => p.countryName === selectedCountry).slice(0, 10);
+    ? players.slice(0, 8)
+    : players.filter(p => p.countryName === selectedCountry).slice(0, 10);
 
   return (
     <div>
@@ -152,7 +194,7 @@ export default function HomePage() {
           </div>
 
           <div className="grid-3-live">
-            {liveMatches.map((m, i) => (
+            {matches.map((m, i) => (
               <div key={i} style={{ background: '#1f1f21', padding: 24, border: '1px solid #28282a', borderRadius: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                   <span className="badge badge-live">LIVE</span>

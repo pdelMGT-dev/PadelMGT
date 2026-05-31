@@ -27,7 +27,7 @@ export default function LeaguesPage() {
           city: t.city,
           teams: t.max_players ?? 0,
           category: t.format,
-          status: t.status === 'active' ? 'active' : t.status === 'upcoming' ? 'upcoming' : 'completed',
+          status: t.status === 'ongoing' ? 'active' : t.status === 'upcoming' ? 'upcoming' : 'completed',
           season: t.start_date ? t.start_date.slice(0, 4) : '',
         })));
       }

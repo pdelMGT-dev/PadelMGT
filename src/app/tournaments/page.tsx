@@ -27,7 +27,7 @@ export default function TournamentsPage() {
           level: '',
           prize: undefined,
           startDate: t.start_date ?? '',
-          status: t.status === 'active' ? 'ongoing' : t.status,
+          status: t.status,
         })));
       }
     });
