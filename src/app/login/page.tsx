@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatePlayer } from '@/lib/player-store';
+import { syncAllFromSupabase } from '@/lib/supabase-sync';
 
 type UserRole = 'player' | 'club_manager' | 'league_organizer' | 'federation' | 'super_admin';
 
@@ -115,6 +116,8 @@ export default function LoginPage() {
         shortId: mockUser.shortId, role: mockUser.role, sub: mockUser.sub,
       };
       localStorage.setItem('padelmgt_user', JSON.stringify(session));
+      // Clear sync timestamp so dashboard immediately fetches fresh data
+      localStorage.removeItem('padelmgt_last_sync');
       document.cookie = `padelmgt_session=${mockUser.role}; path=/; SameSite=Lax; max-age=86400`;
       router.push(ROLE_REDIRECT[mockUser.role]);
       return;
@@ -136,8 +139,12 @@ export default function LoginPage() {
       sub:     `${player.shortId} · ${player.city ?? player.country ?? ''}`,
     };
     localStorage.setItem('padelmgt_user', JSON.stringify(session));
+    // Clear sync timestamp so dashboard immediately fetches fresh data
+    localStorage.removeItem('padelmgt_last_sync');
     document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
-    router.push(ROLE_REDIRECT['player']);
+    // Fire sync before redirect so data is ready when dashboard loads
+    syncAllFromSupabase().finally(() => router.push(ROLE_REDIRECT['player']));
+    return;
   }
 
   const labelStyle: React.CSSProperties = {

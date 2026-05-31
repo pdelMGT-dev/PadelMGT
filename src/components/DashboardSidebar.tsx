@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import { getPendingCount } from '@/lib/friend-request-store';
+import { syncAllFromSupabase } from '@/lib/supabase-sync';
 import LogoIcon from './LogoIcon';
 
 type Role = 'player' | 'club' | 'league' | 'federation' | 'super_admin';
@@ -78,6 +79,8 @@ export default function DashboardSidebar() {
         if (u.role === 'player') setFriendBadge(getPendingCount(u.id));
       }
     } catch {}
+    // Sync all Supabase tables to localStorage (debounced to 30s)
+    syncAllFromSupabase();
   }, []);
 
   // Close drawer on route change
