@@ -10,10 +10,7 @@ import { createInvitation, getInvitationsForGame } from '@/lib/invitation-store'
 import { searchPlayers, getFriendsForPlayer } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, type JoinRequest } from '@/lib/join-request-store';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type CurrentUser = { id: string; name: string; email: string; shortId?: string; ranking?: number };
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -78,7 +75,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   const router = useRouter();
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const { user: currentUser } = useCurrentUser();
   const [tournament, setTournament] = useState<Tournament | null | undefined>(undefined);
 
   // Edit panel
@@ -129,13 +126,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   }>>([]);
   const [draggedPlayerId, setDraggedPlayerId] = useState<string | null>(null);
 
-  // ── Load user ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    try {
-      const u = localStorage.getItem('padelmgt_user');
-      if (u) setCurrentUser(JSON.parse(u) as CurrentUser);
-    } catch { /* ignore */ }
-  }, []);
+  // ── User loaded via useCurrentUser hook ──────────────────────────────────
 
   // ── Load tournament (initial + polling) ───────────────────────────────────
   const loadTournament = useCallback(() => {

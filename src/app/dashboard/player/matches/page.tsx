@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getMatchHistoryForPlayer, type MatchEntry } from '@/lib/match-history';
-
-type CurrentUser = { id: string; name: string };
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 type SortField = 'date' | 'pareja' | 'rivales';
 type SortDir = 'asc' | 'desc';
 
@@ -66,7 +65,7 @@ function PageNav({ page, totalPages, onPage }: { page: number; totalPages: numbe
 
 export default function PlayerMatchesPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const { user: currentUser } = useCurrentUser();
   const [allMatches, setAllMatches] = useState<MatchEntry[]>([]);
   const [resultado, setResultado] = useState('Todos');
   const [gameFilter, setGameFilter] = useState('Todos');
@@ -76,15 +75,9 @@ export default function PlayerMatchesPage() {
   const [page, setPage] = useState(0);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('padelmgt_user');
-      if (raw) {
-        const u = JSON.parse(raw) as CurrentUser;
-        setCurrentUser(u);
-        setAllMatches(getMatchHistoryForPlayer(u.id));
-      }
-    } catch {}
-  }, []);
+    if (!currentUser) return;
+    setAllMatches(getMatchHistoryForPlayer(currentUser.id));
+  }, [currentUser]);
 
   const gameNames = ['Todos', ...Array.from(new Set(allMatches.map(m => m.gameName)))];
 

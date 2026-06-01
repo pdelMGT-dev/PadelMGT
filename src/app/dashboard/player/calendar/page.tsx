@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { getAllGames } from '@/lib/game-store';
 import { getAllTournaments } from '@/lib/tournament-store';
 import type { ActiveGame, InvitedPlayer } from '@/lib/game-engine';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -175,6 +176,7 @@ function EventRow({ e }: { e: CalendarEvent }) {
 // ---------------------------------------------------------------------------
 
 export default function PlayerCalendarPage() {
+  const { user } = useCurrentUser();
   const [filter,   setFilter]   = useState('Todos');
   const [viewMode, setViewMode] = useState<'list' | 'week'>('list');
   const [events,   setEvents]   = useState<CalendarEvent[]>([]);
@@ -182,18 +184,7 @@ export default function PlayerCalendarPage() {
   const [quickGamesCount,  setQuickGamesCount]  = useState(0);
 
   useEffect(() => {
-    // Load current user
-    let userId = '';
-    try {
-      const raw = localStorage.getItem('padelmgt_user');
-      if (raw) {
-        const u = JSON.parse(raw) as { id: string; name: string; email: string };
-        userId = u.id;
-      }
-    } catch {
-      // no user
-    }
-
+    const userId = user?.id ?? '';
     const calEvents: CalendarEvent[] = [];
 
     // ── Quick games ──────────────────────────────────────────────────────────
@@ -291,7 +282,7 @@ export default function PlayerCalendarPage() {
     setEvents(calEvents);
     setTournamentsCount(myTournaments.length);
     setQuickGamesCount(myGames.length);
-  }, []);
+  }, [user]);
 
   const filtered = events.filter((e) => {
     if (filter === 'Todos')          return true;

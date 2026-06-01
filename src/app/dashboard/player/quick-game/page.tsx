@@ -14,6 +14,7 @@ import { getRankingHistoryForGame } from '@/lib/ranking-store';
 import type { RankingEntry } from '@/lib/ranking-store';
 import { getPlayerClubs } from '@/lib/club-membership-store';
 import { getSAClubs } from '@/lib/superadmin-data';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -171,10 +172,10 @@ function WizardHeader({ onCancel }: { onCancel: () => void }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function QuickGamePage() {
+  const { user: currentUser } = useCurrentUser();
   type View = 'dashboard' | 'wizard';
   const [view, setView] = useState<View>('dashboard');
   const [games, setGames] = useState<ActiveGame[]>([]);
-  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string; shortId: string } | null>(null);
   const [myClubs, setMyClubs] = useState<PlayerClub[]>([]);
   const [qrGame, setQrGame]     = useState<ActiveGame | null>(null);
   const [copied, setCopied]     = useState(false);
@@ -191,21 +192,15 @@ export default function QuickGamePage() {
 
   useEffect(() => {
     reloadGames();
-    try {
-      const u = localStorage.getItem('padelmgt_user');
-      if (u) {
-        const parsed = JSON.parse(u);
-        setCurrentUser(parsed);
-        // load player's clubs from membership store
-        const memberships = getPlayerClubs(parsed.id);
-        setMyClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
-        setAllClubs(getSAClubs().filter(c => c.status === 'active').map(c => ({ id: c.id, name: c.name, city: c.city || '', country: c.country || '', courts: c.courts || 0 })));
-        // load invitations for this player
-        const invs = getInvitationsForPlayer(parsed.id).filter(i => i.status === 'pending');
-        setMyInvitations(invs);
-      }
-    } catch {}
-  }, [reloadGames]);
+    if (!currentUser) return;
+    // load player's clubs from membership store
+    const memberships = getPlayerClubs(currentUser.id);
+    setMyClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
+    setAllClubs(getSAClubs().filter(c => c.status === 'active').map(c => ({ id: c.id, name: c.name, city: c.city || '', country: c.country || '', courts: c.courts || 0 })));
+    // load invitations for this player
+    const invs = getInvitationsForPlayer(currentUser.id).filter(i => i.status === 'pending');
+    setMyInvitations(invs);
+  }, [reloadGames, currentUser]);
 
   // ── Wizard state ──────────────────────────────────────────────────────────
   const [step, setStep] = useState(1);

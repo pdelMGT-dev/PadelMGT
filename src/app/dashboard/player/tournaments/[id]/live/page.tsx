@@ -3,6 +3,7 @@ import React, { use, useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { SkeletonCard } from '@/components/Skeleton';
 import { useToast } from '@/components/ToastProvider';
 import { getTournament, saveTournament } from '@/lib/tournament-store';
@@ -157,7 +158,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   const router = useRouter();
   const { showToast } = useToast();
 
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const { user: currentUser } = useCurrentUser();
   const [tournament, setTournament] = useState<Tournament | null | undefined>(undefined);
   const [finishConfirm, setFinishConfirm] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -171,13 +172,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   // Courts in temporary edit mode (key = `${roundNum}-${courtNum}`)
   const [editingCourts, setEditingCourts] = useState<Set<string>>(new Set());
 
-  // ── Load user ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    try {
-      const u = localStorage.getItem('padelmgt_user');
-      if (u) setCurrentUser(JSON.parse(u) as CurrentUser);
-    } catch { /* ignore */ }
-  }, []);
+  // ── User loaded via useCurrentUser hook ──────────────────────────────────
 
   // ── Load tournament (with polling) ────────────────────────────────────────
   const loadTournament = useCallback(() => {

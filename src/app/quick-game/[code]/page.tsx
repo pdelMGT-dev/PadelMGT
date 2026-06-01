@@ -7,6 +7,7 @@ import { getGameByCode, saveGame } from '@/lib/game-store';
 import type { ActiveGame, ScoreConfig, FixedPair } from '@/lib/game-engine';
 import { submitJoinRequest, getMyJoinRequest, type JoinRequest } from '@/lib/join-request-store';
 import { getRankingHistoryForGame, type RankingEntry } from '@/lib/ranking-store';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -73,11 +74,11 @@ interface GameSnap {
 export default function PublicQuickGamePage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
 
+  const { user: currentUser } = useCurrentUser();
   const [game, setGame] = useState<ActiveGame | null>(() =>
     typeof window !== 'undefined' ? getGameByCode(code) : null
   );
   const [snap, setSnap]               = useState<GameSnap | null>(null);
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [joinName, setJoinName]       = useState('');
   const [showJoin, setShowJoin]       = useState(false);
   const [joined,   setJoined]         = useState(false);
@@ -88,22 +89,17 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
   const [shareUrl, setShareUrl]       = useState('');
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('padelmgt_user');
-      const parsed: CurrentUser | null = JSON.parse(raw || 'null');
-      setCurrentUser(parsed);
-      // Keep full URL (with snap param) intact for QR re-sharing
-      setShareUrl(window.location.href);
+    // Keep full URL (with snap param) intact for QR re-sharing
+    setShareUrl(window.location.href);
 
-      // Decode snapshot from URL if present
-      const sp = new URLSearchParams(window.location.search).get('s');
-      if (sp) {
-        try {
-          const decoded = JSON.parse(decodeURIComponent(escape(atob(sp)))) as GameSnap;
-          setSnap(decoded);
-        } catch {}
-      }
-    } catch {}
+    // Decode snapshot from URL if present
+    const sp = new URLSearchParams(window.location.search).get('s');
+    if (sp) {
+      try {
+        const decoded = JSON.parse(decodeURIComponent(escape(atob(sp)))) as GameSnap;
+        setSnap(decoded);
+      } catch {}
+    }
   }, [code]);
 
   useEffect(() => {

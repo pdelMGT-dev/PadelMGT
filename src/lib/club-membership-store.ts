@@ -1,6 +1,6 @@
 // club-membership-store.ts — Tracks which players belong to which clubs
 
-const KEY = 'padelmgt_club_memberships';
+import { createLocalStore } from './local-store';
 
 export interface ClubMembership {
   playerId: string;
@@ -11,18 +11,9 @@ export interface ClubMembership {
   joinedAt: string;
 }
 
-function load(): ClubMembership[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as ClubMembership[]) : [];
-  } catch { return []; }
-}
-
-function persist(data: ClubMembership[]): void {
-  if (typeof window === 'undefined') return;
-  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch {}
-}
+const _store = createLocalStore<ClubMembership[]>('padelmgt_club_memberships', [], { seedOnFirstLoad: false });
+const load    = () => _store.load();
+const persist = (data: ClubMembership[]) => _store.persist(data);
 
 export function joinClub(
   playerId: string,

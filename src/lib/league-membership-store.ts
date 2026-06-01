@@ -1,6 +1,6 @@
 // league-membership-store.ts — Tracks which players belong to which leagues
 
-const KEY = 'padelmgt_league_memberships';
+import { createLocalStore } from './local-store';
 
 export interface LeagueMembership {
   playerId: string;
@@ -11,26 +11,15 @@ export interface LeagueMembership {
   joinedAt: string;
 }
 
-function load(): LeagueMembership[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as LeagueMembership[]) : [];
-  } catch { return []; }
-}
-
-function persist(data: LeagueMembership[]): void {
-  if (typeof window === 'undefined') return;
-  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch {}
-}
+const _store = createLocalStore<LeagueMembership[]>('padelmgt_league_memberships', [], { seedOnFirstLoad: false });
 
 export function joinLeague(
   player: { id: string; name: string; email: string },
   league: { id: string; name: string },
 ): void {
-  const all = load();
+  const all = _store.load();
   if (all.some(m => m.playerId === player.id && m.leagueId === league.id)) return;
-  persist([...all, {
+  _store.persist([...all, {
     playerId: player.id,
     playerName: player.name,
     playerEmail: player.email,
@@ -41,17 +30,17 @@ export function joinLeague(
 }
 
 export function leaveLeague(playerId: string, leagueId: string): void {
-  persist(load().filter(m => !(m.playerId === playerId && m.leagueId === leagueId)));
+  _store.persist(_store.load().filter(m => !(m.playerId === playerId && m.leagueId === leagueId)));
 }
 
 export function getAllLeagueMemberships(): LeagueMembership[] {
-  return load();
+  return _store.load();
 }
 
 export function getLeagueMembers(leagueId: string): LeagueMembership[] {
-  return load().filter(m => m.leagueId === leagueId);
+  return _store.load().filter(m => m.leagueId === leagueId);
 }
 
 export function getPlayerLeagues(playerId: string): LeagueMembership[] {
-  return load().filter(m => m.playerId === playerId);
+  return _store.load().filter(m => m.playerId === playerId);
 }

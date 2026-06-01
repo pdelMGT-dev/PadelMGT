@@ -1,6 +1,6 @@
 // ranking-config-store.ts — Configurable ranking point tables
 
-const CONFIG_KEY = 'padelmgt_ranking_config';
+import { createLocalStore } from './local-store';
 
 export interface RankingTableConfig {
   id: string;
@@ -24,27 +24,7 @@ const DEFAULT_GLOBAL: RankingTableConfig = {
   createdAt: new Date().toISOString(),
 };
 
-function isServer(): boolean {
-  return typeof window === 'undefined';
-}
-
-function load(): RankingTableConfig[] {
-  if (isServer()) return [DEFAULT_GLOBAL];
-  try {
-    const raw = localStorage.getItem(CONFIG_KEY);
-    if (!raw) return [DEFAULT_GLOBAL];
-    return JSON.parse(raw) as RankingTableConfig[];
-  } catch {
-    return [DEFAULT_GLOBAL];
-  }
-}
-
-function persist(configs: RankingTableConfig[]): void {
-  if (isServer()) return;
-  try {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(configs));
-  } catch {}
-}
+const _store = createLocalStore<RankingTableConfig[]>('padelmgt_ranking_config', [DEFAULT_GLOBAL]);
 
 function generateId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -52,20 +32,20 @@ function generateId(): string {
 }
 
 export function getGlobalRankingConfig(): RankingTableConfig {
-  const all = load();
+  const all = _store.load();
   return all.find(c => c.scope === 'global' && c.active) ?? DEFAULT_GLOBAL;
 }
 
 export function getAllRankingConfigs(): RankingTableConfig[] {
-  return load();
+  return _store.load();
 }
 
 export function saveRankingConfig(config: RankingTableConfig): void {
-  const all = load();
+  const all = _store.load();
   const idx = all.findIndex(c => c.id === config.id);
   if (idx >= 0) all[idx] = config;
   else all.push(config);
-  persist(all);
+  _store.persist(all);
 }
 
 export function createRankingConfig(
@@ -88,7 +68,6 @@ export function createRankingConfig(
 }
 
 export function deleteRankingConfig(id: string): void {
-  if (id === 'global') return; // can't delete global
-  const all = load().filter(c => c.id !== id);
-  persist(all);
+  if (id === 'global') return;
+  _store.persist(_store.load().filter(c => c.id !== id));
 }

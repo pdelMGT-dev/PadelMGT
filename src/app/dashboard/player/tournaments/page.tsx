@@ -11,6 +11,7 @@ import { getPlayerClubs } from '@/lib/club-membership-store';
 import { getSAClubs } from '@/lib/superadmin-data';
 import { useToast } from '@/components/ToastProvider';
 import { SkeletonCard } from '@/components/Skeleton';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -153,7 +154,7 @@ export default function PlayerTournamentsPage() {
   const [step, setStep] = useState(1);
 
   // ── Current user ────────────────────────────────────────────────────────────
-  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string; shortId?: string; ranking?: number } | null>(null);
+  const { user: currentUser } = useCurrentUser();
 
   // ── My tournaments ──────────────────────────────────────────────────────────
   const [myTournaments, setMyTournaments] = useState<Tournament[]>([]);
@@ -216,17 +217,11 @@ export default function PlayerTournamentsPage() {
 
   // ── Init ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    try {
-      const u = localStorage.getItem('padelmgt_user');
-      if (u) {
-        const parsed = JSON.parse(u);
-        setCurrentUser(parsed);
-        const memberships = getPlayerClubs(parsed.id);
-        setMyTClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
-        setTAllClubs(getSAClubs().filter(c => c.status === 'active').map(c => ({ id: c.id, name: c.name, city: c.city || '', country: c.country || '', courts: c.courts || 0 })));
-      }
-    } catch {}
-  }, []);
+    if (!currentUser) return;
+    const memberships = getPlayerClubs(currentUser.id);
+    setMyTClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
+    setTAllClubs(getSAClubs().filter(c => c.status === 'active').map(c => ({ id: c.id, name: c.name, city: c.city || '', country: c.country || '', courts: c.courts || 0 })));
+  }, [currentUser]);
 
   useEffect(() => {
     if (!currentUser) return;

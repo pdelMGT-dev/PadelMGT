@@ -7,8 +7,7 @@ import {
   joinClub, leaveClub, isClubMember, getPlayerClubs,
   type ClubMembership,
 } from '@/lib/club-membership-store';
-
-interface StoredUser { id: string; name: string; email: string; }
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 interface GeoLocation { country: string; city: string; }
 
@@ -213,7 +212,7 @@ function ClubListRow({
 }
 
 export default function PlayerClubsPage() {
-  const [user, setUser] = useState<StoredUser | null>(null);
+  const { user } = useCurrentUser();
   const [allClubs, setAllClubs] = useState<SAClub[]>([]);
   const [myMemberships, setMyMemberships] = useState<ClubMembership[]>([]);
   const [geo, setGeo] = useState<GeoLocation | null>(null);
@@ -228,11 +227,6 @@ export default function PlayerClubsPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('padelmgt_user');
-      if (raw) setUser(JSON.parse(raw) as StoredUser);
-    } catch {}
-
     // Load from localStorage first (instant), then fetch Supabase to get all SA-registered clubs
     const localActive = getSAClubs().filter(c => c.status === 'active');
     setAllClubs(localActive);

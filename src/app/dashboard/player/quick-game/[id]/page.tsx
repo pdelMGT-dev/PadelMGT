@@ -25,6 +25,7 @@ import type { RegisteredPlayer } from '@/lib/player-store';
 import { applyGameRankingResults, getRankingHistoryForGame } from '@/lib/ranking-store';
 import type { RankingEntry } from '@/lib/ranking-store';
 import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, type JoinRequest } from '@/lib/join-request-store';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -179,7 +180,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     return getGame(id);
   });
 
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const { user: currentUser } = useCurrentUser();
   const [toast, setToast] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState('');
   const [showQR, setShowQR] = useState(false);
@@ -226,13 +227,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const [dragSource, setDragSource] = useState<string | null>(null);
   const [dropOver, setDropOver]   = useState<string | null>(null);
 
-  // Load user
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('padelmgt_user');
-      if (raw) setCurrentUser(JSON.parse(raw));
-    } catch {}
-  }, []);
+  // ── User loaded via useCurrentUser hook ──────────────────────────────────
 
   // Load game
   useEffect(() => {

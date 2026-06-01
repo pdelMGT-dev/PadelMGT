@@ -1,6 +1,6 @@
 // invitation-store.ts — Direct player invitations for Quick Games
 
-const STORAGE_KEY = 'padelmgt_invitations_v2';
+import { createLocalStore } from './local-store';
 
 export interface Invitation {
   id: string;
@@ -20,26 +20,7 @@ export interface Invitation {
   respondedAt?: string;
 }
 
-function isServer(): boolean {
-  return typeof window === 'undefined';
-}
-
-function load(): Invitation[] {
-  if (isServer()) return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Invitation[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function persist(items: Invitation[]): void {
-  if (isServer()) return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  } catch {}
-}
+const _store = createLocalStore<Invitation[]>('padelmgt_invitations_v2', [], { seedOnFirstLoad: false });
 
 function generateId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -47,23 +28,23 @@ function generateId(): string {
 }
 
 export function getAllInvitations(): Invitation[] {
-  return load();
+  return _store.load();
 }
 
 export function getInvitationsForPlayer(playerId: string): Invitation[] {
-  return load().filter((i) => i.toPlayerId === playerId);
+  return _store.load().filter((i) => i.toPlayerId === playerId);
 }
 
 export function getPendingInvitationsForPlayer(playerId: string): Invitation[] {
-  return load().filter((i) => i.toPlayerId === playerId && i.status === 'pending');
+  return _store.load().filter((i) => i.toPlayerId === playerId && i.status === 'pending');
 }
 
 export function getInvitationsSentByPlayer(playerId: string): Invitation[] {
-  return load().filter((i) => i.fromPlayerId === playerId);
+  return _store.load().filter((i) => i.fromPlayerId === playerId);
 }
 
 export function getInvitationsForGame(gameId: string): Invitation[] {
-  return load().filter((i) => i.gameId === gameId);
+  return _store.load().filter((i) => i.gameId === gameId);
 }
 
 export function createInvitation(params: Omit<Invitation, 'id' | 'status' | 'createdAt'>): Invitation {
@@ -73,9 +54,9 @@ export function createInvitation(params: Omit<Invitation, 'id' | 'status' | 'cre
     status: 'pending',
     createdAt: new Date().toISOString(),
   };
-  const all = load();
+  const all = _store.load();
   all.push(inv);
-  persist(all);
+  _store.persist(all);
   return inv;
 }
 
@@ -83,7 +64,7 @@ export function respondToInvitation(
   invitationId: string,
   response: 'accepted' | 'rejected',
 ): Invitation | null {
-  const all = load();
+  const all = _store.load();
   const idx = all.findIndex((i) => i.id === invitationId);
   if (idx < 0) return null;
   all[idx] = {
@@ -91,11 +72,10 @@ export function respondToInvitation(
     status: response,
     respondedAt: new Date().toISOString(),
   };
-  persist(all);
+  _store.persist(all);
   return all[idx];
 }
 
 export function deleteInvitationsForGame(gameId: string): void {
-  const all = load().filter((i) => i.gameId !== gameId);
-  persist(all);
+  _store.persist(_store.load().filter((i) => i.gameId !== gameId));
 }

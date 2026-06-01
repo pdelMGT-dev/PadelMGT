@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getTournament, saveTournament } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
 import { getInvitationsForPlayer, respondToInvitation } from '@/lib/invitation-store';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -60,17 +61,9 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const router = useRouter();
 
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const { user: currentUser } = useCurrentUser();
   const [tournament, setTournament] = useState<Tournament | null | undefined>(undefined);
   const [respondingId, setRespondingId] = useState<string | null>(null);
-
-  // ── Load user ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    try {
-      const u = localStorage.getItem('padelmgt_user');
-      if (u) setCurrentUser(JSON.parse(u) as CurrentUser);
-    } catch { /* ignore */ }
-  }, []);
 
   // ── Load tournament (initial + polling) ───────────────────────────────────
   const loadTournament = useCallback(() => {

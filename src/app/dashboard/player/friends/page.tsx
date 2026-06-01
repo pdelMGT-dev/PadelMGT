@@ -10,8 +10,7 @@ import {
   getPendingRequestsFor, getSentRequests, getRequestBetween,
   type FriendRequest,
 } from '@/lib/friend-request-store';
-
-type CurrentUser = { id: string; name: string };
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 type Tab = 'friends' | 'requests' | 'search' | 'sent';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -54,7 +53,7 @@ function PlayerMeta({ p }: { p: RegisteredPlayer }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function PlayerFriendsPage() {
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const { user: currentUser } = useCurrentUser();
   const [tab, setTab]   = useState<Tab>('friends');
   const [friends,       setFriends]       = useState<RegisteredPlayer[]>([]);
   const [incoming,      setIncoming]      = useState<FriendRequest[]>([]);
@@ -75,15 +74,10 @@ export default function PlayerFriendsPage() {
   }, []);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('padelmgt_user');
-      if (!raw) return;
-      const u = JSON.parse(raw) as CurrentUser;
-      setCurrentUser(u);
-      setCountries(getPlayerCountries());
-      refresh(u.id);
-    } catch {}
-  }, [refresh]);
+    if (!currentUser) return;
+    setCountries(getPlayerCountries());
+    refresh(currentUser.id);
+  }, [currentUser, refresh]);
 
   // Live search
   useEffect(() => {

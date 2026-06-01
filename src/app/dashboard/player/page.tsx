@@ -19,8 +19,7 @@ import {
   type MatchEntry,
   type UpcomingEvent,
 } from '@/lib/match-history';
-
-type CurrentUser = { id: string; name: string; email: string; shortId?: string; role: string; sub?: string; firstLogin?: boolean };
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   created:       { label: 'Inscripto',     color: 'var(--grey-400)' },
@@ -34,7 +33,7 @@ const FORMAT_LABEL: Record<string, string> = {
 };
 
 export default function PlayerHomePage() {
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const { user: currentUser, patchUser } = useCurrentUser();
   const [myActiveEvents, setMyActiveEvents] = useState<ReturnType<typeof getActiveEventsForPlayer>>([]);
   const [nextEvent, setNextEvent] = useState<UpcomingEvent | null>(null);
   const [recentMatches, setRecentMatches] = useState<MatchEntry[]>([]);
@@ -51,23 +50,16 @@ export default function PlayerHomePage() {
   }
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('padelmgt_user');
-      if (raw) {
-        const u = JSON.parse(raw) as CurrentUser;
-        setCurrentUser(u);
-        setFriendRequests(getPendingRequestsFor(u.id));
-        setPlayerData(getPlayer(u.id));
-        setRealFriends(getFriendsForPlayer(u.id));
-        if (u.firstLogin) {
-          setShowProfileReminder(true);
-          // Clear firstLogin flag so reminder only shows once per session
-          const updated = { ...u, firstLogin: false };
-          localStorage.setItem('padelmgt_user', JSON.stringify(updated));
-        }
-      }
-    } catch {}
-  }, []);
+    if (!currentUser) return;
+    setFriendRequests(getPendingRequestsFor(currentUser.id));
+    setPlayerData(getPlayer(currentUser.id));
+    setRealFriends(getFriendsForPlayer(currentUser.id));
+    if (currentUser.firstLogin) {
+      setShowProfileReminder(true);
+      // Clear firstLogin flag so reminder only shows once per session
+      patchUser({ firstLogin: false });
+    }
+  }, [currentUser, patchUser]);
 
   useEffect(() => {
     if (!currentUser) return;

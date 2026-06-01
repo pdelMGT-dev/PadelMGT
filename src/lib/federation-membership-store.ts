@@ -1,6 +1,6 @@
 // federation-membership-store.ts — Tracks which players belong to which federations
 
-const KEY = 'padelmgt_federation_memberships';
+import { createLocalStore } from './local-store';
 
 export interface FederationMembership {
   playerId: string;
@@ -11,26 +11,15 @@ export interface FederationMembership {
   joinedAt: string;
 }
 
-function load(): FederationMembership[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as FederationMembership[]) : [];
-  } catch { return []; }
-}
-
-function persist(data: FederationMembership[]): void {
-  if (typeof window === 'undefined') return;
-  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch {}
-}
+const _store = createLocalStore<FederationMembership[]>('padelmgt_federation_memberships', [], { seedOnFirstLoad: false });
 
 export function joinFederation(
   player: { id: string; name: string; email: string },
   federation: { id: string; name: string },
 ): void {
-  const all = load();
+  const all = _store.load();
   if (all.some(m => m.playerId === player.id && m.federationId === federation.id)) return;
-  persist([...all, {
+  _store.persist([...all, {
     playerId: player.id,
     playerName: player.name,
     playerEmail: player.email,
@@ -41,17 +30,17 @@ export function joinFederation(
 }
 
 export function leaveFederation(playerId: string, federationId: string): void {
-  persist(load().filter(m => !(m.playerId === playerId && m.federationId === federationId)));
+  _store.persist(_store.load().filter(m => !(m.playerId === playerId && m.federationId === federationId)));
 }
 
 export function getAllFederationMemberships(): FederationMembership[] {
-  return load();
+  return _store.load();
 }
 
 export function getFederationMembers(fedId: string): FederationMembership[] {
-  return load().filter(m => m.federationId === fedId);
+  return _store.load().filter(m => m.federationId === fedId);
 }
 
 export function getPlayerFederations(playerId: string): FederationMembership[] {
-  return load().filter(m => m.playerId === playerId);
+  return _store.load().filter(m => m.playerId === playerId);
 }

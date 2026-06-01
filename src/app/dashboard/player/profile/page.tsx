@@ -5,6 +5,7 @@ import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
 import { updatePlayer } from '@/lib/player-store';
 import { getRankingHistoryForGame } from '@/lib/ranking-store';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -85,6 +86,7 @@ function formatLabel(fmt: string): string {
 // ---------------------------------------------------------------------------
 
 export default function PlayerProfilePage() {
+  const { user: sessionUser, setUser: setSessionUser } = useCurrentUser();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [tab, setTab] = useState<Tab>('perfil');
   const [activeGames, setActiveGames] = useState<ActiveGame[]>([]);
@@ -101,16 +103,10 @@ export default function PlayerProfilePage() {
   const [saveMsg, setSaveMsg] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Load user from localStorage
+  // Hydrate local UserProfile state from the session hook
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('padelmgt_user');
-      if (raw) {
-        const u: UserProfile = JSON.parse(raw);
-        setUser(u);
-      }
-    } catch {}
-  }, []);
+    if (sessionUser) setUser(sessionUser as unknown as UserProfile);
+  }, [sessionUser]);
 
   // Load games and init form whenever user changes
   useEffect(() => {
@@ -158,7 +154,7 @@ export default function PlayerProfilePage() {
       sex: fSex || undefined,
       birthDate: fBirth || undefined,
     };
-    try { localStorage.setItem('padelmgt_user', JSON.stringify(updated)); } catch {}
+    setSessionUser(updated as unknown as Parameters<typeof setSessionUser>[0]);
     setUser(updated);
     if (updated.id) updatePlayer(updated.id, { ...updated, country: updated.nationality });
     setSaveMsg('¡Perfil actualizado!');
@@ -172,7 +168,7 @@ export default function PlayerProfilePage() {
     reader.onload = () => {
       const base64 = reader.result as string;
       const updated = { ...user, avatarBase64: base64 };
-      try { localStorage.setItem('padelmgt_user', JSON.stringify(updated)); } catch {}
+      setSessionUser(updated as unknown as Parameters<typeof setSessionUser>[0]);
       setUser(updated);
     };
     reader.readAsDataURL(file);
@@ -181,7 +177,7 @@ export default function PlayerProfilePage() {
   function handleDeleteAvatar() {
     if (!user) return;
     const updated = { ...user, avatarBase64: undefined };
-    try { localStorage.setItem('padelmgt_user', JSON.stringify(updated)); } catch {}
+    setSessionUser(updated as unknown as Parameters<typeof setSessionUser>[0]);
     setUser(updated);
   }
 

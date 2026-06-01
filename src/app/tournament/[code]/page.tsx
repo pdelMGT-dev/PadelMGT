@@ -7,6 +7,7 @@ import type { Tournament } from '@/lib/tournament-store';
 import type { ScoreConfig, FixedPair } from '@/lib/game-engine';
 import { submitJoinRequest, getMyJoinRequest, type JoinRequest } from '@/lib/join-request-store';
 import { QRCodeSVG } from 'qrcode.react';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -34,41 +35,31 @@ function scoreConfigLabel(cfg: ScoreConfig): string {
 
 export default function PublicTournamentPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
+  const { user } = useCurrentUser();
+  const currentUserId = user?.id ?? null;
   const [tournament, setTournament] = useState<Tournament | null>(() =>
     typeof window !== 'undefined' ? getTournamentByCode(code) : null
   );
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [roundOpen, setRoundOpen] = useState<Record<number, boolean>>({});
   const [myRequest, setMyRequest] = useState<JoinRequest | null>(null);
   const [requestSent, setRequestSent] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('padelmgt_user');
-      if (raw) {
-        const u = JSON.parse(raw);
-        setCurrentUserId(u?.id ?? null);
-        const t2 = getTournamentByCode(code);
-        if (u?.id && t2) setMyRequest(getMyJoinRequest(t2.id, u.id));
-      }
-    } catch {}
-  }, [code]);
+    if (!currentUserId) return;
+    const t2 = getTournamentByCode(code);
+    if (t2) setMyRequest(getMyJoinRequest(t2.id, currentUserId));
+  }, [code, currentUserId]);
 
   useEffect(() => {
     const load = () => {
-      setTournament(getTournamentByCode(code));
-      setCurrentUserId(prev => {
-        if (prev) {
-          const t2 = getTournamentByCode(code);
-          if (t2) setMyRequest(getMyJoinRequest(t2.id, prev));
-        }
-        return prev;
-      });
+      const t2 = getTournamentByCode(code);
+      setTournament(t2 ?? null);
+      if (currentUserId && t2) setMyRequest(getMyJoinRequest(t2.id, currentUserId));
     };
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
-  }, [code]);
+  }, [code, currentUserId]);
 
   if (!tournament) {
     return (

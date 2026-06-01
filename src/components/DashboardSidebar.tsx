@@ -7,6 +7,7 @@ import { Menu, X } from 'lucide-react';
 import { getPendingCount } from '@/lib/friend-request-store';
 import { syncAllFromSupabase } from '@/lib/supabase-sync';
 import LogoIcon from './LogoIcon';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 type Role = 'player' | 'club' | 'league' | 'federation' | 'super_admin';
 
@@ -66,22 +67,15 @@ interface StoredUser {
 export default function DashboardSidebar() {
   const pathname = usePathname();
   const router   = useRouter();
-  const [user,        setUser]        = useState<StoredUser | null>(null);
+  const { user } = useCurrentUser();
   const [friendBadge, setFriendBadge] = useState(0);
   const [mobileOpen,  setMobileOpen]  = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('padelmgt_user');
-      if (raw) {
-        const u = JSON.parse(raw) as StoredUser;
-        setUser(u);
-        if (u.role === 'player') setFriendBadge(getPendingCount(u.id));
-      }
-    } catch {}
+    if (user?.role === 'player') setFriendBadge(getPendingCount(user.id));
     // Sync all Supabase tables to localStorage (debounced to 30s)
     syncAllFromSupabase();
-  }, []);
+  }, [user]);
 
   // Close drawer on route change
   useEffect(() => { setMobileOpen(false); }, [pathname]);

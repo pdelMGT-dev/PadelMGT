@@ -3,31 +3,13 @@
 
 import type { ActiveGame, GameFormat, PairType, ScoreConfig, GamePlayer, InvitedPlayer } from './game-engine';
 import { upsertTournamentToSupabase } from './superadmin-data';
+import { createLocalStore } from './local-store';
 
 export type Tournament = ActiveGame;
 
-const STORAGE_KEY = 'padelmgt_tournaments';
-
-function isServer(): boolean {
-  return typeof window === 'undefined';
-}
-
-function load(): Tournament[] {
-  if (isServer()) return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Tournament[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function persist(items: Tournament[]): void {
-  if (isServer()) return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  } catch {}
-}
+const _store  = createLocalStore<Tournament[]>('padelmgt_tournaments', [], { seedOnFirstLoad: false });
+const load    = () => _store.load();
+const persist = (items: Tournament[]) => _store.persist(items);
 
 function generateId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();

@@ -3,24 +3,21 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getPlayerByEmail } from '@/lib/player-store';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 export default function PlayerRankingPage() {
+  const { user } = useCurrentUser();
   const [pts, setPts] = useState<number>(0);
   const [rank, setRank] = useState<number | null>(null);
   const [name, setName] = useState('');
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('padelmgt_user');
-      if (raw) {
-        const u = JSON.parse(raw) as { email?: string; name?: string; rankingPoints?: number; ranking?: number };
-        const full = u.email ? getPlayerByEmail(u.email) : null;
-        setPts(full?.rankingPoints ?? u.rankingPoints ?? 0);
-        setRank(full?.ranking ?? u.ranking ?? null);
-        setName(full?.name ?? u.name ?? '');
-      }
-    } catch { /* silent */ }
-  }, []);
+    if (!user) return;
+    const full = user.email ? getPlayerByEmail(user.email) : null;
+    setPts(full?.rankingPoints ?? user.rankingPoints ?? 0);
+    setRank(full?.ranking ?? user.ranking ?? null);
+    setName(full?.name ?? user.name ?? '');
+  }, [user]);
 
   const hasData = pts > 0;
 

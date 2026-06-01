@@ -4,8 +4,9 @@ import type { ActiveGame, Standing } from './game-engine';
 import { calculateStandings } from './game-engine';
 import type { Tournament } from './tournament-store';
 import { updatePlayerRankingPoints } from './player-store';
+import { createLocalStore } from './local-store';
 
-const STORAGE_KEY = 'padelmgt_ranking_history';
+const _store = createLocalStore<RankingEntry[]>('padelmgt_ranking_history', [], { seedOnFirstLoad: false });
 
 export type RankingResult = 'win' | 'draw' | 'loss';
 
@@ -28,27 +29,6 @@ const DELTA: Record<RankingResult, number> = {
   loss: -1,
 };
 
-function isServer(): boolean {
-  return typeof window === 'undefined';
-}
-
-function load(): RankingEntry[] {
-  if (isServer()) return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as RankingEntry[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function persist(entries: RankingEntry[]): void {
-  if (isServer()) return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-  } catch {}
-}
-
 function generateId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -67,7 +47,6 @@ function getPlayerCurrentPoints(playerId: string): number {
 /**
  * Determine ranking result for a player from standings.
  * Top third = win, middle = draw, bottom third = loss.
- * For head-to-head, compare individual court wins.
  */
 function deriveResult(playerId: string, standings: Standing[]): RankingResult {
   if (standings.length === 0) return 'draw';
@@ -76,7 +55,6 @@ function deriveResult(playerId: string, standings: Standing[]): RankingResult {
   const n = standings.length;
   if (pos === 0) return 'win';
   if (pos === n - 1) return 'loss';
-  // Top third → win, bottom third → loss, middle → draw
   if (pos < Math.ceil(n / 3)) return 'win';
   if (pos >= n - Math.floor(n / 3)) return 'loss';
   return 'draw';
@@ -84,10 +62,9 @@ function deriveResult(playerId: string, standings: Standing[]): RankingResult {
 
 /**
  * Apply game results to all confirmed players and persist the entries.
- * Returns the list of entries created.
  */
 export function applyGameRankingResults(game: ActiveGame): RankingEntry[] {
-  const all = load();
+  const all = _store.load();
   const created: RankingEntry[] = [];
   const isTraditional = game.scoreConfig?.type === 'traditional';
 
@@ -98,10 +75,8 @@ export function applyGameRankingResults(game: ActiveGame): RankingEntry[] {
     let delta = 0;
     if (s) {
       if (isTraditional) {
-        // (setsWon × 3) + (setsLost × -1)
         delta = s.pointsFor * 3 - s.pointsAgainst;
       } else {
-        // (W × 3) + (T × 1) + (L × -1)
         delta = s.wins * 3 + s.draws - s.losses;
       }
     }
@@ -128,25 +103,17 @@ export function applyGameRankingResults(game: ActiveGame): RankingEntry[] {
     updatePlayerRankingPoints(player.id, delta);
   }
 
-  persist(all);
+  _store.persist(all);
   return created;
 }
 
-// ---------------------------------------------------------------------------
-// Tournament ranking
-// ---------------------------------------------------------------------------
-
 /**
  * Apply tournament final standings to ranking and persist entries.
- * Uses same formula as quick games: W×3 + D×1 + L×-1.
- * Skips if already recorded for this tournament.
- * Returns the list of entries created.
  */
 export function applyTournamentRankingResults(tournament: Tournament): RankingEntry[] {
-  const all = load();
+  const all = _store.load();
   const created: RankingEntry[] = [];
 
-  // Skip if already recorded for this tournament
   if (all.some((e) => e.gameId === tournament.id)) return [];
 
   const standings = calculateStandings(tournament);
@@ -179,18 +146,17 @@ export function applyTournamentRankingResults(tournament: Tournament): RankingEn
 
     all.push(entry);
     created.push(entry);
-
     updatePlayerRankingPoints(player.id, delta);
   }
 
-  persist(all);
+  _store.persist(all);
   return created;
 }
 
 export function getRankingHistoryForPlayer(playerId: string): RankingEntry[] {
-  return load().filter((e) => e.playerId === playerId);
+  return _store.load().filter((e) => e.playerId === playerId);
 }
 
 export function getRankingHistoryForGame(gameId: string): RankingEntry[] {
-  return load().filter((e) => e.gameId === gameId);
+  return _store.load().filter((e) => e.gameId === gameId);
 }

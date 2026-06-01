@@ -2,6 +2,8 @@
 
 import { addFriendship } from './player-store';
 import { upsertFriendRequestToSupabase } from './superadmin-data';
+import { SEED_FRIEND_REQUESTS } from './seeds/players';
+import { createLocalStore } from './local-store';
 
 const KEY = 'padelmgt_friend_requests';
 
@@ -17,37 +19,7 @@ export interface FriendRequest {
   createdAt: string;
 }
 
-// ── Seed requests ─────────────────────────────────────────────────────────────
-// player-009 and player-010 sent requests to player-001 on first load
-
-const SEED_REQUESTS: FriendRequest[] = [
-  { id: 'fr-seed-1', fromId: 'player-009', fromName: 'Pedro Morales',  toId: 'player-001', toName: 'Carlos Méndez', status: 'pending', createdAt: '2026-05-24T10:00:00.000Z' },
-  { id: 'fr-seed-2', fromId: 'player-010', fromName: 'Isabel Bravo',   toId: 'player-001', toName: 'Carlos Méndez', status: 'pending', createdAt: '2026-05-24T11:30:00.000Z' },
-  { id: 'fr-seed-3', fromId: 'player-001', fromName: 'Carlos Méndez',  toId: 'player-016', toName: 'Nicolás Gómez', status: 'pending', createdAt: '2026-05-23T09:00:00.000Z' },
-];
-
-function isServer(): boolean {
-  return typeof window === 'undefined';
-}
-
-function load(): FriendRequest[] {
-  if (isServer()) return SEED_REQUESTS;
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) {
-      localStorage.setItem(KEY, JSON.stringify(SEED_REQUESTS));
-      return SEED_REQUESTS;
-    }
-    return JSON.parse(raw) as FriendRequest[];
-  } catch {
-    return SEED_REQUESTS;
-  }
-}
-
-function save(reqs: FriendRequest[]): void {
-  if (isServer()) return;
-  try { localStorage.setItem(KEY, JSON.stringify(reqs)); } catch {}
-}
+const _store = createLocalStore<FriendRequest[]>(KEY, SEED_FRIEND_REQUESTS);
 
 function generateId(): string {
   return `fr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -60,7 +32,7 @@ export function getRequestBetween(
   userId: string,
   otherId: string,
 ): FriendRequest | null {
-  return load().find(
+  return _store.load().find(
     r =>
       r.status !== 'rejected' &&
       ((r.fromId === userId && r.toId === otherId) ||
@@ -84,49 +56,48 @@ export function sendFriendRequest(
     status: 'pending',
     createdAt: new Date().toISOString(),
   };
-  const all = load();
-  save([...all, req]);
+  _store.persist([..._store.load(), req]);
   upsertFriendRequestToSupabase(req).catch(() => {});
   return req;
 }
 
 /** Accept a pending request — creates the friendship on both sides. */
 export function acceptFriendRequest(requestId: string): void {
-  const all = load();
+  const all = _store.load();
   const idx = all.findIndex(r => r.id === requestId);
   if (idx < 0) return;
   const req = all[idx];
-  const accepted = { ...req, status: 'accepted' };
+  const accepted = { ...req, status: 'accepted' as const };
   all[idx] = accepted;
-  save(all);
+  _store.persist(all);
   upsertFriendRequestToSupabase(accepted).catch(() => {});
   addFriendship(req.fromId, req.toId);
 }
 
 /** Reject a pending request. */
 export function rejectFriendRequest(requestId: string): void {
-  const all = load();
+  const all = _store.load();
   const idx = all.findIndex(r => r.id === requestId);
   if (idx < 0) return;
-  const rejected = { ...all[idx], status: 'rejected' };
+  const rejected = { ...all[idx], status: 'rejected' as const };
   all[idx] = rejected;
-  save(all);
+  _store.persist(all);
   upsertFriendRequestToSupabase(rejected).catch(() => {});
 }
 
 /** Cancel (delete) a request the current user sent. */
 export function cancelFriendRequest(requestId: string): void {
-  save(load().filter(r => r.id !== requestId));
+  _store.persist(_store.load().filter(r => r.id !== requestId));
 }
 
 /** Pending requests received by userId. */
 export function getPendingRequestsFor(userId: string): FriendRequest[] {
-  return load().filter(r => r.toId === userId && r.status === 'pending');
+  return _store.load().filter(r => r.toId === userId && r.status === 'pending');
 }
 
 /** All requests sent by userId (pending or rejected). */
 export function getSentRequests(userId: string): FriendRequest[] {
-  return load().filter(r => r.fromId === userId);
+  return _store.load().filter(r => r.fromId === userId);
 }
 
 /** Count of pending requests received by userId (for badge). */
