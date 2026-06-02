@@ -376,13 +376,41 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
 
   function handleRemovePlayer(playerId: string) {
     if (t.creatorId === playerId) return;
-    if (t.status === 'live') return; // locked during live
+    if (t.status === 'live') return;
     const updated: Tournament = {
       ...t,
       players: t.players.filter(p => p.id !== playerId),
       invitedPlayers: (t.invitedPlayers ?? []).map(ip =>
         ip.id === playerId ? { ...ip, status: 'cancelled' as const } : ip
       ),
+    };
+    saveTournament(updated);
+    setTournament(updated);
+  }
+
+  function handleCreatorLeaveAsPlayer() {
+    if (!currentUser) return;
+    const updated: Tournament = {
+      ...t,
+      players: t.players.filter(p => p.id !== t.creatorId),
+    };
+    saveTournament(updated);
+    setTournament(updated);
+  }
+
+  function handleCreatorJoinAsPlayer() {
+    if (!currentUser) return;
+    if (t.players.some(p => p.id === currentUser.id)) return;
+    const creatorPlayer: import('@/lib/game-engine').GamePlayer = {
+      id: currentUser.id,
+      name: currentUser.name,
+      email: currentUser.email,
+      ranking: currentUser.ranking ?? 999,
+      isCreator: true,
+    };
+    const updated: Tournament = {
+      ...t,
+      players: [creatorPlayer, ...t.players],
     };
     saveTournament(updated);
     setTournament(updated);
@@ -833,6 +861,22 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
             </div>
           )}
 
+          {/* Creator not playing — organizer-only banner */}
+          {isCreator && !confirmedPlayers.some(p => p.id === currentUser?.id) && t.status !== 'live' && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', marginBottom: 12, background: 'rgba(124,58,237,0.05)', border: '1px dashed #7c3aed' }}>
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Solo organizando</span>
+                <span style={{ fontSize: 11, color: 'var(--grey-500)', marginLeft: 8 }}>No estás inscrito como jugador</span>
+              </div>
+              <button
+                onClick={handleCreatorJoinAsPlayer}
+                disabled={confirmedPlayers.length >= t.maxPlayers}
+                style={{ padding: '6px 14px', background: '#7c3aed', color: '#fff', border: 'none', cursor: confirmedPlayers.length < t.maxPlayers ? 'pointer' : 'not-allowed', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: confirmedPlayers.length >= t.maxPlayers ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+                + Unirme como jugador
+              </button>
+            </div>
+          )}
+
           {/* Confirmed */}
           {confirmedPlayers.length > 0 && (
             <div style={{ marginBottom: 16 }}>
@@ -849,7 +893,17 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                     {p.email && <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.email}</div>}
                   </div>
                   {p.isCreator && (
-                    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: 'var(--black)', color: 'var(--neon)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CREADOR</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: 'var(--black)', color: 'var(--neon)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CREADOR</span>
+                      {t.status !== 'live' && (
+                        <button
+                          onClick={handleCreatorLeaveAsPlayer}
+                          title="Salirse como jugador (seguís organizando el torneo)"
+                          style={{ padding: '3px 9px', background: 'transparent', border: '1px solid var(--grey-300)', cursor: 'pointer', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>
+                          Solo organizar
+                        </button>
+                      )}
+                    </div>
                   )}
                   {!p.isCreator && t.status !== 'live' && (
                     <button onClick={() => handleRemovePlayer(p.id)}

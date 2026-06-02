@@ -446,7 +446,6 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   function handleRemoveInvited(invitedId: string) {
     if (!game) return;
-    // Cancel invitation and remove from confirmed players list
     const updatedInvited = (game.invitedPlayers ?? []).map(ip =>
       ip.id === invitedId ? { ...ip, status: 'cancelled' as const } : ip
     );
@@ -455,6 +454,30 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     saveGame(updatedGame);
     setGame(updatedGame);
     showToast('Jugador quitado — slot liberado.');
+  }
+
+  function handleCreatorLeaveAsPlayer() {
+    if (!game || !currentUser) return;
+    const updatedGame = { ...game, players: game.players.filter(p => p.id !== game.creatorId) };
+    saveGame(updatedGame);
+    setGame(updatedGame);
+    showToast('Ahora solo organizás el juego.');
+  }
+
+  function handleCreatorJoinAsPlayer() {
+    if (!game || !currentUser) return;
+    if (game.players.some(p => p.id === currentUser.id)) return;
+    const creatorPlayer: import('@/lib/game-engine').GamePlayer = {
+      id: currentUser.id,
+      name: currentUser.name,
+      email: currentUser.email,
+      ranking: currentUser.ranking ?? 999,
+      isCreator: true,
+    };
+    const updatedGame = { ...game, players: [creatorPlayer, ...game.players] };
+    saveGame(updatedGame);
+    setGame(updatedGame);
+    showToast('Te uniste como jugador.');
   }
 
   function handleInvitePlayer(player: RegisteredPlayer) {
@@ -1212,6 +1235,22 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             )}
           </div>
 
+          {/* Creator not playing — organizer-only banner */}
+          {isCreator && !game.players.some(p => p.id === currentUser?.id) && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', marginBottom: 12, background: 'rgba(124,58,237,0.05)', border: '1px dashed #7c3aed' }}>
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Solo organizando</span>
+                <span style={{ fontSize: 11, color: 'var(--grey-500)', marginLeft: 8 }}>No estás inscrito como jugador</span>
+              </div>
+              <button
+                onClick={handleCreatorJoinAsPlayer}
+                disabled={game.players.length >= game.maxPlayers}
+                style={{ padding: '6px 14px', background: '#7c3aed', color: '#fff', border: 'none', cursor: game.players.length < game.maxPlayers ? 'pointer' : 'not-allowed', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: game.players.length >= game.maxPlayers ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+                + Unirme como jugador
+              </button>
+            </div>
+          )}
+
           {/* Confirmed players (from game.players) */}
           {game.players.map(p => {
             const isThisCreator = p.id === game.creatorId || p.isCreator;
@@ -1231,6 +1270,14 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 8px', background: '#dcfce7', color: '#166534', flexShrink: 0 }}>
                   Confirmado
                 </span>
+                {isThisCreator && isCreator && (
+                  <button
+                    onClick={handleCreatorLeaveAsPlayer}
+                    title="Solo organizar — salirse como jugador"
+                    style={{ padding: '3px 9px', background: 'transparent', border: '1px solid var(--grey-300)', cursor: 'pointer', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    Solo organizar
+                  </button>
+                )}
                 {!isThisCreator && (
                   <button
                     onClick={() => handleRemoveInvited(p.id)}
