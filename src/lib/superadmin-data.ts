@@ -604,20 +604,25 @@ export async function getSATournamentsFromSupabase(): Promise<SATournament[] | n
 
 export async function upsertTournamentToSupabase(t: Record<string, unknown>): Promise<void> {
   if (!supabase) return;
+  const rawStatus = t.status as string;
+  const status = rawStatus === 'created' || rawStatus === 'open' ? 'upcoming'
+    : rawStatus === 'finished' ? 'completed'
+    : (['upcoming', 'ongoing', 'completed', 'cancelled'].includes(rawStatus) ? rawStatus : 'upcoming');
   try {
-    await supabase.from('tournaments').upsert({
+    const { error } = await supabase.from('tournaments').upsert({
       id: t.id,
       name: t.name,
       club: t.club ?? null,
       city: t.city ?? null,
       country: t.country ?? 'ES',
       format: t.format ?? null,
-      status: t.status ?? 'upcoming',
+      status,
       start_date: t.date ?? null,
       max_players: t.maxPlayers ?? 0,
       data: t,
     });
-  } catch { /* silent */ }
+    if (error) console.error('[Supabase] upsertTournament error:', error.message, error.details);
+  } catch (err) { console.error('[Supabase] upsertTournament exception:', err); }
 }
 
 export async function deleteTournamentFromSupabase(id: string): Promise<void> {
@@ -649,22 +654,27 @@ export async function getSAGamesFromSupabase(): Promise<SAGame[] | null> {
 
 export async function upsertGameToSupabase(g: Record<string, unknown>): Promise<void> {
   if (!supabase) return;
+  const rounds = Array.isArray(g.rounds) ? g.rounds as unknown[] : [];
+  const scoreConfig = g.scoreConfig && typeof g.scoreConfig === 'object'
+    ? (g.scoreConfig as Record<string, unknown>).type as string ?? 'puntos'
+    : typeof g.scoreConfig === 'string' ? g.scoreConfig : 'puntos';
+  const rawStatus = g.status as string;
+  const status = rawStatus === 'finished' || rawStatus === 'completed' ? 'completed'
+    : rawStatus === 'cancelled' ? 'cancelled'
+    : rawStatus === 'created' ? 'ongoing'
+    : 'ongoing';
   try {
-    const players = Array.isArray(g.players) ? g.players as unknown[] : [];
-    const rounds = Array.isArray(g.rounds) ? g.rounds as unknown[] : [];
-    const scoreConfig = g.scoreConfig && typeof g.scoreConfig === 'object'
-      ? (g.scoreConfig as Record<string, unknown>).type as string ?? 'puntos'
-      : typeof g.scoreConfig === 'string' ? g.scoreConfig : 'puntos';
-    await supabase.from('quick_games').upsert({
+    const { error } = await supabase.from('quick_games').upsert({
       id: g.id,
       name: g.name ?? null,
       format: g.format ?? null,
       score_config: scoreConfig,
-      status: g.status === 'finished' ? 'completed' : (g.status as string) ?? 'ongoing',
+      status,
       rounds_played: rounds.length,
       data: g,
     });
-  } catch { /* silent */ }
+    if (error) console.error('[Supabase] upsertGame error:', error.message, error.details);
+  } catch (err) { console.error('[Supabase] upsertGame exception:', err); }
 }
 
 export async function deleteGameFromSupabase(id: string): Promise<void> {

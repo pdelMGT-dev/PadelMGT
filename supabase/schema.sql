@@ -89,6 +89,7 @@ CREATE TABLE tournaments (
   start_date DATE,
   end_date DATE,
   max_players INTEGER DEFAULT 16,
+  data JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -100,6 +101,18 @@ CREATE TABLE quick_games (
   score_config TEXT DEFAULT 'puntos',
   status TEXT DEFAULT 'ongoing' CHECK (status IN ('ongoing', 'completed', 'cancelled')),
   rounds_played INTEGER DEFAULT 0,
+  data JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Friend requests
+CREATE TABLE friend_requests (
+  id TEXT PRIMARY KEY,
+  from_id TEXT NOT NULL,
+  from_name TEXT,
+  to_id TEXT NOT NULL,
+  to_name TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -151,9 +164,12 @@ CREATE POLICY "Super admin full access on quick_games"
 
 -- Disable RLS for super admin tables (anon key has full access)
 -- Configure proper RLS policies when enabling production auth
-ALTER TABLE IF EXISTS players DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS clubs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS admin_users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS score_corrections DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS players               DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS clubs                 DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS admin_users           DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS score_corrections     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS player_field_definitions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS player_relationships DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS player_relationships  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS tournaments           DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS quick_games           DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS friend_requests       DISABLE ROW LEVEL SECURITY;
