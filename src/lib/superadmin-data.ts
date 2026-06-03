@@ -683,6 +683,7 @@ export async function upsertGameToSupabase(g: Record<string, unknown>): Promise<
       score_config: scoreConfig,
       status,
       rounds_played: rounds.length,
+      creator_player_id: g.creatorId ?? null,
       data: g,
     });
     if (error) console.error('[Supabase] upsertGame error:', error.message, error.details);
@@ -691,7 +692,7 @@ export async function upsertGameToSupabase(g: Record<string, unknown>): Promise<
 
 export async function deleteGameFromSupabase(id: string): Promise<void> {
   if (!supabase) return;
-  try { await supabase.from('quick_games').delete().eq('id', id); } catch { /* silent */ }
+  try { await supabase.from('quick_games').delete().eq('id', id); } catch (err) { console.warn('[Supabase] deleteGame failed:', err); }
 }
 
 // Register player (player-store write-through)

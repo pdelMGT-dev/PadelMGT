@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatePlayer, getPlayer } from '@/lib/player-store';
-import { syncAllFromSupabase, syncUserTournaments } from '@/lib/supabase-sync';
+import { syncAllFromSupabase, syncUserTournaments, syncUserGames } from '@/lib/supabase-sync';
 import { authSignIn, fetchPlayerByUserId, fetchPlayerByEmail } from '@/lib/supabase';
 
 type UserRole = 'player' | 'club_manager' | 'league_organizer' | 'federation' | 'super_admin';
@@ -149,9 +149,12 @@ export default function LoginPage() {
         localStorage.removeItem('padelmgt_last_sync');
         document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
         setLoading(false);
-        // Sync global data + user's own tournaments across devices
+        // Sync global data + user's own tournaments and games across devices
         syncAllFromSupabase();
-        syncUserTournaments(sbPlayer.id as string).finally(() => router.push(ROLE_REDIRECT['player']));
+        Promise.allSettled([
+          syncUserTournaments(sbPlayer.id as string),
+          syncUserGames(sbPlayer.id as string),
+        ]).finally(() => router.push(ROLE_REDIRECT['player']));
         return;
       }
 

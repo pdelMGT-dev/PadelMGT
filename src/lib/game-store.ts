@@ -78,7 +78,8 @@ export function saveGame(game: ActiveGame): void {
   if (idx >= 0) games[idx] = game;
   else games.push(game);
   _store.persist(games);
-  upsertGameToSupabase(game as unknown as Record<string, unknown>).catch(() => {});
+  upsertGameToSupabase(game as unknown as Record<string, unknown>)
+    .catch(err => console.warn('[Supabase] saveGame failed:', err));
 }
 
 export function updateGame(id: string, updates: Partial<ActiveGame>): ActiveGame | null {
@@ -88,13 +89,15 @@ export function updateGame(id: string, updates: Partial<ActiveGame>): ActiveGame
   const updated: ActiveGame = { ...games[idx], ...updates };
   games[idx] = updated;
   _store.persist(games);
-  upsertGameToSupabase(updated as unknown as Record<string, unknown>).catch(() => {});
+  upsertGameToSupabase(updated as unknown as Record<string, unknown>)
+    .catch(err => console.warn('[Supabase] updateGame failed:', err));
   return updated;
 }
 
 export function deleteGame(id: string): void {
   _store.persist(_store.load().filter((g) => g.id !== id));
-  deleteGameFromSupabase(id).catch(() => {});
+  deleteGameFromSupabase(id)
+    .catch(err => console.warn('[Supabase] deleteGame failed:', err));
 }
 
 export function createQuickGame(params: {

@@ -8,9 +8,11 @@ import {
   getSAGamesFromSupabase,   saveSAGames,   getSAGames,
 } from './superadmin-data';
 import { getAllPlayers } from './player-store';
-import { fetchTournamentsByCreator } from './supabase';
+import { fetchTournamentsByCreator, fetchGamesByCreator } from './supabase';
 import { getAllTournaments, saveTournament } from './tournament-store';
 import type { Tournament } from './tournament-store';
+import { getAllGames, saveGame } from './game-store';
+import type { ActiveGame } from './game-engine';
 
 const SYNC_TS_KEY = 'padelmgt_last_sync';
 const SYNC_TTL_MS = 30_000;
@@ -120,6 +122,25 @@ export async function syncUserTournaments(creatorPlayerId: string): Promise<void
       saveTournament(raw as unknown as Tournament);
     }
     // Already exists locally — local is source of truth (most recent edit wins)
+  }
+}
+
+// ── User-scoped game sync (called on login) ───────────────────────────────────
+
+/**
+ * Fetch all quick games created by this player from Supabase and merge them
+ * into the local game store. Called after login alongside syncUserTournaments.
+ */
+export async function syncUserGames(creatorPlayerId: string): Promise<void> {
+  const rows = await fetchGamesByCreator(creatorPlayerId);
+  if (!rows || rows.length === 0) return;
+
+  const localIds = new Set(getAllGames().map(g => g.id as string));
+  for (const raw of rows) {
+    if (!raw || !raw.id) continue;
+    if (!localIds.has(raw.id as string)) {
+      saveGame(raw as unknown as ActiveGame);
+    }
   }
 }
 

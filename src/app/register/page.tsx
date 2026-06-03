@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { registerPlayer, type PlayerSex } from '@/lib/player-store';
 import { authSignUp } from '@/lib/supabase';
+import { sendWelcomeEmail } from '@/lib/email';
 
 const COUNTRIES: string[] = [
   'Argentina', 'Bolivia', 'Brasil', 'Chile', 'Colombia', 'Costa Rica', 'Cuba',
@@ -85,6 +86,8 @@ export default function RegisterPage() {
     };
     localStorage.setItem('padelmgt_user', JSON.stringify(session));
     document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
+    // Fire-and-forget welcome email — non-blocking
+    sendWelcomeEmail(player.email, player.name).catch(() => {});
     router.push('/dashboard/player');
   }
 

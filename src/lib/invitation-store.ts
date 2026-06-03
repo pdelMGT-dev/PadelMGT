@@ -1,6 +1,7 @@
 // invitation-store.ts — Direct player invitations for Quick Games
 
 import { createLocalStore } from './local-store';
+import { sendInviteEmail } from './email';
 
 export interface Invitation {
   id: string;
@@ -57,6 +58,21 @@ export function createInvitation(params: Omit<Invitation, 'id' | 'status' | 'cre
   const all = _store.load();
   all.push(inv);
   _store.persist(all);
+
+  // Fire-and-forget invite email if the invitee has an email address
+  if (inv.toPlayerEmail) {
+    const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://padelmgt.com';
+    sendInviteEmail({
+      to:       inv.toPlayerEmail,
+      toName:   inv.toPlayerName,
+      fromName: inv.fromPlayerName,
+      gameName: inv.gameName,
+      gameDate: `${inv.gameDate} ${inv.gameTime ?? ''}`.trim(),
+      gameCity: inv.gameCity,
+      joinUrl:  `${appUrl}/dashboard/player`,
+    }).catch(() => {});
+  }
+
   return inv;
 }
 

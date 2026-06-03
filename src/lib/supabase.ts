@@ -64,3 +64,15 @@ export async function fetchTournamentsByCreator(creatorPlayerId: string) {
   if (error) { console.warn('[Supabase] fetchTournamentsByCreator:', error.message); return null; }
   return (data ?? []).map((r: Record<string, unknown>) => r.data as Record<string, unknown>).filter(Boolean);
 }
+
+/** Fetch all quick games created by a player (by their string player ID). */
+export async function fetchGamesByCreator(creatorPlayerId: string) {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('quick_games')
+    .select('data')
+    .eq('creator_player_id', creatorPlayerId)
+    .order('created_at', { ascending: false });
+  if (error) { console.warn('[Supabase] fetchGamesByCreator:', error.message); return null; }
+  return (data ?? []).map((r: Record<string, unknown>) => r.data as Record<string, unknown>).filter(Boolean);
+}

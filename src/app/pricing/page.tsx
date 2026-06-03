@@ -1,7 +1,11 @@
+'use client';
+
 import Link from 'next/link';
+import { useState } from 'react';
 
 const plans = [
   {
+    id: 'free',
     name: 'Gratis',
     price: '$0',
     period: 'para siempre',
@@ -20,6 +24,7 @@ const plans = [
     highlight: false,
   },
   {
+    id: 'club',
     name: 'Club',
     price: '$49',
     period: 'por mes',
@@ -35,10 +40,11 @@ const plans = [
       'Soporte prioritario',
     ],
     cta: 'Comenzar prueba de 14 días',
-    href: '/signup?role=club_manager',
+    href: null,
     highlight: true,
   },
   {
+    id: 'liga',
     name: 'Liga',
     price: '$199',
     period: 'por mes',
@@ -53,11 +59,12 @@ const plans = [
       'White-label (tu marca)',
       'API access',
     ],
-    cta: 'Hablar con ventas',
-    href: '/signup?role=league_organizer',
+    cta: 'Comenzar prueba de 14 días',
+    href: null,
     highlight: false,
   },
   {
+    id: 'federation',
     name: 'Federación',
     price: 'Custom',
     period: 'precio a medida',
@@ -73,17 +80,85 @@ const plans = [
       'Gerente de cuenta dedicado',
     ],
     cta: 'Contactar Equipo',
-    href: '/signup?role=federation',
+    href: '/about',
     highlight: false,
   },
 ];
 
 const faq = [
-  { q: '¿Puedo cambiar de plan en cualquier momento?', a: 'Sí. Puedes hacer upgrade o downgrade desde tu dashboard en cualquier momento. Los cambios se aplican al siguiente ciclo de facturación.' },
-  { q: '¿Cómo funciona la prueba gratuita?', a: 'Los planes Club y Liga incluyen 14 días de prueba sin tarjeta de crédito. Si decides no continuar, tu cuenta se convierte automáticamente al plan Gratis.' },
-  { q: '¿Cuántos torneos puedo crear?', a: 'En el plan Gratis puedes participar en torneos pero crear hasta 3 por mes. En Club y Liga, los torneos son ilimitados.' },
+  { q: '¿Puedo cambiar de plan en cualquier momento?', a: 'Sí. Podés hacer upgrade o downgrade desde tu dashboard en cualquier momento. Los cambios se aplican al siguiente ciclo de facturación.' },
+  { q: '¿Cómo funciona la prueba gratuita?', a: 'Los planes Club y Liga incluyen 14 días de prueba sin tarjeta de crédito. Si decidís no continuar, tu cuenta se convierte automáticamente al plan Gratis.' },
+  { q: '¿Cuántos torneos puedo crear?', a: 'En el plan Gratis podés participar en torneos pero crear hasta 3 por mes. En Club y Liga, los torneos son ilimitados.' },
   { q: '¿El precio incluye impuestos?', a: 'Los precios mostrados no incluyen impuestos locales (IVA / VAT) que pueden aplicar según tu país.' },
 ];
+
+function CheckoutButton({ plan, highlight }: { plan: typeof plans[number]; highlight: boolean }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
+  // Free and Federation plans use normal links
+  if (plan.href) {
+    return (
+      <Link href={plan.href} className="btn btn-lg" style={{
+        display: 'block', textAlign: 'center', borderRadius: 0,
+        background: highlight ? 'var(--neon)' : 'transparent',
+        color: 'var(--black)',
+        border: highlight ? 'none' : '2px solid var(--black)',
+        fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', fontSize: 13,
+      }}>
+        {plan.cta}
+      </Link>
+    );
+  }
+
+  async function handleCheckout() {
+    setError('');
+    setLoading(true);
+    try {
+      const userRaw = typeof window !== 'undefined' ? localStorage.getItem('padelmgt_user') : null;
+      const userEmail = userRaw ? (JSON.parse(userRaw) as { email?: string }).email : undefined;
+
+      const res = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: plan.id, userEmail }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError(data.error ?? 'Error al iniciar el pago. Intentá de nuevo.');
+        setLoading(false);
+      }
+    } catch {
+      setError('Error de conexión. Intentá de nuevo.');
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <button
+        onClick={handleCheckout}
+        disabled={loading}
+        className="btn btn-lg"
+        style={{
+          display: 'block', width: '100%', textAlign: 'center', borderRadius: 0,
+          background: highlight ? 'var(--neon)' : 'transparent',
+          color: 'var(--black)',
+          border: highlight ? 'none' : '2px solid var(--black)',
+          fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', fontSize: 13,
+          opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer',
+        }}
+      >
+        {loading ? 'Redirigiendo...' : plan.cta}
+      </button>
+      {error && (
+        <p style={{ marginTop: 8, fontSize: 12, color: '#dc2626', textAlign: 'center' }}>{error}</p>
+      )}
+    </div>
+  );
+}
 
 export default function PricingPage() {
   return (
@@ -128,15 +203,7 @@ export default function PricingPage() {
                   ))}
                 </ul>
 
-                <Link href={plan.href} className="btn btn-lg" style={{
-                  display: 'block', textAlign: 'center', borderRadius: 0,
-                  background: plan.highlight ? 'var(--neon)' : 'transparent',
-                  color: plan.highlight ? 'var(--black)' : 'var(--black)',
-                  border: plan.highlight ? 'none' : '2px solid var(--black)',
-                  fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', fontSize: 13,
-                }}>
-                  {plan.cta}
-                </Link>
+                <CheckoutButton plan={plan} highlight={plan.highlight} />
               </div>
             ))}
           </div>
