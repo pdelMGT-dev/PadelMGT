@@ -61,12 +61,12 @@ async function syncClubs(): Promise<void> {
   if (!sbClubs || sbClubs.length === 0) return;
 
   const local = getSAClubs();
-  const localIds = new Set(local.map(c => c.id));
+  const sbIds = new Set(sbClubs.map(c => c.id));
 
   // Keep local data for fields not in Supabase (mapsUrl, description, courtTypes…)
   const localMap = Object.fromEntries(local.map(c => [c.id, c]));
   const merged = sbClubs.map(sb => ({ ...sb, ...(localMap[sb.id] ?? {}) }));
-  const localOnly = local.filter(c => !localIds.has(c.id) && !sbClubs.find(s => s.id === c.id));
+  const localOnly = local.filter(c => !sbIds.has(c.id));
   saveSAClubs([...merged, ...localOnly]);
 }
 

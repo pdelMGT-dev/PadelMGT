@@ -1,5 +1,11 @@
 -- Migration 001: Fix RLS and add data JSONB columns
 -- Run this in your Supabase SQL Editor (Dashboard → SQL Editor → New query)
+--
+-- SECURITY NOTE: Disabling RLS is intentional for the MVP phase (no user auth yet).
+-- Before production, re-enable RLS and add policies scoped to auth.uid():
+--   CREATE POLICY "owner_only" ON tournaments FOR ALL USING (creator_id = auth.uid()::text);
+-- The anon key is public — any authenticated Supabase user can read/write all rows
+-- until proper auth is wired up.
 
 -- 1. Disable RLS for tournaments and quick_games so the anon key can write
 ALTER TABLE IF EXISTS tournaments  DISABLE ROW LEVEL SECURITY;

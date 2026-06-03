@@ -106,11 +106,15 @@ export function registerPlayer(params: RegisterParams): RegisteredPlayer | null 
     profileCompleted: false,
   };
   _store.persist([...all, newPlayer]);
-  registerPlayerToSupabase(newPlayer).catch(() => {/* fire-and-forget */});
+  registerPlayerToSupabase(newPlayer).catch(err => console.warn('[Supabase] registerPlayer failed:', err));
   return newPlayer;
 }
 
-/** Authenticate by email + password. Returns the player or null. */
+/**
+ * Authenticate by email + password.
+ * SECURITY NOTE: passwords are stored in plaintext — demo only.
+ * Before going to production, replace with Supabase Auth or server-side hashing.
+ */
 export function authenticatePlayer(
   email: string,
   password: string,
@@ -194,7 +198,7 @@ export function updatePlayerRankingPoints(playerId: string, delta: number): void
   if (idx < 0) return;
   all[idx] = { ...all[idx], rankingPoints: Math.max(0, all[idx].rankingPoints + delta) };
   _store.persist(all);
-  upsertSAPlayerToSupabase(all[idx]).catch(() => {});
+  upsertSAPlayerToSupabase(all[idx]).catch(err => console.warn('[Supabase] updateRankingPoints failed:', err));
 }
 
 /** Update any fields on an existing player and sync to Supabase. */
@@ -217,6 +221,6 @@ export function updatePlayer(playerId: string, updates: Partial<RegisteredPlayer
       }
     } catch { /* silent */ }
   }
-  upsertSAPlayerToSupabase(updated).catch(() => {});
+  upsertSAPlayerToSupabase(updated).catch(err => console.warn('[Supabase] updatePlayer failed:', err));
   return updated;
 }

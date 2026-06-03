@@ -399,22 +399,27 @@ export function savePlayerRelationships(rels: PlayerRelationship[]): void {
 
 // Map Supabase row → SAPlayer
 function rowToSAPlayer(row: Record<string, unknown>): SAPlayer {
+  const cf = (row.custom_fields as Record<string, string>) ?? {};
   return {
     id: row.id as string,
-    shortId: (row.short_id as string) ?? '',
+    // shortId not a DB column — stored in custom_fields
+    shortId: (row.short_id as string) ?? cf.shortId ?? '',
     name: row.name as string,
     email: row.email as string,
     phone: (row.phone as string) ?? '',
+    sex: (['M', 'F'].includes(cf.sex) ? cf.sex as SAPlayer['sex'] : undefined),
     city: (row.city as string) ?? '',
     country: (row.country as string) ?? 'ES',
+    level: (['beginner', 'intermediate', 'advanced'].includes(cf.level) ? cf.level as SAPlayer['level'] : undefined),
     ranking: (row.ranking as number) ?? 0,
     rankingPoints: (row.ranking_points as number) ?? 0,
     status: (row.status as SAPlayer['status']) ?? 'active',
     role: (row.role as SAPlayer['role']) ?? 'player',
+    profileCompleted: cf.profileCompleted === 'true',
     joinedAt: ((row.joined_at as string) ?? '').split('T')[0],
     lastActive: ((row.last_active as string) ?? '').split('T')[0],
     club: (row.club as string) ?? undefined,
-    customFields: (row.custom_fields as Record<string, string>) ?? {},
+    customFields: cf,
   };
 }
 
@@ -430,10 +435,16 @@ function playerToRow(p: SAPlayer): Record<string, unknown> {
     status: p.status,
     role: p.role,
     club: p.club || null,
-    custom_fields: p.customFields ?? {},
+    // Store extended fields in custom_fields JSONB so they round-trip correctly
+    custom_fields: {
+      ...(p.customFields ?? {}),
+      shortId: p.shortId,
+      ...(p.sex              ? { sex: p.sex }                           : {}),
+      ...(p.level            ? { level: p.level }                       : {}),
+      ...(p.profileCompleted !== undefined ? { profileCompleted: String(p.profileCompleted) } : {}),
+    },
     joined_at: p.joinedAt || new Date().toISOString(),
     last_active: p.lastActive || new Date().toISOString(),
-    // Note: sex, level, shortId, profileCompleted stored in custom_fields or as extra columns when schema is extended
   };
 }
 
@@ -478,7 +489,7 @@ function rowToSAAdminUser(row: Record<string, unknown>): SAAdminUser {
 export async function getSAPlayersFromSupabase(): Promise<SAPlayer[] | null> {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from('players').select('*').order('joined_at', { ascending: false });
+    const { data, error } = await supabase.from('players').select('*').order('joined_at', { ascending: false }).limit(500);
     if (error) return null;
     return (data ?? []).map(row => rowToSAPlayer(row as Record<string, unknown>));
   } catch { return null; }
@@ -700,7 +711,12 @@ export async function registerPlayerToSupabase(p: {
       ranking_points: p.rankingPoints ?? 0,
       status: 'active',
       role: 'player',
-      custom_fields: { shortId: p.shortId, sex: p.sex, level: p.level },
+      custom_fields: {
+        shortId: p.shortId,
+        ...(p.sex   ? { sex: p.sex }     : {}),
+        ...(p.level ? { level: p.level } : {}),
+        profileCompleted: 'false',
+      },
     });
     if (error) console.error('[Supabase] registerPlayer error:', error.message, error.details);
   } catch (err) { console.error('[Supabase] registerPlayer exception:', err); }

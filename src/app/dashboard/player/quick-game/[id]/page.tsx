@@ -457,7 +457,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   }
 
   function handleCreatorLeaveAsPlayer() {
-    if (!game || !currentUser) return;
+    if (!game || !currentUser || currentUser.id !== game.creatorId) return;
     const updatedGame = { ...game, players: game.players.filter(p => p.id !== game.creatorId) };
     saveGame(updatedGame);
     setGame(updatedGame);
@@ -465,13 +465,13 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   }
 
   function handleCreatorJoinAsPlayer() {
-    if (!game || !currentUser) return;
+    if (!game || !currentUser || currentUser.id !== game.creatorId) return;
     if (game.players.some(p => p.id === currentUser.id)) return;
     const creatorPlayer: import('@/lib/game-engine').GamePlayer = {
       id: currentUser.id,
       name: currentUser.name,
       email: currentUser.email,
-      ranking: currentUser.ranking ?? 999,
+      ranking: currentUser.rankingPoints ?? currentUser.ranking ?? 0,
       isCreator: true,
     };
     const updatedGame = { ...game, players: [creatorPlayer, ...game.players] };

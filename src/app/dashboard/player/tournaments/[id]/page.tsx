@@ -389,7 +389,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   }
 
   function handleCreatorLeaveAsPlayer() {
-    if (!currentUser) return;
+    if (!currentUser || currentUser.id !== t.creatorId) return;
     const updated: Tournament = {
       ...t,
       players: t.players.filter(p => p.id !== t.creatorId),
@@ -399,13 +399,13 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   }
 
   function handleCreatorJoinAsPlayer() {
-    if (!currentUser) return;
+    if (!currentUser || currentUser.id !== t.creatorId) return;
     if (t.players.some(p => p.id === currentUser.id)) return;
     const creatorPlayer: import('@/lib/game-engine').GamePlayer = {
       id: currentUser.id,
       name: currentUser.name,
       email: currentUser.email,
-      ranking: currentUser.ranking ?? 999,
+      ranking: currentUser.rankingPoints ?? currentUser.ranking ?? 0,
       isCreator: true,
     };
     const updated: Tournament = {

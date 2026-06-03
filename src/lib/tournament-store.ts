@@ -42,7 +42,7 @@ export function saveTournament(tournament: Tournament): void {
   const idx = all.findIndex(t => t.id === tournament.id);
   if (idx >= 0) { all[idx] = tournament; } else { all.push(tournament); }
   persist(all);
-  upsertTournamentToSupabase(tournament as unknown as Record<string, unknown>).catch(() => {});
+  upsertTournamentToSupabase(tournament as unknown as Record<string, unknown>).catch(err => console.warn('[Supabase] saveTournament failed:', err));
 }
 
 export function createTournament(params: {
