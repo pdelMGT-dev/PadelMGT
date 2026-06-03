@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import { getPendingCount } from '@/lib/friend-request-store';
 import { syncAllFromSupabase } from '@/lib/supabase-sync';
+import { authSignOut } from '@/lib/supabase';
 import LogoIcon from './LogoIcon';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 
@@ -94,6 +95,7 @@ export default function DashboardSidebar() {
   const initials    = user ? getInitials(user.name) : '?';
 
   function handleLogout() {
+    authSignOut(); // invalidate Supabase Auth session (fire-and-forget)
     localStorage.removeItem('padelmgt_user');
     document.cookie = 'padelmgt_session=; path=/; max-age=0';
     router.push('/login');

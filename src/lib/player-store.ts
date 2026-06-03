@@ -1,5 +1,5 @@
 // player-store.ts — Single source of truth for all registered players
-import { registerPlayerToSupabase, upsertSAPlayerToSupabase } from './superadmin-data';
+import { registerPlayerToSupabase } from './superadmin-data';
 import { SEED_PLAYERS, SEED_FRIENDSHIPS } from './seeds/players';
 import { createLocalStore, isServer } from './local-store';
 export { SEED_PLAYERS, SEED_FRIENDSHIPS };
@@ -15,7 +15,8 @@ export interface RegisteredPlayer {
   shortId: string;           // e.g. "#00101"
   name: string;
   email: string;
-  password?: string;         // stored for demo; real app would hash server-side
+  /** @deprecated Passwords are managed by Supabase Auth. Only present on legacy/seed records. */
+  password?: string;
   sex?: PlayerSex;
   country?: string;
   city?: string;
@@ -23,6 +24,8 @@ export interface RegisteredPlayer {
   ranking: number;
   rankingPoints: number;
   profileCompleted?: boolean;
+  /** Supabase Auth user UUID, set on registration via Supabase Auth. */
+  authUserId?: string;
 }
 
 // ── Sequential shortId generator ─────────────────────────────────────────────
@@ -81,9 +84,10 @@ export function getPlayerCountries(): string[] {
 export interface RegisterParams {
   name: string;
   email: string;
-  password: string;
   country: string;
   sex: PlayerSex;
+  /** Supabase Auth user UUID — provided when registration goes through Supabase Auth. */
+  authUserId?: string;
 }
 
 /** Register a new player. Returns the player or null if email already taken. */
@@ -98,29 +102,31 @@ export function registerPlayer(params: RegisterParams): RegisteredPlayer | null 
     shortId,
     name: params.name,
     email: params.email,
-    password: params.password,
+    // password intentionally not stored — managed by Supabase Auth
     sex: params.sex,
     country: params.country,
     ranking: all.length + 1,
     rankingPoints: 0,
     profileCompleted: false,
+    authUserId: params.authUserId,
   };
   _store.persist([...all, newPlayer]);
-  registerPlayerToSupabase(newPlayer).catch(err => console.warn('[Supabase] registerPlayer failed:', err));
+  registerPlayerToSupabase({ ...newPlayer, authUserId: params.authUserId })
+    .catch(err => console.warn('[Supabase] registerPlayer failed:', err));
   return newPlayer;
 }
 
 /**
- * Authenticate by email + password.
- * SECURITY NOTE: passwords are stored in plaintext — demo only.
- * Before going to production, replace with Supabase Auth or server-side hashing.
+ * Legacy plaintext-password authentication — only used for seed/demo accounts
+ * that have a `password` field and haven't migrated to Supabase Auth.
+ * New registrations via Supabase Auth never store passwords here.
  */
 export function authenticatePlayer(
   email: string,
   password: string,
 ): RegisteredPlayer | null {
   const p = _store.load().find(
-    p => p.email.toLowerCase() === email.toLowerCase() && p.password === password,
+    p => p.email.toLowerCase() === email.toLowerCase() && !!p.password && p.password === password,
   );
   return p ?? null;
 }
@@ -198,7 +204,7 @@ export function updatePlayerRankingPoints(playerId: string, delta: number): void
   if (idx < 0) return;
   all[idx] = { ...all[idx], rankingPoints: Math.max(0, all[idx].rankingPoints + delta) };
   _store.persist(all);
-  upsertSAPlayerToSupabase(all[idx]).catch(err => console.warn('[Supabase] updateRankingPoints failed:', err));
+  registerPlayerToSupabase(all[idx]).catch(err => console.warn('[Supabase] updateRankingPoints failed:', err));
 }
 
 /** Update any fields on an existing player and sync to Supabase. */
@@ -221,6 +227,6 @@ export function updatePlayer(playerId: string, updates: Partial<RegisteredPlayer
       }
     } catch { /* silent */ }
   }
-  upsertSAPlayerToSupabase(updated).catch(err => console.warn('[Supabase] updatePlayer failed:', err));
+  registerPlayerToSupabase(updated).catch(err => console.warn('[Supabase] updatePlayer failed:', err));
   return updated;
 }

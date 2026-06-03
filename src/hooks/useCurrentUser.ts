@@ -1,20 +1,7 @@
 'use client';
 
-/**
- * useCurrentUser — reads the current user session from localStorage.
- *
- * Replaces the 16+ copy-pasted blocks of:
- *   const raw = localStorage.getItem('padelmgt_user');
- *   if (raw) { const u = JSON.parse(raw) as …; … }
- *
- * Usage:
- *   const { user, setUser } = useCurrentUser();
- *
- * `setUser` writes the updated session back to localStorage so all callers
- * that re-mount after a navigation pick up the latest value automatically.
- */
-
 import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
 
 const SESSION_KEY = 'padelmgt_user';
 
@@ -24,7 +11,6 @@ export interface CurrentUser {
   email: string;
   shortId?: string;
   role: string;
-  /** Display sub-line (e.g. club name or short ID) */
   sub?: string;
   firstLogin?: boolean;
   rankingPoints?: number;
@@ -35,7 +21,11 @@ function readSession(): CurrentUser | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as CurrentUser) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    // Minimum shape validation
+    if (typeof parsed.id !== 'string' || typeof parsed.name !== 'string') return null;
+    return parsed as unknown as CurrentUser;
   } catch {
     return null;
   }
@@ -51,8 +41,21 @@ function writeSession(user: CurrentUser): void {
 export function useCurrentUser() {
   const [user, setUserState] = useState<CurrentUser | null>(null);
 
+  // Initial read from localStorage
   useEffect(() => {
     setUserState(readSession());
+  }, []);
+
+  // Listen for Supabase Auth sign-out events and keep session in sync
+  useEffect(() => {
+    if (!supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: string) => {
+      if (event === 'SIGNED_OUT') {
+        localStorage.removeItem(SESSION_KEY);
+        setUserState(null);
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   const setUser = useCallback((updated: CurrentUser | null) => {
@@ -60,7 +63,6 @@ export function useCurrentUser() {
     setUserState(updated);
   }, []);
 
-  /** Patch specific fields and persist. */
   const patchUser = useCallback(
     (fields: Partial<CurrentUser>) => {
       setUserState((prev: CurrentUser | null) => {

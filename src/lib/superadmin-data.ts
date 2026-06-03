@@ -630,6 +630,7 @@ export async function upsertTournamentToSupabase(t: Record<string, unknown>): Pr
       status,
       start_date: t.date ?? null,
       max_players: t.maxPlayers ?? 0,
+      creator_player_id: t.creatorId ?? null,
       data: t,
     });
     if (error) console.error('[Supabase] upsertTournament error:', error.message, error.details);
@@ -698,6 +699,7 @@ export async function registerPlayerToSupabase(p: {
   id: string; shortId?: string; name: string; email: string;
   phone?: string; sex?: string; country?: string; city?: string;
   level?: string; ranking?: number; rankingPoints?: number;
+  authUserId?: string;
 }): Promise<void> {
   if (!supabase) return;
   try {
@@ -711,6 +713,7 @@ export async function registerPlayerToSupabase(p: {
       ranking_points: p.rankingPoints ?? 0,
       status: 'active',
       role: 'player',
+      ...(p.authUserId ? { user_id: p.authUserId } : {}),
       custom_fields: {
         shortId: p.shortId,
         ...(p.sex   ? { sex: p.sex }     : {}),

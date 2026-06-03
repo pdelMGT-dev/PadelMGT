@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { authenticatePlayer } from '@/lib/player-store';
-import { syncAllFromSupabase } from '@/lib/supabase-sync';
+import { authenticatePlayer, getPlayer } from '@/lib/player-store';
+import { syncAllFromSupabase, syncUserTournaments } from '@/lib/supabase-sync';
+import { authSignIn, fetchPlayerByUserId, fetchPlayerByEmail } from '@/lib/supabase';
 
 type UserRole = 'player' | 'club_manager' | 'league_organizer' | 'federation' | 'super_admin';
 
@@ -103,48 +104,94 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  function handleSubmit(e: React.FormEvent) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
-    // 1. Check built-in demo accounts (club, league, federation, super-admin)
+    // 1. Check built-in demo accounts (club, league, federation, super-admin, seed players)
     const mockUser = MOCK_USERS.find(u => u.email === email && u.password === password);
-
     if (mockUser) {
       const session = {
         id: mockUser.id, name: mockUser.name, email: mockUser.email,
         shortId: mockUser.shortId, role: mockUser.role, sub: mockUser.sub,
       };
       localStorage.setItem('padelmgt_user', JSON.stringify(session));
-      // Clear sync timestamp so dashboard immediately fetches fresh data
       localStorage.removeItem('padelmgt_last_sync');
       document.cookie = `padelmgt_session=${mockUser.role}; path=/; SameSite=Lax; max-age=86400`;
+      setLoading(false);
       router.push(ROLE_REDIRECT[mockUser.role]);
       return;
     }
 
-    // 2. Check player-store (covers seed players + newly registered users)
-    const player = authenticatePlayer(email, password);
-    if (!player) {
-      setError('Email o contraseña incorrectos.');
+    // 2. Supabase Auth (for real registered players)
+    const { data: authData, error: authError } = await authSignIn(email, password);
+    if (!authError && authData?.user) {
+      const authUser = authData.user;
+      // Fetch the player record from Supabase (by user_id first, then by email)
+      let sbPlayer = await fetchPlayerByUserId(authUser.id);
+      if (!sbPlayer) sbPlayer = await fetchPlayerByEmail(authUser.email ?? email);
+
+      if (sbPlayer) {
+        const cf = (sbPlayer.custom_fields as Record<string, string>) ?? {};
+        const session = {
+          id:            (sbPlayer.id as string),
+          name:          (sbPlayer.name as string),
+          email:         (sbPlayer.email as string),
+          shortId:       cf.shortId || (sbPlayer.short_id as string) || '',
+          role:          'player' as UserRole,
+          sub:           `${cf.shortId ?? ''} · ${(sbPlayer.city as string) ?? (sbPlayer.country as string) ?? ''}`,
+          rankingPoints: (sbPlayer.ranking_points as number) ?? 0,
+        };
+        localStorage.setItem('padelmgt_user', JSON.stringify(session));
+        localStorage.removeItem('padelmgt_last_sync');
+        document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
+        setLoading(false);
+        // Sync global data + user's own tournaments across devices
+        syncAllFromSupabase();
+        syncUserTournaments(sbPlayer.id as string).finally(() => router.push(ROLE_REDIRECT['player']));
+        return;
+      }
+
+      // Auth succeeded but no player record — use auth user data as fallback
+      const session = {
+        id:      authUser.id,
+        name:    authUser.email?.split('@')[0] ?? 'Jugador',
+        email:   authUser.email ?? email,
+        role:    'player' as UserRole,
+        sub:     '',
+      };
+      localStorage.setItem('padelmgt_user', JSON.stringify(session));
+      localStorage.removeItem('padelmgt_last_sync');
+      document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
+      setLoading(false);
+      router.push(ROLE_REDIRECT['player']);
       return;
     }
 
-    const session = {
-      id:      player.id,
-      name:    player.name,
-      email:   player.email,
-      shortId: player.shortId,
-      role:    'player' as UserRole,
-      sub:     `${player.shortId} · ${player.city ?? player.country ?? ''}`,
-    };
-    localStorage.setItem('padelmgt_user', JSON.stringify(session));
-    // Clear sync timestamp so dashboard immediately fetches fresh data
-    localStorage.removeItem('padelmgt_last_sync');
-    document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
-    // Fire sync before redirect so data is ready when dashboard loads
-    syncAllFromSupabase().finally(() => router.push(ROLE_REDIRECT['player']));
-    return;
+    // 3. Fallback: legacy localStorage auth for seed players with stored passwords
+    const player = authenticatePlayer(email, password);
+    if (player) {
+      const session = {
+        id:      player.id,
+        name:    player.name,
+        email:   player.email,
+        shortId: player.shortId,
+        role:    'player' as UserRole,
+        sub:     `${player.shortId} · ${player.city ?? player.country ?? ''}`,
+      };
+      localStorage.setItem('padelmgt_user', JSON.stringify(session));
+      localStorage.removeItem('padelmgt_last_sync');
+      document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
+      setLoading(false);
+      syncAllFromSupabase().finally(() => router.push(ROLE_REDIRECT['player']));
+      return;
+    }
+
+    setError('Email o contraseña incorrectos.');
+    setLoading(false);
   }
 
   const labelStyle: React.CSSProperties = {
@@ -227,10 +274,11 @@ export default function LoginPage() {
 
             <button
               type="submit"
+              disabled={loading}
               className="btn btn-primary"
-              style={{ width: '100%', borderRadius: 0, padding: '14px', fontSize: 14 }}
+              style={{ width: '100%', borderRadius: 0, padding: '14px', fontSize: 14, opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
             >
-              Entrar
+              {loading ? 'Verificando...' : 'Entrar'}
             </button>
           </form>
 

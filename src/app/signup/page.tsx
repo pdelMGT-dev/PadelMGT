@@ -5,6 +5,7 @@ import { useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { registerPlayer, type PlayerSex } from '@/lib/player-store';
 import { sanitizeText, isValidEmail } from '@/lib/sanitize';
+import { authSignUp } from '@/lib/supabase';
 
 const COUNTRIES: string[] = [
   'Argentina', 'Bolivia', 'Brasil', 'Chile', 'Colombia', 'Costa Rica', 'Cuba',
@@ -38,7 +39,7 @@ function SignupForm() {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
@@ -51,8 +52,24 @@ function SignupForm() {
     if (!sex)                { setError('Seleccioná tu sexo.'); return; }
 
     setLoading(true);
-    const player = registerPlayer({ name: cleanName, email: cleanEmail, password, country, sex });
 
+    // 1. Register in Supabase Auth
+    let authUserId: string | undefined;
+    const { data: authData, error: authError } = await authSignUp(cleanEmail, password);
+    if (authError) {
+      const msg = authError.message?.toLowerCase() ?? '';
+      if (msg.includes('already registered') || msg.includes('already been registered')) {
+        setError('Ya existe una cuenta con ese email.');
+      } else {
+        setError(authError.message ?? 'Error al crear la cuenta.');
+      }
+      setLoading(false);
+      return;
+    }
+    authUserId = authData?.user?.id;
+
+    // 2. Create player record
+    const player = registerPlayer({ name: cleanName, email: cleanEmail, country, sex, authUserId });
     if (!player) {
       setError('Ya existe una cuenta con ese email.');
       setLoading(false);
@@ -69,6 +86,7 @@ function SignupForm() {
       firstLogin: true,
     };
     localStorage.setItem('padelmgt_user', JSON.stringify(session));
+    document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
     router.push('/dashboard/player');
   }
 

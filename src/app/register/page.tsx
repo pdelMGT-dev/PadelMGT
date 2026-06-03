@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { registerPlayer, type PlayerSex } from '@/lib/player-store';
+import { authSignUp } from '@/lib/supabase';
 
 const COUNTRIES: string[] = [
   'Argentina', 'Bolivia', 'Brasil', 'Chile', 'Colombia', 'Costa Rica', 'Cuba',
@@ -37,7 +38,7 @@ export default function RegisterPage() {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
@@ -48,8 +49,25 @@ export default function RegisterPage() {
     if (!sex)                 { setError('Seleccioná tu sexo.'); return; }
 
     setLoading(true);
-    const player = registerPlayer({ name: name.trim(), email: email.trim(), password, country, sex });
 
+    // 1. Register in Supabase Auth (password lives here, not in localStorage)
+    let authUserId: string | undefined;
+    const { data: authData, error: authError } = await authSignUp(email.trim(), password);
+    if (authError) {
+      // Supabase Auth failed — common reasons: email already registered
+      const msg = authError.message?.toLowerCase() ?? '';
+      if (msg.includes('already registered') || msg.includes('already been registered')) {
+        setError('Ya existe una cuenta con ese email.');
+      } else {
+        setError(authError.message ?? 'Error al crear la cuenta.');
+      }
+      setLoading(false);
+      return;
+    }
+    authUserId = authData?.user?.id;
+
+    // 2. Create player record in localStorage (+ fire-and-forget to Supabase players table)
+    const player = registerPlayer({ name: name.trim(), email: email.trim(), country, sex, authUserId });
     if (!player) {
       setError('Ya existe una cuenta con ese email.');
       setLoading(false);
@@ -66,6 +84,7 @@ export default function RegisterPage() {
       firstLogin: true,
     };
     localStorage.setItem('padelmgt_user', JSON.stringify(session));
+    document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
     router.push('/dashboard/player');
   }
 
