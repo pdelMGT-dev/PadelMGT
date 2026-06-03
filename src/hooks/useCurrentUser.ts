@@ -15,6 +15,7 @@ export interface CurrentUser {
   firstLogin?: boolean;
   rankingPoints?: number;
   ranking?: number;
+  plan?: string;
 }
 
 function readSession(): CurrentUser | null {

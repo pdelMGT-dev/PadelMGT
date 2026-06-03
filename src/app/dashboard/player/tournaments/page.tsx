@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import { getAllTournaments, createTournament, getTournament, saveTournament } from '@/lib/tournament-store';
+import { checkTournamentGate, incrementUsage, getPlayerLimits } from '@/lib/plan-config';
 import type { Tournament } from '@/lib/tournament-store';
 import type { FixedPair } from '@/lib/game-engine';
 import { getFriendsForPlayer, searchPlayers } from '@/lib/player-store';
@@ -152,6 +153,7 @@ export default function PlayerTournamentsPage() {
   // ── View ────────────────────────────────────────────────────────────────────
   const [view, setView] = useState<'dashboard' | 'wizard'>('dashboard');
   const [step, setStep] = useState(1);
+  const [planError, setPlanError] = useState('');
 
   // ── Current user ────────────────────────────────────────────────────────────
   const { user: currentUser } = useCurrentUser();
@@ -333,6 +335,16 @@ export default function PlayerTournamentsPage() {
   // ── Create tournament ────────────────────────────────────────────────────────
   function handleCreateTournament() {
     if (!currentUser) return;
+    const gate = checkTournamentGate(tMaxPlayers);
+    if (!gate.allowed) {
+      if (gate.reason === 'tournaments_per_month') {
+        setPlanError(`Alcanzaste el límite de ${gate.limit} torneo por mes en el plan Free. Activá Pro para torneos ilimitados.`);
+      } else {
+        setPlanError(`El plan Free permite hasta ${gate.limit} jugadores por torneo. Activá Pro para hasta 64 jugadores.`);
+      }
+      return;
+    }
+    setPlanError('');
     const scoreConfig = tScoreType === 'points'
       ? { type: 'points' as const, target: tPtTarget }
       : {
@@ -397,6 +409,7 @@ export default function PlayerTournamentsPage() {
       saveTournament({ ...tournament, fixedPairs: tPairAssignments });
     }
 
+    incrementUsage('tournaments');
     setNewTId(tournament.id);
     setNewTCode(tournament.code);
     setStep(99);
@@ -750,13 +763,34 @@ export default function PlayerTournamentsPage() {
               <div style={{ marginBottom: 16 }}>
                 <label style={lbl}>Jugadores</label>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {PLAYER_COUNT_OPTIONS.map(n => (
-                    <button key={n} onClick={() => setTMaxPlayers(n)}
-                      style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tMaxPlayers === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tMaxPlayers === n ? 'var(--black)' : '#fff', color: tMaxPlayers === n ? '#fff' : 'var(--black)' }}>
-                      {n}
-                    </button>
-                  ))}
+                  {PLAYER_COUNT_OPTIONS.map(n => {
+                    const planLimit = getPlayerLimits().maxPlayersPerTournament;
+                    const locked = planLimit !== -1 && n > planLimit;
+                    return (
+                      <button key={n}
+                        onClick={() => { if (!locked) { setTMaxPlayers(n); setPlanError(''); } }}
+                        title={locked ? `Requiere Plan Pro (máx ${planLimit} en Free)` : undefined}
+                        style={{
+                          width: 52, height: 44,
+                          fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700,
+                          cursor: locked ? 'not-allowed' : 'pointer',
+                          border: `2px solid ${tMaxPlayers === n ? 'var(--black)' : locked ? 'var(--grey-100)' : 'var(--grey-200)'}`,
+                          background: tMaxPlayers === n ? 'var(--black)' : locked ? 'var(--grey-50)' : '#fff',
+                          color: tMaxPlayers === n ? '#fff' : locked ? 'var(--grey-300)' : 'var(--black)',
+                          position: 'relative',
+                        }}>
+                        {locked && <span style={{ position: 'absolute', top: 1, right: 2, fontSize: 8 }}>🔒</span>}
+                        {n}
+                      </button>
+                    );
+                  })}
                 </div>
+                {getPlayerLimits().maxPlayersPerTournament !== -1 && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: 'var(--grey-400)' }}>
+                    Plan Free: máx {getPlayerLimits().maxPlayersPerTournament} jugadores.{' '}
+                    <a href="/pricing" style={{ color: 'var(--black)', fontWeight: 700 }}>Activar Pro →</a>
+                  </div>
+                )}
               </div>
               <div>
                 <label style={lbl}>Canchas (pistas)</label>
@@ -1253,6 +1287,17 @@ export default function PlayerTournamentsPage() {
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Plan gate error */}
+          {planError && (
+            <div style={{ margin: '16px 0 0', padding: '14px 16px', background: '#fef3c7', border: '1px solid #fbbf24', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>🔒</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 4 }}>{planError}</div>
+                <a href="/pricing" style={{ fontSize: 12, color: '#92400e', fontWeight: 700, textDecoration: 'underline' }}>Ver Plan Pro ($3/mes) →</a>
+              </div>
             </div>
           )}
 

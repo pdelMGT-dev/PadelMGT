@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { createQuickGame, getAllGames } from '@/lib/game-store';
+import { checkGameGate, incrementUsage, getPlayerLimits } from '@/lib/plan-config';
 import { createInvitation, getPendingInvitationsForPlayer, respondToInvitation, getInvitationsForPlayer } from '@/lib/invitation-store';
 import type { Invitation } from '@/lib/invitation-store';
 import { getFriendsForPlayer, searchPlayers, addFriendship } from '@/lib/player-store';
@@ -204,6 +205,7 @@ export default function QuickGamePage() {
 
   // ── Wizard state ──────────────────────────────────────────────────────────
   const [step, setStep] = useState(1);
+  const [planError, setPlanError] = useState('');
 
   // Step I — Información básica
   const [gameName, setGameName]         = useState('');
@@ -331,6 +333,16 @@ export default function QuickGamePage() {
 
   function handleSubmit() {
     if (!currentUser) return;
+    const gate = checkGameGate(maxPlayers);
+    if (!gate.allowed) {
+      if (gate.reason === 'games_per_month') {
+        setPlanError(`Alcanzaste el límite de ${gate.limit} Juegos Rápidos este mes en el plan Free. Activá Pro para juegos ilimitados.`);
+      } else {
+        setPlanError(`El plan Free permite hasta ${gate.limit} jugadores por JR. Activá Pro para hasta 32 jugadores.`);
+      }
+      return;
+    }
+    setPlanError('');
 
     const creatorPlayer: EnginePlayer = {
       id: currentUser.id,
@@ -378,6 +390,8 @@ export default function QuickGamePage() {
       levelLabel: level ? LEVEL_LABEL[level] : 'Todos',
       creatorId: currentUser.id,
     });
+
+    incrementUsage('games');
 
     // Send invitations
     for (const p of invitedList) {
@@ -1000,22 +1014,39 @@ export default function QuickGamePage() {
         <div style={card}>
           <div style={secTitle}>Cantidad máxima de jugadores</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {[4, 6, 8, 10, 12].map(n => {
-              const tooFew = n < invitedList.length + 1;
+            {[4, 6, 8, 10, 12, 16, 20, 24, 28, 32].map(n => {
+              const tooFew    = n < invitedList.length + 1;
+              const planLimit = getPlayerLimits().maxPlayersPerGame;
+              const locked    = planLimit !== -1 && n > planLimit;
+              const disabled  = tooFew || locked;
               return (
-                <button key={n} onClick={() => !tooFew && setMaxPlayers(n)} disabled={tooFew}
-                  style={{ width: 52, height: 48, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: tooFew ? 'not-allowed' : 'pointer', border: `2px solid ${maxPlayers === n ? 'var(--black)' : 'var(--grey-200)'}`, background: maxPlayers === n ? 'var(--black)' : tooFew ? 'var(--grey-50)' : '#fff', color: maxPlayers === n ? '#fff' : tooFew ? 'var(--grey-300)' : 'var(--black)' }}>
+                <button key={n}
+                  onClick={() => { if (!disabled) { setMaxPlayers(n); setPlanError(''); } }}
+                  title={locked ? `Requiere Plan Pro (máx ${planLimit} en Free)` : undefined}
+                  style={{
+                    width: 52, height: 48,
+                    fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700,
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    border: `2px solid ${maxPlayers === n ? 'var(--black)' : locked ? 'var(--grey-100)' : 'var(--grey-200)'}`,
+                    background: maxPlayers === n ? 'var(--black)' : disabled ? 'var(--grey-50)' : '#fff',
+                    color: maxPlayers === n ? '#fff' : disabled ? 'var(--grey-300)' : 'var(--black)',
+                    position: 'relative',
+                  }}>
+                  {locked && <span style={{ position: 'absolute', top: 2, right: 3, fontSize: 8 }}>🔒</span>}
                   {n}
                 </button>
               );
             })}
-            <button disabled style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 48, border: '2px solid var(--grey-100)', background: 'var(--grey-50)', color: 'var(--grey-300)', cursor: 'not-allowed', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              <span style={{ fontSize: 14 }}>🔒</span> Más + <span style={{ fontSize: 9 }}>Próximamente</span>
-            </button>
           </div>
           <div style={{ marginTop: 10, fontSize: 11, color: 'var(--grey-400)' }}>
             {maxPlayers} jugadores · {maxPlayers / 2} parejas
           </div>
+          {getPlayerLimits().maxPlayersPerGame !== -1 && (
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--grey-400)' }}>
+              Plan Free: máx {getPlayerLimits().maxPlayersPerGame} jugadores.{' '}
+              <a href="/pricing" style={{ color: 'var(--black)', fontWeight: 700 }}>Activar Pro →</a>
+            </div>
+          )}
         </div>
 
         {/* Provisional player list */}
@@ -1316,6 +1347,17 @@ export default function QuickGamePage() {
             </div>
           )}
         </div>
+
+        {/* Plan gate error */}
+        {planError && (
+          <div style={{ marginTop: 20, padding: '14px 16px', background: '#fef3c7', border: '1px solid #fbbf24', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>🔒</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 4 }}>{planError}</div>
+              <a href="/pricing" style={{ fontSize: 12, color: '#92400e', fontWeight: 700, textDecoration: 'underline' }}>Ver Plan Pro ($3/mes) →</a>
+            </div>
+          </div>
+        )}
 
         {/* Submit */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28 }}>
