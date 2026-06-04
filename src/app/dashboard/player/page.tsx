@@ -38,6 +38,9 @@ export default function PlayerHomePage() {
   const [myActiveEvents, setMyActiveEvents] = useState<ReturnType<typeof getActiveEventsForPlayer>>([]);
   const [nextEvent, setNextEvent] = useState<UpcomingEvent | null>(null);
   const [recentMatches, setRecentMatches] = useState<MatchEntry[]>([]);
+  const [allMatchCount, setAllMatchCount] = useState(0);
+  const [totalWins, setTotalWins] = useState(0);
+  const [eventsPlayed, setEventsPlayed] = useState(0);
   const [pendingInvitations, setPendingInvitations] = useState<Invitation[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [showProfileReminder, setShowProfileReminder] = useState(false);
@@ -67,7 +70,11 @@ export default function PlayerHomePage() {
     const uid = currentUser.id;
     setMyActiveEvents(getActiveEventsForPlayer(uid));
     setNextEvent(getNextEventForPlayer(uid));
-    setRecentMatches(getMatchHistoryForPlayer(uid).slice(0, 10));
+    const allHistory = getMatchHistoryForPlayer(uid);
+    setRecentMatches(allHistory.slice(0, 10));
+    setAllMatchCount(allHistory.length);
+    setTotalWins(allHistory.filter(m => m.result === 'V').length);
+    setEventsPlayed(new Set(allHistory.map(m => m.gameId)).size);
     setPendingInvitations(getPendingInvitationsForPlayer(uid));
   }, [currentUser]);
 
@@ -218,13 +225,14 @@ export default function PlayerHomePage() {
       {/* Stats */}
       <div className="player-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
         {(() => {
-          const isNewPlayer = (playerData?.rankingPoints ?? 0) === 0 && recentMatches.length === 0;
-          const wins = recentMatches.filter(m => m.result === 'V').length;
+          const pts = playerData?.rankingPoints ?? 0;
+          const rankPos = playerData?.ranking ?? null;
+          const winRate = allMatchCount > 0 ? `${Math.round(totalWins / allMatchCount * 100)}% win rate` : '—';
           return [
-            { label: 'Torneos jugados', value: isNewPlayer ? '0' : '24', delta: isNewPlayer ? '' : '+3 este mes' },
-            { label: 'Victorias', value: String(wins), delta: recentMatches.length > 0 ? `${Math.round(wins / recentMatches.length * 100)}% win rate` : '—' },
-            { label: 'Ranking', value: isNewPlayer ? '—' : '#47', delta: isNewPlayer ? '' : '▲4 posiciones' },
-            { label: 'Puntos', value: isNewPlayer ? '0' : '1,840', delta: isNewPlayer ? '' : '+120 esta semana' },
+            { label: 'Torneos jugados', value: String(eventsPlayed), delta: '' },
+            { label: 'Victorias', value: String(totalWins), delta: winRate },
+            { label: 'Ranking', value: rankPos ? `#${rankPos}` : '—', delta: '' },
+            { label: 'Puntos', value: pts.toLocaleString(), delta: '' },
           ];
         })().map((s) => (
           <div key={s.label} className="player-stats-card" style={{ background: '#fff', padding: '28px 24px' }}>
