@@ -20,6 +20,7 @@ import {
   type UpcomingEvent,
 } from '@/lib/match-history';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import PlanUsageBanner from '@/components/PlanUsageBanner';
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   created:       { label: 'Inscripto',     color: 'var(--grey-400)' },
@@ -131,6 +132,9 @@ export default function PlayerHomePage() {
           {toast}
         </div>
       )}
+
+      {/* Plan usage banner */}
+      <PlanUsageBanner role="player" />
 
       {/* Header */}
       <div style={{ marginBottom: 40 }}>

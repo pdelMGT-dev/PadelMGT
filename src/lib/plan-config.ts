@@ -139,3 +139,8 @@ export function isPlayerProOrAbove(): boolean {
   const plan = getUserPlan();
   return plan !== 'free';
 }
+
+/** Read current month usage — used by UI to display progress bars. */
+export function getMonthlyUsage(): { games: number; tournaments: number } {
+  return readUsage();
+}

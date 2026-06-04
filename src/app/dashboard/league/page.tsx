@@ -6,6 +6,7 @@ import { useLeague } from '@/hooks/useLeague';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { createLeague } from '@/lib/league-store';
 import { createSeason } from '@/lib/league-season-store';
+import PlanUsageBanner from '@/components/PlanUsageBanner';
 
 function EmptyState({ onCreated }: { onCreated: () => void }) {
   const { user } = useCurrentUser();
@@ -111,6 +112,7 @@ export default function LeagueDashboardPage() {
 
   return (
     <div style={{ padding: '40px 40px 80px' }}>
+      <PlanUsageBanner role="league_organizer" />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Panel de Liga</div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
 import { useToast } from '@/components/ToastProvider';
+import PlanUsageBanner from '@/components/PlanUsageBanner';
 import { getClubMembersByName } from '@/lib/club-membership-store';
 import { getAllPlayers } from '@/lib/player-store';
 
@@ -573,6 +574,7 @@ export default function ClubDashboardPage() {
 
       {/* Content */}
       <div style={{ padding: '40px 40px 0' }}>
+        {tab === 'resumen' && <PlanUsageBanner role="club_manager" />}
         {tab === 'resumen'     && <ResumenSection players={players} games={games} />}
         {tab === 'jugadores' && (
           <div>
