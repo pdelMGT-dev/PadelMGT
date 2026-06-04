@@ -1121,7 +1121,7 @@ export default function PlayerTournamentsPage() {
           )}
 
           {/* Card 4: Puntuación */}
-          {tFormat && (
+          {tFormat && tFormat !== 'knockout' && (
             <div style={card}>
               <div style={secTitle}>Puntuación</div>
 
