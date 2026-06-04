@@ -64,6 +64,7 @@ export function createTournament(params: {
   levelLabel?: string;
   pjTarget?: number;
   knockoutConfig?: KnockoutConfig;
+  groupScoreConfig?: ScoreConfig;
 }): Tournament {
   const t: Tournament = {
     id: generateId(),
@@ -91,6 +92,7 @@ export function createTournament(params: {
     levelLabel: params.levelLabel,
     pjTarget: params.pjTarget,
     knockoutConfig: params.knockoutConfig,
+    groupScoreConfig: params.groupScoreConfig,
     createdAt: new Date().toISOString(),
   };
   saveTournament(t);

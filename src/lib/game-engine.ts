@@ -137,6 +137,7 @@ export interface ActiveGame {
   bracket?: KnockoutBracket;  // for knockout/world_cup
   groups?: GroupStage;        // for world_cup / knockout phase I
   knockoutConfig?: KnockoutConfig;
+  groupScoreConfig?: ScoreConfig; // knockout with groups: separate score config for group stage
   isCreator?: boolean;        // set by UI when rendering for creator
   cancelledAt?: string;       // ISO date if game was cancelled
   createdAt?: string;         // ISO date when game was first created

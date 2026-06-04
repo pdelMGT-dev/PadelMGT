@@ -202,8 +202,15 @@ export default function PlayerTournamentsPage() {
 
   // ── Knockout config ──────────────────────────────────────────────────────────
   const [tKOHasGroups, setTKOHasGroups] = useState(false);
-  const [tKONumGroups, setTKONumGroups] = useState(2);
+  const [tKONumGroups, setTKONumGroups] = useState(4);
+  const [tKOTeamsPerGroup, setTKOTeamsPerGroup] = useState(3);
   const [tKOTeamsAdvancing, setTKOTeamsAdvancing] = useState(1);
+  // Group-phase score params (same type as main tScoreType, separate params)
+  const [tGrpSets, setTGrpSets] = useState(1);
+  const [tGrpGames, setTGrpGames] = useState(6);
+  const [tGrpTiebreak, setTGrpTiebreak] = useState(7);
+  const [tGrpDeuce, setTGrpDeuce] = useState<'ventaja' | 'oro' | 'plata' | 'ipf'>('oro');
+  const [tGrpTarget, setTGrpTarget] = useState(24);
 
   // ── Step 3 ──────────────────────────────────────────────────────────────────
   const [tPlayers, setTPlayers] = useState<TournamentPlayer[]>([]);
@@ -240,6 +247,20 @@ export default function PlayerTournamentsPage() {
     ));
     setTournamentsLoading(false);
   }, [currentUser]);
+
+  // Auto-derive maxPlayers for knockout with groups
+  useEffect(() => {
+    if (tFormat === 'knockout' && tKOHasGroups) {
+      setTMaxPlayers(tKONumGroups * tKOTeamsPerGroup * 2);
+    }
+  }, [tFormat, tKOHasGroups, tKONumGroups, tKOTeamsPerGroup]);
+
+  // Clamp teamsAdvancing when teamsPerGroup changes
+  useEffect(() => {
+    if (tKOTeamsAdvancing >= tKOTeamsPerGroup) {
+      setTKOTeamsAdvancing(Math.max(1, tKOTeamsPerGroup - 1));
+    }
+  }, [tKOTeamsPerGroup, tKOTeamsAdvancing]);
 
   // Load friends when entering step 3
   useEffect(() => {
@@ -319,13 +340,12 @@ export default function PlayerTournamentsPage() {
   const step2Valid = useMemo(() => {
     if (!tFormat) return false;
     if (!FORMAT_INFO[tFormat].functional) return false;
-    // Knockout: if groups, need even pair count ≥ numGroups*2
     if (tFormat === 'knockout' && tKOHasGroups) {
-      const numPairs = tMaxPlayers / 2;
-      if (numPairs < tKONumGroups * 2) return false;
+      if (tKOTeamsPerGroup < 2) return false;
+      if (tKOTeamsAdvancing < 1 || tKOTeamsAdvancing >= tKOTeamsPerGroup) return false;
     }
     return true;
-  }, [tFormat, tKOHasGroups, tKONumGroups, tMaxPlayers]);
+  }, [tFormat, tKOHasGroups, tKONumGroups, tKOTeamsPerGroup, tKOTeamsAdvancing]);
 
   // ── Reset ────────────────────────────────────────────────────────────────────
   function resetWizard() {
@@ -341,7 +361,8 @@ export default function PlayerTournamentsPage() {
     setTProvName(''); setTShowProvInput(false); setTShowAddPanel(false);
     setTPairAssignments([]); setTPairsLocked(false);
     setTDragId(null); setTDragSource(null); setTDropOver(null);
-    setTKOHasGroups(false); setTKONumGroups(2); setTKOTeamsAdvancing(1);
+    setTKOHasGroups(false); setTKONumGroups(4); setTKOTeamsPerGroup(3); setTKOTeamsAdvancing(1);
+    setTGrpSets(1); setTGrpGames(6); setTGrpTiebreak(7); setTGrpDeuce('oro'); setTGrpTarget(24);
     setNewTId(''); setNewTCode(''); setNewTShareUrl(''); setCopied(false);
   }
 
@@ -368,6 +389,13 @@ export default function PlayerTournamentsPage() {
           deuce: tDeuce,
           ...(tFormat === 'round_robin' ? { allowTies: tAllowTies } : {}),
         };
+
+    // Knockout with groups: separate score config for group stage phase
+    const groupScoreConfig = (tFormat === 'knockout' && tKOHasGroups)
+      ? (tScoreType === 'points'
+          ? { type: 'points' as const, target: tGrpTarget }
+          : { type: 'traditional' as const, setsPerMatch: tGrpSets, gamesPerSet: tGrpGames, tiebreak: tGrpTiebreak, deuce: tGrpDeuce })
+      : undefined;
 
     // Only creator + provisionals go to confirmed players
     const confirmedPlayers = tPlayers.filter(p => p.isCreator || p.id.startsWith('prov-'));
@@ -421,8 +449,9 @@ export default function PlayerTournamentsPage() {
         hasGroups: tKOHasGroups,
         numGroups: tKOHasGroups ? tKONumGroups : 0,
         teamsAdvancing: tKOHasGroups ? tKOTeamsAdvancing : 0,
-        currentPhase: 'bracket',
+        currentPhase: tKOHasGroups ? 'group_stage' : 'bracket',
       } : undefined,
+      groupScoreConfig,
     });
 
     if (tPairsLocked && tPairAssignments.length > 0) {
@@ -769,59 +798,214 @@ export default function PlayerTournamentsPage() {
           </div>
 
           {/* Knockout config — shown when format = knockout */}
-          {tFormat === 'knockout' && (
-            <>
-              <div style={{ padding: '12px 16px', background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.3)', marginBottom: 8, fontSize: 12, color: 'var(--black)' }}>
-                Knockout siempre es por <strong>Parejas</strong>. Los jugadores se organizan en parejas antes de iniciar.
+          {tFormat === 'knockout' && (() => {
+            const koPlayers = tKONumGroups * tKOTeamsPerGroup * 2;
+            const totalQual  = tKONumGroups * tKOTeamsAdvancing;
+            let bracketSize = 2; while (bracketSize < totalQual) bracketSize *= 2;
+            const needsBestOf = totalQual < bracketSize;
+            const deuceBtns = (
+              curVal: 'ventaja'|'oro'|'plata'|'ipf',
+              setter: (v: 'ventaja'|'oro'|'plata'|'ipf') => void,
+            ) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {([
+                  { v: 'ventaja' as const, label: 'Ventaja Tradicional', desc: 'D y AD hasta ganar 2 consecutivos.' },
+                  { v: 'oro'     as const, label: 'Punto de Oro',        desc: 'El siguiente punto en Deuce gana el game.' },
+                  { v: 'plata'   as const, label: 'Punto de Plata',      desc: 'Ventaja al primero en puntuar en Deuce. Si la pierde, vuelve a Deuce.' },
+                  { v: 'ipf'     as const, label: 'IPF',                 desc: 'Punto de Oro federado. El siguiente punto gana.' },
+                ] as const).map(o => (
+                  <button key={o.v} onClick={() => setter(o.v)}
+                    style={{ padding: '10px 14px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, border: `1px solid ${curVal === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: curVal === o.v ? '#111' : '#fff', color: curVal === o.v ? '#fff' : 'var(--black)' }}>
+                    <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${curVal === o.v ? 'var(--neon)' : 'var(--grey-300)'}`, background: curVal === o.v ? 'var(--neon)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{o.label}</div>
+                      <div style={{ fontSize: 10, color: curVal === o.v ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.4 }}>{o.desc}</div>
+                    </div>
+                  </button>
+                ))}
               </div>
-              <div style={card}>
-                <div style={secTitle}>Fase I — Grupos (opcional)</div>
-                <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 12 }}>
-                  ¿Deseas una fase de grupos clasificatoria antes del cuadro de eliminatorias?
+            );
+            const traditionalParams = (
+              sets: number, setSets: (n:number)=>void,
+              games: number, setGames: (n:number)=>void,
+              tb: number, setTb: (n:number)=>void,
+              deuce: 'ventaja'|'oro'|'plata'|'ipf', setDeuce: (v:'ventaja'|'oro'|'plata'|'ipf')=>void,
+            ) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={lbl}>Sets por partido</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[1, 2, 3].map(n => (
+                      <button key={n} onClick={() => setSets(n)}
+                        style={{ flex: 1, padding: '12px 8px', border: `2px solid ${sets === n ? 'var(--black)' : 'var(--grey-200)'}`, background: sets === n ? 'var(--black)' : '#fff', color: sets === n ? '#fff' : 'var(--black)', cursor: 'pointer', textAlign: 'center' }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{n}</div>
+                        <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 3, color: sets === n ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>
+                          {n === 1 ? 'set' : n === 2 ? 'sets (tb)' : 'best of 3'}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 6 }}>
+                    {sets === 2 ? 'Si cada equipo gana 1 set, se juega tiebreak para desempatar.' : sets === 3 ? 'Gana el primero en ganar 2 sets.' : 'El que gana el set, gana el partido.'}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: 10, marginBottom: tKOHasGroups ? 20 : 0 }}>
-                  {([{ label: 'Sin grupos', val: false }, { label: 'Con grupos', val: true }] as const).map(o => (
-                    <button key={String(o.val)} onClick={() => setTKOHasGroups(o.val)}
-                      style={{ flex: 1, padding: '12px', border: `2px solid ${tKOHasGroups === o.val ? 'var(--black)' : 'var(--grey-200)'}`, background: tKOHasGroups === o.val ? 'var(--black)' : '#fff', color: tKOHasGroups === o.val ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>
-                      {o.label}
+                <div>
+                  <label style={lbl}>Games por set</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[4, 5, 6].map(n => (
+                      <button key={n} onClick={() => setGames(n)}
+                        style={{ width: 48, height: 42, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${games === n ? 'var(--black)' : 'var(--grey-200)'}`, background: games === n ? 'var(--black)' : '#fff', color: games === n ? '#fff' : 'var(--black)' }}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label style={lbl}>Tiebreak a</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[7, 10].map(n => (
+                      <button key={n} onClick={() => setTb(n)}
+                        style={{ width: 52, height: 42, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tb === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tb === n ? 'var(--black)' : '#fff', color: tb === n ? '#fff' : 'var(--black)' }}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label style={lbl}>Regla de Deuce / Ventaja</label>
+                  {deuceBtns(deuce, setDeuce)}
+                </div>
+              </div>
+            );
+            const pointsParam = (target: number, setter: (n:number)=>void) => (
+              <div>
+                <label style={lbl}>Puntos objetivo</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[16, 24, 32].map(n => (
+                    <button key={n} onClick={() => setter(n)}
+                      style={{ width: 58, height: 48, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${target === n ? 'var(--black)' : 'var(--grey-200)'}`, background: target === n ? 'var(--black)' : '#fff', color: target === n ? '#fff' : 'var(--black)' }}>
+                      {n}
                     </button>
                   ))}
                 </div>
-                {tKOHasGroups && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <div>
-                      <label style={lbl}>Número de grupos</label>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
-                          <button key={n} onClick={() => setTKONumGroups(n)}
-                            style={{ width: 44, height: 40, fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tKONumGroups === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tKONumGroups === n ? 'var(--black)' : '#fff', color: tKONumGroups === n ? '#fff' : 'var(--black)' }}>
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label style={lbl}>Equipos que avanzan por grupo</label>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        {[1, 2].map(n => (
-                          <button key={n} onClick={() => setTKOTeamsAdvancing(n)}
-                            style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tKOTeamsAdvancing === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tKOTeamsAdvancing === n ? 'var(--black)' : '#fff', color: tKOTeamsAdvancing === n ? '#fff' : 'var(--black)' }}>
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {tKOHasGroups && (
-                  <div style={{ marginTop: 12, fontSize: 11, color: 'var(--grey-400)' }}>
-                    Con {tMaxPlayers} jugadores ({tMaxPlayers / 2} parejas), {tKONumGroups} grupos de {Math.ceil(tMaxPlayers / 2 / tKONumGroups)} parejas c/u.
-                    Avanzan {tKOTeamsAdvancing * tKONumGroups} equipos al cuadro.
-                  </div>
-                )}
               </div>
-            </>
-          )}
+            );
+            return (
+              <>
+                <div style={{ padding: '12px 16px', background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.3)', marginBottom: 8, fontSize: 12, color: 'var(--black)' }}>
+                  Knockout siempre es por <strong>Parejas</strong>. Los jugadores se organizan en parejas antes de iniciar.
+                </div>
+
+                {/* PHASE I: Groups */}
+                <div style={card}>
+                  <div style={secTitle}>Fase I — Grupos (opcional)</div>
+                  <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 12 }}>
+                    ¿Deseas una fase de grupos clasificatoria antes del cuadro de eliminatorias?
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, marginBottom: tKOHasGroups ? 20 : 0 }}>
+                    {([{ label: 'Sin grupos', val: false }, { label: 'Con grupos', val: true }] as const).map(o => (
+                      <button key={String(o.val)} onClick={() => setTKOHasGroups(o.val)}
+                        style={{ flex: 1, padding: '12px', border: `2px solid ${tKOHasGroups === o.val ? 'var(--black)' : 'var(--grey-200)'}`, background: tKOHasGroups === o.val ? 'var(--black)' : '#fff', color: tKOHasGroups === o.val ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  {tKOHasGroups && (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
+                        <div>
+                          <label style={lbl}>Número de grupos</label>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                            {[2,3,4,5,6,7,8,9,10].map(n => (
+                              <button key={n} onClick={() => setTKONumGroups(n)}
+                                style={{ width: 40, height: 38, fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tKONumGroups === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tKONumGroups === n ? 'var(--black)' : '#fff', color: tKONumGroups === n ? '#fff' : 'var(--black)' }}>
+                                {n}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label style={lbl}>Equipos por grupo</label>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                            {[2,3,4,5,6,7,8,9,10].map(n => (
+                              <button key={n} onClick={() => setTKOTeamsPerGroup(n)}
+                                style={{ width: 40, height: 38, fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tKOTeamsPerGroup === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tKOTeamsPerGroup === n ? 'var(--black)' : '#fff', color: tKOTeamsPerGroup === n ? '#fff' : 'var(--black)' }}>
+                                {n}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label style={lbl}>Clasifican por grupo</label>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                            {Array.from({ length: Math.max(1, tKOTeamsPerGroup - 1) }, (_, i) => i + 1).map(n => (
+                              <button key={n} onClick={() => setTKOTeamsAdvancing(n)}
+                                style={{ width: 40, height: 38, fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tKOTeamsAdvancing === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tKOTeamsAdvancing === n ? 'var(--black)' : '#fff', color: tKOTeamsAdvancing === n ? '#fff' : 'var(--black)' }}>
+                                {n}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Auto-calculated summary */}
+                      <div style={{ background: 'var(--black)', color: '#fff', padding: '16px 20px', marginBottom: needsBestOf ? 8 : 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, color: 'var(--neon)', lineHeight: 1 }}>{koPlayers}</div>
+                            <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)', marginTop: 3 }}>Jugadores totales</div>
+                          </div>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>
+                            {tKONumGroups} grupos × {tKOTeamsPerGroup} equipos × 2 jugadores = <strong style={{ color: '#fff' }}>{koPlayers} jugadores</strong><br />
+                            {totalQual} equipos clasifican → cuadro de {bracketSize}
+                            {needsBestOf && <span style={{ color: 'var(--neon)' }}> (+{bracketSize - totalQual} mejores no clasificados)</span>}
+                          </div>
+                        </div>
+                      </div>
+                      {needsBestOf && (
+                        <div style={{ padding: '10px 14px', background: '#fffbeb', border: '1px solid #fcd34d', fontSize: 11, color: '#92400e' }}>
+                          ℹ️ Con {totalQual} equipos clasificados el cuadro será de {bracketSize}. El sistema seleccionará automáticamente los {bracketSize - totalQual} mejores equipos no clasificados para completarlo.
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* PUNTUACIÓN */}
+                <div style={card}>
+                  <div style={secTitle}>Puntuación</div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+                    {[{ v: 'points', label: 'Por Puntos' }, { v: 'traditional', label: 'Tradicional (sets)' }].map(o => (
+                      <button key={o.v} onClick={() => setTScoreType(o.v as 'points' | 'traditional')}
+                        style={{ padding: '10px 18px', border: `2px solid ${tScoreType === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tScoreType === o.v ? 'var(--black)' : '#fff', color: tScoreType === o.v ? '#fff' : 'var(--black)', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  {tKOHasGroups ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                      <div style={{ borderRight: '1px solid var(--grey-100)', paddingRight: 20 }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--grey-100)' }}>Fase I — Grupos</div>
+                        {tScoreType === 'traditional'
+                          ? traditionalParams(tGrpSets, setTGrpSets, tGrpGames, setTGrpGames, tGrpTiebreak, setTGrpTiebreak, tGrpDeuce, setTGrpDeuce)
+                          : pointsParam(tGrpTarget, setTGrpTarget)}
+                      </div>
+                      <div style={{ paddingLeft: 4 }}>
+                        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--grey-100)' }}>Fase II — Knockout</div>
+                        {tScoreType === 'traditional'
+                          ? traditionalParams(tSets, setTSets, tGames, setTGames, tTiebreak, setTTiebreak, tDeuce, setTDeuce)
+                          : pointsParam(tPtTarget, setTPtTarget)}
+                      </div>
+                    </div>
+                  ) : (
+                    tScoreType === 'traditional'
+                      ? traditionalParams(tSets, setTSets, tGames, setTGames, tTiebreak, setTTiebreak, tDeuce, setTDeuce)
+                      : pointsParam(tPtTarget, setTPtTarget)
+                  )}
+                </div>
+              </>
+            );
+          })()}
 
           {/* Card 2: Modalidad (only if format is functional and not knockout) */}
           {tFormat && fmtFunctional && tFormat !== 'knockout' && (
@@ -858,38 +1042,51 @@ export default function PlayerTournamentsPage() {
           {tFormat && (
             <div style={card}>
               <div style={secTitle}>Jugadores y canchas</div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={lbl}>Jugadores</label>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {PLAYER_COUNT_OPTIONS.map(n => {
-                    const planLimit = getPlayerLimits().maxPlayersPerTournament;
-                    const locked = planLimit !== -1 && n > planLimit;
-                    return (
-                      <button key={n}
-                        onClick={() => { if (!locked) { setTMaxPlayers(n); setPlanError(''); } }}
-                        title={locked ? `Requiere Plan Pro (máx ${planLimit} en Free)` : undefined}
-                        style={{
-                          width: 52, height: 44,
-                          fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700,
-                          cursor: locked ? 'not-allowed' : 'pointer',
-                          border: `2px solid ${tMaxPlayers === n ? 'var(--black)' : locked ? 'var(--grey-100)' : 'var(--grey-200)'}`,
-                          background: tMaxPlayers === n ? 'var(--black)' : locked ? 'var(--grey-50)' : '#fff',
-                          color: tMaxPlayers === n ? '#fff' : locked ? 'var(--grey-300)' : 'var(--black)',
-                          position: 'relative',
-                        }}>
-                        {locked && <span style={{ position: 'absolute', top: 1, right: 2, fontSize: 8 }}>🔒</span>}
-                        {n}
-                      </button>
-                    );
-                  })}
-                </div>
-                {getPlayerLimits().maxPlayersPerTournament !== -1 && (
-                  <div style={{ marginTop: 8, fontSize: 11, color: 'var(--grey-400)' }}>
-                    Plan Free: máx {getPlayerLimits().maxPlayersPerTournament} jugadores.{' '}
-                    <a href="/pricing" style={{ color: 'var(--black)', fontWeight: 700 }}>Activar Pro →</a>
+              {tFormat === 'knockout' && tKOHasGroups ? (
+                /* Knockout with groups: player count is auto-calculated */
+                <div style={{ marginBottom: 16 }}>
+                  <label style={lbl}>Jugadores (calculado automáticamente)</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)' }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 700, color: 'var(--black)', lineHeight: 1 }}>{tMaxPlayers}</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-500)' }}>
+                      {tKONumGroups} grupos × {tKOTeamsPerGroup} equipos × 2 jugadores
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={lbl}>Jugadores</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {PLAYER_COUNT_OPTIONS.map(n => {
+                      const planLimit = getPlayerLimits().maxPlayersPerTournament;
+                      const locked = planLimit !== -1 && n > planLimit;
+                      return (
+                        <button key={n}
+                          onClick={() => { if (!locked) { setTMaxPlayers(n); setPlanError(''); } }}
+                          title={locked ? `Requiere Plan Pro (máx ${planLimit} en Free)` : undefined}
+                          style={{
+                            width: 52, height: 44,
+                            fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700,
+                            cursor: locked ? 'not-allowed' : 'pointer',
+                            border: `2px solid ${tMaxPlayers === n ? 'var(--black)' : locked ? 'var(--grey-100)' : 'var(--grey-200)'}`,
+                            background: tMaxPlayers === n ? 'var(--black)' : locked ? 'var(--grey-50)' : '#fff',
+                            color: tMaxPlayers === n ? '#fff' : locked ? 'var(--grey-300)' : 'var(--black)',
+                            position: 'relative',
+                          }}>
+                          {locked && <span style={{ position: 'absolute', top: 1, right: 2, fontSize: 8 }}>🔒</span>}
+                          {n}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {getPlayerLimits().maxPlayersPerTournament !== -1 && (
+                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--grey-400)' }}>
+                      Plan Free: máx {getPlayerLimits().maxPlayersPerTournament} jugadores.{' '}
+                      <a href="/pricing" style={{ color: 'var(--black)', fontWeight: 700 }}>Activar Pro →</a>
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <label style={lbl}>Canchas (pistas)</label>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1019,7 +1216,7 @@ export default function PlayerTournamentsPage() {
                   </div>
                 </div>
               ) : (
-                /* Other formats: show both scoring options */
+                /* Other formats (round_robin, knockout-without-groups): both scoring options */
                 <>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                     {[{ v: 'points', label: 'Por Puntos' }, { v: 'traditional', label: 'Tradicional (sets)' }].map(o => (
@@ -1049,12 +1246,18 @@ export default function PlayerTournamentsPage() {
                       <div>
                         <label style={lbl}>Sets por partido</label>
                         <div style={{ display: 'flex', gap: 8 }}>
-                          {[1, 3].map(n => (
+                          {[1, 2, 3].map(n => (
                             <button key={n} onClick={() => setTSets(n)}
-                              style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tSets === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tSets === n ? 'var(--black)' : '#fff', color: tSets === n ? '#fff' : 'var(--black)' }}>
-                              {n}
+                              style={{ flex: 1, padding: '12px 8px', border: `2px solid ${tSets === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tSets === n ? 'var(--black)' : '#fff', color: tSets === n ? '#fff' : 'var(--black)', cursor: 'pointer', textAlign: 'center' }}>
+                              <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{n}</div>
+                              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 3, color: tSets === n ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>
+                                {n === 1 ? 'set' : n === 2 ? 'sets (tb)' : 'best of 3'}
+                              </div>
                             </button>
                           ))}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 6 }}>
+                          {tSets === 2 ? 'Con 1-1 se juega tiebreak para desempatar.' : tSets === 3 ? 'Gana el primero en ganar 2 sets.' : 'El que gana el único set gana el partido.'}
                         </div>
                       </div>
                       <div>
@@ -1080,12 +1283,21 @@ export default function PlayerTournamentsPage() {
                         </div>
                       </div>
                       <div>
-                        <label style={lbl}>Regla de Deuce</label>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          {[{ v: 'ventaja', label: 'Ventaja' }, { v: 'oro', label: 'Punto de Oro' }].map(o => (
-                            <button key={o.v} onClick={() => setTDeuce(o.v as 'ventaja' | 'oro')}
-                              style={{ padding: '10px 18px', border: `2px solid ${tDeuce === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tDeuce === o.v ? 'var(--black)' : '#fff', color: tDeuce === o.v ? '#fff' : 'var(--black)', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                              {o.label}
+                        <label style={lbl}>Regla de Deuce / Ventaja</label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {([
+                            { v: 'ventaja' as const, label: 'Ventaja Tradicional', desc: 'D y AD hasta que un equipo gane 2 puntos consecutivos.' },
+                            { v: 'oro'     as const, label: 'Punto de Oro',        desc: 'En Deuce, el siguiente punto gana el game.' },
+                            { v: 'plata'   as const, label: 'Punto de Plata',      desc: 'Ventaja al primero en puntuar. Si la pierde, vuelve a Deuce.' },
+                            { v: 'ipf'     as const, label: 'IPF',                 desc: 'Como Punto de Oro. Reglamento federado.' },
+                          ]).map(o => (
+                            <button key={o.v} onClick={() => setTDeuce(o.v)}
+                              style={{ padding: '10px 14px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, border: `1px solid ${tDeuce === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tDeuce === o.v ? '#111' : '#fff', color: tDeuce === o.v ? '#fff' : 'var(--black)' }}>
+                              <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${tDeuce === o.v ? 'var(--neon)' : 'var(--grey-300)'}`, background: tDeuce === o.v ? 'var(--neon)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{o.label}</div>
+                                <div style={{ fontSize: 10, color: tDeuce === o.v ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.4 }}>{o.desc}</div>
+                              </div>
                             </button>
                           ))}
                         </div>
