@@ -30,7 +30,7 @@ const FORMAT_INFO: Record<FormatKey, { label: string; desc: string; functional: 
   mexicano:    { label: 'Mexicano',    desc: 'Rotación dinámica según posición en el ranking del torneo.',              functional: true  },
   round_robin: { label: 'Round Robin', desc: 'Todos contra todos. Puntuación tradicional (sets/games). Parejas rotan.',  functional: true  },
   team_league: { label: 'Team League', desc: 'Liga por equipos con jornadas semanales.',                               functional: false },
-  knockout:    { label: 'Knockout',    desc: 'Eliminación directa, un perdedor queda afuera.',                         functional: false },
+  knockout:    { label: 'Knockout',    desc: 'Eliminación directa por parejas. Fase de grupos opcional + cuadro.',     functional: true  },
   world_cup:   { label: 'World Cup',   desc: 'Fase de grupos seguida de eliminatorias directas.',                      functional: false },
 };
 const FORMAT_LABEL: Record<string, string> = {
@@ -200,6 +200,11 @@ export default function PlayerTournamentsPage() {
   const [tPjTarget, setTPjTarget] = useState(4);      // round_robin: games per player
   const [tAllowTies, setTAllowTies] = useState(false); // round_robin: allow set tie (6-6)
 
+  // ── Knockout config ──────────────────────────────────────────────────────────
+  const [tKOHasGroups, setTKOHasGroups] = useState(false);
+  const [tKONumGroups, setTKONumGroups] = useState(2);
+  const [tKOTeamsAdvancing, setTKOTeamsAdvancing] = useState(1);
+
   // ── Step 3 ──────────────────────────────────────────────────────────────────
   const [tPlayers, setTPlayers] = useState<TournamentPlayer[]>([]);
   const [tInvited, setTInvited] = useState<InvitedEntry[]>([]);
@@ -313,8 +318,14 @@ export default function PlayerTournamentsPage() {
 
   const step2Valid = useMemo(() => {
     if (!tFormat) return false;
-    return FORMAT_INFO[tFormat].functional;
-  }, [tFormat]);
+    if (!FORMAT_INFO[tFormat].functional) return false;
+    // Knockout: if groups, need even pair count ≥ numGroups*2
+    if (tFormat === 'knockout' && tKOHasGroups) {
+      const numPairs = tMaxPlayers / 2;
+      if (numPairs < tKONumGroups * 2) return false;
+    }
+    return true;
+  }, [tFormat, tKOHasGroups, tKONumGroups, tMaxPlayers]);
 
   // ── Reset ────────────────────────────────────────────────────────────────────
   function resetWizard() {
@@ -330,6 +341,7 @@ export default function PlayerTournamentsPage() {
     setTProvName(''); setTShowProvInput(false); setTShowAddPanel(false);
     setTPairAssignments([]); setTPairsLocked(false);
     setTDragId(null); setTDragSource(null); setTDropOver(null);
+    setTKOHasGroups(false); setTKONumGroups(2); setTKOTeamsAdvancing(1);
     setNewTId(''); setNewTCode(''); setNewTShareUrl(''); setCopied(false);
   }
 
@@ -387,6 +399,7 @@ export default function PlayerTournamentsPage() {
       ...registeredInvites,
     ];
 
+    const isKnockout = tFormat === 'knockout';
     const tournament = createTournament({
       name: tName.trim() || `Torneo ${FORMAT_LABEL[tFormat ?? 'americano']}`,
       date: tDate,
@@ -395,8 +408,8 @@ export default function PlayerTournamentsPage() {
       city: resolvedCity() || '–',
       country: resolvedCountry() || '–',
       format: tFormat ?? 'americano',
-      pairType: tModalidad as 'individual' | 'parejas',
-      mixto: tMixto,
+      pairType: isKnockout ? 'parejas' : (tModalidad as 'individual' | 'parejas'),
+      mixto: isKnockout ? false : tMixto,
       scoreConfig,
       maxPlayers: tMaxPlayers,
       courts: tCourts,
@@ -404,6 +417,12 @@ export default function PlayerTournamentsPage() {
       invitedPlayers: allInvited,
       creatorId: currentUser.id,
       pjTarget: tFormat === 'round_robin' ? tPjTarget : undefined,
+      knockoutConfig: isKnockout ? {
+        hasGroups: tKOHasGroups,
+        numGroups: tKOHasGroups ? tKONumGroups : 0,
+        teamsAdvancing: tKOHasGroups ? tKOTeamsAdvancing : 0,
+        currentPhase: 'bracket',
+      } : undefined,
     });
 
     if (tPairsLocked && tPairAssignments.length > 0) {
@@ -749,8 +768,63 @@ export default function PlayerTournamentsPage() {
             </div>
           </div>
 
-          {/* Card 2: Modalidad (only if format is functional) */}
-          {tFormat && fmtFunctional && (
+          {/* Knockout config — shown when format = knockout */}
+          {tFormat === 'knockout' && (
+            <>
+              <div style={{ padding: '12px 16px', background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.3)', marginBottom: 8, fontSize: 12, color: 'var(--black)' }}>
+                Knockout siempre es por <strong>Parejas</strong>. Los jugadores se organizan en parejas antes de iniciar.
+              </div>
+              <div style={card}>
+                <div style={secTitle}>Fase I — Grupos (opcional)</div>
+                <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 12 }}>
+                  ¿Deseas una fase de grupos clasificatoria antes del cuadro de eliminatorias?
+                </div>
+                <div style={{ display: 'flex', gap: 10, marginBottom: tKOHasGroups ? 20 : 0 }}>
+                  {([{ label: 'Sin grupos', val: false }, { label: 'Con grupos', val: true }] as const).map(o => (
+                    <button key={String(o.val)} onClick={() => setTKOHasGroups(o.val)}
+                      style={{ flex: 1, padding: '12px', border: `2px solid ${tKOHasGroups === o.val ? 'var(--black)' : 'var(--grey-200)'}`, background: tKOHasGroups === o.val ? 'var(--black)' : '#fff', color: tKOHasGroups === o.val ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                {tKOHasGroups && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <label style={lbl}>Número de grupos</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {[2, 4, 8].map(n => (
+                          <button key={n} onClick={() => setTKONumGroups(n)}
+                            style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tKONumGroups === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tKONumGroups === n ? 'var(--black)' : '#fff', color: tKONumGroups === n ? '#fff' : 'var(--black)' }}>
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={lbl}>Equipos que avanzan por grupo</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {[1, 2].map(n => (
+                          <button key={n} onClick={() => setTKOTeamsAdvancing(n)}
+                            style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tKOTeamsAdvancing === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tKOTeamsAdvancing === n ? 'var(--black)' : '#fff', color: tKOTeamsAdvancing === n ? '#fff' : 'var(--black)' }}>
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {tKOHasGroups && (
+                  <div style={{ marginTop: 12, fontSize: 11, color: 'var(--grey-400)' }}>
+                    Con {tMaxPlayers} jugadores ({tMaxPlayers / 2} parejas), {tKONumGroups} grupos de {Math.ceil(tMaxPlayers / 2 / tKONumGroups)} parejas c/u.
+                    Avanzan {tKOTeamsAdvancing * tKONumGroups} equipos al cuadro.
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Card 2: Modalidad (only if format is functional and not knockout) */}
+          {tFormat && fmtFunctional && tFormat !== 'knockout' && (
             <div style={card}>
               <div style={secTitle}>Modalidad</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -765,7 +839,7 @@ export default function PlayerTournamentsPage() {
           )}
 
           {/* Card 2b: Mixto toggle (only for americano/mexicano) */}
-          {tFormat && fmtFunctional && (tFormat === 'americano' || tFormat === 'mexicano') && (
+          {tFormat && fmtFunctional && tFormat !== 'knockout' && (tFormat === 'americano' || tFormat === 'mexicano') && (
             <div style={card}>
               <div style={secTitle}>Mixto</div>
               <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 12 }}>¿Es torneo mixto (Hombres + Mujeres)?</div>

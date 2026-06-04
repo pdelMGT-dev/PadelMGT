@@ -17,6 +17,12 @@ import {
   calculateStandings,
 } from '@/lib/game-engine';
 import type { GameRound, GamePlayer, Standing, FixedPair, CourtMatch } from '@/lib/game-engine';
+import {
+  updateKnockoutGroupMatch,
+  advanceGroupsToKnockout,
+  updateKnockoutBracketMatch,
+} from '@/lib/tournament-engine';
+import KnockoutBracketView from '@/components/KnockoutBracketView';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -171,6 +177,10 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   const [setInputs, setSetInputs] = useState<Record<string, Array<{ p1: string; p2: string }>>>({});
   // Courts in temporary edit mode (key = `${roundNum}-${courtNum}`)
   const [editingCourts, setEditingCourts] = useState<Set<string>>(new Set());
+
+  // Knockout group score inputs: key = `${groupId}-${courtNum}`, value = { p1: string; p2: string }
+  const [koGroupInputs, setKOGroupInputs] = useState<Record<string, { p1: string; p2: string }>>({});
+  const [advanceConfirm, setAdvanceConfirm] = useState(false);
 
   // ── User loaded via useCurrentUser hook ──────────────────────────────────
 
@@ -648,7 +658,9 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
             {t.name}
           </div>
           <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 2 }}>
-            Ronda {currentRoundNum} / {expectedTotalRounds}
+            {t.format === 'knockout'
+              ? (t.knockoutConfig?.currentPhase === 'group_stage' ? 'Fase I: Grupos' : 'Fase II: Cuadro')
+              : `Ronda ${currentRoundNum} / ${expectedTotalRounds}`}
           </div>
         </div>
         {!isFinished && (!finishConfirm ? (
@@ -783,8 +795,193 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
 
+        {/* ── KNOCKOUT: Group Stage ── */}
+        {t.format === 'knockout' && t.knockoutConfig?.currentPhase === 'group_stage' && t.groups && (() => {
+          const allGroupMatchesDone = t.groups.groups.every(g =>
+            g.matches.every(m => m.status === 'completed')
+          );
+          const pairs = t.fixedPairs ?? [];
+
+          function getPairLabel(pairIds: string[]): string {
+            const fp = pairs.find(p => p.player1Id === pairIds[0]);
+            return fp ? (fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`) : pairIds[0] ?? '?';
+          }
+
+          function handleGroupScore(groupId: string, courtNum: number) {
+            const key = `${groupId}-${courtNum}`;
+            const raw = koGroupInputs[key] ?? { p1: '', p2: '' };
+            const s1 = parseInt(raw.p1 || '0', 10);
+            const s2 = parseInt(raw.p2 || '0', 10);
+            const updated = updateKnockoutGroupMatch(t, groupId, courtNum, s1, s2);
+            saveTournament(updated);
+            setTournament(updated);
+            setKOGroupInputs(prev => { const n = { ...prev }; delete n[key]; return n; });
+          }
+
+          return (
+            <div style={{ marginBottom: 32 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
+                  Fase I — Grupos
+                </div>
+                {allGroupMatchesDone && !advanceConfirm && (
+                  <button onClick={() => setAdvanceConfirm(true)}
+                    style={{ padding: '9px 20px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Avanzar al Cuadro →
+                  </button>
+                )}
+                {advanceConfirm && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#854d0e' }}>¿Confirmar?</span>
+                    <button onClick={() => {
+                      const updated = advanceGroupsToKnockout(t);
+                      saveTournament(updated);
+                      setTournament(updated);
+                      setAdvanceConfirm(false);
+                    }} style={{ padding: '7px 14px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
+                      Sí
+                    </button>
+                    <button onClick={() => setAdvanceConfirm(false)}
+                      style={{ padding: '7px 12px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--grey-500)' }}>
+                      No
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+                {t.groups.groups.map(group => (
+                  <div key={group.id} style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+                    {/* Group header */}
+                    <div style={{ padding: '12px 20px', background: 'var(--black)', color: '#fff' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{group.name}</div>
+                    </div>
+
+                    {/* Standings */}
+                    <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--grey-100)' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Tabla</div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                        <thead>
+                          <tr style={{ color: 'var(--grey-400)' }}>
+                            <th style={{ textAlign: 'left', padding: '4px 0', fontWeight: 600, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Equipo</th>
+                            <th style={{ textAlign: 'center', padding: '4px 4px', fontWeight: 600, fontSize: 9 }}>PJ</th>
+                            <th style={{ textAlign: 'center', padding: '4px 4px', fontWeight: 600, fontSize: 9 }}>G</th>
+                            <th style={{ textAlign: 'center', padding: '4px 4px', fontWeight: 600, fontSize: 9 }}>P</th>
+                            <th style={{ textAlign: 'right', padding: '4px 0', fontWeight: 600, fontSize: 9 }}>PTS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.standings.map((s, i) => {
+                            const advancing = i < (t.knockoutConfig?.teamsAdvancing ?? 1);
+                            return (
+                              <tr key={s.playerId} style={{ background: advancing ? 'rgba(30,170,82,0.04)' : 'transparent' }}>
+                                <td style={{ padding: '5px 0', fontWeight: advancing ? 700 : 400, fontSize: 12, color: advancing ? 'var(--turf-green)' : 'var(--black)' }}>
+                                  {advancing && '↑ '}{getPairLabel([s.playerId])}
+                                </td>
+                                <td style={{ textAlign: 'center', padding: '5px 4px', color: 'var(--grey-500)' }}>{s.played}</td>
+                                <td style={{ textAlign: 'center', padding: '5px 4px', color: 'var(--grey-500)' }}>{s.wins}</td>
+                                <td style={{ textAlign: 'center', padding: '5px 4px', color: 'var(--grey-500)' }}>{s.losses}</td>
+                                <td style={{ textAlign: 'right', padding: '5px 0', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>{s.pts}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Matches */}
+                    <div style={{ padding: '12px 20px' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Partidos</div>
+                      {group.matches.map(match => {
+                        const key = `${group.id}-${match.courtNum}`;
+                        const input = koGroupInputs[key] ?? { p1: '', p2: '' };
+                        const isDone = match.status === 'completed';
+                        return (
+                          <div key={match.courtNum} style={{ marginBottom: 10, border: `1px solid ${isDone ? 'var(--grey-100)' : 'var(--grey-200)'}`, background: isDone ? 'var(--grey-50)' : '#fff' }}>
+                            <div style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                              <div style={{ fontSize: 12 }}>
+                                <span style={{ fontWeight: isDone ? 400 : 600, color: isDone && match.pair1Score !== null && match.pair2Score !== null && match.pair1Score > match.pair2Score ? 'var(--turf-green)' : 'var(--black)' }}>
+                                  {getPairLabel(match.pair1)}
+                                </span>
+                                <span style={{ color: 'var(--grey-300)', margin: '0 6px' }}>vs</span>
+                                <span style={{ fontWeight: isDone ? 400 : 600, color: isDone && match.pair1Score !== null && match.pair2Score !== null && match.pair2Score > match.pair1Score ? 'var(--turf-green)' : 'var(--black)' }}>
+                                  {getPairLabel(match.pair2)}
+                                </span>
+                              </div>
+                              {isDone ? (
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
+                                  <button onClick={() => {
+                                    const g2 = { ...t.groups!.groups.find(g => g.id === group.id)! };
+                                    const matches2 = g2.matches.map(m => m.courtNum === match.courtNum ? { ...m, status: 'pending' as const, pair1Score: null, pair2Score: null } : m);
+                                    const groups2 = t.groups!.groups.map(g => g.id === group.id ? { ...g, matches: matches2, standings: g.standings } : g);
+                                    const upd = { ...t, groups: { groups: groups2 } };
+                                    saveTournament(upd); setTournament(upd);
+                                  }} style={{ fontSize: 9, color: 'var(--grey-400)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                                    editar
+                                  </button>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                  <input type="number" min="0" value={input.p1}
+                                    onChange={e => setKOGroupInputs(prev => ({ ...prev, [key]: { ...prev[key] ?? { p1: '', p2: '' }, p1: e.target.value } }))}
+                                    placeholder="0" style={{ width: 48, padding: '5px 8px', fontSize: 14, fontFamily: 'var(--font-display)', fontWeight: 700, border: '2px solid var(--grey-200)', textAlign: 'center', outline: 'none', background: '#fff' }}
+                                  />
+                                  <span style={{ color: 'var(--grey-400)', fontWeight: 700 }}>–</span>
+                                  <input type="number" min="0" value={input.p2}
+                                    onChange={e => setKOGroupInputs(prev => ({ ...prev, [key]: { ...prev[key] ?? { p1: '', p2: '' }, p2: e.target.value } }))}
+                                    placeholder="0" style={{ width: 48, padding: '5px 8px', fontSize: 14, fontFamily: 'var(--font-display)', fontWeight: 700, border: '2px solid var(--grey-200)', textAlign: 'center', outline: 'none', background: '#fff' }}
+                                  />
+                                  <button onClick={() => handleGroupScore(group.id, match.courtNum)}
+                                    disabled={input.p1 === '' && input.p2 === ''}
+                                    style={{ padding: '5px 10px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>
+                                    ✓
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── KNOCKOUT: Bracket ── */}
+        {t.format === 'knockout' && t.knockoutConfig?.currentPhase === 'bracket' && t.bracket && (() => {
+          const pairs = t.fixedPairs ?? [];
+          return (
+            <div style={{ marginBottom: 32 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
+                  {t.knockoutConfig.hasGroups ? 'Fase II — Cuadro de Eliminatorias' : 'Cuadro de Eliminatorias'}
+                </div>
+              </div>
+              <KnockoutBracketView
+                bracket={t.bracket}
+                fixedPairs={pairs}
+                players={t.players}
+                isEditable={!isFinished}
+                onScoreEntry={(roundIdx, matchIdx, s1, s2) => {
+                  const updated = updateKnockoutBracketMatch(t, roundIdx, matchIdx, s1, s2);
+                  saveTournament(updated);
+                  setTournament(updated);
+                  if (updated.status === 'finished') {
+                    applyTournamentRankingResults(updated);
+                    showToast('¡Torneo finalizado! Resultados guardados.', 'success');
+                  }
+                }}
+              />
+            </div>
+          );
+        })()}
+
         {/* ── RONDAS ── */}
-        <div style={{ marginBottom: 32 }}>
+        {t.format !== 'knockout' && <div style={{ marginBottom: 32 }}>
           <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)', marginBottom: 16 }}>
             Rondas
           </div>
@@ -1104,7 +1301,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
               </div>
             );
           })}
-        </div>
+        </div>}
 
         {/* ── CLASIFICACIÓN + RANKING ── */}
         {t.standings.length > 0 && (() => {

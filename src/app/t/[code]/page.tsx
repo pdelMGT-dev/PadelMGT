@@ -7,6 +7,7 @@ import { getTournamentByCode } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
 import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import KnockoutBracketView from '@/components/KnockoutBracketView';
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
   created:       { label: 'Inscripciones abiertas', color: '#a78bfa' },
@@ -135,6 +136,54 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                 </div>
               )}
             </div>
+
+            {/* Knockout bracket — public read-only view */}
+            {t.format === 'knockout' && t.bracket && t.knockoutConfig?.currentPhase === 'bracket' && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
+                  {t.knockoutConfig.hasGroups ? 'Fase II — Cuadro' : 'Cuadro de Eliminatorias'}
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', padding: 16 }}>
+                  <KnockoutBracketView
+                    bracket={t.bracket}
+                    fixedPairs={t.fixedPairs}
+                    players={t.players}
+                    isEditable={false}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Knockout group stage — public read-only view */}
+            {t.format === 'knockout' && t.groups && t.knockoutConfig?.currentPhase === 'group_stage' && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
+                  Fase I — Grupos
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+                  {t.groups.groups.map(group => (
+                    <div key={group.id} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                      <div style={{ padding: '10px 16px', background: 'rgba(255,255,255,0.08)', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>{group.name}</div>
+                      <div style={{ padding: '12px 16px' }}>
+                        {group.standings.map((s, i) => {
+                          const advancing = i < (t.knockoutConfig?.teamsAdvancing ?? 1);
+                          const fp = t.fixedPairs?.find(fp => fp.player1Id === s.playerId);
+                          const pairName = fp ? (fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`) : s.playerName;
+                          return (
+                            <div key={s.playerId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                              <span style={{ fontSize: 12, color: advancing ? 'var(--neon)' : 'rgba(255,255,255,0.7)', fontWeight: advancing ? 700 : 400 }}>
+                                {advancing && '↑ '}{pairName}
+                              </span>
+                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: '#fff' }}>{s.pts}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {canJoin && (
               currentUser ? (

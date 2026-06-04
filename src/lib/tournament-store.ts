@@ -1,7 +1,7 @@
 // tournament-store.ts — Separate storage for Tournaments (padelmgt_tournaments)
 // Re-uses the ActiveGame shape from game-engine so all engine functions work.
 
-import type { ActiveGame, GameFormat, PairType, ScoreConfig, GamePlayer, InvitedPlayer } from './game-engine';
+import type { ActiveGame, GameFormat, PairType, ScoreConfig, GamePlayer, InvitedPlayer, KnockoutConfig } from './game-engine';
 import { upsertTournamentToSupabase } from './superadmin-data';
 import { createLocalStore } from './local-store';
 
@@ -63,6 +63,7 @@ export function createTournament(params: {
   creatorId: string;
   levelLabel?: string;
   pjTarget?: number;
+  knockoutConfig?: KnockoutConfig;
 }): Tournament {
   const t: Tournament = {
     id: generateId(),
@@ -89,6 +90,8 @@ export function createTournament(params: {
     coCreatorIds: [],
     levelLabel: params.levelLabel,
     pjTarget: params.pjTarget,
+    knockoutConfig: params.knockoutConfig,
+    createdAt: new Date().toISOString(),
   };
   saveTournament(t);
   return t;

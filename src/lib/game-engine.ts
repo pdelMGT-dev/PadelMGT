@@ -135,10 +135,18 @@ export interface ActiveGame {
   creatorId?: string;         // user ID of the creator
   coCreatorIds?: string[];    // player IDs that can also manage scores/rounds
   bracket?: KnockoutBracket;  // for knockout/world_cup
-  groups?: GroupStage;        // for world_cup
+  groups?: GroupStage;        // for world_cup / knockout phase I
+  knockoutConfig?: KnockoutConfig;
   isCreator?: boolean;        // set by UI when rendering for creator
   cancelledAt?: string;       // ISO date if game was cancelled
   createdAt?: string;         // ISO date when game was first created
+}
+
+export interface KnockoutConfig {
+  hasGroups: boolean;
+  numGroups: number;
+  teamsAdvancing: number;     // per group
+  currentPhase: 'group_stage' | 'bracket';
 }
 
 export interface GroupStage {
@@ -1021,4 +1029,155 @@ export function startGame(game: ActiveGame): ActiveGame {
     currentRound: 1,
     standings,
   };
+}
+
+// ---------------------------------------------------------------------------
+// 14. generateKnockoutBracketFromPairs — seeded bracket from FixedPair list
+// ---------------------------------------------------------------------------
+
+export function generateKnockoutBracketFromPairs(pairs: FixedPair[]): KnockoutBracket {
+  const size = nextPowerOfTwo(pairs.length);
+  const numRounds = Math.log2(size);
+
+  const seeded: (FixedPair | null)[] = [...pairs];
+  while (seeded.length < size) seeded.push(null);
+
+  const firstRoundMatches: KnockoutMatch[] = [];
+  for (let i = 0; i < size / 2; i++) {
+    const fp1 = seeded[i];
+    const fp2 = seeded[size - 1 - i];
+
+    let winner: string[] | null = null;
+    let status: 'pending' | 'completed' = 'pending';
+
+    if (!fp1 && fp2) {
+      winner = [fp2.player1Id, fp2.player2Id];
+      status = 'completed';
+    } else if (fp1 && !fp2) {
+      winner = [fp1.player1Id, fp1.player2Id];
+      status = 'completed';
+    }
+
+    firstRoundMatches.push({
+      id: `r1-m${i + 1}`,
+      pair1: fp1 ? [fp1.player1Id, fp1.player2Id] : null,
+      pair2: fp2 ? [fp2.player1Id, fp2.player2Id] : null,
+      pair1Score: null,
+      pair2Score: null,
+      winner,
+      status,
+    });
+  }
+
+  const rounds: KnockoutRound[] = [];
+  for (let r = 0; r < numRounds; r++) {
+    if (r === 0) {
+      rounds.push({ name: knockoutRoundName(numRounds, r), matches: firstRoundMatches });
+    } else {
+      const matchCount = size / Math.pow(2, r + 1);
+      const matches: KnockoutMatch[] = Array.from({ length: matchCount }, (_, i) => ({
+        id: `r${r + 1}-m${i + 1}`,
+        pair1: null, pair2: null, pair1Score: null, pair2Score: null,
+        winner: null, status: 'pending' as const,
+      }));
+      rounds.push({ name: knockoutRoundName(numRounds, r), matches });
+    }
+  }
+
+  // Propagate byes
+  return advanceKnockoutBracket({ rounds });
+}
+
+// ---------------------------------------------------------------------------
+// 15. generateKnockoutGroupStage — phase I groups for knockout tournament
+// ---------------------------------------------------------------------------
+
+export function generateKnockoutGroupStage(pairs: FixedPair[], numGroups: number): GroupStage {
+  const groups: Group[] = Array.from({ length: numGroups }, (_, g) => ({
+    id: `group-${g}`,
+    name: `Grupo ${String.fromCharCode(65 + g)}`,
+    playerIds: [],
+    matches: [],
+    standings: [],
+  }));
+
+  // Distribute snake-style for balance
+  pairs.forEach((pair, idx) => {
+    const row = Math.floor(idx / numGroups);
+    const col = row % 2 === 0 ? idx % numGroups : numGroups - 1 - (idx % numGroups);
+    groups[col].playerIds.push(pair.player1Id, pair.player2Id);
+  });
+
+  groups.forEach(group => {
+    const groupPairs = pairs.filter(fp => group.playerIds.includes(fp.player1Id));
+    let courtNum = 1;
+    for (let i = 0; i < groupPairs.length; i++) {
+      for (let j = i + 1; j < groupPairs.length; j++) {
+        group.matches.push({
+          courtNum: courtNum++,
+          pair1: [groupPairs[i].player1Id, groupPairs[i].player2Id],
+          pair2: [groupPairs[j].player1Id, groupPairs[j].player2Id],
+          pair1Score: null,
+          pair2Score: null,
+          status: 'pending',
+        });
+      }
+    }
+    group.standings = groupPairs.map(fp => ({
+      playerId: fp.player1Id,
+      playerName: fp.name ?? `${fp.player1Name} / ${fp.player2Name}`,
+      pts: 0, wins: 0, losses: 0, draws: 0, played: 0, diff: 0, pointsFor: 0, pointsAgainst: 0,
+    }));
+  });
+
+  return { groups };
+}
+
+// ---------------------------------------------------------------------------
+// 16. calculateGroupStandings — recalculate standings for one group
+// ---------------------------------------------------------------------------
+
+export function calculateGroupStandings(group: Group, pairs: FixedPair[]): Standing[] {
+  const map = new Map<string, Standing>();
+  pairs
+    .filter(fp => group.playerIds.includes(fp.player1Id))
+    .forEach(fp => {
+      map.set(fp.player1Id, {
+        playerId: fp.player1Id,
+        playerName: fp.name ?? `${fp.player1Name} / ${fp.player2Name}`,
+        pts: 0, wins: 0, losses: 0, draws: 0, played: 0, diff: 0, pointsFor: 0, pointsAgainst: 0,
+      });
+    });
+
+  for (const match of group.matches) {
+    if (match.status !== 'completed' || match.pair1Score === null || match.pair2Score === null) continue;
+    const s1 = match.pair1Score;
+    const s2 = match.pair2Score;
+    const p1rep = match.pair1[0];
+    const p2rep = match.pair2[0];
+
+    const st1 = map.get(p1rep);
+    const st2 = map.get(p2rep);
+
+    if (st1) {
+      st1.played++;
+      st1.pointsFor += s1; st1.pointsAgainst += s2; st1.diff += s1 - s2;
+      if (s1 > s2) { st1.wins++; st1.pts += 3; }
+      else if (s1 === s2) { st1.draws++; st1.pts += 1; }
+      else { st1.losses++; st1.pts -= 1; }
+    }
+    if (st2) {
+      st2.played++;
+      st2.pointsFor += s2; st2.pointsAgainst += s1; st2.diff += s2 - s1;
+      if (s2 > s1) { st2.wins++; st2.pts += 3; }
+      else if (s2 === s1) { st2.draws++; st2.pts += 1; }
+      else { st2.losses++; st2.pts -= 1; }
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) =>
+    b.pts !== a.pts ? b.pts - a.pts :
+    b.diff !== a.diff ? b.diff - a.diff :
+    b.pointsFor - a.pointsFor
+  );
 }

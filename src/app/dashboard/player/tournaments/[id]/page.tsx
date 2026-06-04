@@ -198,9 +198,9 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     setInviteFriends(getFriendsForPlayer(currentUser.id).filter(f => !allIds.has(f.id)));
   }, [currentUser, tournament]);
 
-  // ── Initialize pairSlots for americano parejas ────────────────────────────
+  // ── Initialize pairSlots for americano parejas / knockout ────────────────
   useEffect(() => {
-    if (!tournament || tournament.format !== 'americano' || tournament.pairType !== 'parejas') return;
+    if (!tournament || !((tournament.format === 'americano' && tournament.pairType === 'parejas') || tournament.format === 'knockout')) return;
     // If fixedPairs already set, restore them
     if (tournament.fixedPairs?.length) {
       setPairSlots(tournament.fixedPairs.map(fp => ({
@@ -358,9 +358,11 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   const allFilled = confirmedPlayers.length >= t.maxPlayers;
   const noPending = pendingInvited.length === 0;
   const isAmericanoParejas = t.format === 'americano' && t.pairType === 'parejas';
+  const isKnockout = t.format === 'knockout';
+  const needsPairSetup = isAmericanoParejas || isKnockout;
   const completePairs = pairSlots.filter(s => s.player1Id && s.player2Id);
-  const canStartParejas = isAmericanoParejas ? completePairs.length >= 2 && noPending : false;
-  const canStart = isAmericanoParejas ? canStartParejas : (allFilled && noPending);
+  const canStartParejas = needsPairSetup ? completePairs.length >= 2 && noPending : false;
+  const canStart = needsPairSetup ? canStartParejas : (allFilled && noPending);
   const si = statusInfo(t.status);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -560,7 +562,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   function handleStartTournament() {
     let tournamentToStart = t;
 
-    if (isAmericanoParejas) {
+    if (needsPairSetup) {
       const validPairs = pairSlots.filter(s => s.player1Id && s.player2Id);
       const activePairPlayerIds = new Set(validPairs.flatMap(s => [s.player1Id!, s.player2Id!]));
       tournamentToStart = {
@@ -1185,8 +1187,8 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
           )}
         </div>
 
-        {/* ── Section 2b: Pair Builder (americano parejas) ── */}
-        {isAmericanoParejas && t.status !== 'live' && (() => {
+        {/* ── Section 2b: Pair Builder (americano parejas / knockout) ── */}
+        {needsPairSetup && t.status !== 'live' && (() => {
           // Compute unassigned players
           const assignedIds = new Set(
             pairSlots.flatMap(s => [s.player1Id, s.player2Id].filter(Boolean) as string[])
@@ -1412,8 +1414,8 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
           </button>
           {!canStart && (
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--grey-400)', textAlign: 'center' }}>
-              {isAmericanoParejas
-                ? `Necesitás al menos 2 equipos completos para iniciar (tenés ${completePairs.length}).`
+              {needsPairSetup
+                ? `Necesitás al menos 2 parejas completas para iniciar (tenés ${completePairs.length}).`
                 : `Necesitás completar todos los cupos (${confirmedPlayers.length}/${t.maxPlayers}) para iniciar el torneo.`
               }
             </div>

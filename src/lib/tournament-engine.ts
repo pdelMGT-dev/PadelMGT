@@ -9,6 +9,10 @@ import {
   calculateStandings,
   generateMexicanoRound,
   generateRoundRobinRounds,
+  generateKnockoutBracketFromPairs,
+  generateKnockoutGroupStage,
+  calculateGroupStandings,
+  advanceKnockoutBracket,
 } from './game-engine';
 import type { Tournament } from './tournament-store';
 
@@ -219,6 +223,36 @@ export function startTournament(tournament: Tournament): Tournament {
 
   let rounds: GameRound[] = [];
 
+  if (format === 'knockout') {
+    const pairs = fixedPairs ?? [];
+    if (pairs.length < 2) return tournament;
+    const cfg = tournament.knockoutConfig ?? { hasGroups: false, numGroups: 2, teamsAdvancing: 1, currentPhase: 'bracket' as const };
+
+    if (cfg.hasGroups) {
+      const groups = generateKnockoutGroupStage(pairs, cfg.numGroups);
+      return {
+        ...tournament,
+        status: 'live',
+        rounds: [],
+        currentRound: 1,
+        standings: [],
+        groups,
+        knockoutConfig: { ...cfg, currentPhase: 'group_stage' },
+      };
+    } else {
+      const bracket = generateKnockoutBracketFromPairs(pairs);
+      return {
+        ...tournament,
+        status: 'live',
+        rounds: [],
+        currentRound: 1,
+        standings: [],
+        bracket,
+        knockoutConfig: { ...cfg, currentPhase: 'bracket' },
+      };
+    }
+  }
+
   if (format === 'americano') {
     rounds = generateTournamentAmericanoRounds(
       players,
@@ -276,4 +310,97 @@ export function startTournament(tournament: Tournament): Tournament {
   const standings = calculateStandings({ ...base, rounds: [] });
 
   return { ...base, standings };
+}
+
+// ---------------------------------------------------------------------------
+// updateKnockoutGroupMatch — score a group stage match
+// ---------------------------------------------------------------------------
+
+export function updateKnockoutGroupMatch(
+  tournament: Tournament,
+  groupId: string,
+  courtNum: number,
+  s1: number,
+  s2: number,
+): Tournament {
+  if (!tournament.groups || !tournament.fixedPairs) return tournament;
+  const pairs = tournament.fixedPairs;
+
+  const groups = tournament.groups.groups.map(g => {
+    if (g.id !== groupId) return g;
+    const matches = g.matches.map(m =>
+      m.courtNum === courtNum
+        ? { ...m, pair1Score: s1, pair2Score: s2, status: 'completed' as const }
+        : m
+    );
+    const standings = calculateGroupStandings({ ...g, matches }, pairs);
+    return { ...g, matches, standings };
+  });
+
+  return { ...tournament, groups: { groups } };
+}
+
+// ---------------------------------------------------------------------------
+// advanceGroupsToKnockout — promote top teams, generate bracket
+// ---------------------------------------------------------------------------
+
+export function advanceGroupsToKnockout(tournament: Tournament): Tournament {
+  const { groups, knockoutConfig, fixedPairs } = tournament;
+  if (!groups || !knockoutConfig || !fixedPairs) return tournament;
+
+  const teamsAdvancing = knockoutConfig.teamsAdvancing;
+  const advancingPairs: FixedPair[] = [];
+
+  // Interleave: 1st from each group, then 2nd from each group, etc.
+  for (let pos = 0; pos < teamsAdvancing; pos++) {
+    for (const group of groups.groups) {
+      const st = group.standings[pos];
+      if (!st) continue;
+      const fp = fixedPairs.find(p => p.player1Id === st.playerId);
+      if (fp) advancingPairs.push(fp);
+    }
+  }
+
+  const bracket = generateKnockoutBracketFromPairs(advancingPairs);
+  return {
+    ...tournament,
+    bracket,
+    knockoutConfig: { ...knockoutConfig, currentPhase: 'bracket' },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// updateKnockoutBracketMatch — score a bracket match and advance winner
+// ---------------------------------------------------------------------------
+
+export function updateKnockoutBracketMatch(
+  tournament: Tournament,
+  roundIdx: number,
+  matchIdx: number,
+  s1: number,
+  s2: number,
+): Tournament {
+  if (!tournament.bracket) return tournament;
+
+  const rounds = tournament.bracket.rounds.map((round, ri) => {
+    if (ri !== roundIdx) return round;
+    const matches = round.matches.map((m, mi) => {
+      if (mi !== matchIdx) return m;
+      const winner = s1 > s2 ? m.pair1 : m.pair2;
+      return { ...m, pair1Score: s1, pair2Score: s2, winner, status: 'completed' as const };
+    });
+    return { ...round, matches };
+  });
+
+  const advanced = advanceKnockoutBracket({ rounds });
+
+  // Check if Final is done → finish tournament
+  const lastRound = advanced.rounds[advanced.rounds.length - 1];
+  const isFinished = lastRound?.matches.every(m => m.status === 'completed') ?? false;
+
+  return {
+    ...tournament,
+    bracket: advanced,
+    status: isFinished ? 'finished' : tournament.status,
+  };
 }
