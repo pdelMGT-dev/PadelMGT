@@ -114,7 +114,6 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
 
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px clamp(20px,5vw,48px) 80px', display: 'grid', gridTemplateColumns: '1fr 300px', gap: 32 }}>
           <div>
-            {/* Players */}
             <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: 24, marginBottom: 24 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Jugadores confirmados</span>
@@ -132,15 +131,9 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
               )}
             </div>
 
-            {/* Join section */}
             {canJoin && (
               currentUser ? (
-                myRequest ? (
-                  <div style={{ background: 'rgba(214,255,0,0.08)', border: '1px solid rgba(214,255,0,0.3)', padding: '20px 24px' }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--neon)', marginBottom: 4 }}>✓ Solicitud enviada</div>
-                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>El organizador confirmará tu inscripción.</div>
-                  </div>
-                ) : joinSent ? (
+                myRequest || joinSent ? (
                   <div style={{ background: 'rgba(214,255,0,0.08)', border: '1px solid rgba(214,255,0,0.3)', padding: '20px 24px' }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--neon)', marginBottom: 4 }}>✓ Solicitud enviada</div>
                     <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>El organizador confirmará tu inscripción.</div>
@@ -161,7 +154,7 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                   <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginBottom: 16 }}>Iniciá sesión para solicitar unirte al torneo.</div>
                   <div style={{ display: 'flex', gap: 12 }}>
                     <Link href={`/login?redirect=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`} className="btn btn-on-dark">Iniciar sesión →</Link>
-                    <Link href="/signup" className="btn btn-outline-dark">Crear cuenta</Link>
+                    <Link href="/register" className="btn btn-outline-dark">Crear cuenta</Link>
                   </div>
                 </div>
               )
@@ -173,10 +166,9 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
             )}
           </div>
 
-          {/* QR sidebar */}
           <div style={{ position: 'sticky', top: 24, alignSelf: 'start' }}>
             <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: 24, textAlign: 'center' }}>
-              <QRCodeSVG value={shareUrl} size={160} style={{ marginBottom: 16 }} />
+              <QRCodeSVG value={shareUrl || `https://padelmgt.com/t/${code}`} size={160} style={{ marginBottom: 16 }} />
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', wordBreak: 'break-all', marginBottom: 16 }}>{shareUrl}</div>
               <button onClick={() => navigator.clipboard.writeText(shareUrl).catch(() => {})} style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Copiar link</button>
             </div>
@@ -248,7 +240,7 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                   <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginBottom: 16 }}>Iniciá sesión para solicitar unirte al torneo.</div>
                   <div style={{ display: 'flex', gap: 12 }}>
                     <Link href={`/login?redirect=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`} className="btn btn-on-dark">Iniciar sesión →</Link>
-                    <Link href="/signup" className="btn btn-outline-dark">Crear cuenta</Link>
+                    <Link href="/register" className="btn btn-outline-dark">Crear cuenta</Link>
                   </div>
                 </div>
               )

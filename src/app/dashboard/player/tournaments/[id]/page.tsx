@@ -167,9 +167,9 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
         d:   t.date     || '',
       };
       const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(snap))));
-      setShareUrl(`${window.location.origin}/tournaments/${t.code}?s=${encoded}`);
+      setShareUrl(`${window.location.origin}/t/${t.code}?s=${encoded}`);
     } catch {
-      setShareUrl(`${window.location.origin}/tournaments/${tournament?.code}`);
+      setShareUrl(`${window.location.origin}/t/${tournament?.code}`);
     }
   }, [tournament?.code, tournament?.status, tournament?.players.length]);
 
