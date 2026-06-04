@@ -26,6 +26,8 @@ export interface RegisteredPlayer {
   profileCompleted?: boolean;
   /** Supabase Auth user UUID, set on registration via Supabase Auth. */
   authUserId?: string;
+  /** Plan assigned by SA or Stripe (e.g. 'free', 'player_pro'). */
+  plan?: string;
 }
 
 // ── Sequential shortId generator ─────────────────────────────────────────────

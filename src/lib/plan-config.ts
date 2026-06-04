@@ -1,4 +1,5 @@
 // plan-config.ts — Central plan limits, usage tracking, and gate helpers
+import { getAllPlayers } from './player-store';
 
 export type PlanId =
   | 'free'
@@ -81,8 +82,14 @@ export function getUserPlan(): PlanId {
   try {
     const raw = localStorage.getItem('padelmgt_user');
     if (!raw) return 'free';
-    const s = JSON.parse(raw) as { plan?: string; role?: string };
-    if (s.role && BYPASS_ROLES.has(s.role)) return 'fed_pro'; // demo accounts are unrestricted
+    const s = JSON.parse(raw) as { id?: string; plan?: string; role?: string };
+    if (s.role && BYPASS_ROLES.has(s.role)) return 'fed_pro'; // bypass for admin roles
+    // Check the player store for the authoritative plan (SA may have changed it after login)
+    if (s.id) {
+      const allPlayers = getAllPlayers();
+      const playerRecord = allPlayers.find(p => p.id === s.id);
+      if (playerRecord?.plan) return playerRecord.plan as PlanId;
+    }
     return (s.plan as PlanId) ?? 'free';
   } catch { return 'free'; }
 }

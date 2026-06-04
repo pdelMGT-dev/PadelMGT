@@ -15,6 +15,13 @@ import {
   type SAPlayer,
   type PlayerRelationship,
 } from '@/lib/superadmin-data';
+import { getAllPlayers, updatePlayer as updateRegisteredPlayer } from '@/lib/player-store';
+import type { PlanId } from '@/lib/plan-config';
+
+const PLAYER_PLANS: { id: PlanId | 'free'; label: string; color: string; bg: string }[] = [
+  { id: 'free',       label: 'Free',        color: '#555',    bg: '#f0f0f0' },
+  { id: 'player_pro', label: 'Player Pro',  color: '#92400e', bg: '#fef3c7' },
+];
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -78,6 +85,15 @@ function LevelBadge({ level }: { level?: SAPlayer['level'] }) {
     intermediate: { label: 'Intermedio',   bg: '#dbeafe', color: '#1d4ed8' },
     advanced:     { label: 'Avanzado',     bg: '#fef3c7', color: '#92400e' },
   }[level];
+  return (
+    <span style={{ background: cfg.bg, color: cfg.color, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
+      {cfg.label}
+    </span>
+  );
+}
+
+function PlanBadge({ plan }: { plan?: string }) {
+  const cfg = PLAYER_PLANS.find(p => p.id === plan) ?? PLAYER_PLANS[0];
   return (
     <span style={{ background: cfg.bg, color: cfg.color, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
       {cfg.label}
@@ -183,7 +199,7 @@ function PlayerForm({
   const [form, setForm] = useState<Partial<SAPlayer>>({
     name: '', email: '', phone: '', city: '', country: 'ES',
     ranking: 0, rankingPoints: 0, role: 'player', status: 'active', club: '',
-    sex: undefined, level: undefined, profileCompleted: true,
+    sex: undefined, level: undefined, profileCompleted: true, plan: 'free',
     photoUrl: '', customFields: {}, ...initial,
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -215,6 +231,7 @@ function PlayerForm({
       rankingPoints: form.rankingPoints ?? 0,
       role: form.role ?? 'player',
       status: form.status ?? 'active',
+      plan: form.plan ?? 'free',
       club: form.club ?? undefined,
       profileCompleted: form.profileCompleted ?? true,
       joinedAt: form.joinedAt ?? now,
@@ -285,6 +302,13 @@ function PlayerForm({
             <option value="active">Activo</option>
             <option value="blocked">Bloqueado</option>
             <option value="suspended">Suspendido</option>
+          </select>
+        </Field>
+        <Field label="Plan de suscripción">
+          <select style={{ ...inputStyle, fontWeight: 600 }} value={form.plan ?? 'free'} onChange={e => set('plan', e.target.value)}>
+            {PLAYER_PLANS.map(p => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
           </select>
         </Field>
         <Field label="URL de foto">
@@ -541,6 +565,12 @@ export default function PlayersPage() {
     const updated = exists ? players.map(x => x.id === p.id ? p : x) : [p, ...players];
     saveAndRefresh(updated);
     upsertSAPlayerToSupabase(p);
+    // Sync plan to RegisteredPlayer store so getUserPlan() picks it up immediately
+    if (p.plan !== undefined) {
+      const regPlayers = getAllPlayers();
+      const reg = regPlayers.find(r => r.id === p.id || r.email.toLowerCase() === p.email.toLowerCase());
+      if (reg) updateRegisteredPlayer(reg.id, { plan: p.plan });
+    }
     setShowCreateModal(false);
     setEditPlayer(null);
     if (selectedPlayer?.id === p.id) setSelectedPlayer(p);
@@ -594,6 +624,15 @@ export default function PlayersPage() {
       updated = players.map(p => selectedIds.has(p.id) ? { ...p, level: bulkAction as SAPlayer['level'] } : p);
     } else if (roleOpts.includes(bulkAction)) {
       updated = players.map(p => selectedIds.has(p.id) ? { ...p, role: bulkAction as SAPlayer['role'] } : p);
+    } else if (bulkAction.startsWith('plan:')) {
+      const planVal = bulkAction.replace('plan:', '');
+      updated = players.map(p => selectedIds.has(p.id) ? { ...p, plan: planVal } : p);
+      // Sync to RegisteredPlayer store for all affected players
+      const regPlayers = getAllPlayers();
+      players.filter(p => selectedIds.has(p.id)).forEach(sp => {
+        const reg = regPlayers.find(r => r.id === sp.id || r.email.toLowerCase() === sp.email.toLowerCase());
+        if (reg) updateRegisteredPlayer(reg.id, { plan: planVal });
+      });
     }
     saveAndRefresh(updated);
     setBulkAction('');
@@ -817,6 +856,7 @@ export default function PlayersPage() {
                 <th onClick={() => handleSort('rankingPoints')} style={thStyle}>Pts Ranking <SortIcon col="rankingPoints" /></th>
                 <th style={{ ...thStyle, cursor: 'default' }}>Club</th>
                 <th style={{ ...thStyle, cursor: 'default' }}>Rol</th>
+                <th style={{ ...thStyle, cursor: 'default' }}>Plan</th>
                 <th style={{ ...thStyle, cursor: 'default' }}>Estado</th>
                 <th style={{ ...thStyle, cursor: 'default' }}>Perfil %</th>
                 <th onClick={() => handleSort('joinedAt')} style={thStyle}>Ingreso <SortIcon col="joinedAt" /></th>
@@ -857,6 +897,7 @@ export default function PlayersPage() {
                     <td style={{ padding: '10px 14px', color: 'var(--grey-600)', whiteSpace: 'nowrap' }}>{p.rankingPoints.toLocaleString()} pts</td>
                     <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.club ?? '—'}</td>
                     <td style={{ padding: '10px 14px' }}><RoleBadge role={p.role} /></td>
+                    <td style={{ padding: '10px 14px' }}><PlanBadge plan={p.plan} /></td>
                     <td style={{ padding: '10px 14px' }}><StatusBadge status={p.status} /></td>
                     <td style={{ padding: '10px 14px' }}>
                       {p.profileCompleted
@@ -944,6 +985,10 @@ export default function PlayersPage() {
               <option value="club_admin">Admin Club</option>
               <option value="federation_admin">Admin Fed</option>
             </optgroup>
+            <optgroup label="Plan">
+              <option value="plan:free">Plan Free</option>
+              <option value="plan:player_pro">Plan Player Pro</option>
+            </optgroup>
           </select>
           <button
             onClick={handleBulkApply}
@@ -1003,6 +1048,7 @@ export default function PlayersPage() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
               <StatusBadge status={selectedPlayer.status} />
               <RoleBadge role={selectedPlayer.role} />
+              <PlanBadge plan={selectedPlayer.plan} />
               <LevelBadge level={selectedPlayer.level} />
             </div>
 
@@ -1055,6 +1101,24 @@ export default function PlayersPage() {
               </div>
               <InfoRow label="Estado"><StatusBadge status={selectedPlayer.status} /></InfoRow>
               <InfoRow label="Rol"><RoleBadge role={selectedPlayer.role} /></InfoRow>
+              <InfoRow label="Plan de suscripción">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <PlanBadge plan={selectedPlayer.plan} />
+                  <select
+                    value={selectedPlayer.plan ?? 'free'}
+                    onChange={e => {
+                      const newPlan = e.target.value;
+                      const updated = { ...selectedPlayer, plan: newPlan };
+                      handleSavePlayer(updated);
+                    }}
+                    style={{ fontSize: 11, padding: '3px 6px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', color: 'var(--grey-600)', background: '#fff' }}
+                  >
+                    {PLAYER_PLANS.map(p => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </InfoRow>
               <InfoRow label="Fecha de ingreso"><span>{selectedPlayer.joinedAt}</span></InfoRow>
               <InfoRow label="Ultima actividad"><span>{selectedPlayer.lastActive}</span></InfoRow>
             </div>

@@ -16,6 +16,7 @@ export interface SAPlayer {
   rankingPoints: number;
   status: 'active' | 'blocked' | 'suspended';
   role: 'player' | 'club_admin' | 'federation_admin';
+  plan?: string;           // PlanId assigned by SA (e.g. 'free', 'player_pro')
   profileCompleted?: boolean;
   joinedAt: string;
   lastActive: string;
