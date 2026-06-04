@@ -9,7 +9,7 @@ import { startTournament } from '@/lib/tournament-engine';
 import { createInvitation, getInvitationsForGame } from '@/lib/invitation-store';
 import { searchPlayers, getFriendsForPlayer } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
-import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, type JoinRequest } from '@/lib/join-request-store';
+import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, syncJoinRequestsFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -137,7 +137,10 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     setTournament(t ?? null);
     if (t) {
       setSoonMaxPlayers(t.maxPlayers);
-      setJoinRequests(loadJoinRequests().filter(r => r.entityId === t.id && r.status === 'pending'));
+      // Sync join requests from Supabase so requests from other devices appear
+      syncJoinRequestsFromSupabase(t.id)
+        .then(pending => setJoinRequests(pending))
+        .catch(() => setJoinRequests(loadJoinRequests().filter(r => r.entityId === t.id && r.status === 'pending')));
     }
   }, [id]);
 

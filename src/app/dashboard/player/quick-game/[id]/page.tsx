@@ -24,7 +24,7 @@ import { searchPlayers, addFriendship, areFriends, getFriendsForPlayer } from '@
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { applyGameRankingResults, getRankingHistoryForGame } from '@/lib/ranking-store';
 import type { RankingEntry } from '@/lib/ranking-store';
-import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, type JoinRequest } from '@/lib/join-request-store';
+import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, syncJoinRequestsFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -229,23 +229,26 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   // ── User loaded via useCurrentUser hook ──────────────────────────────────
 
-  // Load game
+  // Load game state on mount
   useEffect(() => {
-    const g = game ?? getGame(id);
-    if (!game) setGame(g);
-    if (g) setJoinRequests(loadJoinRequests().filter(r => r.entityId === g.id && r.status === 'pending'));
-  }, [id, game]);
+    const g = getGame(id);
+    if (g) setGame(g);
+  }, [id]);
 
-  // Poll for invitation responses every 5s (creator sees status updates)
+  // Poll every 5s: refresh local game state + pull new join requests from Supabase
   const refreshGame = useCallback(() => {
     const fresh = getGame(id);
     if (fresh) {
       setGame(fresh);
-      setJoinRequests(loadJoinRequests().filter(r => r.entityId === fresh.id && r.status === 'pending'));
+      // Also sync from Supabase so requests from other devices appear
+      syncJoinRequestsFromSupabase(fresh.id)
+        .then(pending => setJoinRequests(pending))
+        .catch(() => setJoinRequests(loadJoinRequests().filter(r => r.entityId === fresh.id && r.status === 'pending')));
     }
   }, [id]);
 
   useEffect(() => {
+    refreshGame(); // immediate first sync
     const interval = setInterval(refreshGame, 5000);
     return () => clearInterval(interval);
   }, [refreshGame]);

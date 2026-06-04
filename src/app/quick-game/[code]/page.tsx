@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import { getGameByCode, saveGame } from '@/lib/game-store';
 import type { ActiveGame, ScoreConfig, FixedPair } from '@/lib/game-engine';
-import { submitJoinRequest, getMyJoinRequest, type JoinRequest } from '@/lib/join-request-store';
+import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { getRankingHistoryForGame, type RankingEntry } from '@/lib/ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 
@@ -111,12 +111,17 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
       const g = getGameByCode(code);
       setGame(g);
       if (g?.status === 'finished') setRankingEntries(getRankingHistoryForGame(g.id));
-      if (currentUser) setMyRequest(g ? getMyJoinRequest(g.id, currentUser.id) : null);
+      if (currentUser && g) {
+        // Check Supabase for status updates (creator may have approved/rejected from another device)
+        syncMyJoinRequestFromSupabase(g.id, currentUser.id)
+          .then(req => setMyRequest(req))
+          .catch(() => setMyRequest(getMyJoinRequest(g.id, currentUser.id)));
+      }
     };
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
-  }, [code]);
+  }, [code, currentUser?.id]);
 
   // ── Snapshot view (cross-device: game not in local storage) ──────────────────
   if (!game && snap) {

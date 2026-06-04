@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import { getTournamentByCode } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
-import { submitJoinRequest, getMyJoinRequest, type JoinRequest } from '@/lib/join-request-store';
+import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
@@ -56,12 +56,17 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
     const load = () => {
       const t = getTournamentByCode(code);
       setTournament(t);
-      if (t && currentUser) setMyRequest(getMyJoinRequest(t.id, currentUser.id));
+      if (currentUser && t) {
+        // Check Supabase for status updates from the creator on another device
+        syncMyJoinRequestFromSupabase(t.id, currentUser.id)
+          .then(req => setMyRequest(req))
+          .catch(() => setMyRequest(getMyJoinRequest(t.id, currentUser.id)));
+      }
     };
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
-  }, [code, currentUser]);
+  }, [code, currentUser?.id]);
 
   function handleJoin(entityId: string) {
     if (!currentUser) return;
