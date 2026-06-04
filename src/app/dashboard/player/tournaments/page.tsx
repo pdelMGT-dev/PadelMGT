@@ -196,7 +196,7 @@ export default function PlayerTournamentsPage() {
   const [tSets, setTSets] = useState(1);
   const [tGames, setTGames] = useState(6);
   const [tTiebreak, setTTiebreak] = useState(7);
-  const [tDeuce, setTDeuce] = useState<'ventaja' | 'oro'>('oro');
+  const [tDeuce, setTDeuce] = useState<'ventaja' | 'oro' | 'plata' | 'ipf'>('oro');
   const [tPjTarget, setTPjTarget] = useState(4);      // round_robin: games per player
   const [tAllowTies, setTAllowTies] = useState(false); // round_robin: allow set tie (6-6)
 
@@ -791,10 +791,10 @@ export default function PlayerTournamentsPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <div>
                       <label style={lbl}>Número de grupos</label>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        {[2, 4, 8].map(n => (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
                           <button key={n} onClick={() => setTKONumGroups(n)}
-                            style={{ width: 52, height: 44, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tKONumGroups === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tKONumGroups === n ? 'var(--black)' : '#fff', color: tKONumGroups === n ? '#fff' : 'var(--black)' }}>
+                            style={{ width: 44, height: 40, fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, cursor: 'pointer', border: `2px solid ${tKONumGroups === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tKONumGroups === n ? 'var(--black)' : '#fff', color: tKONumGroups === n ? '#fff' : 'var(--black)' }}>
                             {n}
                           </button>
                         ))}
@@ -1002,7 +1002,9 @@ export default function PlayerTournamentsPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {([
                         { v: 'ventaja' as const, label: 'Ventaja Tradicional', desc: 'D y AD hasta que un equipo gane 2 puntos consecutivos.' },
-                        { v: 'oro'     as const, label: 'Punto de Oro',         desc: 'En Deuce, el siguiente punto gana el game. (Sin ventaja)' },
+                        { v: 'oro'     as const, label: 'Punto de Oro',        desc: 'En Deuce, el siguiente punto gana el game. (Sin ventaja)' },
+                        { v: 'plata'   as const, label: 'Punto de Plata',      desc: 'Ventaja para quien gana el primer punto del Deuce. Si lo pierde, vuelve a Deuce.' },
+                        { v: 'ipf'     as const, label: 'IPF',                 desc: 'Como Punto de Oro. El siguiente punto en Deuce gana el game. (Reglamento federado)' },
                       ]).map(o => (
                         <button key={o.v} onClick={() => setTDeuce(o.v)}
                           style={{ padding: '12px 16px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 12, border: `1px solid ${tDeuce === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tDeuce === o.v ? 'var(--grey-900, #111)' : '#fff', color: tDeuce === o.v ? '#fff' : 'var(--black)' }}>

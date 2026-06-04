@@ -348,19 +348,86 @@ export function advanceGroupsToKnockout(tournament: Tournament): Tournament {
   const { groups, knockoutConfig, fixedPairs } = tournament;
   if (!groups || !knockoutConfig || !fixedPairs) return tournament;
 
-  const teamsAdvancing = knockoutConfig.teamsAdvancing;
-  const advancingPairs: FixedPair[] = [];
+  const { teamsAdvancing } = knockoutConfig;
+  const allGroups = groups.groups;
+  const numGroups = allGroups.length;
 
-  // Interleave: 1st from each group, then 2nd from each group, etc.
-  for (let pos = 0; pos < teamsAdvancing; pos++) {
-    for (const group of groups.groups) {
-      const st = group.standings[pos];
-      if (!st) continue;
-      const fp = fixedPairs.find(p => p.player1Id === st.playerId);
-      if (fp) advancingPairs.push(fp);
+  const getFP = (playerId: string): FixedPair | null =>
+    fixedPairs.find(p => p.player1Id === playerId) ?? null;
+
+  // Build seeded array using cross-group pairing when numGroups >= 2 and teamsAdvancing >= 2.
+  // Pairs: (group 0, group 1), (group 2, group 3), …
+  // Seeding: A1 vs B2, A2 vs B1, C1 vs D2, C2 vs D1, …
+  // This is achieved by filling: [A1,A2, C1,C2, …] in the first half and
+  // [D1,D2, B1,B2, …] (reverse pair order) in the second half, so that the
+  // generateKnockoutBracketFromPairs seeding (i vs size-1-i) produces the right matchups.
+  const qualifying: (FixedPair | null)[] = [];
+
+  if (numGroups >= 2 && teamsAdvancing >= 2) {
+    const numPairs = Math.floor(numGroups / 2);
+    const firstHalf: (FixedPair | null)[] = [];
+    const secondHalf: (FixedPair | null)[] = [];
+
+    for (let pi = 0; pi < numPairs; pi++) {
+      const groupA = allGroups[pi * 2];
+      const groupB = allGroups[pi * 2 + 1];
+      for (let pos = 0; pos < teamsAdvancing; pos++) {
+        firstHalf.push(getFP(groupA.standings[pos]?.playerId ?? ''));
+      }
+      // Prepend groupB so last pair's B comes first in secondHalf
+      const bTeams: (FixedPair | null)[] = [];
+      for (let pos = 0; pos < teamsAdvancing; pos++) {
+        bTeams.push(getFP(groupB.standings[pos]?.playerId ?? ''));
+      }
+      secondHalf.unshift(...bTeams);
+    }
+
+    // Odd group has no partner — append its qualifiers to firstHalf
+    if (numGroups % 2 === 1) {
+      const lastGroup = allGroups[numGroups - 1];
+      for (let pos = 0; pos < teamsAdvancing; pos++) {
+        firstHalf.push(getFP(lastGroup.standings[pos]?.playerId ?? ''));
+      }
+    }
+
+    qualifying.push(...firstHalf, ...secondHalf);
+  } else {
+    // Simple ordering: all 1st places, then all 2nd places, etc.
+    for (let pos = 0; pos < teamsAdvancing; pos++) {
+      for (const group of allGroups) {
+        qualifying.push(getFP(group.standings[pos]?.playerId ?? ''));
+      }
     }
   }
 
+  // Fill up to the next power of 2 using best-thirds
+  // (sorted by pts desc → pointsFor desc → diff desc)
+  const qualCount = qualifying.filter(Boolean).length;
+  let targetSize = 2;
+  while (targetSize < qualCount) targetSize *= 2;
+  const needed = targetSize - qualCount;
+
+  if (needed > 0) {
+    const thirds: { fp: FixedPair; pts: number; pointsFor: number; diff: number }[] = [];
+    for (const group of allGroups) {
+      const st = group.standings[teamsAdvancing]; // position just below the cut
+      if (!st) continue;
+      const fp = getFP(st.playerId);
+      if (fp && !qualifying.includes(fp)) {
+        thirds.push({ fp, pts: st.pts, pointsFor: st.pointsFor, diff: st.diff });
+      }
+    }
+    thirds.sort((a, b) =>
+      b.pts !== a.pts ? b.pts - a.pts :
+      b.pointsFor !== a.pointsFor ? b.pointsFor - a.pointsFor :
+      b.diff - a.diff
+    );
+    for (let i = 0; i < needed && i < thirds.length; i++) {
+      qualifying.push(thirds[i].fp);
+    }
+  }
+
+  const advancingPairs = qualifying.filter((fp): fp is FixedPair => fp !== null);
   const bracket = generateKnockoutBracketFromPairs(advancingPairs);
   return {
     ...tournament,

@@ -24,7 +24,7 @@ export interface ScoreConfig {
   setsPerMatch?: number; // for traditional
   gamesPerSet?: number;
   tiebreak?: number;
-  deuce?: 'ventaja' | 'oro';
+  deuce?: 'ventaja' | 'oro' | 'plata' | 'ipf';
   allowTies?: boolean;   // round_robin: allow set to end equal (e.g. 6-6)
 }
 
