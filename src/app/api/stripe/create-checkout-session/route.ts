@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${appUrl}${successPath}`,
+      success_url: `${appUrl}${successPath}&plan=${plan}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${appUrl}/pricing`,
       ...(userEmail ? { customer_email: userEmail } : {}),
       subscription_data: {

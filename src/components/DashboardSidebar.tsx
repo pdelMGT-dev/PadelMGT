@@ -9,6 +9,7 @@ import { syncAllFromSupabase } from '@/lib/supabase-sync';
 import { authSignOut } from '@/lib/supabase';
 import LogoIcon from './LogoIcon';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { getUserPlan } from '@/lib/plan-config';
 
 type Role = 'player' | 'club' | 'league' | 'federation' | 'super_admin';
 
@@ -89,6 +90,14 @@ export default function DashboardSidebar() {
     : 'player';
 
   const isSuperAdmin = user?.role === 'super_admin';
+  const currentPlan  = typeof window !== 'undefined' ? getUserPlan() : 'free';
+
+  const planBadgeLabel: Partial<Record<string, string>> = {
+    player_pro:     'Pro', liga_basic: 'Básico', liga_pro: 'Pro',
+    liga_unlimited: 'Ilimitado', club_starter: 'Starter', club_pro: 'Pro',
+    club_liga:      'Club+Liga', fed_basic: 'Básica', fed_pro: 'Pro',
+  };
+  const planBadge = currentPlan !== 'free' ? planBadgeLabel[currentPlan] : null;
   const nav = navItems[activeRole];
   const displayName = user?.name ?? 'Invitado';
   const displaySub  = user?.sub ?? (user?.email ?? '');
@@ -163,6 +172,22 @@ export default function DashboardSidebar() {
           );
         })}
 
+        {/* Upgrade CTA for free players */}
+        {activeRole === 'player' && currentPlan === 'free' && (
+          <div style={{ margin: '12px 12px 0' }}>
+            <Link href="/pricing" style={{
+              display: 'block', textDecoration: 'none', padding: '10px 14px',
+              background: 'rgba(214,255,0,0.08)', border: '1px solid rgba(214,255,0,0.2)',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--neon)', marginBottom: 2 }}>
+                ⚡ Jugador Pro
+              </div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>Sin límites desde $3/mes</div>
+            </Link>
+          </div>
+        )}
+
         <div style={{ margin: '16px 20px 0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
           <div style={{ fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.25)', fontWeight: 700, marginBottom: 6 }}>Plataforma</div>
           {[
@@ -185,7 +210,14 @@ export default function DashboardSidebar() {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displaySub}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{displaySub}</div>
+              {planBadge && (
+                <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neon)', background: 'rgba(214,255,0,0.12)', padding: '2px 6px', border: '1px solid rgba(214,255,0,0.25)' }}>
+                  {planBadge}
+                </span>
+              )}
+            </div>
           </div>
         </Link>
         <button onClick={handleLogout} style={{ display: 'block', width: '100%', textAlign: 'center', padding: '7px', fontSize: 11, color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.08)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, background: 'transparent', cursor: 'pointer' }}>

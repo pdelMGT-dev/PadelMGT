@@ -1,0 +1,32 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  const sessionId = request.nextUrl.searchParams.get('session_id');
+  if (!sessionId) {
+    return NextResponse.json({ error: 'session_id requerido' }, { status: 400 });
+  }
+
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeSecretKey || stripeSecretKey.startsWith('sk_test_...')) {
+    // Stripe not configured — trust the plan from query param (dev mode)
+    return NextResponse.json({ status: 'not_configured' });
+  }
+
+  try {
+    const Stripe = (await import('stripe')).default;
+    const stripe = new Stripe(stripeSecretKey);
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (session.status !== 'complete' && session.payment_status !== 'paid') {
+      return NextResponse.json({ status: 'pending', paymentStatus: session.payment_status });
+    }
+
+    const plan = session.metadata?.plan as string | undefined;
+    const customerEmail = session.customer_email ?? session.customer_details?.email ?? undefined;
+
+    return NextResponse.json({ status: 'paid', plan, customerEmail });
+  } catch (err) {
+    console.error('[Stripe] verify-session error:', err);
+    return NextResponse.json({ status: 'error' });
+  }
+}
