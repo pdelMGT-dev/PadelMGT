@@ -406,7 +406,6 @@ html, body {
 }
 .dashboard-main {
   margin-left: 256px; flex: 1; min-height: 100vh;
-  display: flex; flex-direction: column;
 }
 .dash-mobile-bar {
   display: none;
