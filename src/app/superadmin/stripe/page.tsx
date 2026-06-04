@@ -225,8 +225,16 @@ export default function StripePage() {
               value={cfg.livePublishableKey}
               onChange={e => setCfg(c => ({ ...c, livePublishableKey: e.target.value.trim(), connected: false }))}
               placeholder="pk_live_..."
-              style={{ ...input }}
+              style={{ ...input, borderColor: cfg.livePublishableKey.startsWith('sk_') ? '#dc2626' : undefined }}
             />
+            {cfg.livePublishableKey.startsWith('sk_') && (
+              <div style={{ marginTop: 6, padding: '8px 12px', background: '#fef2f2', border: '1px solid #fca5a5', fontSize: 12, color: '#dc2626', fontWeight: 600 }}>
+                ⚠️ Esto parece una Secret Key (sk_...). Las Secret Keys van SOLO en el servidor (.env.local → STRIPE_SECRET_KEY), nunca en el browser. Borrala de acá y guardá solo la Publishable Key (pk_live_...).
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: '#707072', marginTop: 4 }}>
+              Solo la <strong>Publishable Key</strong> (<code style={{ background: '#f5f5f5', padding: '1px 4px' }}>pk_live_...</code>) va acá. La Secret Key va en el servidor.
+            </div>
           </div>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: '#707072' }}>
