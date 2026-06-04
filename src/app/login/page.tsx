@@ -103,8 +103,15 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-
   const [loading, setLoading] = useState(false);
+
+  function getRedirectUrl(role: string): string {
+    if (typeof window !== 'undefined') {
+      const redirect = new URLSearchParams(window.location.search).get('redirect');
+      if (redirect) return redirect;
+    }
+    return ROLE_REDIRECT[role as UserRole] ?? '/dashboard/player';
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -122,7 +129,7 @@ export default function LoginPage() {
       localStorage.removeItem('padelmgt_last_sync');
       document.cookie = `padelmgt_session=${mockUser.role}; path=/; SameSite=Lax; max-age=86400`;
       setLoading(false);
-      router.push(ROLE_REDIRECT[mockUser.role]);
+      router.push(getRedirectUrl(mockUser.role));
       return;
     }
 
@@ -154,7 +161,7 @@ export default function LoginPage() {
         Promise.allSettled([
           syncUserTournaments(sbPlayer.id as string),
           syncUserGames(sbPlayer.id as string),
-        ]).finally(() => router.push(ROLE_REDIRECT['player']));
+        ]).finally(() => router.push(getRedirectUrl('player')));
         return;
       }
 
@@ -170,7 +177,7 @@ export default function LoginPage() {
       localStorage.removeItem('padelmgt_last_sync');
       document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
       setLoading(false);
-      router.push(ROLE_REDIRECT['player']);
+      router.push(getRedirectUrl('player'));
       return;
     }
 
@@ -189,7 +196,7 @@ export default function LoginPage() {
       localStorage.removeItem('padelmgt_last_sync');
       document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
       setLoading(false);
-      syncAllFromSupabase().finally(() => router.push(ROLE_REDIRECT['player']));
+      syncAllFromSupabase().finally(() => router.push(getRedirectUrl('player')));
       return;
     }
 

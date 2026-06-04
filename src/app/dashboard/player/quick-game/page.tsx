@@ -792,7 +792,7 @@ export default function QuickGamePage() {
 
   if (step === 1) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+      <div style={{ padding: '40px 40px 80px', maxWidth: 640, margin: '0 auto' }}>
         <WizardHeader onCancel={goToDashboard} />
         <Steps current={1} />
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 24px' }}>Información Básica</h2>
@@ -979,7 +979,7 @@ export default function QuickGamePage() {
       { key: 'advanced',     desc: 'Alto nivel competitivo. Selección aleatoria en Intercambio.' },
     ];
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+      <div style={{ padding: '40px 40px 80px', maxWidth: 640, margin: '0 auto' }}>
         <WizardHeader onCancel={goToDashboard} />
         <Steps current={2} />
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Nivel de Juego</h2>
@@ -1004,7 +1004,7 @@ export default function QuickGamePage() {
     const canAddMore = invitedList.length < maxInvitable;
 
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 680 }}>
+      <div style={{ padding: '40px 40px 80px', maxWidth: 680, margin: '0 auto' }}>
         <WizardHeader onCancel={goToDashboard} />
         <Steps current={3} />
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Jugadores</h2>
@@ -1201,7 +1201,7 @@ export default function QuickGamePage() {
 
   if (step === 4) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+      <div style={{ padding: '40px 40px 80px', maxWidth: 640, margin: '0 auto' }}>
         <WizardHeader onCancel={goToDashboard} />
         <Steps current={4} />
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Tipo de Pareja</h2>
@@ -1242,7 +1242,7 @@ export default function QuickGamePage() {
 
   if (step === 5) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+      <div style={{ padding: '40px 40px 80px', maxWidth: 640, margin: '0 auto' }}>
         <WizardHeader onCancel={goToDashboard} />
         <Steps current={5} />
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Configuración del Juego</h2>

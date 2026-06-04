@@ -11,6 +11,7 @@ import { searchPlayers, getFriendsForPlayer } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, type JoinRequest } from '@/lib/join-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { QRCodeSVG } from 'qrcode.react';
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -117,6 +118,8 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
 
   // Join requests
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
+  const [shareUrl, setShareUrl] = useState('');
+  const [showQR, setShowQR] = useState(false);
 
   // Pair builder state (for americano parejas mode)
   const [pairSlots, setPairSlots] = useState<Array<{
@@ -143,6 +146,32 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     const timer = setInterval(loadTournament, 5000);
     return () => clearInterval(timer);
   }, [loadTournament]);
+
+  // ── Generate share URL with snapshot ─────────────────────────────────────
+  useEffect(() => {
+    const t = tournament;
+    if (!t?.code) return;
+    try {
+      const snap = {
+        id: t.id,
+        n:   t.name,
+        cl:  t.club     || '',
+        ci:  t.city     || '',
+        co:  t.country  || '',
+        st:  t.status,
+        p:   t.players.length,
+        mp:  t.maxPlayers,
+        fmt: t.format   || 'americano',
+        pt:  t.pairType || 'individual',
+        lv:  t.levelLabel || '',
+        d:   t.date     || '',
+      };
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(snap))));
+      setShareUrl(`${window.location.origin}/tournaments/${t.code}?s=${encoded}`);
+    } catch {
+      setShareUrl(`${window.location.origin}/tournaments/${tournament?.code}`);
+    }
+  }, [tournament?.code, tournament?.status, tournament?.players.length]);
 
   // ── Search players for invite ─────────────────────────────────────────────
   useEffect(() => {
@@ -648,6 +677,28 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
               style={{ padding: '10px 22px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               INICIAR TORNEO
             </button>
+          </div>
+        )}
+
+        {/* QR + Share strip */}
+        {shareUrl && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 20, padding: '16px', background: 'var(--grey-50, #f9f9f9)', border: '1px solid var(--grey-100)' }}>
+            <div style={{ flexShrink: 0, cursor: 'pointer' }} onClick={() => setShowQR(true)} title="Ver QR en grande">
+              <QRCodeSVG value={shareUrl} size={72} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 4 }}>Compartir Torneo</div>
+              <div style={{ fontSize: 12, color: 'var(--black)', marginBottom: 8, wordBreak: 'break-all', fontFamily: 'monospace' }}>{shareUrl}</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button onClick={() => { navigator.clipboard.writeText(shareUrl).catch(() => {}); }} style={{ padding: '6px 14px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}>
+                  Copiar link
+                </button>
+                <button onClick={() => setShowQR(true)} style={{ padding: '6px 14px', background: 'transparent', border: '1px solid var(--grey-200)', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: 'var(--grey-500)' }}>
+                  Ver QR
+                </button>
+                <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>Código: <strong style={{ color: 'var(--black)' }}>{t.code}</strong></span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1367,6 +1418,18 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
         </div>
 
       </div>
+
+      {/* QR Modal */}
+      {showQR && (
+        <div onClick={() => setShowQR(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 360, width: '90%' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 16 }}>Compartir Torneo</div>
+            <QRCodeSVG value={shareUrl} size={200} />
+            <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 16, wordBreak: 'break-all', textAlign: 'center', maxWidth: 280 }}>{shareUrl}</div>
+            <button onClick={() => setShowQR(false)} style={{ marginTop: 20, padding: '10px 28px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cerrar</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

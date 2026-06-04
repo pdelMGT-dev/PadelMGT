@@ -64,6 +64,7 @@ const RESULT_INFO: Record<string, { label: string; bg: string; textColor: string
 };
 
 interface GameSnap {
+  id?: string;
   n: string; cl: string; ci: string; co: string;
   st: string; p: number; mp: number;
   fmt: string; pt: string; lv: string;
@@ -87,6 +88,9 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
   const [roundOpen, setRoundOpen]     = useState<Record<number, boolean>>({});
   const [rankingEntries, setRankingEntries] = useState<RankingEntry[]>([]);
   const [shareUrl, setShareUrl]       = useState('');
+  const [snapJoinName, setSnapJoinName] = useState('');
+  const [snapJoinSent, setSnapJoinSent] = useState(false);
+  const [snapJoinError, setSnapJoinError] = useState('');
 
   useEffect(() => {
     // Keep full URL (with snap param) intact for QR re-sharing
@@ -107,10 +111,7 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
       const g = getGameByCode(code);
       setGame(g);
       if (g?.status === 'finished') setRankingEntries(getRankingHistoryForGame(g.id));
-      setCurrentUser(prev => {
-        if (prev) setMyRequest(g ? getMyJoinRequest(g.id, prev.id) : null);
-        return prev;
-      });
+      if (currentUser) setMyRequest(g ? getMyJoinRequest(g.id, currentUser.id) : null);
     };
     load();
     const interval = setInterval(load, 5000);
@@ -182,21 +183,57 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
             </div>
           </div>
 
-          {/* Cross-device notice */}
-          <div style={{ background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.2)', borderRadius: 4, padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <span style={{ fontSize: 18, flexShrink: 0 }}>ℹ️</span>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--neon)', marginBottom: 4 }}>Estás viendo desde otro dispositivo</div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>
-                Para unirte o ver los detalles completos, pedile al organizador que te comparta el enlace o iniciá sesión en la app.
+          {/* Join section */}
+          {snap.st === 'created' && snap.p < snap.mp ? (
+            currentUser ? (
+              snapJoinSent ? (
+                <div style={{ background: 'rgba(214,255,0,0.08)', border: '1px solid rgba(214,255,0,0.3)', borderRadius: 4, padding: '20px 24px' }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--neon)', marginBottom: 6 }}>✓ Solicitud enviada</div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>El organizador del juego recibirá tu solicitud y te confirmará la inscripción.</div>
+                </div>
+              ) : (
+                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '24px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Unirte a este juego</div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 16 }}>Enviá una solicitud al organizador para confirmar tu lugar.</div>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      value={snapJoinName}
+                      onChange={e => setSnapJoinName(e.target.value)}
+                      placeholder={currentUser.name || 'Tu nombre'}
+                      style={{ flex: 1, minWidth: 160, padding: '10px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 13, outline: 'none' }}
+                    />
+                    <button
+                      onClick={() => {
+                        const name = (snapJoinName.trim() || currentUser.name || '').trim();
+                        if (!name) { setSnapJoinError('Ingresá tu nombre'); return; }
+                        if (!snap.id) { setSnapJoinError('No se pudo identificar el juego. Pedile el link al organizador.'); return; }
+                        submitJoinRequest(snap.id, 'game', currentUser.id, name, currentUser.email);
+                        setSnapJoinSent(true);
+                        setSnapJoinError('');
+                      }}
+                      style={{ padding: '10px 24px', background: 'var(--neon)', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
+                    >
+                      Solicitar unirme
+                    </button>
+                  </div>
+                  {snapJoinError && <div style={{ fontSize: 12, color: '#f87171', marginTop: 8 }}>{snapJoinError}</div>}
+                </div>
+              )
+            ) : (
+              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '24px' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 8 }}>¿Querés unirte?</div>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginBottom: 20 }}>Iniciá sesión o creá una cuenta para solicitar unirte a este juego.</div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <Link href={`/login?redirect=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`} className="btn btn-on-dark">Iniciar sesión →</Link>
+                  <Link href="/signup" className="btn btn-outline-dark">Crear cuenta</Link>
+                </div>
               </div>
+            )
+          ) : (
+            <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '16px 20px', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+              {snap.st === 'finished' ? 'Este juego ya finalizó.' : snap.p >= snap.mp ? 'Este juego está completo.' : 'No disponible para inscripción.'}
             </div>
-          </div>
-
-          <div style={{ marginTop: 32, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Link href="/signup" className="btn btn-on-dark">Crear cuenta →</Link>
-            <Link href="/login" className="btn btn-outline-dark">Iniciar sesión</Link>
-          </div>
+          )}
         </div>
       </div>
     );

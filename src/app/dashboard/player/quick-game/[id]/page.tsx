@@ -255,6 +255,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     if (!game?.code) return;
     try {
       const snap = {
+        id:  game.id,
         n:   game.name,
         cl:  game.club  || '',
         ci:  game.city  || '',
@@ -843,7 +844,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   if (!canManage) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 800 }}>
+      <div style={{ padding: '40px 40px 80px', maxWidth: 800, margin: '0 auto' }}>
         {toast && (
           <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none' }}>
             {toast}
@@ -945,7 +946,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   // ── CREATOR VIEW ──────────────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: '40px 40px 80px', maxWidth: 900 }}>
+    <div style={{ padding: '40px 40px 80px', maxWidth: 900, margin: '0 auto' }}>
       {/* Toast */}
       {toast && (
         <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none' }}>

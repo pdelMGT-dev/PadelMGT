@@ -512,7 +512,7 @@ export default function PlayerTournamentsPage() {
     // ── STEP 1: Información Básica ─────────────────────────────────────────
     if (step === 1) {
       return (
-        <div style={{ padding: '40px 40px 80px', maxWidth: 660 }}>
+        <div style={{ padding: '40px 40px 80px', maxWidth: 660, margin: '0 auto' }}>
           {wizardHeader}
           <WizardSteps current={1} />
 
@@ -690,7 +690,7 @@ export default function PlayerTournamentsPage() {
       const fmtFunctional = tFormat ? FORMAT_INFO[tFormat].functional : false;
 
       return (
-        <div style={{ padding: '40px 40px 80px', maxWidth: 720 }}>
+        <div style={{ padding: '40px 40px 80px', maxWidth: 720, margin: '0 auto' }}>
           {wizardHeader}
           <WizardSteps current={2} />
 
@@ -1009,7 +1009,7 @@ export default function PlayerTournamentsPage() {
       const canCreate = tPlayers.length >= 1 && (!needsPairs || tPairsLocked);
 
       return (
-        <div style={{ padding: '40px 40px 80px', maxWidth: 720 }}>
+        <div style={{ padding: '40px 40px 80px', maxWidth: 720, margin: '0 auto' }}>
           {wizardHeader}
           <WizardSteps current={3} />
 
@@ -1318,7 +1318,7 @@ export default function PlayerTournamentsPage() {
     // ── STEP 99: Éxito ─────────────────────────────────────────────────────
     if (step === 99) {
       return (
-        <div style={{ padding: '40px 40px 80px', maxWidth: 560 }}>
+        <div style={{ padding: '40px 40px 80px', maxWidth: 560, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', padding: '40px 0 24px' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 56, color: 'var(--turf-green)', marginBottom: 12 }}>✓</div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', marginBottom: 8 }}>¡TORNEO CREADO!</div>
