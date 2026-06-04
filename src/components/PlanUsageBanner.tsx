@@ -2,7 +2,10 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { getUserPlan, getPlayerLimits, getMonthlyUsage, type PlanId } from '@/lib/plan-config';
+import { getUserPlan, getPlayerLimits, type PlanId } from '@/lib/plan-config';
+import { getAllGames } from '@/lib/game-store';
+import { getAllTournaments } from '@/lib/tournament-store';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Display metadata ────────────────────────────────────────────────────────
 
@@ -126,13 +129,38 @@ interface Props {
 }
 
 export default function PlanUsageBanner({ role }: Props) {
+  const { user } = useCurrentUser();
   const [plan, setPlan] = useState<PlanId>('free');
   const [usage, setUsage] = useState({ games: 0, tournaments: 0 });
 
   useEffect(() => {
     setPlan(getUserPlan());
-    setUsage(getMonthlyUsage());
-  }, []);
+
+    if (!user?.id) return;
+    const now = new Date();
+    const yr = now.getFullYear();
+    const mo = now.getMonth(); // 0-indexed
+
+    function isThisMonth(iso?: string): boolean {
+      if (!iso) return false;
+      const d = new Date(iso);
+      return d.getFullYear() === yr && d.getMonth() === mo;
+    }
+
+    const games = getAllGames().filter(g =>
+      g.creatorId === user.id &&
+      !g.cancelledAt &&
+      isThisMonth(g.createdAt)
+    ).length;
+
+    const tournaments = getAllTournaments().filter(t =>
+      t.creatorId === user.id &&
+      !t.cancelledAt &&
+      isThisMonth(t.createdAt)
+    ).length;
+
+    setUsage({ games, tournaments });
+  }, [user?.id]);
 
   const meta = PLAN_META[plan] ?? PLAN_META.free;
   const tierColor = TIER_COLOR[meta.tier];

@@ -138,6 +138,7 @@ export interface ActiveGame {
   groups?: GroupStage;        // for world_cup
   isCreator?: boolean;        // set by UI when rendering for creator
   cancelledAt?: string;       // ISO date if game was cancelled
+  createdAt?: string;         // ISO date when game was first created
 }
 
 export interface GroupStage {
