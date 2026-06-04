@@ -472,11 +472,22 @@ export default function QuickGamePage() {
       .filter(g => g.status === 'finished')
       .sort((a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || '')));
 
-    function gameShareUrl(code: string) {
-      return `${window.location.origin}/quick-game/${code}`;
+    function gameShareUrl(game: typeof games[0]) {
+      try {
+        const snap = {
+          id: game.id, n: game.name, cl: game.club || '', ci: game.city || '',
+          co: game.country || '', st: game.status, p: game.players.length,
+          mp: game.maxPlayers, fmt: game.format || 'americano',
+          pt: game.pairType || 'individual', lv: game.levelLabel || '',
+        };
+        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(snap))));
+        return `${window.location.origin}/quick-game/${game.code}?s=${encoded}`;
+      } catch {
+        return `${window.location.origin}/quick-game/${game.code}`;
+      }
     }
-    function copyCode(code: string) {
-      navigator.clipboard.writeText(gameShareUrl(code)).catch(() => {});
+    function copyCode(game: typeof games[0]) {
+      navigator.clipboard.writeText(gameShareUrl(game)).catch(() => {});
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -508,13 +519,13 @@ export default function QuickGamePage() {
               </div>
               <div style={{ background: 'var(--grey-900)', padding: '24px', textAlign: 'center', marginBottom: 20 }}>
                 <div style={{ background: '#fff', display: 'inline-block', padding: 8, marginBottom: 12 }}>
-                  <QRCodeSVG value={gameShareUrl(qrGame.code)} size={120} bgColor="#ffffff" fgColor="#000000" level="M" />
+                  <QRCodeSVG value={gameShareUrl(qrGame)} size={120} bgColor="#ffffff" fgColor="#000000" level="M" />
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '0.12em' }}>{qrGame.code}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 4, wordBreak: 'break-all' }}>{gameShareUrl(qrGame.code)}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 4, wordBreak: 'break-all' }}>{gameShareUrl(qrGame)}</div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <button onClick={() => copyCode(qrGame.code)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', border: `1px solid ${copied ? 'var(--turf-green)' : 'var(--grey-200)'}`, background: copied ? 'rgba(0,200,100,0.05)' : '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                <button onClick={() => copyCode(qrGame)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', border: `1px solid ${copied ? 'var(--turf-green)' : 'var(--grey-200)'}`, background: copied ? 'rgba(0,200,100,0.05)' : '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
                   <span style={{ fontSize: 18 }}>{copied ? '✓' : '📋'}</span>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: copied ? 'var(--turf-green)' : 'var(--black)' }}>{copied ? '¡Link copiado!' : 'Copiar link de invitación'}</div>

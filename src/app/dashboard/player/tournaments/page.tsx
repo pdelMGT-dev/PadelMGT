@@ -168,6 +168,7 @@ export default function PlayerTournamentsPage() {
   // ── Success ─────────────────────────────────────────────────────────────────
   const [newTId, setNewTId] = useState('');
   const [newTCode, setNewTCode] = useState('');
+  const [newTShareUrl, setNewTShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
 
   // ── Step 1 ──────────────────────────────────────────────────────────────────
@@ -329,7 +330,7 @@ export default function PlayerTournamentsPage() {
     setTProvName(''); setTShowProvInput(false); setTShowAddPanel(false);
     setTPairAssignments([]); setTPairsLocked(false);
     setTDragId(null); setTDragSource(null); setTDropOver(null);
-    setNewTId(''); setNewTCode(''); setCopied(false);
+    setNewTId(''); setNewTCode(''); setNewTShareUrl(''); setCopied(false);
   }
 
   // ── Create tournament ────────────────────────────────────────────────────────
@@ -412,6 +413,29 @@ export default function PlayerTournamentsPage() {
     incrementUsage('tournaments');
     setNewTId(tournament.id);
     setNewTCode(tournament.code);
+
+    // Build snapshot URL so QR works cross-device (no localStorage dependency)
+    try {
+      const snap = {
+        id:  tournament.id,
+        n:   tournament.name,
+        cl:  tournament.club  || '',
+        ci:  tournament.city  || '',
+        co:  tournament.country || '',
+        st:  tournament.status,
+        p:   tournament.players.length,
+        mp:  tournament.maxPlayers,
+        fmt: tournament.format   || 'americano',
+        pt:  tournament.pairType || 'individual',
+        lv:  tournament.levelLabel || '',
+        d:   tournament.date || '',
+      };
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(snap))));
+      setNewTShareUrl(`${window.location.origin}/t/${tournament.code}?s=${encoded}`);
+    } catch {
+      setNewTShareUrl(`${window.location.origin}/t/${tournament.code}`);
+    }
+
     setStep(99);
     showToast('¡Torneo creado exitosamente!', 'success');
 
@@ -1332,7 +1356,7 @@ export default function PlayerTournamentsPage() {
 
             <div style={{ display: 'inline-block', background: '#fff', padding: 12, marginBottom: 16 }}>
               <QRCodeSVG
-                value={typeof window !== 'undefined' ? `${window.location.origin}/tournament/${newTCode}` : `https://padelmgt.com/tournament/${newTCode}`}
+                value={newTShareUrl || `https://padelmgt.com/t/${newTCode}`}
                 size={140} bgColor="#ffffff" fgColor="#000000" level="M"
               />
             </div>
@@ -1340,11 +1364,11 @@ export default function PlayerTournamentsPage() {
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ background: 'rgba(255,255,255,0.08)', padding: '8px 14px', fontSize: 11, fontFamily: 'monospace', color: 'rgba(255,255,255,0.6)', wordBreak: 'break-all' }}>
-                {typeof window !== 'undefined' ? `${window.location.origin}/tournament/${newTCode}` : `padelmgt.com/tournament/${newTCode}`}
+                {newTShareUrl || `padelmgt.com/t/${newTCode}`}
               </div>
               <button
                 onClick={() => {
-                  const url = `${window.location.origin}/tournament/${newTCode}`;
+                  const url = newTShareUrl || `${window.location.origin}/t/${newTCode}`;
                   navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
                 }}
                 style={{ padding: '8px 16px', background: copied ? 'var(--turf-green)' : 'var(--neon)', color: 'var(--black)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
