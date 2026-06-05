@@ -135,6 +135,7 @@ const CLUB_PLAN_MAP: Record<string, { label: string; bg: string; color: string }
   liga_unlimited:{ label: 'Liga Unlimited',bg: '#f5f3ff', color: '#6d28d9' },
   fed_basic:     { label: 'Fed Basic',     bg: '#ffedd5', color: '#9a3412' },
   fed_pro:       { label: 'Fed Pro',       bg: '#fed7aa', color: '#7c2d12' },
+  infinity:      { label: '∞ Infinity',   bg: '#f3e8ff', color: '#7c3aed' },
 };
 
 function PlanBadge({ plan }: { plan: SAClub['plan'] }) {
@@ -255,6 +256,9 @@ function ClubForm({
             <optgroup label="Federación">
               <option value="fed_basic">Fed Basic</option>
               <option value="fed_pro">Fed Pro</option>
+            </optgroup>
+            <optgroup label="★ Especial">
+              <option value="infinity">∞ Infinity</option>
             </optgroup>
           </select>
         </Field>
@@ -825,6 +829,7 @@ export default function ClubsPage() {
               <option value="free">Plan Free</option>
               <option value="basic">Plan Basic</option>
               <option value="pro">Plan Pro</option>
+              <option value="infinity">Plan ∞ Infinity</option>
             </optgroup>
             <optgroup label="Peligroso">
               <option value="delete">Eliminar seleccionados</option>
@@ -1005,6 +1010,9 @@ export default function ClubsPage() {
                   <optgroup label="Federación">
                     <option value="fed_basic">Fed Basic</option>
                     <option value="fed_pro">Fed Pro</option>
+                  </optgroup>
+                  <optgroup label="★ Especial">
+                    <option value="infinity">∞ Infinity</option>
                   </optgroup>
                 </select>
                 <button

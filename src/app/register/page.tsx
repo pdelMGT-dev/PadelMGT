@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { registerPlayer, type PlayerSex } from '@/lib/player-store';
 import { authSignUp } from '@/lib/supabase';
 import { sendWelcomeEmail } from '@/lib/email';
@@ -30,7 +29,6 @@ const inputStyle: React.CSSProperties = {
 };
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [name,     setName]     = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -38,16 +36,18 @@ export default function RegisterPage() {
   const [sex,      setSex]      = useState<PlayerSex | ''>('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
+  const [success,  setSuccess]  = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
-    if (!name.trim())         { setError('Ingresá tu nombre completo.'); return; }
-    if (!email.trim())        { setError('Ingresá un email válido.'); return; }
-    if (password.length < 6)  { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
-    if (!country)             { setError('Seleccioná tu país.'); return; }
-    if (!sex)                 { setError('Seleccioná tu sexo.'); return; }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!name.trim())                   { setError('Ingresá tu nombre completo.'); return; }
+    if (!emailRegex.test(email.trim())) { setError('Ingresá un email válido (ej: nombre@dominio.com).'); return; }
+    if (password.length < 6)            { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
+    if (!country)                       { setError('Seleccioná tu país.'); return; }
+    if (!sex)                           { setError('Seleccioná tu sexo.'); return; }
 
     setLoading(true);
 
@@ -75,33 +75,52 @@ export default function RegisterPage() {
       return;
     }
 
-    const session = {
-      id:         player.id,
-      name:       player.name,
-      email:      player.email,
-      shortId:    player.shortId,
-      role:       'player',
-      sub:        `${player.shortId} · ${player.country ?? ''}`,
-      firstLogin: true,
-    };
-    localStorage.setItem('padelmgt_user', JSON.stringify(session));
-    document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
     // Fire-and-forget welcome email — non-blocking
     sendWelcomeEmail(player.email, player.name).catch(() => {});
-    router.push('/dashboard/player');
+    setLoading(false);
+    setSuccess(true);
+  }
+
+  const headerBar = (
+    <div style={{ background: 'var(--black)', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+        <div style={{ width: 32, height: 32, background: 'var(--neon)', color: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18 }}>P</div>
+        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: '#fff', letterSpacing: '0.04em' }}>PADELMGT</span>
+      </Link>
+      <Link href="/login" style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>
+        ¿Ya tenés cuenta? Iniciar sesión →
+      </Link>
+    </div>
+  );
+
+  if (success) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--grey-50)', display: 'flex', flexDirection: 'column' }}>
+        {headerBar}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
+          <div style={{ background: '#fff', width: '100%', maxWidth: 480, padding: '48px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', textAlign: 'center' }}>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(214,255,0,0.12)', border: '2px solid var(--neon)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: 24 }}>✓</div>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 28, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 12px', color: 'var(--black)' }}>
+              ¡Cuenta creada!
+            </h1>
+            <p style={{ fontSize: 14, color: 'var(--grey-500)', margin: '0 0 8px', lineHeight: 1.6 }}>
+              Revisá tu bandeja de entrada en <strong>{email}</strong> para confirmar tu cuenta.
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--grey-400)', margin: '0 0 32px' }}>
+              Una vez confirmado el email, podés iniciar sesión.
+            </p>
+            <Link href="/login" className="btn btn-primary" style={{ display: 'inline-block', padding: '14px 32px', fontSize: 14, textDecoration: 'none', borderRadius: 0 }}>
+              Ir a iniciar sesión →
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--grey-50)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ background: 'var(--black)', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <div style={{ width: 32, height: 32, background: 'var(--neon)', color: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18 }}>P</div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: '#fff', letterSpacing: '0.04em' }}>PADELMGT</span>
-        </Link>
-        <Link href="/login" style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>
-          ¿Ya tenés cuenta? Iniciar sesión →
-        </Link>
-      </div>
+      {headerBar}
 
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
         <div style={{ background: '#fff', width: '100%', maxWidth: 520, padding: '48px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>

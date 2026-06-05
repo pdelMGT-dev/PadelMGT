@@ -9,7 +9,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Display metadata ────────────────────────────────────────────────────────
 
-const PLAN_META: Record<PlanId, { label: string; tier: 'free' | 'starter' | 'pro' | 'max' }> = {
+const PLAN_META: Record<PlanId, { label: string; tier: 'free' | 'starter' | 'pro' | 'max' | 'infinity' }> = {
   free:             { label: 'Plan Gratuito',    tier: 'free' },
   player_pro:       { label: 'Jugador Pro',      tier: 'pro' },
   club_starter:     { label: 'Club Starter',     tier: 'starter' },
@@ -21,13 +21,15 @@ const PLAN_META: Record<PlanId, { label: string; tier: 'free' | 'starter' | 'pro
   liga_unlimited:   { label: 'Liga Unlimited',   tier: 'max' },
   fed_basic:        { label: 'Federación Básica',tier: 'starter' },
   fed_pro:          { label: 'Federación Pro',   tier: 'max' },
+  infinity:         { label: 'Infinity',         tier: 'infinity' },
 };
 
 const TIER_COLOR: Record<string, string> = {
-  free:    'var(--grey-400)',
-  starter: '#6366f1',
-  pro:     'var(--neon)',
-  max:     '#f5a623',
+  free:     'var(--grey-400)',
+  starter:  '#6366f1',
+  pro:      'var(--neon)',
+  max:      '#f5a623',
+  infinity: '#a855f7',
 };
 
 // ── Usage progress bar ──────────────────────────────────────────────────────
@@ -166,7 +168,20 @@ export default function PlanUsageBanner({ role }: Props) {
   const tierColor = TIER_COLOR[meta.tier];
   const isUnlimited = meta.tier === 'max' || role === 'super_admin';
 
-  // ── Super admin / federation: no banner needed ────────────────────────────
+  // ── Infinity plan: special unlimited banner for all roles ─────────────────
+  if (plan === 'infinity') {
+    return (
+      <div style={{ border: '1px solid rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.06)', padding: '18px 24px', marginBottom: 32, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 22 }}>∞</span>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#a855f7', marginBottom: 2 }}>Plan Infinity</div>
+          <div style={{ fontSize: 13, color: 'var(--grey-600)', fontWeight: 500 }}>Tu plan es Infinity — sin limitaciones en juegos, torneos ni jugadores.</div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Super admin / federation: no banner needed ─────────────────────────────
   if (role === 'super_admin' || role === 'federation') return null;
 
   // ── Player banner ─────────────────────────────────────────────────────────

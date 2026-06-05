@@ -29,6 +29,21 @@ export async function getAuthUser() {
   return data.user ?? null;
 }
 
+export async function resetPasswordForEmail(email: string, redirectTo: string) {
+  if (!supabase) return { error: { message: 'Supabase no configurado' } };
+  return supabase.auth.resetPasswordForEmail(email, { redirectTo });
+}
+
+export async function updateUserPassword(newPassword: string) {
+  if (!supabase) return { error: { message: 'Supabase no configurado' } };
+  return supabase.auth.updateUser({ password: newPassword });
+}
+
+export async function exchangeCodeForSession(code: string) {
+  if (!supabase) return { data: null, error: { message: 'Supabase no configurado' } };
+  return supabase.auth.exchangeCodeForSession(code);
+}
+
 /** Fetch a player record from Supabase by their auth user_id. */
 export async function fetchPlayerByUserId(userId: string) {
   if (!supabase) return null;

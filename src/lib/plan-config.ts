@@ -6,7 +6,8 @@ export type PlanId =
   | 'player_pro'
   | 'liga_free' | 'liga_basic' | 'liga_pro' | 'liga_unlimited'
   | 'club_starter' | 'club_pro' | 'club_liga'
-  | 'fed_basic' | 'fed_pro';
+  | 'fed_basic' | 'fed_pro'
+  | 'infinity';
 
 // ── Stripe plan ID → PlanId mapping ───────────────────────────────────────────
 
@@ -43,6 +44,12 @@ const PLAYER_LIMITS: Record<string, PlayerLimits> = {
     maxPlayersPerGame: 32,
     maxGamesPerMonth: -1,
     maxPlayersPerTournament: 64,
+    maxTournamentsPerMonth: -1,
+  },
+  infinity: {
+    maxPlayersPerGame: -1,
+    maxGamesPerMonth: -1,
+    maxPlayersPerTournament: -1,
     maxTournamentsPerMonth: -1,
   },
 };
@@ -110,7 +117,7 @@ export type GateResult =
 
 export function checkGameGate(maxPlayers: number): GateResult {
   const plan = getUserPlan();
-  if (BYPASS_ROLES.has(plan) || plan === 'fed_pro') return { allowed: true };
+  if (BYPASS_ROLES.has(plan) || plan === 'fed_pro' || plan === 'infinity') return { allowed: true };
   const lim = PLAYER_LIMITS[plan] ?? PLAYER_LIMITS.free;
 
   if (lim.maxPlayersPerGame !== -1 && maxPlayers > lim.maxPlayersPerGame) {
@@ -127,7 +134,7 @@ export function checkGameGate(maxPlayers: number): GateResult {
 
 export function checkTournamentGate(maxPlayers: number): GateResult {
   const plan = getUserPlan();
-  if (BYPASS_ROLES.has(plan) || plan === 'fed_pro') return { allowed: true };
+  if (BYPASS_ROLES.has(plan) || plan === 'fed_pro' || plan === 'infinity') return { allowed: true };
   const lim = PLAYER_LIMITS[plan] ?? PLAYER_LIMITS.free;
 
   if (lim.maxPlayersPerTournament !== -1 && maxPlayers > lim.maxPlayersPerTournament) {

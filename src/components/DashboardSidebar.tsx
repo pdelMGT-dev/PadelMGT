@@ -96,6 +96,7 @@ export default function DashboardSidebar() {
     player_pro:     'Pro', liga_basic: 'Básico', liga_pro: 'Pro',
     liga_unlimited: 'Ilimitado', club_starter: 'Starter', club_pro: 'Pro',
     club_liga:      'Club+Liga', fed_basic: 'Básica', fed_pro: 'Pro',
+    infinity:       '∞ Infinity',
   };
   const planBadge = currentPlan !== 'free' ? planBadgeLabel[currentPlan] : null;
   const nav = navItems[activeRole];
@@ -213,7 +214,7 @@ export default function DashboardSidebar() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{displaySub}</div>
               {planBadge && (
-                <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--neon)', background: 'rgba(214,255,0,0.12)', padding: '2px 6px', border: '1px solid rgba(214,255,0,0.25)' }}>
+                <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: currentPlan === 'infinity' ? '#a855f7' : 'var(--neon)', background: currentPlan === 'infinity' ? 'rgba(168,85,247,0.15)' : 'rgba(214,255,0,0.12)', padding: '2px 6px', border: `1px solid ${currentPlan === 'infinity' ? 'rgba(168,85,247,0.35)' : 'rgba(214,255,0,0.25)'}` }}>
                   {planBadge}
                 </span>
               )}

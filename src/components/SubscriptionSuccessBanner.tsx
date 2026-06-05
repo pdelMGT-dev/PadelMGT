@@ -17,6 +17,7 @@ const PLAN_LABELS: Record<PlanId, string> = {
   club_liga:      'Club + Liga',
   fed_basic:      'Federación Básica',
   fed_pro:        'Federación Pro',
+  infinity:       '∞ Infinity',
 };
 
 export default function SubscriptionSuccessBanner() {

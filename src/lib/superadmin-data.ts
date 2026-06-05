@@ -45,7 +45,7 @@ export interface SAClub {
   message: string;
   rejectReason?: string;
   joinedAt: string;
-  plan: 'free' | 'basic' | 'pro' | 'club_starter' | 'club_pro' | 'club_liga' | 'liga_free' | 'liga_basic' | 'liga_pro' | 'liga_unlimited' | 'fed_basic' | 'fed_pro';
+  plan: 'free' | 'basic' | 'pro' | 'club_starter' | 'club_pro' | 'club_liga' | 'liga_free' | 'liga_basic' | 'liga_pro' | 'liga_unlimited' | 'fed_basic' | 'fed_pro' | 'infinity';
   mapsUrl?: string;
 }
 

@@ -52,6 +52,12 @@ const ALL_PLAN_GROUPS: { group: string; plans: PlanOption[] }[] = [
       { id: 'fed_pro',   label: 'Fed Pro',   color: '#7c2d12', bg: '#fed7aa' },
     ],
   },
+  {
+    group: '★ Especial',
+    plans: [
+      { id: 'infinity', label: '∞ Infinity', color: '#7c3aed', bg: '#f3e8ff' },
+    ],
+  },
 ];
 
 const ALL_PLANS: PlanOption[] = ALL_PLAN_GROUPS.flatMap(g => g.plans);
@@ -1052,6 +1058,7 @@ export default function PlayersPage() {
             <optgroup label="Plan">
               <option value="plan:free">Plan Free</option>
               <option value="plan:player_pro">Plan Player Pro</option>
+              <option value="plan:infinity">Plan ∞ Infinity</option>
             </optgroup>
           </select>
           <button
