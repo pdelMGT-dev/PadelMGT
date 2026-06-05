@@ -1414,27 +1414,56 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             </div>
           )}
           {/* Co-creator assignment */}
-          {isCreator && game.players.filter(p => !p.isCreator).length > 0 && (
-            <div style={{ marginTop: 24, borderTop: '1px solid var(--grey-100)', paddingTop: 16 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>
-                Co-Creadores (pueden ingresar scores)
+          {isCreator && (() => {
+            const playerIds = new Set(game.players.map(p => p.id));
+            const externalFriends = currentUser
+              ? getFriendsForPlayer(currentUser.id).filter(f => !playerIds.has(f.id) && f.id !== game.creatorId)
+              : [];
+            const nonCreatorPlayers = game.players.filter(p => !p.isCreator);
+            if (nonCreatorPlayers.length === 0 && externalFriends.length === 0) return null;
+            return (
+              <div style={{ marginTop: 24, borderTop: '1px solid var(--grey-100)', paddingTop: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>
+                  Co-Creadores (pueden ingresar scores)
+                </div>
+                {nonCreatorPlayers.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 10, color: 'var(--grey-400)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Jugadores del juego</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                      {nonCreatorPlayers.map(p => {
+                        const isCo = game.coCreatorIds?.includes(p.id);
+                        return (
+                          <button key={p.id} onClick={() => handleToggleCoCreator(p.id)}
+                            style={{ padding: '7px 14px', border: '1px solid', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase', background: isCo ? 'var(--neon)' : '#fff', color: isCo ? 'var(--black)' : 'var(--grey-400)', borderColor: isCo ? 'var(--neon)' : 'var(--grey-200)' }}>
+                            {p.name} {isCo ? '★' : '+'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+                {externalFriends.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 10, color: 'var(--grey-400)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Amistades (externas)</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+                      {externalFriends.map(f => {
+                        const isCo = game.coCreatorIds?.includes(f.id);
+                        return (
+                          <button key={f.id} onClick={() => handleToggleCoCreator(f.id)}
+                            style={{ padding: '7px 14px', border: '1px solid', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase', background: isCo ? '#1d4ed8' : '#fff', color: isCo ? '#fff' : 'var(--grey-400)', borderColor: isCo ? '#1d4ed8' : 'var(--grey-200)' }}>
+                            {f.name} {isCo ? '★' : '+'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+                <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 4 }}>
+                  Los Co-Creadores (★) podrán ingresar scores y avanzar rondas. Las amistades externas no participan en el juego.
+                </div>
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {game.players.filter(p => !p.isCreator).map(p => {
-                  const isCo = game.coCreatorIds?.includes(p.id);
-                  return (
-                    <button key={p.id} onClick={() => handleToggleCoCreator(p.id)}
-                      style={{ padding: '7px 14px', border: '1px solid', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase', background: isCo ? 'var(--neon)' : '#fff', color: isCo ? 'var(--black)' : 'var(--grey-400)', borderColor: isCo ? 'var(--neon)' : 'var(--grey-200)' }}>
-                      {p.name} {isCo ? '★' : '+'}
-                    </button>
-                  );
-                })}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 8 }}>
-                Los Co-Creadores seleccionados (★) podrán ingresar scores y avanzar rondas.
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
 

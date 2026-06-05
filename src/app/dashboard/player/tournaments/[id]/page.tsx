@@ -621,9 +621,24 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   }
 
   // ── Co-creator eligible players ──────────────────────────────────────────
-  const eligibleCoCreators = confirmedPlayers.filter(p =>
-    p.id !== t.creatorId && !(t.coCreatorIds ?? []).includes(p.id)
-  );
+  const assignedCoIds = new Set([t.creatorId, ...(t.coCreatorIds ?? [])]);
+  const creatorFriends = currentUser ? getFriendsForPlayer(currentUser.id) : [];
+  const confirmedPlayerIds = new Set(confirmedPlayers.map(p => p.id));
+  // Players already in the tournament (excl. creator/existing co-creators)
+  const eligibleFromTournament = confirmedPlayers.filter(p => !assignedCoIds.has(p.id));
+  // Friends NOT already in the tournament and not already a co-creator
+  const eligibleFromFriends = creatorFriends.filter(f => !assignedCoIds.has(f.id) && !confirmedPlayerIds.has(f.id));
+  const eligibleCoCreators = [...eligibleFromTournament, ...eligibleFromFriends];
+
+  // Resolve co-creator display name (could be a friend not in confirmed players)
+  function resolveCoCreatorName(cId: string): string {
+    return confirmedPlayers.find(p => p.id === cId)?.name
+      ?? creatorFriends.find(f => f.id === cId)?.name
+      ?? cId;
+  }
+  function isExternalCoCreator(cId: string): boolean {
+    return !confirmedPlayerIds.has(cId);
+  }
 
   // Keep invitation store in sync (read-only reference — polling handles fresh data)
   getInvitationsForGame(t.id);
@@ -1376,13 +1391,19 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
           ) : (
             <div style={{ marginBottom: 14 }}>
               {(t.coCreatorIds ?? []).map(cId => {
-                const player = confirmedPlayers.find(p => p.id === cId);
+                const name = resolveCoCreatorName(cId);
+                const external = isExternalCoCreator(cId);
                 return (
                   <div key={cId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', marginBottom: 6, border: '1px solid var(--grey-200)', background: '#fff' }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--grey-300)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                      {initials(player?.name ?? cId)}
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: external ? 'var(--court-blue)' : 'var(--grey-300)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                      {initials(name)}
                     </div>
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{player?.name ?? cId}</span>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{name}</span>
+                    {external && (
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', background: '#dbeafe', color: '#1d4ed8', marginRight: 4 }}>
+                        Externo
+                      </span>
+                    )}
                     <button onClick={() => handleRemoveCoCreator(cId)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--grey-400)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Quitar
@@ -1403,10 +1424,21 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239E9EA0'/%3E%3C/svg%3E")`,
                   backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center',
                 }}>
-                <option value="">Seleccionar jugador confirmado…</option>
-                {eligibleCoCreators.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
+                <option value="">Seleccionar jugador o amistad…</option>
+                {eligibleFromTournament.length > 0 && (
+                  <optgroup label="Jugadores del torneo">
+                    {eligibleFromTournament.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {eligibleFromFriends.length > 0 && (
+                  <optgroup label="Amistades (externos)">
+                    {eligibleFromFriends.map(f => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
               <button onClick={handleAddCoCreator} disabled={!coCreatorDropdown}
                 style={{ padding: '10px 18px', background: coCreatorDropdown ? 'var(--black)' : 'var(--grey-200)', color: coCreatorDropdown ? '#fff' : 'var(--grey-400)', border: 'none', cursor: coCreatorDropdown ? 'pointer' : 'not-allowed', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
@@ -1414,6 +1446,9 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
               </button>
             </div>
           )}
+          <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 10 }}>
+            Podés asignar jugadores del torneo o amistades externas que no participen.
+          </div>
         </div>
 
         {/* ── Section 4: Acciones ── */}
