@@ -169,6 +169,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   const [finishConfirm, setFinishConfirm] = useState(false);
   const [copied, setCopied] = useState(false);
   const [infoOpen, setInfoOpen] = useState(true);
+  const [reorgRequested, setReorgRequested] = useState(false);
   const [roundsHistOpen, setRoundsHistOpen] = useState(true);
   const [roundOpen, setRoundOpen] = useState<Record<number, boolean>>({});
 
@@ -264,6 +265,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   }
 
   // ── Derived data ──────────────────────────────────────────────────────────
+  const isActualCreator = currentUser != null && t.creatorId === currentUser.id;
   const isFinished = t.status === 'finished';
   const currentRoundNum = t.currentRound;
   const totalRounds = t.rounds.length;
@@ -794,6 +796,39 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
             </div>
           )}
         </div>
+
+        {/* ── REORGANIZATION REQUEST ── */}
+        {isActualCreator && !isFinished && (
+          <div style={{ marginBottom: 24 }}>
+            {(t.reorganizationRequested || reorgRequested) ? (
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 20px', background: '#fefce8', border: '1px solid #fde047', borderRadius: 6 }}>
+                <span style={{ fontSize: 16 }}>⏳</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#854d0e' }}>Solicitud de reorganización enviada</div>
+                  <div style={{ fontSize: 12, color: '#a16207', marginTop: 2 }}>El SA puede revertir el torneo a estado de gestión para que puedas editar los equipos.</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => {
+                    const updated: Tournament = {
+                      ...t,
+                      reorganizationRequested: true,
+                      reorganizationRequestedAt: new Date().toISOString(),
+                    };
+                    saveTournament(updated);
+                    setTournament(updated);
+                    setReorgRequested(true);
+                  }}
+                  style={{ padding: '9px 20px', background: '#fff', color: '#92400e', border: '1px solid #fde047', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                >
+                  ✎ Solicitar reorganización de equipos
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── KNOCKOUT: Group Stage ── */}
         {t.format === 'knockout' && t.knockoutConfig?.currentPhase === 'group_stage' && t.groups && (() => {

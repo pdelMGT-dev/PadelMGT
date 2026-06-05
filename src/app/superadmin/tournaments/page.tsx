@@ -190,6 +190,45 @@ function TournamentDetailDrawer({
           </div>
         </div>
 
+        {/* Reorganization request banner */}
+        {full?.reorganizationRequested && (
+          <div style={{ marginBottom: 24, padding: '14px 18px', background: '#fefce8', border: '1px solid #fde047', borderRadius: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#854d0e', marginBottom: 4 }}>
+                  ⚠ Solicitud de reorganización de equipos
+                </div>
+                <div style={{ fontSize: 12, color: '#a16207' }}>
+                  El creador necesita editar los equipos. Al revertir, el torneo vuelve a estado de gestión y se borran las rondas jugadas.
+                </div>
+                {full.reorganizationRequestedAt && (
+                  <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 6 }}>
+                    Solicitado: {new Date(full.reorganizationRequestedAt).toLocaleString('es-ES')}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  const updated: Tournament = {
+                    ...full,
+                    status: 'created',
+                    rounds: [],
+                    currentRound: 0,
+                    reorganizationRequested: false,
+                    reorganizationRequestedAt: undefined,
+                  };
+                  saveTournament(updated);
+                  setFull(updated);
+                  onStatusChange(summary.id, 'upcoming');
+                }}
+                style={{ padding: '8px 16px', background: '#854d0e', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
+              >
+                Revertir a Gestión
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Participants */}
         {full && full.players.length > 0 && (
           <div style={{ marginBottom: 24 }}>
@@ -314,6 +353,7 @@ export default function TournamentsPage() {
   const [sortKey, setSortKey] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
+  const [reorgRequestIds, setReorgRequestIds] = useState<Set<string>>(new Set());
   // ── CSV Import ──────────────────────────────────────────────────────────────
   const [showImportModal, setShowImportModal] = useState(false);
   const [csvRows, setCsvRows] = useState<string[][]>([]);
@@ -323,6 +363,10 @@ export default function TournamentsPage() {
 
   useEffect(() => {
     setTournaments(getSATournaments());
+
+    const localAll = getAllTournaments();
+    const ids = new Set(localAll.filter(t => t.reorganizationRequested).map(t => t.id));
+    setReorgRequestIds(ids);
 
     function fetchFromSupabase() {
       getSATournamentsFromSupabase().then(sbT => {
@@ -583,7 +627,16 @@ export default function TournamentsPage() {
                       onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
                       onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
                     >
-                      <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--black)' }}>{t.name}</td>
+                      <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--black)' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {t.name}
+                          {reorgRequestIds.has(t.id) && (
+                            <span title="Reorganización solicitada" style={{ fontSize: 11, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047', borderRadius: 4, padding: '1px 6px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              ⚠ Reorg.
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td style={{ padding: '10px 14px', color: 'var(--grey-600)', fontSize: 12 }}>{t.club}</td>
                       <td style={{ padding: '10px 14px', color: 'var(--grey-600)', fontSize: 12 }}>{t.city}</td>
                       <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{t.date}</td>
@@ -681,6 +734,7 @@ export default function TournamentsPage() {
             const updated = tournaments.map(t => t.id === id ? { ...t, status } : t);
             setTournaments(updated);
             saveSATournaments(updated);
+            setReorgRequestIds(prev => { const s = new Set(prev); s.delete(id); return s; });
           }}
         />
       )}
