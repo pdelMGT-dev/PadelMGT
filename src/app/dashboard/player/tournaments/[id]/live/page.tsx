@@ -181,6 +181,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
   // Knockout group score inputs: key = `${groupId}-${courtNum}`, value = { p1: string; p2: string }
   const [koGroupInputs, setKOGroupInputs] = useState<Record<string, { p1: string; p2: string }>>({});
+  const [koGroupSetInputs, setKoGroupSetInputs] = useState<Record<string, Array<{ p1: string; p2: string }>>>({});
+  const [koGroupHistoryOpen, setKoGroupHistoryOpen] = useState<Record<string, boolean>>({});
   const [advanceConfirm, setAdvanceConfirm] = useState(false);
 
   // ── User loaded via useCurrentUser hook ──────────────────────────────────

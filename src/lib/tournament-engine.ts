@@ -229,7 +229,7 @@ export function startTournament(tournament: Tournament): Tournament {
     const cfg = tournament.knockoutConfig ?? { hasGroups: false, numGroups: 2, teamsAdvancing: 1, currentPhase: 'bracket' as const };
 
     if (cfg.hasGroups) {
-      const groups = generateKnockoutGroupStage(pairs, cfg.numGroups);
+      const groups = generateKnockoutGroupStage(pairs, cfg.numGroups, tournament.courts);
       return {
         ...tournament,
         status: 'live',
@@ -322,6 +322,7 @@ export function updateKnockoutGroupMatch(
   courtNum: number,
   s1: number,
   s2: number,
+  sets?: Array<{ p1: number; p2: number }>,
 ): Tournament {
   if (!tournament.groups || !tournament.fixedPairs) return tournament;
   const pairs = tournament.fixedPairs;
@@ -330,7 +331,7 @@ export function updateKnockoutGroupMatch(
     if (g.id !== groupId) return g;
     const matches = g.matches.map(m =>
       m.courtNum === courtNum
-        ? { ...m, pair1Score: s1, pair2Score: s2, status: 'completed' as const }
+        ? { ...m, pair1Score: s1, pair2Score: s2, status: 'completed' as const, ...(sets ? { sets } : {}) }
         : m
     );
     const standings = calculateGroupStandings({ ...g, matches }, pairs);

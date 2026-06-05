@@ -66,6 +66,7 @@ export interface CourtMatch {
   pair2Score: number | null;
   sets?: Array<{ p1: number; p2: number }>; // games per set (traditional mode)
   status: 'pending' | 'completed';
+  roundNum?: number;  // for group stage: which RR round this match belongs to (1-indexed)
 }
 
 export interface GameRound {
@@ -1095,7 +1096,7 @@ export function generateKnockoutBracketFromPairs(pairs: FixedPair[]): KnockoutBr
 // 15. generateKnockoutGroupStage — phase I groups for knockout tournament
 // ---------------------------------------------------------------------------
 
-export function generateKnockoutGroupStage(pairs: FixedPair[], numGroups: number): GroupStage {
+export function generateKnockoutGroupStage(pairs: FixedPair[], numGroups: number, numCourts: number = 2): GroupStage {
   const groups: Group[] = Array.from({ length: numGroups }, (_, g) => ({
     id: `group-${g}`,
     name: `Grupo ${String.fromCharCode(65 + g)}`,
@@ -1104,7 +1105,7 @@ export function generateKnockoutGroupStage(pairs: FixedPair[], numGroups: number
     standings: [],
   }));
 
-  // Distribute snake-style for balance
+  // Distribute snake-style for balance (same as before)
   pairs.forEach((pair, idx) => {
     const row = Math.floor(idx / numGroups);
     const col = row % 2 === 0 ? idx % numGroups : numGroups - 1 - (idx % numGroups);
@@ -1113,19 +1114,39 @@ export function generateKnockoutGroupStage(pairs: FixedPair[], numGroups: number
 
   groups.forEach(group => {
     const groupPairs = pairs.filter(fp => group.playerIds.includes(fp.player1Id));
-    let courtNum = 1;
-    for (let i = 0; i < groupPairs.length; i++) {
-      for (let j = i + 1; j < groupPairs.length; j++) {
-        group.matches.push({
-          courtNum: courtNum++,
-          pair1: [groupPairs[i].player1Id, groupPairs[i].player2Id],
-          pair2: [groupPairs[j].player1Id, groupPairs[j].player2Id],
-          pair1Score: null,
-          pair2Score: null,
-          status: 'pending',
-        });
-      }
+    const G = groupPairs.length;
+    if (G < 2) {
+      group.standings = [];
+      return;
     }
+
+    // Circle method round-robin: G-1 rounds for even G, G rounds for odd G
+    const n = G % 2 === 0 ? G : G + 1;
+    let idx = Array.from({ length: n }, (_, i) => i);
+    let courtCounter = 1;
+
+    for (let r = 0; r < n - 1; r++) {
+      // Generate all matches for this RR round
+      for (let i = 0; i < n / 2; i++) {
+        const a = idx[i];
+        const b = idx[n - 1 - i];
+        if (a < G && b < G) {
+          group.matches.push({
+            courtNum: courtCounter++,
+            pair1: [groupPairs[a].player1Id, groupPairs[a].player2Id],
+            pair2: [groupPairs[b].player1Id, groupPairs[b].player2Id],
+            pair1Score: null,
+            pair2Score: null,
+            status: 'pending',
+            roundNum: r + 1,
+          });
+        }
+      }
+      // Circle rotation: fix idx[0], move last to position 1
+      const last = idx[n - 1];
+      idx = [idx[0], last, ...idx.slice(1, n - 1)];
+    }
+
     group.standings = groupPairs.map(fp => ({
       playerId: fp.player1Id,
       playerName: fp.name ?? `${fp.player1Name} / ${fp.player2Name}`,
