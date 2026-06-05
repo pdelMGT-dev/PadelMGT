@@ -128,6 +128,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     player2Id: string | null;
   }>>([]);
   const [draggedPlayerId, setDraggedPlayerId] = useState<string | null>(null);
+  const [hideCompleteTeams, setHideCompleteTeams] = useState(false);
 
   // ── User loaded via useCurrentUser hook ──────────────────────────────────
 
@@ -1260,10 +1261,50 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                 </div>
               </div>
 
-              {/* Team slots grid */}
+              {/* Collapse toggle */}
+              {completePairs.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <span style={{ fontSize: 11, color: 'var(--grey-500)' }}>
+                    {completePairs.length} equipo{completePairs.length !== 1 ? 's' : ''} completo{completePairs.length !== 1 ? 's' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setHideCompleteTeams(v => !v)}
+                    style={{ fontSize: 11, fontWeight: 700, color: hideCompleteTeams ? 'var(--black)' : 'var(--grey-500)', background: hideCompleteTeams ? 'var(--neon)' : 'var(--grey-100)', border: 'none', padding: '5px 14px', cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase' }}
+                  >
+                    {hideCompleteTeams ? '▶ Mostrar todos' : '◀ Colapsar completos'}
+                  </button>
+                </div>
+              )}
+
+              {/* Compact summary of collapsed complete teams */}
+              {hideCompleteTeams && completePairs.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16, padding: '10px 14px', background: 'rgba(34,197,94,0.04)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                  {pairSlots.map((slot, i) => {
+                    if (!slot.player1Id || !slot.player2Id) return null;
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', background: '#fff', border: '1px solid rgba(34,197,94,0.35)', fontSize: 12 }}>
+                        <span style={{ fontWeight: 700, color: 'var(--grey-500)', fontSize: 10, letterSpacing: '0.06em' }}>{slot.name || `E${i + 1}`}</span>
+                        <span style={{ color: 'var(--grey-300)' }}>·</span>
+                        <span style={{ fontWeight: 600 }}>{playerName(slot.player1Id)}</span>
+                        <span style={{ color: 'var(--grey-300)' }}>/</span>
+                        <span style={{ fontWeight: 600 }}>{playerName(slot.player2Id)}</span>
+                        <button
+                          onClick={() => setHideCompleteTeams(false)}
+                          title="Expandir para editar"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-300)', fontSize: 11, padding: '0 0 0 4px', lineHeight: 1 }}
+                        >✎</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Team slots grid — only show incomplete when collapsed */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                 {pairSlots.map((slot, i) => {
-                  const isComplete = slot.player1Id && slot.player2Id;
+                  const isComplete = !!(slot.player1Id && slot.player2Id);
+                  if (hideCompleteTeams && isComplete) return null;
                   return (
                     <div key={i} style={{
                       border: `2px solid ${isComplete ? 'var(--turf-green, #22c55e)' : 'var(--grey-200)'}`,
