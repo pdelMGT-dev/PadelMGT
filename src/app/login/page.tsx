@@ -151,6 +151,7 @@ export default function LoginPage() {
           role:          'player' as UserRole,
           sub:           `${cf.shortId ?? ''} · ${(sbPlayer.city as string) ?? (sbPlayer.country as string) ?? ''}`,
           rankingPoints: (sbPlayer.ranking_points as number) ?? 0,
+          ...(cf.plan ? { plan: cf.plan } : {}),
         };
         localStorage.setItem('padelmgt_user', JSON.stringify(session));
         localStorage.removeItem('padelmgt_last_sync');
@@ -191,6 +192,7 @@ export default function LoginPage() {
         shortId: player.shortId,
         role:    'player' as UserRole,
         sub:     `${player.shortId} · ${player.city ?? player.country ?? ''}`,
+        ...(player.plan ? { plan: player.plan } : {}),
       };
       localStorage.setItem('padelmgt_user', JSON.stringify(session));
       localStorage.removeItem('padelmgt_last_sync');

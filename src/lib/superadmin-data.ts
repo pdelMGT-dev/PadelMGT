@@ -703,7 +703,7 @@ export async function registerPlayerToSupabase(p: {
   id: string; shortId?: string; name: string; email: string;
   phone?: string; sex?: string; country?: string; city?: string;
   level?: string; ranking?: number; rankingPoints?: number;
-  authUserId?: string;
+  authUserId?: string; plan?: string;
 }): Promise<void> {
   if (!supabase) return;
   try {
@@ -722,6 +722,7 @@ export async function registerPlayerToSupabase(p: {
         shortId: p.shortId,
         ...(p.sex   ? { sex: p.sex }     : {}),
         ...(p.level ? { level: p.level } : {}),
+        ...(p.plan  ? { plan: p.plan }   : {}),
         profileCompleted: 'false',
       },
     });

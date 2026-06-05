@@ -54,8 +54,24 @@ async function syncPlayers(): Promise<void> {
       ...(sb.level             ? { level: sb.level } : {}),
       ...(sb.city              ? { city: sb.city } : {}),
       ...(sb.country           ? { country: sb.country } : {}),
+      ...(sb.plan              ? { plan: sb.plan }   : {}),
     };
   });
+  // Also update padelmgt_user session plan if it belongs to one of the synced players
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('padelmgt_user');
+      if (raw) {
+        const session = JSON.parse(raw) as { id?: string; email?: string; plan?: string };
+        const match = updatedRegistered.find(
+          p => p.id === session.id || p.email.toLowerCase() === (session.email ?? '').toLowerCase()
+        );
+        if (match?.plan && match.plan !== session.plan) {
+          localStorage.setItem('padelmgt_user', JSON.stringify({ ...session, plan: match.plan }));
+        }
+      }
+    } catch { /* silent */ }
+  }
   localStorage.setItem('padelmgt_registered_players', JSON.stringify(updatedRegistered));
 }
 
