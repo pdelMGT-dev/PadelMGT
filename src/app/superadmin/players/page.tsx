@@ -18,10 +18,55 @@ import {
 import { getAllPlayers, updatePlayer as updateRegisteredPlayer } from '@/lib/player-store';
 import type { PlanId } from '@/lib/plan-config';
 
-const PLAYER_PLANS: { id: PlanId | 'free'; label: string; color: string; bg: string }[] = [
-  { id: 'free',       label: 'Free',        color: '#555',    bg: '#f0f0f0' },
-  { id: 'player_pro', label: 'Player Pro',  color: '#92400e', bg: '#fef3c7' },
+interface PlanOption { id: string; label: string; color: string; bg: string }
+
+const ALL_PLAN_GROUPS: { group: string; plans: PlanOption[] }[] = [
+  {
+    group: 'Jugador',
+    plans: [
+      { id: 'free',       label: 'Free',           color: '#555',    bg: '#f0f0f0' },
+      { id: 'player_pro', label: 'Player Pro',      color: '#92400e', bg: '#fef3c7' },
+    ],
+  },
+  {
+    group: 'Liga',
+    plans: [
+      { id: 'liga_free',      label: 'Liga Free',      color: '#0369a1', bg: '#e0f2fe' },
+      { id: 'liga_basic',     label: 'Liga Basic',     color: '#1d4ed8', bg: '#dbeafe' },
+      { id: 'liga_pro',       label: 'Liga Pro',       color: '#7c3aed', bg: '#ede9fe' },
+      { id: 'liga_unlimited', label: 'Liga Unlimited', color: '#6d28d9', bg: '#f5f3ff' },
+    ],
+  },
+  {
+    group: 'Club',
+    plans: [
+      { id: 'club_starter', label: 'Club Starter', color: '#065f46', bg: '#d1fae5' },
+      { id: 'club_pro',     label: 'Club Pro',     color: '#166534', bg: '#dcfce7' },
+      { id: 'club_liga',    label: 'Club Liga',    color: '#14532d', bg: '#bbf7d0' },
+    ],
+  },
+  {
+    group: 'Federación',
+    plans: [
+      { id: 'fed_basic', label: 'Fed Basic', color: '#9a3412', bg: '#ffedd5' },
+      { id: 'fed_pro',   label: 'Fed Pro',   color: '#7c2d12', bg: '#fed7aa' },
+    ],
+  },
 ];
+
+const ALL_PLANS: PlanOption[] = ALL_PLAN_GROUPS.flatMap(g => g.plans);
+
+function plansForRole(role?: SAPlayer['role']): PlanOption[] {
+  if (role === 'federation_admin') return ALL_PLAN_GROUPS.find(g => g.group === 'Federación')!.plans;
+  if (role === 'club_admin') return [
+    ...ALL_PLAN_GROUPS.find(g => g.group === 'Liga')!.plans,
+    ...ALL_PLAN_GROUPS.find(g => g.group === 'Club')!.plans,
+  ];
+  return ALL_PLAN_GROUPS.find(g => g.group === 'Jugador')!.plans;
+}
+
+// Legacy alias kept for PlanBadge lookup
+const PLAYER_PLANS = ALL_PLANS;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -306,8 +351,12 @@ function PlayerForm({
         </Field>
         <Field label="Plan de suscripción">
           <select style={{ ...inputStyle, fontWeight: 600 }} value={form.plan ?? 'free'} onChange={e => set('plan', e.target.value)}>
-            {PLAYER_PLANS.map(p => (
-              <option key={p.id} value={p.id}>{p.label}</option>
+            {ALL_PLAN_GROUPS.map(g => (
+              <optgroup key={g.group} label={g.group}>
+                {g.plans.map(p => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </Field>
@@ -435,15 +484,30 @@ export default function PlayersPage() {
     function fetchFromSupabase() {
       getSAPlayersFromSupabase().then(sbPlayers => {
         if (sbPlayers && sbPlayers.length > 0) {
-          // Merge: Supabase is authoritative, but keep localStorage-only players
-          // (seed players not yet uploaded) so no data is lost between sources.
+          // Local is the write-authoritative source for SA edits (plan, status, etc.).
+          // Supabase is authoritative for profile data and new registrations.
+          // Strategy: merge Supabase into local, but preserve local-only fields
+          // (plan, status changes, etc.) to avoid overwriting SA edits during
+          // the race condition window between upsert and next poll.
           const local = getSAPlayers();
-          const sbIds = new Set(sbPlayers.map(p => p.id));
+          const localMap = new Map(local.map(p => [p.id, p]));
           const sbEmails = new Set(sbPlayers.map(p => p.email.toLowerCase()));
+          const sbIds = new Set(sbPlayers.map(p => p.id));
+
+          const mergedSb = sbPlayers.map(sp => {
+            const loc = localMap.get(sp.id);
+            if (!loc) return sp;
+            // Existing player: prefer local SA-managed fields to avoid overwrite during polling
+            return {
+              ...sp,
+              plan:   loc.plan   ?? sp.plan,
+              status: loc.status ?? sp.status,
+            };
+          });
           const localOnly = local.filter(
             p => !sbIds.has(p.id) && !sbEmails.has(p.email.toLowerCase()),
           );
-          const merged = [...sbPlayers, ...localOnly];
+          const merged = [...mergedSb, ...localOnly];
           setPlayers(merged);
           saveSAPlayers(merged);
         }
@@ -1113,8 +1177,12 @@ export default function PlayersPage() {
                     }}
                     style={{ fontSize: 11, padding: '3px 6px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', color: 'var(--grey-600)', background: '#fff' }}
                   >
-                    {PLAYER_PLANS.map(p => (
-                      <option key={p.id} value={p.id}>{p.label}</option>
+                    {ALL_PLAN_GROUPS.map(g => (
+                      <optgroup key={g.group} label={g.group}>
+                        {g.plans.map(p => (
+                          <option key={p.id} value={p.id}>{p.label}</option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>

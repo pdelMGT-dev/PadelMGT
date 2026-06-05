@@ -45,7 +45,7 @@ export interface SAClub {
   message: string;
   rejectReason?: string;
   joinedAt: string;
-  plan: 'free' | 'basic' | 'pro';
+  plan: 'free' | 'basic' | 'pro' | 'club_starter' | 'club_pro' | 'club_liga' | 'liga_free' | 'liga_basic' | 'liga_pro' | 'liga_unlimited' | 'fed_basic' | 'fed_pro';
   mapsUrl?: string;
 }
 
@@ -416,6 +416,7 @@ function rowToSAPlayer(row: Record<string, unknown>): SAPlayer {
     rankingPoints: (row.ranking_points as number) ?? 0,
     status: (row.status as SAPlayer['status']) ?? 'active',
     role: (row.role as SAPlayer['role']) ?? 'player',
+    plan: cf.plan ?? undefined,
     profileCompleted: cf.profileCompleted === 'true',
     joinedAt: ((row.joined_at as string) ?? '').split('T')[0],
     lastActive: ((row.last_active as string) ?? '').split('T')[0],
@@ -443,6 +444,7 @@ function playerToRow(p: SAPlayer): Record<string, unknown> {
       ...(p.sex              ? { sex: p.sex }                           : {}),
       ...(p.level            ? { level: p.level }                       : {}),
       ...(p.profileCompleted !== undefined ? { profileCompleted: String(p.profileCompleted) } : {}),
+      ...(p.plan             ? { plan: p.plan }                         : {}),
     },
     joined_at: p.joinedAt || new Date().toISOString(),
     last_active: p.lastActive || new Date().toISOString(),

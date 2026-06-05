@@ -122,12 +122,23 @@ function StatusBadge({ status }: { status: SAClub['status'] }) {
   );
 }
 
+const CLUB_PLAN_MAP: Record<string, { label: string; bg: string; color: string }> = {
+  free:          { label: 'Free',          bg: '#f0f0f0', color: '#555'    },
+  basic:         { label: 'Basic',         bg: '#e0f2fe', color: '#0369a1' },
+  pro:           { label: 'Pro',           bg: '#fef3c7', color: '#92400e' },
+  club_starter:  { label: 'Club Starter',  bg: '#d1fae5', color: '#065f46' },
+  club_pro:      { label: 'Club Pro',      bg: '#dcfce7', color: '#166534' },
+  club_liga:     { label: 'Club Liga',     bg: '#bbf7d0', color: '#14532d' },
+  liga_free:     { label: 'Liga Free',     bg: '#e0f2fe', color: '#0369a1' },
+  liga_basic:    { label: 'Liga Basic',    bg: '#dbeafe', color: '#1d4ed8' },
+  liga_pro:      { label: 'Liga Pro',      bg: '#ede9fe', color: '#7c3aed' },
+  liga_unlimited:{ label: 'Liga Unlimited',bg: '#f5f3ff', color: '#6d28d9' },
+  fed_basic:     { label: 'Fed Basic',     bg: '#ffedd5', color: '#9a3412' },
+  fed_pro:       { label: 'Fed Pro',       bg: '#fed7aa', color: '#7c2d12' },
+};
+
 function PlanBadge({ plan }: { plan: SAClub['plan'] }) {
-  const cfg = {
-    free:  { label: 'Free',  bg: '#f0f0f0', color: '#555' },
-    basic: { label: 'Basic', bg: '#e0f2fe', color: '#0369a1' },
-    pro:   { label: 'Pro',   bg: '#fef3c7', color: '#92400e' },
-  }[plan];
+  const cfg = CLUB_PLAN_MAP[plan] ?? CLUB_PLAN_MAP.free;
   return (
     <span style={{ background: cfg.bg, color: cfg.color, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
       {cfg.label}
@@ -227,11 +238,24 @@ function ClubForm({
         <Field label="Numero de Miembros">
           <input style={inputStyle} type="number" min={0} value={form.members ?? 0} onChange={e => set('members', Number(e.target.value))} />
         </Field>
-        <Field label="Plan">
+        <Field label="Plan de suscripción">
           <select style={inputStyle} value={form.plan ?? 'free'} onChange={e => set('plan', e.target.value as SAClub['plan'])}>
-            <option value="free">Free</option>
-            <option value="basic">Basic</option>
-            <option value="pro">Pro</option>
+            <optgroup label="Club">
+              <option value="free">Free</option>
+              <option value="club_starter">Club Starter</option>
+              <option value="club_pro">Club Pro</option>
+              <option value="club_liga">Club Liga</option>
+            </optgroup>
+            <optgroup label="Liga">
+              <option value="liga_free">Liga Free</option>
+              <option value="liga_basic">Liga Basic</option>
+              <option value="liga_pro">Liga Pro</option>
+              <option value="liga_unlimited">Liga Unlimited</option>
+            </optgroup>
+            <optgroup label="Federación">
+              <option value="fed_basic">Fed Basic</option>
+              <option value="fed_pro">Fed Pro</option>
+            </optgroup>
           </select>
         </Field>
         <Field label="Estado">
@@ -966,9 +990,22 @@ export default function ClubsPage() {
                   onChange={e => setDrawerPlan(e.target.value as SAClub['plan'])}
                   style={{ ...inputStyle, flex: 1 }}
                 >
-                  <option value="free">Free</option>
-                  <option value="basic">Basic</option>
-                  <option value="pro">Pro</option>
+                  <optgroup label="Club">
+                    <option value="free">Free</option>
+                    <option value="club_starter">Club Starter</option>
+                    <option value="club_pro">Club Pro</option>
+                    <option value="club_liga">Club Liga</option>
+                  </optgroup>
+                  <optgroup label="Liga">
+                    <option value="liga_free">Liga Free</option>
+                    <option value="liga_basic">Liga Basic</option>
+                    <option value="liga_pro">Liga Pro</option>
+                    <option value="liga_unlimited">Liga Unlimited</option>
+                  </optgroup>
+                  <optgroup label="Federación">
+                    <option value="fed_basic">Fed Basic</option>
+                    <option value="fed_pro">Fed Pro</option>
+                  </optgroup>
                 </select>
                 <button
                   onClick={() => handleChangePlan(selectedClub.id, drawerPlan)}
