@@ -68,6 +68,18 @@ export async function fetchPlayerByEmail(email: string) {
   return data as Record<string, unknown> | null;
 }
 
+/** Fetch a single tournament by its short code from the data JSONB column. */
+export async function fetchTournamentByCode(code: string) {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('tournaments')
+    .select('data')
+    .filter('data->>code', 'eq', code)
+    .maybeSingle();
+  if (error) { console.warn('[Supabase] fetchTournamentByCode:', error.message); return null; }
+  return data ? (data.data as Record<string, unknown>) : null;
+}
+
 /** Fetch all tournaments created by a player (by their string player ID). */
 export async function fetchTournamentsByCreator(creatorPlayerId: string) {
   if (!supabase) return null;

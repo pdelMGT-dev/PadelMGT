@@ -3,11 +3,12 @@
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
-import { getTournamentByCode } from '@/lib/tournament-store';
+import { getTournamentByCode, saveTournament } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
 import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import KnockoutBracketView from '@/components/KnockoutBracketView';
+import { fetchTournamentByCode } from '@/lib/supabase';
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
   created:       { label: 'Inscripciones abiertas', color: '#a78bfa' },
@@ -41,6 +42,7 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
   const [joinSent, setJoinSent] = useState(false);
   const [joinError, setJoinError] = useState('');
   const [shareUrl, setShareUrl] = useState('');
+  const [sbLoading, setSbLoading] = useState(false);
 
   useEffect(() => {
     setShareUrl(window.location.href);
@@ -52,6 +54,21 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
       } catch {}
     }
   }, []);
+
+  // Fetch from Supabase when not found in localStorage (cross-device share)
+  useEffect(() => {
+    const local = getTournamentByCode(code);
+    if (local) return; // already have it
+    setSbLoading(true);
+    fetchTournamentByCode(code)
+      .then(raw => {
+        if (!raw) return;
+        const t = raw as unknown as Tournament;
+        saveTournament(t); // cache locally for future loads
+        setTournament(t);
+      })
+      .finally(() => setSbLoading(false));
+  }, [code]);
 
   useEffect(() => {
     const load = () => {
@@ -305,6 +322,17 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
             )}
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // ── Loading from Supabase ─────────────────────────────────────────────────
+  if (sbLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0a0f1e', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-body)', gap: 16 }}>
+        <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: 'var(--neon)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Cargando torneo…</div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
