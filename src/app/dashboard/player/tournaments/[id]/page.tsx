@@ -560,6 +560,23 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     router.push('/dashboard/player/tournaments');
   }
 
+  function handleSavePairsDraft() {
+    const validPairs = pairSlots.filter(s => s.player1Id && s.player2Id);
+    const updated: Tournament = {
+      ...t,
+      fixedPairs: validPairs.map((s, i) => ({
+        pairIndex: i,
+        player1Id: s.player1Id!,
+        player2Id: s.player2Id!,
+        player1Name: t.players.find(p => p.id === s.player1Id)?.name ?? '',
+        player2Name: t.players.find(p => p.id === s.player2Id)?.name ?? '',
+        name: s.name.trim() || undefined,
+      })),
+    };
+    saveTournament(updated);
+    setTournament(updated);
+  }
+
   function handleStartTournament() {
     let tournamentToStart = t;
 
@@ -1371,10 +1388,19 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                 })}
               </div>
 
-              {/* Status */}
-              <div style={{ marginTop: 14, fontSize: 12, color: 'var(--grey-400)' }}>
-                {completePairs.length} equipo{completePairs.length !== 1 ? 's' : ''} completo{completePairs.length !== 1 ? 's' : ''} · {unassigned.length} jugador{unassigned.length !== 1 ? 'es' : ''} sin equipo
-                {unassigned.length > 0 && ' — los jugadores sin equipo serán excluidos al iniciar'}
+              {/* Save draft + status */}
+              <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
+                  {completePairs.length} equipo{completePairs.length !== 1 ? 's' : ''} completo{completePairs.length !== 1 ? 's' : ''} · {unassigned.length} jugador{unassigned.length !== 1 ? 'es' : ''} sin equipo
+                  {unassigned.length > 0 && ' — los sin equipo se excluyen al iniciar'}
+                </div>
+                <button
+                  onClick={handleSavePairsDraft}
+                  disabled={completePairs.length === 0}
+                  style={{ padding: '8px 20px', background: completePairs.length > 0 ? 'var(--black)' : 'var(--grey-200)', color: completePairs.length > 0 ? '#fff' : 'var(--grey-400)', border: 'none', cursor: completePairs.length > 0 ? 'pointer' : 'not-allowed', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
+                >
+                  Guardar equipos
+                </button>
               </div>
             </div>
           );

@@ -141,6 +141,8 @@ export interface ActiveGame {
   isCreator?: boolean;        // set by UI when rendering for creator
   cancelledAt?: string;       // ISO date if game was cancelled
   createdAt?: string;         // ISO date when game was first created
+  reorganizationRequested?: boolean;
+  reorganizationRequestedAt?: string;
 }
 
 export interface KnockoutConfig {
