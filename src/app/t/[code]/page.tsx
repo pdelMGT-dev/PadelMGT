@@ -48,6 +48,25 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
   const [activeTab, setActiveTab] = useState<'groups' | 'bracket'>('groups');
   const [displayMode, setDisplayMode] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  // Collapsible round state: keyed by "groupId_roundNum" or bracket round name
+  const [expandedGroupRounds, setExpandedGroupRounds] = useState<Record<string, boolean>>({});
+  const [expandedBracketRounds, setExpandedBracketRounds] = useState<Record<string, boolean>>({});
+
+  function toggleGroupRound(groupId: string, roundNum: number) {
+    const key = `${groupId}_${roundNum}`;
+    setExpandedGroupRounds(prev => ({ ...prev, [key]: !prev[key] }));
+  }
+  function isGroupRoundExpanded(groupId: string, roundNum: number) {
+    const key = `${groupId}_${roundNum}`;
+    // Default: expanded (undefined = true)
+    return expandedGroupRounds[key] !== false;
+  }
+  function toggleBracketRound(name: string) {
+    setExpandedBracketRounds(prev => ({ ...prev, [name]: !prev[name] }));
+  }
+  function isBracketRoundExpanded(name: string) {
+    return expandedBracketRounds[name] !== false;
+  }
 
   useEffect(() => {
     setShareUrl(window.location.href);
@@ -171,68 +190,187 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                 {/* GROUP STANDINGS in display mode */}
                 {t.groups && (activeTab === 'groups' || !t.bracket) && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
-                    {t.groups.groups.map(group => (
-                      <div key={group.id} style={{ border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-                        <div style={{ padding: '10px 20px', background: 'rgba(255,255,255,0.06)', fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--neon, #d9ff4f)' }}>
-                          {group.name}
+                    {t.groups.groups.map(group => {
+                      const completedGroupMatches = group.matches.filter(m => m.status === 'completed');
+                      const byRoundDisp: Record<number, typeof completedGroupMatches> = {};
+                      completedGroupMatches.forEach(m => {
+                        const r = (m as any).roundNum ?? 1;
+                        if (!byRoundDisp[r]) byRoundDisp[r] = [];
+                        byRoundDisp[r].push(m);
+                      });
+                      const roundNumsDisp = Object.keys(byRoundDisp).map(Number).sort((a, b) => a - b);
+                      return (
+                        <div key={group.id} style={{ border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                          <div style={{ padding: '10px 20px', background: 'rgba(255,255,255,0.06)', fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--neon, #d9ff4f)' }}>
+                            {group.name}
+                          </div>
+                          <div style={{ padding: '12px 16px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                              <thead>
+                                <tr style={{ color: 'rgba(255,255,255,0.4)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                  <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 600, fontSize: 10, textTransform: 'uppercase' }}>Equipo</th>
+                                  <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>PJ</th>
+                                  <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>PG</th>
+                                  <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>SF</th>
+                                  <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>SC</th>
+                                  <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 600, fontSize: 10 }}>PTS</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.standings.map((s, i) => {
+                                  const advancing = i < (t.knockoutConfig?.teamsAdvancing ?? 1);
+                                  const fp = pairs.find(p => p.player1Id === s.playerId);
+                                  const teamName = fp ? (fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`) : s.playerName;
+                                  return (
+                                    <tr key={s.playerId} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                      <td style={{ padding: '8px 0', fontWeight: advancing ? 700 : 400, fontSize: 14, color: advancing ? 'var(--neon, #d9ff4f)' : '#fff' }}>
+                                        {advancing ? '↑ ' : ''}{teamName}
+                                      </td>
+                                      <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.played}</td>
+                                      <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.wins}</td>
+                                      <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.pointsFor}</td>
+                                      <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.pointsAgainst}</td>
+                                      <td style={{ textAlign: 'right', padding: '8px 0', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: advancing ? 'var(--neon, #d9ff4f)' : '#fff' }}>{s.pts}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                            {/* Collapsible rounds in display mode */}
+                            {roundNumsDisp.length > 0 && (
+                              <div style={{ marginTop: 14 }}>
+                                {roundNumsDisp.map(roundNum => {
+                                  const rMatches = byRoundDisp[roundNum];
+                                  const isOpen = isGroupRoundExpanded(group.id, roundNum);
+                                  return (
+                                    <div key={roundNum} style={{ marginBottom: 4, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                                      <button onClick={() => toggleGroupRound(group.id, roundNum)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.8)' }}>
+                                        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Ronda {roundNum}</span>
+                                        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
+                                      </button>
+                                      {isOpen && (
+                                        <div style={{ padding: '4px 12px 10px' }}>
+                                          {rMatches.map(match => {
+                                            const fp1 = pairs.find(p => p.player1Id === match.pair1[0]);
+                                            const fp2 = pairs.find(p => p.player1Id === match.pair2[0]);
+                                            const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : match.pair1[0];
+                                            const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : match.pair2[0];
+                                            const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
+                                            const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
+                                            return (
+                                              <div key={match.courtNum} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 13 }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                                    <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.8)' }}>{p1won ? '▶ ' : ''}{n1}</span>
+                                                    <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.6)' }}>{p2won ? '▶ ' : ''}{n2}</span>
+                                                  </div>
+                                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 72 }}>
+                                                    {match.sets && match.sets.length > 0 ? (
+                                                      match.sets.map((s, si) => (
+                                                        <div key={si} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Set {si + 1}</span>
+                                                          <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: s.p1 > s.p2 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.45)' }}>{s.p1}</span>
+                                                          <span style={{ color: 'rgba(255,255,255,0.2)' }}>–</span>
+                                                          <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: s.p2 > s.p1 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.45)' }}>{s.p2}</span>
+                                                        </div>
+                                                      ))
+                                                    ) : (
+                                                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div style={{ padding: '12px 16px' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                            <thead>
-                              <tr style={{ color: 'rgba(255,255,255,0.4)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 600, fontSize: 10, textTransform: 'uppercase' }}>Equipo</th>
-                                <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>PJ</th>
-                                <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>PG</th>
-                                <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>SF</th>
-                                <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>SC</th>
-                                <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 600, fontSize: 10 }}>PTS</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {group.standings.map((s, i) => {
-                                const advancing = i < (t.knockoutConfig?.teamsAdvancing ?? 1);
-                                const fp = pairs.find(p => p.player1Id === s.playerId);
-                                const teamName = fp ? (fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`) : s.playerName;
-                                return (
-                                  <tr key={s.playerId} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                                    <td style={{ padding: '8px 0', fontWeight: advancing ? 700 : 400, fontSize: 14, color: advancing ? 'var(--neon, #d9ff4f)' : '#fff' }}>
-                                      {advancing ? '↑ ' : ''}{teamName}
-                                    </td>
-                                    <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.played}</td>
-                                    <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.wins}</td>
-                                    <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.pointsFor}</td>
-                                    <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.pointsAgainst}</td>
-                                    <td style={{ textAlign: 'right', padding: '8px 0', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: advancing ? 'var(--neon, #d9ff4f)' : '#fff' }}>{s.pts}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
                 {/* BRACKET in display mode */}
-                {t.bracket && (activeTab === 'bracket' || !t.groups) && (
-                  <div>
-                    {t.groups && (
-                      <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>
-                        Fase II — Bracket
+                {t.bracket && (activeTab === 'bracket' || !t.groups) && (() => {
+                  const dispPairs = t.fixedPairs ?? [];
+                  return (
+                    <div>
+                      {t.groups && (
+                        <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>
+                          Fase II — Bracket
+                        </div>
+                      )}
+                      {/* White container for bracket (component uses light colors) */}
+                      <div style={{ background: '#fff', padding: 24, overflow: 'auto' }}>
+                        <KnockoutBracketView
+                          bracket={t.bracket}
+                          fixedPairs={dispPairs}
+                          players={t.players}
+                          isEditable={false}
+                        />
                       </div>
-                    )}
-                    {/* White container for bracket (component uses light colors) */}
-                    <div style={{ background: '#fff', padding: 24, overflow: 'auto' }}>
-                      <KnockoutBracketView
-                        bracket={t.bracket}
-                        fixedPairs={t.fixedPairs ?? []}
-                        players={t.players}
-                        isEditable={false}
-                      />
+                      {/* Collapsible bracket round details in display mode */}
+                      <div style={{ marginTop: 20 }}>
+                        {[...t.bracket.rounds].reverse().map(round => {
+                          const completedMatches = round.matches.filter(m => m.status === 'completed');
+                          if (completedMatches.length === 0) return null;
+                          const isOpen = isBracketRoundExpanded(round.name);
+                          return (
+                            <div key={round.name} style={{ marginBottom: 4, border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                              <button onClick={() => toggleBracketRound(round.name)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: 'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', color: '#fff' }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{round.name}</span>
+                                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
+                              </button>
+                              {isOpen && (
+                                <div style={{ padding: '8px 16px 14px' }}>
+                                  {completedMatches.map(match => {
+                                    if (!match.pair1 || !match.pair2) return null;
+                                    const fp1 = dispPairs.find(p => p.player1Id === match.pair1![0]);
+                                    const fp2 = dispPairs.find(p => p.player1Id === match.pair2![0]);
+                                    const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : (match.pair1[0] ?? '?');
+                                    const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : (match.pair2[0] ?? '?');
+                                    const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
+                                    const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
+                                    return (
+                                      <div key={match.id} style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.07)', fontSize: 14 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                            <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.85)' }}>{p1won ? '▶ ' : ''}{n1}</span>
+                                            <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.6)' }}>{p2won ? '▶ ' : ''}{n2}</span>
+                                          </div>
+                                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, minWidth: 88 }}>
+                                            {match.sets && match.sets.length > 0 ? (
+                                              match.sets.map((s, si) => (
+                                                <div key={si} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>Set {si + 1}</span>
+                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: s.p1 > s.p2 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.45)' }}>{s.p1}</span>
+                                                  <span style={{ color: 'rgba(255,255,255,0.2)' }}>–</span>
+                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: s.p2 > s.p1 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.45)' }}>{s.p2}</span>
+                                                </div>
+                                              ))
+                                            ) : (
+                                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
           );
@@ -373,36 +511,68 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                                   </tbody>
                                 </table>
 
-                                {/* Completed match results */}
-                                {group.matches.filter(m => m.status === 'completed').length > 0 && (() => {
+                                {/* Completed matches grouped by round — collapsible */}
+                                {(() => {
                                   const completedMatches = group.matches.filter(m => m.status === 'completed');
+                                  if (completedMatches.length === 0) return null;
+                                  // Group by roundNum (default 1)
+                                  const byRound: Record<number, typeof completedMatches> = {};
+                                  completedMatches.forEach(m => {
+                                    const r = (m as any).roundNum ?? 1;
+                                    if (!byRound[r]) byRound[r] = [];
+                                    byRound[r].push(m);
+                                  });
+                                  const roundNums = Object.keys(byRound).map(Number).sort((a, b) => a - b);
                                   return (
                                     <div style={{ marginTop: 12 }}>
-                                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>
-                                        Resultados ({completedMatches.length})
-                                      </div>
-                                      {completedMatches.map(match => {
-                                        const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
-                                        const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
-                                        const fp1 = pairs.find(p => p.player1Id === match.pair1[0]);
-                                        const fp2 = pairs.find(p => p.player1Id === match.pair2[0]);
-                                        const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : match.pair1[0];
-                                        const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : match.pair2[0];
+                                      {roundNums.map(roundNum => {
+                                        const rMatches = byRound[roundNum];
+                                        const isOpen = isGroupRoundExpanded(group.id, roundNum);
                                         return (
-                                          <div key={match.courtNum} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 12 }}>
-                                            <div>
-                                              <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.8)' }}>{n1}</span>
-                                              <span style={{ color: 'rgba(255,255,255,0.3)', margin: '0 6px' }}>vs</span>
-                                              <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.8)' }}>{n2}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
-                                              {match.sets && match.sets.length > 0 && (
-                                                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
-                                                  ({match.sets.map(s => `${s.p1}-${s.p2}`).join(', ')})
-                                                </span>
-                                              )}
-                                            </div>
+                                          <div key={roundNum} style={{ marginBottom: 4, border: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                                            <button
+                                              onClick={() => toggleGroupRound(group.id, roundNum)}
+                                              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: 'rgba(255,255,255,0.05)', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)' }}
+                                            >
+                                              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Ronda {roundNum} <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>({rMatches.length} partido{rMatches.length !== 1 ? 's' : ''})</span></span>
+                                              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
+                                            </button>
+                                            {isOpen && (
+                                              <div style={{ padding: '4px 10px 8px' }}>
+                                                {rMatches.map(match => {
+                                                  const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
+                                                  const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
+                                                  const fp1 = pairs.find(p => p.player1Id === match.pair1[0]);
+                                                  const fp2 = pairs.find(p => p.player1Id === match.pair2[0]);
+                                                  const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : match.pair1[0];
+                                                  const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : match.pair2[0];
+                                                  return (
+                                                    <div key={match.courtNum} style={{ padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 11 }}>
+                                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                                          <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.8)' }}>{p1won ? '▶ ' : ''}{n1}</span>
+                                                          <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.6)' }}>{p2won ? '▶ ' : ''}{n2}</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 60 }}>
+                                                          {match.sets && match.sets.length > 0 ? (
+                                                            match.sets.map((s, si) => (
+                                                              <div key={si} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                                                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', minWidth: 28, textAlign: 'right' }}>Set {si + 1}</span>
+                                                                <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: s.p1 > s.p2 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p1}</span>
+                                                                <span style={{ color: 'rgba(255,255,255,0.25)' }}>–</span>
+                                                                <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: s.p2 > s.p1 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p2}</span>
+                                                              </div>
+                                                            ))
+                                                          ) : (
+                                                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
                                           </div>
                                         );
                                       })}
@@ -419,6 +589,63 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
 
                   // Tab content: BRACKET
                   if (t.bracket && (activeTab === 'bracket' || !t.groups)) {
+                    const bracketRoundDetails = (
+                      <div style={{ marginTop: 20 }}>
+                        {[...t.bracket.rounds].reverse().map(round => {
+                          const completedMatches = round.matches.filter(m => m.status === 'completed');
+                          if (completedMatches.length === 0) return null;
+                          const isOpen = isBracketRoundExpanded(round.name);
+                          return (
+                            <div key={round.name} style={{ marginBottom: 4, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                              <button
+                                onClick={() => toggleBracketRound(round.name)}
+                                style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', background: 'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', color: '#fff' }}
+                              >
+                                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{round.name} <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>({completedMatches.length} partido{completedMatches.length !== 1 ? 's' : ''})</span></span>
+                                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
+                              </button>
+                              {isOpen && (
+                                <div style={{ padding: '8px 14px 12px' }}>
+                                  {completedMatches.map(match => {
+                                    if (!match.pair1 || !match.pair2) return null;
+                                    const fp1 = pairs.find(p => p.player1Id === match.pair1![0]);
+                                    const fp2 = pairs.find(p => p.player1Id === match.pair2![0]);
+                                    const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : (match.pair1[0] ?? '?');
+                                    const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : (match.pair2[0] ?? '?');
+                                    const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
+                                    const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
+                                    return (
+                                      <div key={match.id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 12 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                            <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.85)' }}>{p1won ? '▶ ' : ''}{n1}</span>
+                                            <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.6)' }}>{p2won ? '▶ ' : ''}{n2}</span>
+                                          </div>
+                                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, minWidth: 72 }}>
+                                            {match.sets && match.sets.length > 0 ? (
+                                              match.sets.map((s, si) => (
+                                                <div key={si} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                                  <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', minWidth: 28, textAlign: 'right' }}>Set {si + 1}</span>
+                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: s.p1 > s.p2 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p1}</span>
+                                                  <span style={{ color: 'rgba(255,255,255,0.25)' }}>–</span>
+                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: s.p2 > s.p1 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p2}</span>
+                                                </div>
+                                              ))
+                                            ) : (
+                                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
                     return (
                       <div style={{ marginBottom: 24 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
@@ -432,12 +659,70 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                             isEditable={false}
                           />
                         </div>
+                        {bracketRoundDetails}
                       </div>
                     );
                   }
 
                   // No groups, no bracket (non-knockout formats): bracket-only check
                   if (!t.groups && t.bracket) {
+                    const bracketRoundDetails2 = (
+                      <div style={{ marginTop: 20 }}>
+                        {[...t.bracket.rounds].reverse().map(round => {
+                          const completedMatches = round.matches.filter(m => m.status === 'completed');
+                          if (completedMatches.length === 0) return null;
+                          const isOpen = isBracketRoundExpanded(round.name);
+                          return (
+                            <div key={round.name} style={{ marginBottom: 4, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                              <button
+                                onClick={() => toggleBracketRound(round.name)}
+                                style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', background: 'rgba(255,255,255,0.06)', border: 'none', cursor: 'pointer', color: '#fff' }}
+                              >
+                                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{round.name} <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>({completedMatches.length} partido{completedMatches.length !== 1 ? 's' : ''})</span></span>
+                                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
+                              </button>
+                              {isOpen && (
+                                <div style={{ padding: '8px 14px 12px' }}>
+                                  {completedMatches.map(match => {
+                                    if (!match.pair1 || !match.pair2) return null;
+                                    const fp1 = pairs.find(p => p.player1Id === match.pair1![0]);
+                                    const fp2 = pairs.find(p => p.player1Id === match.pair2![0]);
+                                    const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : (match.pair1[0] ?? '?');
+                                    const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : (match.pair2[0] ?? '?');
+                                    const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
+                                    const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
+                                    return (
+                                      <div key={match.id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 12 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                            <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.85)' }}>{p1won ? '▶ ' : ''}{n1}</span>
+                                            <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.6)' }}>{p2won ? '▶ ' : ''}{n2}</span>
+                                          </div>
+                                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, minWidth: 72 }}>
+                                            {match.sets && match.sets.length > 0 ? (
+                                              match.sets.map((s, si) => (
+                                                <div key={si} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                                  <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', minWidth: 28, textAlign: 'right' }}>Set {si + 1}</span>
+                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: s.p1 > s.p2 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p1}</span>
+                                                  <span style={{ color: 'rgba(255,255,255,0.25)' }}>–</span>
+                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: s.p2 > s.p1 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p2}</span>
+                                                </div>
+                                              ))
+                                            ) : (
+                                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
                     return (
                       <div style={{ marginBottom: 24 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
@@ -451,6 +736,7 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                             isEditable={false}
                           />
                         </div>
+                        {bracketRoundDetails2}
                       </div>
                     );
                   }
