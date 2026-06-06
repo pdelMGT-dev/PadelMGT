@@ -44,6 +44,11 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
   const [shareUrl, setShareUrl] = useState('');
   const [sbLoading, setSbLoading] = useState(false);
 
+  // New state for tabs, display mode, and last-updated timestamp
+  const [activeTab, setActiveTab] = useState<'groups' | 'bracket'>('groups');
+  const [displayMode, setDisplayMode] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
   useEffect(() => {
     setShareUrl(window.location.href);
     const sp = new URLSearchParams(window.location.search).get('s');
@@ -86,6 +91,27 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
     return () => clearInterval(interval);
   }, [code, currentUser?.id]);
 
+  // 10-second polling: re-read from localStorage or fall back to Supabase
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const local = getTournamentByCode(code);
+      if (local) {
+        setTournament(local);
+        setLastUpdated(new Date());
+      } else if (typeof window !== 'undefined') {
+        fetchTournamentByCode(code).then(raw => {
+          if (raw) {
+            const t = raw as unknown as Tournament;
+            saveTournament(t);
+            setTournament(t);
+            setLastUpdated(new Date());
+          }
+        });
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [code]);
+
   function handleJoin(entityId: string) {
     if (!currentUser) return;
     const name = (joinName.trim() || currentUser.name || '').trim();
@@ -103,149 +129,381 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
   // ── Full tournament view (found in localStorage) ──────────────────────────
   if (t) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0a0f1e', color: '#fff', fontFamily: 'var(--font-body)' }}>
-        <div style={{ position: 'relative', background: '#0a0f1e', padding: 'clamp(80px,10vw,140px) clamp(20px,5vw,48px) clamp(32px,4vw,48px)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ position: 'relative', maxWidth: 1200, margin: '0 auto' }}>
-            <Link href="/tournaments" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', marginBottom: 24, fontWeight: 600 }}>← Torneos</Link>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <span style={{ padding: '5px 14px', borderRadius: 30, border: `1px solid ${si?.color ?? '#fff'}`, color: si?.color ?? '#fff', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                {si?.label ?? t.status}
-              </span>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>{code}</span>
+      <>
+        {/* ── DISPLAY MODE OVERLAY ── */}
+        {displayMode && (() => {
+          const pairs = t.fixedPairs ?? [];
+          return (
+            <div style={{ position: 'fixed', inset: 0, background: '#0a0a0a', color: '#fff', zIndex: 9999, overflowY: 'auto', fontFamily: 'var(--font-body)' }}>
+              {/* Display header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 40px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', marginBottom: 4 }}>Torneo en vivo</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t.name}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                  {/* Tab switcher */}
+                  {t.groups && (
+                    <div style={{ display: 'flex', gap: 0, background: 'rgba(255,255,255,0.08)', padding: 3 }}>
+                      {(['groups', 'bracket'] as const).map(tab => (
+                        <button key={tab} onClick={() => setActiveTab(tab)} style={{
+                          padding: '7px 18px', border: 'none', background: activeTab === tab ? '#fff' : 'transparent',
+                          color: activeTab === tab ? '#000' : 'rgba(255,255,255,0.6)', cursor: 'pointer',
+                          fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', transition: 'all 0.15s',
+                        }}>
+                          {tab === 'groups' ? '📊 Grupos' : '🏆 Bracket'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', textAlign: 'right' }}>
+                    <div>Actualizado</div>
+                    <div>{lastUpdated.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
+                  </div>
+                  <button onClick={() => setDisplayMode(false)} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    ✕ Salir
+                  </button>
+                </div>
+              </div>
+
+              {/* Display content */}
+              <div style={{ padding: '32px 40px' }}>
+                {/* GROUP STANDINGS in display mode */}
+                {t.groups && (activeTab === 'groups' || !t.bracket) && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
+                    {t.groups.groups.map(group => (
+                      <div key={group.id} style={{ border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                        <div style={{ padding: '10px 20px', background: 'rgba(255,255,255,0.06)', fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--neon, #d9ff4f)' }}>
+                          {group.name}
+                        </div>
+                        <div style={{ padding: '12px 16px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                            <thead>
+                              <tr style={{ color: 'rgba(255,255,255,0.4)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 600, fontSize: 10, textTransform: 'uppercase' }}>Equipo</th>
+                                <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>PJ</th>
+                                <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>PG</th>
+                                <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>SF</th>
+                                <th style={{ textAlign: 'center', padding: '6px 4px', fontWeight: 600, fontSize: 10 }}>SC</th>
+                                <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 600, fontSize: 10 }}>PTS</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.standings.map((s, i) => {
+                                const advancing = i < (t.knockoutConfig?.teamsAdvancing ?? 1);
+                                const fp = pairs.find(p => p.player1Id === s.playerId);
+                                const teamName = fp ? (fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`) : s.playerName;
+                                return (
+                                  <tr key={s.playerId} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                    <td style={{ padding: '8px 0', fontWeight: advancing ? 700 : 400, fontSize: 14, color: advancing ? 'var(--neon, #d9ff4f)' : '#fff' }}>
+                                      {advancing ? '↑ ' : ''}{teamName}
+                                    </td>
+                                    <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.played}</td>
+                                    <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.wins}</td>
+                                    <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.pointsFor}</td>
+                                    <td style={{ textAlign: 'center', padding: '8px 4px', color: 'rgba(255,255,255,0.6)' }}>{s.pointsAgainst}</td>
+                                    <td style={{ textAlign: 'right', padding: '8px 0', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: advancing ? 'var(--neon, #d9ff4f)' : '#fff' }}>{s.pts}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* BRACKET in display mode */}
+                {t.bracket && (activeTab === 'bracket' || !t.groups) && (
+                  <div>
+                    {t.groups && (
+                      <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>
+                        Fase II — Bracket
+                      </div>
+                    )}
+                    {/* White container for bracket (component uses light colors) */}
+                    <div style={{ background: '#fff', padding: 24, overflow: 'auto' }}>
+                      <KnockoutBracketView
+                        bracket={t.bracket}
+                        fixedPairs={t.fixedPairs ?? []}
+                        players={t.players}
+                        isEditable={false}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'clamp(36px, 6vw, 80px)', lineHeight: 0.92, textTransform: 'uppercase', letterSpacing: '-0.025em', margin: '0 0 16px', color: '#fff' }}>{t.name}</h1>
-            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', margin: 0 }}>{[t.date, t.time, t.club, t.city].filter(Boolean).join(' · ')}</p>
-          </div>
-        </div>
+          );
+        })()}
 
-        <div style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', padding: '0 clamp(20px,5vw,48px)' }}>
-            {[
-              { label: 'Formato', value: FORMAT_LABEL[t.format] ?? t.format },
-              { label: 'Modalidad', value: t.pairType === 'individual' ? 'Individual' : 'Parejas' },
-              { label: 'Nivel', value: t.levelLabel || 'Todos los niveles' },
-              { label: 'Jugadores', value: `${t.players.length} / ${t.maxPlayers}` },
-              { label: 'Canchas', value: String(t.courts) },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ padding: '20px 16px', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontWeight: 600, marginBottom: 6 }}>{label}</div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#fff' }}>{value}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px clamp(20px,5vw,48px) 80px', display: 'grid', gridTemplateColumns: '1fr 300px', gap: 32 }}>
-          <div>
-            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: 24, marginBottom: 24 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Jugadores confirmados</span>
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: '#fff' }}>{t.players.length}<span style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>/{t.maxPlayers}</span></span>
-              </div>
-              <div style={{ height: 6, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.min(100, (t.players.length / t.maxPlayers) * 100)}%`, background: 'var(--neon)', transition: 'width 0.3s' }} />
-              </div>
-              {t.players.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
-                  {t.players.map(p => (
-                    <span key={p.id} style={{ fontSize: 12, padding: '4px 12px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)' }}>{p.name}</span>
-                  ))}
+        {/* ── NORMAL PAGE ── */}
+        {!displayMode && (
+          <div style={{ minHeight: '100vh', background: '#0a0f1e', color: '#fff', fontFamily: 'var(--font-body)' }}>
+            {/* Existing page header */}
+            <div style={{ position: 'relative', background: '#0a0f1e', padding: 'clamp(80px,10vw,140px) clamp(20px,5vw,48px) clamp(32px,4vw,48px)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ position: 'relative', maxWidth: 1200, margin: '0 auto' }}>
+                <Link href="/tournaments" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', textDecoration: 'none', marginBottom: 24, fontWeight: 600 }}>← Torneos</Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <span style={{ padding: '5px 14px', borderRadius: 30, border: `1px solid ${si?.color ?? '#fff'}`, color: si?.color ?? '#fff', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    {si?.label ?? t.status}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600 }}>{code}</span>
                 </div>
-              )}
+                <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'clamp(36px, 6vw, 80px)', lineHeight: 0.92, textTransform: 'uppercase', letterSpacing: '-0.025em', margin: '0 0 16px', color: '#fff' }}>{t.name}</h1>
+                <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', margin: 0 }}>{[t.date, t.time, t.club, t.city].filter(Boolean).join(' · ')}</p>
+              </div>
             </div>
 
-            {/* Knockout bracket — public read-only view */}
-            {t.format === 'knockout' && t.bracket && t.knockoutConfig?.currentPhase === 'bracket' && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
-                  {t.knockoutConfig.hasGroups ? 'Fase II — Cuadro' : 'Cuadro de Eliminatorias'}
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', padding: 16 }}>
-                  <KnockoutBracketView
-                    bracket={t.bracket}
-                    fixedPairs={t.fixedPairs}
-                    players={t.players}
-                    isEditable={false}
-                  />
-                </div>
+            {/* Info grid */}
+            <div style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', padding: '0 clamp(20px,5vw,48px)' }}>
+                {[
+                  { label: 'Formato', value: FORMAT_LABEL[t.format] ?? t.format },
+                  { label: 'Modalidad', value: t.pairType === 'individual' ? 'Individual' : 'Parejas' },
+                  { label: 'Nivel', value: t.levelLabel || 'Todos los niveles' },
+                  { label: 'Jugadores', value: `${t.players.length} / ${t.maxPlayers}` },
+                  { label: 'Canchas', value: String(t.courts) },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ padding: '20px 16px', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', fontWeight: 600, marginBottom: 6 }}>{label}</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#fff' }}>{value}</div>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
 
-            {/* Knockout group stage — public read-only view */}
-            {t.format === 'knockout' && t.groups && t.knockoutConfig?.currentPhase === 'group_stage' && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
-                  Fase I — Grupos
+            {/* Tab bar + Pantalla button */}
+            <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 clamp(20px,5vw,48px)', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 0 }}>
+              <div style={{ display: 'flex', gap: 0 }}>
+                {t.groups && (
+                  <>
+                    {(['groups', 'bracket'] as const).map(tab => (
+                      <button key={tab} onClick={() => setActiveTab(tab)} style={{
+                        padding: '14px 20px', border: 'none', background: 'none', cursor: 'pointer',
+                        fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                        color: activeTab === tab ? '#fff' : 'rgba(255,255,255,0.4)',
+                        borderBottom: activeTab === tab ? '2px solid var(--neon, #d9ff4f)' : '2px solid transparent',
+                      }}>
+                        {tab === 'groups' ? '📊 Grupos' : '🏆 Bracket'}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
+                  ↻ {lastUpdated.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <button
+                  onClick={() => setDisplayMode(true)}
+                  style={{ padding: '8px 16px', background: 'var(--neon, #d9ff4f)', color: '#000', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+                >
+                  📺 Pantalla
+                </button>
+              </div>
+            </div>
+
+            <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px clamp(20px,5vw,48px) 80px', display: 'grid', gridTemplateColumns: '1fr 300px', gap: 32 }}>
+              <div>
+                {/* Players confirmed block */}
+                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: 24, marginBottom: 24 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Jugadores confirmados</span>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: '#fff' }}>{t.players.length}<span style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>/{t.maxPlayers}</span></span>
+                  </div>
+                  <div style={{ height: 6, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min(100, (t.players.length / t.maxPlayers) * 100)}%`, background: 'var(--neon)', transition: 'width 0.3s' }} />
+                  </div>
+                  {t.players.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+                      {t.players.map(p => (
+                        <span key={p.id} style={{ fontSize: 12, padding: '4px 12px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)' }}>{p.name}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
-                  {t.groups.groups.map(group => (
-                    <div key={group.id} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-                      <div style={{ padding: '10px 16px', background: 'rgba(255,255,255,0.08)', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>{group.name}</div>
-                      <div style={{ padding: '12px 16px' }}>
-                        {group.standings.map((s, i) => {
-                          const advancing = i < (t.knockoutConfig?.teamsAdvancing ?? 1);
-                          const fp = t.fixedPairs?.find(fp => fp.player1Id === s.playerId);
-                          const pairName = fp ? (fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`) : s.playerName;
-                          return (
-                            <div key={s.playerId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                              <span style={{ fontSize: 12, color: advancing ? 'var(--neon)' : 'rgba(255,255,255,0.7)', fontWeight: advancing ? 700 : 400 }}>
-                                {advancing && '↑ '}{pairName}
-                              </span>
-                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: '#fff' }}>{s.pts}</span>
+
+                {/* Tab content: GROUPS */}
+                {(() => {
+                  const pairs = t.fixedPairs ?? [];
+
+                  if (t.groups && (activeTab === 'groups' || !t.bracket)) {
+                    return (
+                      <div style={{ marginBottom: 24 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
+                          Fase I — Grupos
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+                          {t.groups.groups.map(group => (
+                            <div key={group.id} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                              <div style={{ padding: '10px 16px', background: 'rgba(255,255,255,0.08)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>{group.name}</div>
+                              <div style={{ padding: '12px 16px' }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>Tabla</div>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                                  <thead>
+                                    <tr style={{ color: 'rgba(255,255,255,0.4)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                      <th style={{ textAlign: 'left', padding: '4px 0', fontWeight: 600, fontSize: 9, textTransform: 'uppercase' }}>Equipo</th>
+                                      <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>PJ</th>
+                                      <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>PG</th>
+                                      <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>SF</th>
+                                      <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>SC</th>
+                                      <th style={{ textAlign: 'right', padding: '4px 0', fontWeight: 600, fontSize: 9 }}>PTS</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {group.standings.map((s, i) => {
+                                      const advancing = i < (t.knockoutConfig?.teamsAdvancing ?? 1);
+                                      const fp = pairs.find(p => p.player1Id === s.playerId);
+                                      const teamName = fp ? (fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`) : s.playerName;
+                                      return (
+                                        <tr key={s.playerId} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                          <td style={{ padding: '5px 0', fontWeight: advancing ? 700 : 400, fontSize: 12, color: advancing ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.85)' }}>
+                                            {advancing ? '↑ ' : ''}{teamName}
+                                          </td>
+                                          <td style={{ textAlign: 'center', padding: '5px 3px', color: 'rgba(255,255,255,0.5)' }}>{s.played}</td>
+                                          <td style={{ textAlign: 'center', padding: '5px 3px', color: 'rgba(255,255,255,0.5)' }}>{s.wins}</td>
+                                          <td style={{ textAlign: 'center', padding: '5px 3px', color: 'rgba(255,255,255,0.5)' }}>{s.pointsFor}</td>
+                                          <td style={{ textAlign: 'center', padding: '5px 3px', color: 'rgba(255,255,255,0.5)' }}>{s.pointsAgainst}</td>
+                                          <td style={{ textAlign: 'right', padding: '5px 0', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: '#fff' }}>{s.pts}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+
+                                {/* Completed match results */}
+                                {group.matches.filter(m => m.status === 'completed').length > 0 && (() => {
+                                  const completedMatches = group.matches.filter(m => m.status === 'completed');
+                                  return (
+                                    <div style={{ marginTop: 12 }}>
+                                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>
+                                        Resultados ({completedMatches.length})
+                                      </div>
+                                      {completedMatches.map(match => {
+                                        const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
+                                        const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
+                                        const fp1 = pairs.find(p => p.player1Id === match.pair1[0]);
+                                        const fp2 = pairs.find(p => p.player1Id === match.pair2[0]);
+                                        const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : match.pair1[0];
+                                        const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : match.pair2[0];
+                                        return (
+                                          <div key={match.courtNum} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 12 }}>
+                                            <div>
+                                              <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.8)' }}>{n1}</span>
+                                              <span style={{ color: 'rgba(255,255,255,0.3)', margin: '0 6px' }}>vs</span>
+                                              <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.8)' }}>{n2}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
+                                              {match.sets && match.sets.length > 0 && (
+                                                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
+                                                  ({match.sets.map(s => `${s.p1}-${s.p2}`).join(', ')})
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
                             </div>
-                          );
-                        })}
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Tab content: BRACKET
+                  if (t.bracket && (activeTab === 'bracket' || !t.groups)) {
+                    return (
+                      <div style={{ marginBottom: 24 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
+                          {t.knockoutConfig?.hasGroups ? 'Fase II — Cuadro' : 'Cuadro de Eliminatorias'}
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', padding: 16 }}>
+                          <KnockoutBracketView
+                            bracket={t.bracket}
+                            fixedPairs={pairs}
+                            players={t.players}
+                            isEditable={false}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // No groups, no bracket (non-knockout formats): bracket-only check
+                  if (!t.groups && t.bracket) {
+                    return (
+                      <div style={{ marginBottom: 24 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
+                          Cuadro de Eliminatorias
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', padding: 16 }}>
+                          <KnockoutBracketView
+                            bracket={t.bracket}
+                            fixedPairs={pairs}
+                            players={t.players}
+                            isEditable={false}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return null;
+                })()}
+
+                {canJoin && (
+                  currentUser ? (
+                    myRequest || joinSent ? (
+                      <div style={{ background: 'rgba(214,255,0,0.08)', border: '1px solid rgba(214,255,0,0.3)', padding: '20px 24px' }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--neon)', marginBottom: 4 }}>✓ Solicitud enviada</div>
+                        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>El organizador confirmará tu inscripción.</div>
+                      </div>
+                    ) : (
+                      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', padding: 24 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 16 }}>Unirte a este torneo</div>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                          <input value={joinName} onChange={e => setJoinName(e.target.value)} placeholder={currentUser.name} style={{ flex: 1, padding: '10px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 13, outline: 'none' }} />
+                          <button onClick={() => handleJoin(t.id)} style={{ padding: '10px 24px', background: 'var(--neon)', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Solicitar</button>
+                        </div>
+                        {joinError && <div style={{ fontSize: 12, color: '#f87171', marginTop: 8 }}>{joinError}</div>}
+                      </div>
+                    )
+                  ) : (
+                    <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', padding: 24 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 8 }}>¿Querés unirte?</div>
+                      <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginBottom: 16 }}>Iniciá sesión para solicitar unirte al torneo.</div>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <Link href={`/login?redirect=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`} className="btn btn-on-dark">Iniciar sesión →</Link>
+                        <Link href="/register" className="btn btn-outline-dark">Crear cuenta</Link>
                       </div>
                     </div>
-                  ))}
+                  )
+                )}
+                {!canJoin && t.status !== 'created' && (
+                  <div style={{ padding: '16px 20px', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+                    {t.status === 'finished' ? 'Este torneo ya finalizó.' : t.status === 'live' ? 'Este torneo está en juego.' : 'Cupos completos.'}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ position: 'sticky', top: 24, alignSelf: 'start' }}>
+                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: 24, textAlign: 'center' }}>
+                  <QRCodeSVG value={shareUrl || `https://padelmgt.com/t/${code}`} size={160} style={{ marginBottom: 16 }} />
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', wordBreak: 'break-all', marginBottom: 16 }}>{shareUrl}</div>
+                  <button onClick={() => navigator.clipboard.writeText(shareUrl).catch(() => {})} style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Copiar link</button>
                 </div>
               </div>
-            )}
-
-            {canJoin && (
-              currentUser ? (
-                myRequest || joinSent ? (
-                  <div style={{ background: 'rgba(214,255,0,0.08)', border: '1px solid rgba(214,255,0,0.3)', padding: '20px 24px' }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--neon)', marginBottom: 4 }}>✓ Solicitud enviada</div>
-                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>El organizador confirmará tu inscripción.</div>
-                  </div>
-                ) : (
-                  <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', padding: 24 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 16 }}>Unirte a este torneo</div>
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                      <input value={joinName} onChange={e => setJoinName(e.target.value)} placeholder={currentUser.name} style={{ flex: 1, padding: '10px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 13, outline: 'none' }} />
-                      <button onClick={() => handleJoin(t.id)} style={{ padding: '10px 24px', background: 'var(--neon)', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Solicitar</button>
-                    </div>
-                    {joinError && <div style={{ fontSize: 12, color: '#f87171', marginTop: 8 }}>{joinError}</div>}
-                  </div>
-                )
-              ) : (
-                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', padding: 24 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 8 }}>¿Querés unirte?</div>
-                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginBottom: 16 }}>Iniciá sesión para solicitar unirte al torneo.</div>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <Link href={`/login?redirect=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`} className="btn btn-on-dark">Iniciar sesión →</Link>
-                    <Link href="/register" className="btn btn-outline-dark">Crear cuenta</Link>
-                  </div>
-                </div>
-              )
-            )}
-            {!canJoin && t.status !== 'created' && (
-              <div style={{ padding: '16px 20px', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
-                {t.status === 'finished' ? 'Este torneo ya finalizó.' : t.status === 'live' ? 'Este torneo está en juego.' : 'Cupos completos.'}
-              </div>
-            )}
-          </div>
-
-          <div style={{ position: 'sticky', top: 24, alignSelf: 'start' }}>
-            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: 24, textAlign: 'center' }}>
-              <QRCodeSVG value={shareUrl || `https://padelmgt.com/t/${code}`} size={160} style={{ marginBottom: 16 }} />
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', wordBreak: 'break-all', marginBottom: 16 }}>{shareUrl}</div>
-              <button onClick={() => navigator.clipboard.writeText(shareUrl).catch(() => {})} style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Copiar link</button>
             </div>
           </div>
-        </div>
-      </div>
+        )}
+      </>
     );
   }
 
