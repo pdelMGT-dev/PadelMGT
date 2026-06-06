@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import type { KnockoutBracket, FixedPair, GamePlayer } from '@/lib/game-engine';
+import type { KnockoutBracket, FixedPair, GamePlayer, ScoreConfig } from '@/lib/game-engine';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

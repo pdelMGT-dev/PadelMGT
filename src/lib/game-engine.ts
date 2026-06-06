@@ -56,6 +56,7 @@ export interface FixedPair {
   player1Name: string;
   player2Name: string;
   name?: string;
+  groupOrigin?: string;  // e.g. '1° A', '2° B', 'M3° A'
 }
 
 export interface CourtMatch {
@@ -84,9 +85,12 @@ export interface Standing {
   losses: number;
   draws: number;
   played: number;
-  diff: number;         // point/game difference
-  pointsFor: number;
-  pointsAgainst: number;
+  diff: number;         // sets diff (setsFor - setsAgainst)
+  pointsFor: number;    // sets won
+  pointsAgainst: number; // sets lost
+  gamesFor?: number;    // total games won (sum of set scores)
+  gamesAgainst?: number;
+  gamesDiff?: number;
 }
 
 export interface KnockoutBracket {
@@ -104,6 +108,7 @@ export interface KnockoutMatch {
   pair2: string[] | null;
   pair1Score: number | null;
   pair2Score: number | null;
+  sets?: Array<{ p1: number; p2: number }>;
   winner: string[] | null; // winning pair player ids
   status: 'pending' | 'completed';
 }
@@ -1169,39 +1174,54 @@ export function calculateGroupStandings(group: Group, pairs: FixedPair[]): Stand
       map.set(fp.player1Id, {
         playerId: fp.player1Id,
         playerName: fp.name ?? `${fp.player1Name} / ${fp.player2Name}`,
-        pts: 0, wins: 0, losses: 0, draws: 0, played: 0, diff: 0, pointsFor: 0, pointsAgainst: 0,
+        pts: 0, wins: 0, losses: 0, draws: 0, played: 0,
+        diff: 0, pointsFor: 0, pointsAgainst: 0,
+        gamesFor: 0, gamesAgainst: 0, gamesDiff: 0,
       });
     });
 
   for (const match of group.matches) {
     if (match.status !== 'completed' || match.pair1Score === null || match.pair2Score === null) continue;
-    const s1 = match.pair1Score;
-    const s2 = match.pair2Score;
+    const s1 = match.pair1Score;  // sets won by pair1
+    const s2 = match.pair2Score;  // sets won by pair2
     const p1rep = match.pair1[0];
     const p2rep = match.pair2[0];
 
     const st1 = map.get(p1rep);
     const st2 = map.get(p2rep);
 
+    // Accumulate set-level stats
     if (st1) {
       st1.played++;
-      st1.pointsFor += s1; st1.pointsAgainst += s2; st1.diff += s1 - s2;
+      st1.pointsFor += s1; st1.pointsAgainst += s2; st1.diff = st1.pointsFor - st1.pointsAgainst;
       if (s1 > s2) { st1.wins++; st1.pts += 3; }
       else if (s1 === s2) { st1.draws++; st1.pts += 1; }
       else { st1.losses++; st1.pts -= 1; }
     }
     if (st2) {
       st2.played++;
-      st2.pointsFor += s2; st2.pointsAgainst += s1; st2.diff += s2 - s1;
+      st2.pointsFor += s2; st2.pointsAgainst += s1; st2.diff = st2.pointsFor - st2.pointsAgainst;
       if (s2 > s1) { st2.wins++; st2.pts += 3; }
       else if (s2 === s1) { st2.draws++; st2.pts += 1; }
       else { st2.losses++; st2.pts -= 1; }
+    }
+
+    // Accumulate game-level stats (from sets array)
+    if (match.sets && match.sets.length > 0) {
+      let gf1 = 0, ga1 = 0, gf2 = 0, ga2 = 0;
+      for (const s of match.sets) {
+        gf1 += s.p1; ga1 += s.p2;
+        gf2 += s.p2; ga2 += s.p1;
+      }
+      if (st1) { st1.gamesFor = (st1.gamesFor ?? 0) + gf1; st1.gamesAgainst = (st1.gamesAgainst ?? 0) + ga1; st1.gamesDiff = (st1.gamesFor ?? 0) - (st1.gamesAgainst ?? 0); }
+      if (st2) { st2.gamesFor = (st2.gamesFor ?? 0) + gf2; st2.gamesAgainst = (st2.gamesAgainst ?? 0) + ga2; st2.gamesDiff = (st2.gamesFor ?? 0) - (st2.gamesAgainst ?? 0); }
     }
   }
 
   return Array.from(map.values()).sort((a, b) =>
     b.pts !== a.pts ? b.pts - a.pts :
     b.diff !== a.diff ? b.diff - a.diff :
-    b.pointsFor - a.pointsFor
+    (b.gamesDiff ?? 0) !== (a.gamesDiff ?? 0) ? (b.gamesDiff ?? 0) - (a.gamesDiff ?? 0) :
+    (b.gamesFor ?? 0) - (a.gamesFor ?? 0)
   );
 }

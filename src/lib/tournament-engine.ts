@@ -428,7 +428,24 @@ export function advanceGroupsToKnockout(tournament: Tournament): Tournament {
     }
   }
 
-  const advancingPairs = qualifying.filter((fp): fp is FixedPair => fp !== null);
+  // Annotate group origin on qualifying pairs
+  const annotatedQualifying = qualifying.map(fp => {
+    if (!fp) return fp;
+    // Find which group this pair belongs to and at what standing position
+    for (const g of allGroups) {
+      const posIdx = g.standings.findIndex(s => s.playerId === fp.player1Id);
+      if (posIdx !== -1) {
+        const isBest3rd = posIdx >= teamsAdvancing;
+        const origin = isBest3rd
+          ? `M3° ${g.name.replace('Grupo ', '')}`
+          : `${posIdx + 1}° ${g.name.replace('Grupo ', '')}`;
+        return { ...fp, groupOrigin: origin };
+      }
+    }
+    return fp;
+  });
+
+  const advancingPairs = annotatedQualifying.filter((fp): fp is FixedPair => fp !== null);
   const bracket = generateKnockoutBracketFromPairs(advancingPairs);
   return {
     ...tournament,
@@ -447,6 +464,7 @@ export function updateKnockoutBracketMatch(
   matchIdx: number,
   s1: number,
   s2: number,
+  sets?: Array<{ p1: number; p2: number }>,
 ): Tournament {
   if (!tournament.bracket) return tournament;
 
@@ -455,7 +473,7 @@ export function updateKnockoutBracketMatch(
     const matches = round.matches.map((m, mi) => {
       if (mi !== matchIdx) return m;
       const winner = s1 > s2 ? m.pair1 : m.pair2;
-      return { ...m, pair1Score: s1, pair2Score: s2, winner, status: 'completed' as const };
+      return { ...m, pair1Score: s1, pair2Score: s2, winner, status: 'completed' as const, ...(sets ? { sets } : {}) };
     });
     return { ...round, matches };
   });
