@@ -184,6 +184,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   const [koGroupSetInputs, setKoGroupSetInputs] = useState<Record<string, Array<{ p1: string; p2: string }>>>({});
   const [koGroupHistoryOpen, setKoGroupHistoryOpen] = useState<Record<string, boolean>>({});
   const [advanceConfirm, setAdvanceConfirm] = useState(false);
+  const [standingsPanelOpen, setStandingsPanelOpen] = useState(false);
 
   // ── User loaded via useCurrentUser hook ──────────────────────────────────
 
@@ -288,6 +289,21 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     ? `${window.location.origin}/tournament/${t.code}`
     : `https://padelmgt.com/tournament/${t.code}`;
 
+  // ── Tiebreak helper ───────────────────────────────────────────────────────
+
+  function needsTiebreakSlot(inputs: Array<{p1: string; p2: string}>, setsPerMatchCount: number): boolean {
+    if (setsPerMatchCount !== 2) return false;
+    if (inputs.length < 2) return false;
+    const s0p1 = parseInt(inputs[0]?.p1 || '0', 10); const s0p2 = parseInt(inputs[0]?.p2 || '0', 10);
+    const s1p1 = parseInt(inputs[1]?.p1 || '0', 10); const s1p2 = parseInt(inputs[1]?.p2 || '0', 10);
+    const set1done = inputs[0]?.p1 !== '' && inputs[0]?.p2 !== '';
+    const set2done = inputs[1]?.p1 !== '' && inputs[1]?.p2 !== '';
+    if (!set1done || !set2done) return false;
+    const wins1 = (s0p1 > s0p2 ? 1 : 0) + (s1p1 > s1p2 ? 1 : 0);
+    const wins2 = (s0p2 > s0p1 ? 1 : 0) + (s1p2 > s1p1 ? 1 : 0);
+    return wins1 === 1 && wins2 === 1;
+  }
+
   // ── Score handlers ────────────────────────────────────────────────────────
 
   function handleP1Change(key: string, val: string) {
@@ -357,7 +373,10 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   function handleTradSetChange(key: string, setIdx: number, side: 'p1' | 'p2', val: string, roundNum: number, courtNum: number) {
     setSetInputs(prev => {
       const current = prev[key] ?? Array.from({ length: setsPerMatch }, () => ({ p1: '', p2: '' }));
-      const updated = current.map((s, i) => i === setIdx ? { ...s, [side]: val } : s);
+      // Ensure array is long enough for tiebreak slot
+      const extended = [...current];
+      while (extended.length <= setIdx) extended.push({ p1: '', p2: '' });
+      const updated = extended.map((s, i) => i === setIdx ? { ...s, [side]: val } : s);
       let w1 = 0, w2 = 0;
       for (const s of updated) {
         const a = parseInt(s.p1 || '0', 10), b = parseInt(s.p2 || '0', 10);
@@ -737,6 +756,18 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                   <InfoRow label="Hora" value={t.time} />
                   {t.club && <InfoRow label="Club" value={t.club} />}
                   {t.city && <InfoRow label="Ciudad" value={t.city} />}
+                  {t.format === 'knockout' && t.knockoutConfig && (
+                    <>
+                      <InfoRow label="Grupos" value={t.knockoutConfig.hasGroups ? `${t.knockoutConfig.numGroups} grupos` : 'Sin grupos'} />
+                      {t.knockoutConfig.hasGroups && (
+                        <InfoRow label="Clasifican" value={`${t.knockoutConfig.teamsAdvancing} por grupo`} />
+                      )}
+                      {t.knockoutConfig.hasGroups && t.groupScoreConfig && (
+                        <InfoRow label="Score grupos" value={`${t.groupScoreConfig.setsPerMatch ?? 3} sets`} />
+                      )}
+                      <InfoRow label="Score knockout" value={`${t.scoreConfig?.setsPerMatch ?? 3} sets`} />
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -924,28 +955,45 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                       {/* Standings table */}
                       <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--grey-100)' }}>
                         <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Tabla</div>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
                           <thead>
                             <tr style={{ color: 'var(--grey-400)' }}>
                               <th style={{ textAlign: 'left', padding: '4px 0', fontWeight: 600, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Equipo</th>
-                              <th style={{ textAlign: 'center', padding: '4px 4px', fontWeight: 600, fontSize: 9 }}>PJ</th>
-                              <th style={{ textAlign: 'center', padding: '4px 4px', fontWeight: 600, fontSize: 9 }}>G</th>
-                              <th style={{ textAlign: 'center', padding: '4px 4px', fontWeight: 600, fontSize: 9 }}>P</th>
+                              <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>PJ</th>
+                              <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>PG</th>
+                              <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>PP</th>
+                              <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>SF</th>
+                              <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>SC</th>
+                              {group.standings.some(s => (s.gamesFor ?? 0) > 0 || (s.gamesAgainst ?? 0) > 0) && (
+                                <>
+                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>GF</th>
+                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>GC</th>
+                                </>
+                              )}
                               <th style={{ textAlign: 'right', padding: '4px 0', fontWeight: 600, fontSize: 9 }}>PTS</th>
                             </tr>
                           </thead>
                           <tbody>
                             {group.standings.map((s, i) => {
                               const advancing = i < (t.knockoutConfig?.teamsAdvancing ?? 1);
+                              const hasGamesData = group.standings.some(st => (st.gamesFor ?? 0) > 0 || (st.gamesAgainst ?? 0) > 0);
                               return (
                                 <tr key={s.playerId} style={{ background: advancing ? 'rgba(30,170,82,0.04)' : 'transparent' }}>
-                                  <td style={{ padding: '5px 0', fontWeight: advancing ? 700 : 400, fontSize: 12, color: advancing ? 'var(--turf-green)' : 'var(--black)' }}>
+                                  <td style={{ padding: '5px 0', fontWeight: advancing ? 700 : 400, fontSize: 11, color: advancing ? 'var(--turf-green)' : 'var(--black)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {advancing && '↑ '}{getGroupPairLabel([s.playerId])}
                                   </td>
-                                  <td style={{ textAlign: 'center', padding: '5px 4px', color: 'var(--grey-500)' }}>{s.played}</td>
-                                  <td style={{ textAlign: 'center', padding: '5px 4px', color: 'var(--grey-500)' }}>{s.wins}</td>
-                                  <td style={{ textAlign: 'center', padding: '5px 4px', color: 'var(--grey-500)' }}>{s.losses}</td>
-                                  <td style={{ textAlign: 'right', padding: '5px 0', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>{s.pts}</td>
+                                  <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.played}</td>
+                                  <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.wins}</td>
+                                  <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.losses}</td>
+                                  <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.pointsFor}</td>
+                                  <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.pointsAgainst}</td>
+                                  {hasGamesData && (
+                                    <>
+                                      <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.gamesFor ?? 0}</td>
+                                      <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.gamesAgainst ?? 0}</td>
+                                    </>
+                                  )}
+                                  <td style={{ textAlign: 'right', padding: '5px 0', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700 }}>{s.pts}</td>
                                 </tr>
                               );
                             })}
@@ -973,11 +1021,16 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                     Partido {match.courtNum}
                                   </div>
                                   <div style={{ display: 'flex', gap: 8 }}>
-                                    {Array.from({ length: groupSets }, (_, i) => (
-                                      <div key={i} style={{ width: 48, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
-                                        SET {i + 1}
-                                      </div>
-                                    ))}
+                                    {(() => {
+                                      const inputs = koGroupSetInputs[key] ?? Array.from({ length: groupSets }, () => ({ p1: '', p2: '' }));
+                                      const showTB = needsTiebreakSlot(inputs, groupSets);
+                                      const effSets = showTB ? groupSets + 1 : groupSets;
+                                      return Array.from({ length: effSets }, (_, i) => (
+                                        <div key={i} style={{ width: 48, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: i >= groupSets ? '#b45309' : 'var(--grey-400)' }}>
+                                          {i >= groupSets ? 'DESEMPATE' : `SET ${i + 1}`}
+                                        </div>
+                                      ));
+                                    })()}
                                   </div>
                                 </div>
 
@@ -988,18 +1041,23 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)' }}>{getGroupPairLabel(match.pair1)}</div>
                                   </div>
                                   <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                                    {Array.from({ length: groupSets }, (_, i) => (
-                                      <input key={i} type="number" min="0" max="99"
-                                        value={inputs[i]?.p1 ?? ''}
-                                        onChange={e => setKoGroupSetInputs(prev => {
-                                          const cur = [...(prev[key] ?? Array.from({ length: groupSets }, () => ({ p1: '', p2: '' })))];
-                                          cur[i] = { ...cur[i], p1: e.target.value };
-                                          return { ...prev, [key]: cur };
-                                        })}
-                                        placeholder="0"
-                                        style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }}
-                                      />
-                                    ))}
+                                    {(() => {
+                                      const showTB = needsTiebreakSlot(inputs, groupSets);
+                                      const effSets = showTB ? groupSets + 1 : groupSets;
+                                      return Array.from({ length: effSets }, (_, i) => (
+                                        <input key={i} type="number" min="0" max="99"
+                                          value={inputs[i]?.p1 ?? ''}
+                                          onChange={e => setKoGroupSetInputs(prev => {
+                                            const cur = [...(prev[key] ?? Array.from({ length: groupSets }, () => ({ p1: '', p2: '' })))];
+                                            while (cur.length <= i) cur.push({ p1: '', p2: '' });
+                                            cur[i] = { ...cur[i], p1: e.target.value };
+                                            return { ...prev, [key]: cur };
+                                          })}
+                                          placeholder="0"
+                                          style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: `2px solid ${i >= groupSets ? '#fde047' : 'var(--grey-300)'}`, outline: 'none', background: '#fff', color: 'var(--black)' }}
+                                        />
+                                      ));
+                                    })()}
                                   </div>
                                 </div>
 
@@ -1010,18 +1068,23 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)' }}>{getGroupPairLabel(match.pair2)}</div>
                                   </div>
                                   <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                                    {Array.from({ length: groupSets }, (_, i) => (
-                                      <input key={i} type="number" min="0" max="99"
-                                        value={inputs[i]?.p2 ?? ''}
-                                        onChange={e => setKoGroupSetInputs(prev => {
-                                          const cur = [...(prev[key] ?? Array.from({ length: groupSets }, () => ({ p1: '', p2: '' })))];
-                                          cur[i] = { ...cur[i], p2: e.target.value };
-                                          return { ...prev, [key]: cur };
-                                        })}
-                                        placeholder="0"
-                                        style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }}
-                                      />
-                                    ))}
+                                    {(() => {
+                                      const showTB = needsTiebreakSlot(inputs, groupSets);
+                                      const effSets = showTB ? groupSets + 1 : groupSets;
+                                      return Array.from({ length: effSets }, (_, i) => (
+                                        <input key={i} type="number" min="0" max="99"
+                                          value={inputs[i]?.p2 ?? ''}
+                                          onChange={e => setKoGroupSetInputs(prev => {
+                                            const cur = [...(prev[key] ?? Array.from({ length: groupSets }, () => ({ p1: '', p2: '' })))];
+                                            while (cur.length <= i) cur.push({ p1: '', p2: '' });
+                                            cur[i] = { ...cur[i], p2: e.target.value };
+                                            return { ...prev, [key]: cur };
+                                          })}
+                                          placeholder="0"
+                                          style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: `2px solid ${i >= groupSets ? '#fde047' : 'var(--grey-300)'}`, outline: 'none', background: '#fff', color: 'var(--black)' }}
+                                        />
+                                      ));
+                                    })()}
                                   </div>
                                 </div>
 
@@ -1116,9 +1179,10 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                 bracket={t.bracket}
                 fixedPairs={pairs}
                 players={t.players}
+                scoreConfig={t.scoreConfig}
                 isEditable={!isFinished}
-                onScoreEntry={(roundIdx, matchIdx, s1, s2) => {
-                  const updated = updateKnockoutBracketMatch(t, roundIdx, matchIdx, s1, s2);
+                onScoreEntry={(roundIdx, matchIdx, s1, s2, sets) => {
+                  const updated = updateKnockoutBracketMatch(t, roundIdx, matchIdx, s1, s2, sets);
                   saveTournament(updated);
                   setTournament(updated);
                   if (updated.status === 'finished') {
@@ -1254,9 +1318,16 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                 {isPointsMode ? (
                                   <div style={{ width: 56, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>PTS</div>
                                 ) : (
-                                  Array.from({ length: setsPerMatch }, (_, i) => (
-                                    <div key={i} style={{ width: 48, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>SET {i + 1}</div>
-                                  ))
+                                  (() => {
+                                    const curInputs = setInputs[key] ?? Array.from({ length: setsPerMatch }, () => ({ p1: '', p2: '' }));
+                                    const showTB = needsTiebreakSlot(curInputs, setsPerMatch);
+                                    const effSets = showTB ? setsPerMatch + 1 : setsPerMatch;
+                                    return Array.from({ length: effSets }, (_, i) => (
+                                      <div key={i} style={{ width: 48, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: i >= setsPerMatch ? '#b45309' : 'var(--grey-400)' }}>
+                                        {i >= setsPerMatch ? 'DESEMPATE' : `SET ${i + 1}`}
+                                      </div>
+                                    ));
+                                  })()
                                 )}
                               </div>
                             </div>
@@ -1293,14 +1364,18 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                           </div>
                                         )
                                       ) : isEditable ? (
-                                        Array.from({ length: setsPerMatch }, (_, i) => (
-                                          <input key={i} type="number" min="0" max="99"
-                                            value={courtSetInputs[i]?.p1 ?? ''}
-                                            onChange={e => handleTradSetChange(key, i, 'p1', e.target.value, round.num, court.courtNum)}
-                                            onBlur={() => handleSaveScore(round.num, court.courtNum)}
-                                            placeholder="0"
-                                            style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }} />
-                                        ))
+                                        (() => {
+                                          const showTB = needsTiebreakSlot(courtSetInputs, setsPerMatch);
+                                          const effSets = showTB ? setsPerMatch + 1 : setsPerMatch;
+                                          return Array.from({ length: effSets }, (_, i) => (
+                                            <input key={i} type="number" min="0" max="99"
+                                              value={courtSetInputs[i]?.p1 ?? ''}
+                                              onChange={e => handleTradSetChange(key, i, 'p1', e.target.value, round.num, court.courtNum)}
+                                              onBlur={() => handleSaveScore(round.num, court.courtNum)}
+                                              placeholder="0"
+                                              style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: `2px solid ${i >= setsPerMatch ? '#fde047' : 'var(--grey-300)'}`, outline: 'none', background: '#fff', color: 'var(--black)' }} />
+                                          ));
+                                        })()
                                       ) : (
                                         // Completed traditional: show actual games per set
                                         court.sets && court.sets.length > 0
@@ -1341,14 +1416,18 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                           </div>
                                         )
                                       ) : isEditable ? (
-                                        Array.from({ length: setsPerMatch }, (_, i) => (
-                                          <input key={i} type="number" min="0" max="99"
-                                            value={courtSetInputs[i]?.p2 ?? ''}
-                                            onChange={e => handleTradSetChange(key, i, 'p2', e.target.value, round.num, court.courtNum)}
-                                            onBlur={() => handleSaveScore(round.num, court.courtNum)}
-                                            placeholder="0"
-                                            style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: '2px solid var(--grey-300)', outline: 'none', background: '#fff', color: 'var(--black)' }} />
-                                        ))
+                                        (() => {
+                                          const showTB = needsTiebreakSlot(courtSetInputs, setsPerMatch);
+                                          const effSets = showTB ? setsPerMatch + 1 : setsPerMatch;
+                                          return Array.from({ length: effSets }, (_, i) => (
+                                            <input key={i} type="number" min="0" max="99"
+                                              value={courtSetInputs[i]?.p2 ?? ''}
+                                              onChange={e => handleTradSetChange(key, i, 'p2', e.target.value, round.num, court.courtNum)}
+                                              onBlur={() => handleSaveScore(round.num, court.courtNum)}
+                                              placeholder="0"
+                                              style={{ width: 48, height: 56, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, border: `2px solid ${i >= setsPerMatch ? '#fde047' : 'var(--grey-300)'}`, outline: 'none', background: '#fff', color: 'var(--black)' }} />
+                                          ));
+                                        })()
                                       ) : (
                                         court.sets && court.sets.length > 0
                                           ? court.sets.map((s, i) => (
@@ -1635,6 +1714,124 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
           50% { opacity: 0.5; transform: scale(1.3); }
         }
       `}</style>
+
+      {/* ── Floating Standings/Bracket Panel button ── */}
+      {t.format === 'knockout' && (
+        <>
+          <button
+            onClick={() => setStandingsPanelOpen(true)}
+            style={{
+              position: 'fixed', bottom: 24, right: 24, zIndex: 100,
+              padding: '12px 20px', background: 'var(--black)', color: 'var(--neon)',
+              border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '0.08em',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+            }}
+          >
+            ▦ Clasificación
+          </button>
+
+          {standingsPanelOpen && (
+            <>
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200 }} onClick={() => setStandingsPanelOpen(false)} />
+              <div style={{
+                position: 'fixed', top: 0, right: 0, width: '90vw', maxWidth: 760, height: '100vh',
+                background: '#fff', zIndex: 201, overflowY: 'auto', padding: '28px 32px',
+                boxShadow: '-4px 0 40px rgba(0,0,0,0.15)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase' }}>
+                    Clasificación y Bracket
+                  </div>
+                  <button onClick={() => setStandingsPanelOpen(false)} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: 'var(--grey-400)', lineHeight: 1 }}>×</button>
+                </div>
+
+                {/* Group standings tables */}
+                {t.groups && (
+                  <div style={{ marginBottom: 32 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 16 }}>
+                      Fase I — Tablas de Grupos
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+                      {t.groups.groups.map(group => (
+                        <div key={group.id} style={{ border: '1px solid var(--grey-200)', overflow: 'hidden' }}>
+                          <div style={{ padding: '8px 16px', background: 'var(--black)', color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                            {group.name}
+                          </div>
+                          <div style={{ padding: '12px 16px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                              <thead>
+                                <tr style={{ color: 'var(--grey-400)', borderBottom: '1px solid var(--grey-100)' }}>
+                                  <th style={{ textAlign: 'left', padding: '4px 0', fontWeight: 600, fontSize: 9, textTransform: 'uppercase' }}>#</th>
+                                  <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 600, fontSize: 9, textTransform: 'uppercase' }}>Equipo</th>
+                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>PJ</th>
+                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>PG</th>
+                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>PP</th>
+                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>SF</th>
+                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>SC</th>
+                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>GF</th>
+                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>GC</th>
+                                  <th style={{ textAlign: 'right', padding: '4px 0', fontWeight: 600, fontSize: 9 }}>PTS</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.standings.map((s, i) => {
+                                  const advancing = i < (t.knockoutConfig?.teamsAdvancing ?? 1);
+                                  const panelPairs = t.fixedPairs ?? [];
+                                  const fp = panelPairs.find(p => p.player1Id === s.playerId);
+                                  const teamName = fp ? (fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`) : s.playerName;
+                                  return (
+                                    <tr key={s.playerId} style={{ background: advancing ? 'rgba(30,170,82,0.04)' : 'transparent', borderBottom: '1px solid var(--grey-100)' }}>
+                                      <td style={{ padding: '6px 0', fontSize: 11, color: advancing ? 'var(--turf-green)' : 'var(--grey-400)', fontWeight: 700 }}>{i + 1}</td>
+                                      <td style={{ padding: '6px 8px', fontWeight: advancing ? 700 : 400, fontSize: 11, color: advancing ? 'var(--turf-green)' : 'var(--black)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {advancing && '↑ '}{teamName}
+                                      </td>
+                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.played}</td>
+                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.wins}</td>
+                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.losses}</td>
+                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.pointsFor}</td>
+                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.pointsAgainst}</td>
+                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.gamesFor ?? 0}</td>
+                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.gamesAgainst ?? 0}</td>
+                                      <td style={{ textAlign: 'right', padding: '6px 0', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700 }}>{s.pts}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Knockout Bracket */}
+                {t.bracket && (
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 16 }}>
+                      Fase II — Cuadro de Eliminatorias
+                    </div>
+                    <KnockoutBracketView
+                      bracket={t.bracket}
+                      fixedPairs={t.fixedPairs}
+                      players={t.players}
+                      scoreConfig={t.scoreConfig}
+                      isEditable={false}
+                    />
+                  </div>
+                )}
+
+                {!t.groups && !t.bracket && (
+                  <div style={{ color: 'var(--grey-400)', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
+                    El torneo aún no ha iniciado.
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }
