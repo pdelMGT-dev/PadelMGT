@@ -1104,7 +1104,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                 {t.groups.groups.map(group => {
                   const completedMatches = group.matches.filter(m => m.status === 'completed');
                   const activeWaveMatches = group.matches.filter(m => (m.roundNum ?? 1) === activeWave);
-                  const historyOpen = koGroupHistoryOpen[group.id] ?? false;
+                  const historyOpen = koGroupHistoryOpen[group.id] ?? true;
 
                   return (
                     <div key={group.id} style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
@@ -1264,60 +1264,78 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                         </div>
                       )}
 
-                      {/* Completed match history — collapsible */}
-                      {completedMatches.length > 0 && (
-                        <div style={{ padding: '0' }}>
-                          <button
-                            onClick={() => setKoGroupHistoryOpen(prev => ({ ...prev, [group.id]: !prev[group.id] }))}
-                            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 20px', background: 'none', border: 'none', borderTop: '1px solid var(--grey-100)', cursor: 'pointer', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}
-                          >
-                            <span>Resultados ({completedMatches.length})</span>
-                            <span style={{ fontSize: 12, transform: historyOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
-                          </button>
-                          {historyOpen && (
-                            <div style={{ padding: '0 20px 12px' }}>
-                              {completedMatches.map(match => {
-                                const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
-                                const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
-                                return (
-                                  <div key={match.courtNum} style={{ marginBottom: 8, padding: '8px 12px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)', fontSize: 12 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: match.sets && match.sets.length > 0 ? 6 : 0 }}>
-                                      <div>
-                                        <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--turf-green)' : 'var(--black)' }}>{getGroupPairLabel(match.pair1)}</span>
-                                        <span style={{ color: 'var(--grey-300)', margin: '0 6px' }}>vs</span>
-                                        <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--turf-green)' : 'var(--black)' }}>{getGroupPairLabel(match.pair2)}</span>
-                                      </div>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
-                                        <button onClick={() => {
-                                          const groups2 = t.groups!.groups.map(g => g.id !== group.id ? g : {
-                                            ...g,
-                                            matches: g.matches.map(m => m.courtNum !== match.courtNum ? m : { ...m, status: 'pending' as const, pair1Score: null, pair2Score: null, sets: undefined }),
-                                            standings: g.standings,
-                                          });
-                                          const upd = { ...t, groups: { groups: groups2 } };
-                                          saveTournament(upd); setTournament(upd);
-                                        }} style={{ fontSize: 9, color: 'var(--grey-400)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-                                          editar
-                                        </button>
-                                      </div>
+                      {/* Completed match history — collapsible, organized by round */}
+                      {completedMatches.length > 0 && (() => {
+                        // Group by roundNum
+                        const byRound: Record<number, typeof completedMatches> = {};
+                        completedMatches.forEach(m => {
+                          const r = m.roundNum ?? 1;
+                          if (!byRound[r]) byRound[r] = [];
+                          byRound[r].push(m);
+                        });
+                        const doneRoundNums = Object.keys(byRound).map(Number).sort((a, b) => a - b);
+                        return (
+                          <div style={{ padding: '0' }}>
+                            <button
+                              onClick={() => setKoGroupHistoryOpen(prev => ({ ...prev, [group.id]: !prev[group.id] }))}
+                              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 20px', background: 'none', border: 'none', borderTop: '1px solid var(--grey-100)', cursor: 'pointer', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}
+                            >
+                              <span>Resultados ({completedMatches.length} partido{completedMatches.length !== 1 ? 's' : ''})</span>
+                              <span style={{ fontSize: 12, transform: historyOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
+                            </button>
+                            {historyOpen && (
+                              <div style={{ padding: '4px 20px 12px' }}>
+                                {doneRoundNums.map(rNum => (
+                                  <div key={rNum} style={{ marginBottom: 8 }}>
+                                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 4, paddingBottom: 4, borderBottom: '1px solid var(--grey-100)' }}>
+                                      Ronda {rNum}
                                     </div>
-                                    {match.sets && match.sets.length > 0 && (
-                                      <div style={{ display: 'flex', gap: 6, fontSize: 11, color: 'var(--grey-500)' }}>
-                                        {match.sets.map((s, i) => (
-                                          <span key={i} style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '2px 6px', borderRadius: 3 }}>
-                                            {s.p1}–{s.p2}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    )}
+                                    {byRound[rNum].map(match => {
+                                      const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
+                                      const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
+                                      return (
+                                        <div key={match.courtNum} style={{ marginBottom: 6, padding: '8px 12px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)', fontSize: 12 }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: match.sets && match.sets.length > 0 ? 6 : 0 }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                              <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--turf-green)' : 'var(--black)' }}>{p1won ? '▶ ' : ''}{getGroupPairLabel(match.pair1)}</span>
+                                              <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--turf-green)' : 'var(--grey-500)' }}>{p2won ? '▶ ' : ''}{getGroupPairLabel(match.pair2)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                                              {match.sets && match.sets.length > 0 ? (
+                                                match.sets.map((s, i) => (
+                                                  <div key={i} style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 11 }}>
+                                                    <span style={{ color: 'var(--grey-300)', fontSize: 9 }}>S{i + 1}</span>
+                                                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: s.p1 > s.p2 ? 'var(--turf-green)' : 'var(--grey-400)' }}>{s.p1}</span>
+                                                    <span style={{ color: 'var(--grey-300)' }}>–</span>
+                                                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: s.p2 > s.p1 ? 'var(--turf-green)' : 'var(--grey-400)' }}>{s.p2}</span>
+                                                  </div>
+                                                ))
+                                              ) : (
+                                                <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
+                                              )}
+                                              <button onClick={() => {
+                                                const groups2 = t.groups!.groups.map(g => g.id !== group.id ? g : {
+                                                  ...g,
+                                                  matches: g.matches.map(m => m.courtNum !== match.courtNum ? m : { ...m, status: 'pending' as const, pair1Score: null, pair2Score: null, sets: undefined }),
+                                                  standings: g.standings,
+                                                });
+                                                const upd = { ...t, groups: { groups: groups2 } };
+                                                saveTournament(upd); setTournament(upd);
+                                              }} style={{ fontSize: 9, color: 'var(--grey-400)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                                                editar
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
