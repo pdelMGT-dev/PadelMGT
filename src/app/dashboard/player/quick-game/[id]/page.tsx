@@ -227,6 +227,8 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const [dragSource, setDragSource] = useState<string | null>(null);
   const [dropOver, setDropOver]   = useState<string | null>(null);
 
+  const [screenW, setScreenW] = useState(1400);
+
   // ── User loaded via useCurrentUser hook ──────────────────────────────────
 
   // Load game state on mount
@@ -340,6 +342,14 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       results.filter(r => !alreadyIn.includes(r.id) && !alreadyInvited.includes(r.id)).slice(0, 8)
     );
   }, [playerSearchQ, game?.players, game?.invitedPlayers]);
+
+  useEffect(() => {
+    const update = () => setScreenW(window.innerWidth);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  const isMobile = screenW < 768;
 
   function showToast(msg: string) {
     setToast(msg);
@@ -847,7 +857,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   if (!canManage) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ padding: `${isMobile ? '16px' : '40px'} ${isMobile ? '16px' : '40px'} 80px`, maxWidth: 800, margin: '0 auto' }}>
         {toast && (
           <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none' }}>
             {toast}
@@ -949,7 +959,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   // ── CREATOR VIEW ──────────────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: '40px 40px 80px', maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ padding: `${isMobile ? '16px' : '40px'} ${isMobile ? '16px' : '40px'} 80px`, maxWidth: 900, margin: '0 auto' }}>
       {/* Toast */}
       {toast && (
         <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none' }}>
@@ -1808,7 +1818,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                     </div>
 
                     {/* Pair A */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderBottom: '1px solid var(--grey-100)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: isMobile ? '10px 12px' : '14px 20px', borderBottom: '1px solid var(--grey-100)' }}>
                       <div style={{ width: 64, flexShrink: 0 }}>
                         {winner === 1 && <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
                       </div>
@@ -1841,7 +1851,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                     </div>
 
                     {/* Pair B */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: isMobile ? '10px 12px' : '14px 20px' }}>
                       <div style={{ width: 64, flexShrink: 0 }}>
                         {winner === 2 && <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
                       </div>
