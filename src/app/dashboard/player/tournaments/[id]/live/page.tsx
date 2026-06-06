@@ -185,6 +185,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   const [koGroupHistoryOpen, setKoGroupHistoryOpen] = useState<Record<string, boolean>>({});
   const [advanceConfirm, setAdvanceConfirm] = useState(false);
   const [standingsPanelOpen, setStandingsPanelOpen] = useState(false);
+  const [screenW, setScreenW] = useState(1400);
+  const [standingsTab, setStandingsTab] = useState<'groups' | 'bracket'>('groups');
 
   // ── User loaded via useCurrentUser hook ──────────────────────────────────
 
@@ -224,6 +226,14 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     }
   }, [tournament, id, router]);
 
+  // ── Screen width tracking ─────────────────────────────────────────────────
+  useEffect(() => {
+    const update = () => setScreenW(window.innerWidth);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
   // ── Guard: loading ────────────────────────────────────────────────────────
   if (tournament === undefined) {
     return (
@@ -255,6 +265,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   }
 
   const t = tournament;
+  const isDesktop = screenW >= 1024;
 
   // ── Access control ────────────────────────────────────────────────────────
   const canManage = currentUser != null && (
@@ -455,6 +466,141 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     if (court.sets && court.sets.length > 0) return court.sets.map((s: { p1: number; p2: number }) => `${s.p1}-${s.p2}`).join('  ');
     return `${court.pair1Score ?? '—'} – ${court.pair2Score ?? '—'}`;
   }
+
+  // ── Standings panel content (shared between desktop sidebar and mobile drawer) ──
+  const standingsPanelContent = (
+    <div>
+      {/* Panel header with tabs (shown when knockout phase has both groups and bracket) */}
+      {t.format === 'knockout' && t.groups && t.bracket && (
+        <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '2px solid var(--grey-100)' }}>
+          {(['groups', 'bracket'] as const).map(tab => (
+            <button key={tab} onClick={() => setStandingsTab(tab)} style={{
+              padding: '8px 16px', border: 'none', background: 'none', cursor: 'pointer',
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+              color: standingsTab === tab ? 'var(--black)' : 'var(--grey-400)',
+              borderBottom: standingsTab === tab ? '2px solid var(--black)' : '2px solid transparent',
+              marginBottom: -2,
+            }}>
+              {tab === 'groups' ? '📊 Grupos' : '🏆 Bracket'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* GROUP STANDINGS — shown when: no bracket yet, OR tab is 'groups' */}
+      {t.groups && (standingsTab === 'groups' || !t.bracket) && (
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>
+            Fase I — Grupos
+          </div>
+          {t.groups.groups.map(group => {
+            const pairs = t.fixedPairs ?? [];
+            return (
+              <div key={group.id} style={{ marginBottom: 16, border: '1px solid var(--grey-200)', overflow: 'hidden' }}>
+                <div style={{ padding: '7px 14px', background: 'var(--black)', color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  {group.name}
+                </div>
+                <div style={{ padding: '10px 14px', overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+                    <thead>
+                      <tr style={{ color: 'var(--grey-400)', borderBottom: '1px solid var(--grey-100)' }}>
+                        <th style={{ textAlign: 'left', padding: '3px 0', fontWeight: 600, fontSize: 9, textTransform: 'uppercase', minWidth: 80 }}>Equipo</th>
+                        <th style={{ textAlign: 'center', padding: '3px 3px', fontWeight: 600, fontSize: 9 }}>PJ</th>
+                        <th style={{ textAlign: 'center', padding: '3px 3px', fontWeight: 600, fontSize: 9 }}>PG</th>
+                        <th style={{ textAlign: 'center', padding: '3px 3px', fontWeight: 600, fontSize: 9 }}>PP</th>
+                        <th style={{ textAlign: 'center', padding: '3px 3px', fontWeight: 600, fontSize: 9 }}>SF</th>
+                        <th style={{ textAlign: 'center', padding: '3px 3px', fontWeight: 600, fontSize: 9 }}>SC</th>
+                        <th style={{ textAlign: 'center', padding: '3px 3px', fontWeight: 600, fontSize: 9 }}>GF</th>
+                        <th style={{ textAlign: 'center', padding: '3px 3px', fontWeight: 600, fontSize: 9 }}>GC</th>
+                        <th style={{ textAlign: 'right', padding: '3px 0', fontWeight: 600, fontSize: 9 }}>PTS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.standings.map((s, i) => {
+                        const advancing = i < (t.knockoutConfig?.teamsAdvancing ?? 1);
+                        const fp = pairs.find(p => p.player1Id === s.playerId);
+                        const teamName = fp ? (fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`) : s.playerName;
+                        return (
+                          <tr key={s.playerId} style={{ borderBottom: '1px solid var(--grey-50)' }}>
+                            <td style={{ padding: '5px 0', fontWeight: advancing ? 700 : 400, fontSize: 10, color: advancing ? 'var(--turf-green)' : 'var(--black)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {advancing ? '↑ ' : ''}{teamName}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.played}</td>
+                            <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.wins}</td>
+                            <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.losses}</td>
+                            <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.pointsFor}</td>
+                            <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.pointsAgainst}</td>
+                            <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.gamesFor ?? 0}</td>
+                            <td style={{ textAlign: 'center', padding: '5px 3px', color: 'var(--grey-500)' }}>{s.gamesAgainst ?? 0}</td>
+                            <td style={{ textAlign: 'right', padding: '5px 0', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700 }}>{s.pts}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* BRACKET — shown when tab is 'bracket' and bracket exists */}
+      {t.bracket && (standingsTab === 'bracket' || !t.groups) && (
+        <div>
+          {t.groups && (
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>
+              Fase II — Bracket
+            </div>
+          )}
+          <KnockoutBracketView
+            bracket={t.bracket}
+            fixedPairs={t.fixedPairs}
+            players={t.players}
+            scoreConfig={t.scoreConfig}
+            isEditable={false}
+          />
+        </div>
+      )}
+
+      {/* Americano/Mexicano/Round Robin standings */}
+      {t.format !== 'knockout' && t.standings && t.standings.length > 0 && (
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>
+            Clasificación
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ color: 'var(--grey-400)', borderBottom: '1px solid var(--grey-100)' }}>
+                <th style={{ textAlign: 'left', padding: '4px 0', fontWeight: 600, fontSize: 9, textTransform: 'uppercase' }}>#</th>
+                <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 600, fontSize: 9, textTransform: 'uppercase' }}>Jugador</th>
+                <th style={{ textAlign: 'center', padding: '4px 4px', fontWeight: 600, fontSize: 9 }}>PJ</th>
+                <th style={{ textAlign: 'center', padding: '4px 4px', fontWeight: 600, fontSize: 9 }}>PG</th>
+                <th style={{ textAlign: 'right', padding: '4px 0', fontWeight: 600, fontSize: 9 }}>PTS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {t.standings.map((s, i) => (
+                <tr key={s.playerId} style={{ borderBottom: '1px solid var(--grey-50)' }}>
+                  <td style={{ padding: '5px 0', fontSize: 11, color: 'var(--grey-400)', fontWeight: 700 }}>{i + 1}</td>
+                  <td style={{ padding: '5px 8px', fontWeight: i < 3 ? 700 : 400, fontSize: 11, color: 'var(--black)' }}>{s.playerName}</td>
+                  <td style={{ textAlign: 'center', padding: '5px 4px', color: 'var(--grey-500)' }}>{s.played}</td>
+                  <td style={{ textAlign: 'center', padding: '5px 4px', color: 'var(--grey-500)' }}>{s.wins}</td>
+                  <td style={{ textAlign: 'right', padding: '5px 0', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700 }}>{s.pts}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {!t.groups && !t.bracket && t.format !== 'knockout' && t.standings.length === 0 && (
+        <div style={{ color: 'var(--grey-400)', fontSize: 12, textAlign: 'center', padding: '24px 0' }}>
+          Las clasificaciones aparecerán aquí al registrar los primeros resultados.
+        </div>
+      )}
+    </div>
+  );
 
   // ── Permanent finished view ───────────────────────────────────────────────
   if (isFinished) {
@@ -664,7 +810,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <div style={{ paddingBottom: 80 }}>
+    <div style={{ paddingBottom: isDesktop ? 0 : 80 }}>
 
       {/* ── Sticky top bar ── */}
       <div style={{
@@ -707,7 +853,22 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
         ))}
       </div>
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 32px' }}>
+      {/* ── Body: responsive grid ── */}
+      <div style={{
+        display: isDesktop ? 'grid' : 'block',
+        gridTemplateColumns: isDesktop ? '1fr 380px' : undefined,
+        alignItems: 'flex-start',
+        minHeight: isDesktop ? 'calc(100vh - 65px)' : undefined,
+      }}>
+
+      {/* ── Left / Main column ── */}
+      <div style={{
+        maxWidth: isDesktop ? 'none' : 900,
+        margin: isDesktop ? 0 : '0 auto',
+        padding: '24px 32px',
+        overflowY: isDesktop ? 'auto' : undefined,
+        maxHeight: isDesktop ? 'calc(100vh - 65px)' : undefined,
+      }}>
 
         {/* ── INFO PANEL: collapsible accordion ── */}
         <div style={{ marginBottom: 32 }}>
@@ -1707,6 +1868,26 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
         })()}
       </div>
 
+      {/* ── Right column: always-visible standings (desktop only) ── */}
+      {isDesktop && (
+        <div style={{
+          borderLeft: '1px solid var(--grey-200)',
+          padding: '20px 20px',
+          background: '#fafafa',
+          position: 'sticky',
+          top: 65,
+          height: 'calc(100vh - 65px)',
+          overflowY: 'auto',
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 16 }}>
+            Clasificación
+          </div>
+          {standingsPanelContent}
+        </div>
+      )}
+
+      </div>{/* end body grid */}
+
       {/* Pulse animation for active dot */}
       <style>{`
         @keyframes pulse {
@@ -1715,122 +1896,38 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
         }
       `}</style>
 
-      {/* ── Floating Standings/Bracket Panel button ── */}
-      {t.format === 'knockout' && (
+      {/* ── Mobile/tablet: floating button + drawer (only when NOT desktop) ── */}
+      {!isDesktop && t.format === 'knockout' && (
         <>
           <button
             onClick={() => setStandingsPanelOpen(true)}
-            style={{
-              position: 'fixed', bottom: 24, right: 24, zIndex: 100,
-              padding: '12px 20px', background: 'var(--black)', color: 'var(--neon)',
-              border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
-              textTransform: 'uppercase', letterSpacing: '0.08em',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            }}
+            style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 100, padding: '12px 20px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
           >
             ▦ Clasificación
           </button>
-
           {standingsPanelOpen && (
             <>
               <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200 }} onClick={() => setStandingsPanelOpen(false)} />
-              <div style={{
-                position: 'fixed', top: 0, right: 0, width: '90vw', maxWidth: 760, height: '100vh',
-                background: '#fff', zIndex: 201, overflowY: 'auto', padding: '28px 32px',
-                boxShadow: '-4px 0 40px rgba(0,0,0,0.15)',
-              }}>
+              <div style={{ position: 'fixed', top: 0, right: 0, width: '90vw', maxWidth: 760, height: '100vh', background: '#fff', zIndex: 201, overflowY: 'auto', padding: '28px 32px', boxShadow: '-4px 0 40px rgba(0,0,0,0.15)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase' }}>
-                    Clasificación y Bracket
-                  </div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase' }}>Clasificación y Bracket</div>
                   <button onClick={() => setStandingsPanelOpen(false)} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: 'var(--grey-400)', lineHeight: 1 }}>×</button>
                 </div>
-
-                {/* Group standings tables */}
-                {t.groups && (
-                  <div style={{ marginBottom: 32 }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 16 }}>
-                      Fase I — Tablas de Grupos
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-                      {t.groups.groups.map(group => (
-                        <div key={group.id} style={{ border: '1px solid var(--grey-200)', overflow: 'hidden' }}>
-                          <div style={{ padding: '8px 16px', background: 'var(--black)', color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                            {group.name}
-                          </div>
-                          <div style={{ padding: '12px 16px' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                              <thead>
-                                <tr style={{ color: 'var(--grey-400)', borderBottom: '1px solid var(--grey-100)' }}>
-                                  <th style={{ textAlign: 'left', padding: '4px 0', fontWeight: 600, fontSize: 9, textTransform: 'uppercase' }}>#</th>
-                                  <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 600, fontSize: 9, textTransform: 'uppercase' }}>Equipo</th>
-                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>PJ</th>
-                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>PG</th>
-                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>PP</th>
-                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>SF</th>
-                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>SC</th>
-                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>GF</th>
-                                  <th style={{ textAlign: 'center', padding: '4px 3px', fontWeight: 600, fontSize: 9 }}>GC</th>
-                                  <th style={{ textAlign: 'right', padding: '4px 0', fontWeight: 600, fontSize: 9 }}>PTS</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {group.standings.map((s, i) => {
-                                  const advancing = i < (t.knockoutConfig?.teamsAdvancing ?? 1);
-                                  const panelPairs = t.fixedPairs ?? [];
-                                  const fp = panelPairs.find(p => p.player1Id === s.playerId);
-                                  const teamName = fp ? (fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`) : s.playerName;
-                                  return (
-                                    <tr key={s.playerId} style={{ background: advancing ? 'rgba(30,170,82,0.04)' : 'transparent', borderBottom: '1px solid var(--grey-100)' }}>
-                                      <td style={{ padding: '6px 0', fontSize: 11, color: advancing ? 'var(--turf-green)' : 'var(--grey-400)', fontWeight: 700 }}>{i + 1}</td>
-                                      <td style={{ padding: '6px 8px', fontWeight: advancing ? 700 : 400, fontSize: 11, color: advancing ? 'var(--turf-green)' : 'var(--black)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {advancing && '↑ '}{teamName}
-                                      </td>
-                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.played}</td>
-                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.wins}</td>
-                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.losses}</td>
-                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.pointsFor}</td>
-                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.pointsAgainst}</td>
-                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.gamesFor ?? 0}</td>
-                                      <td style={{ textAlign: 'center', padding: '6px 3px' }}>{s.gamesAgainst ?? 0}</td>
-                                      <td style={{ textAlign: 'right', padding: '6px 0', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700 }}>{s.pts}</td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Knockout Bracket */}
-                {t.bracket && (
-                  <div>
-                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 16 }}>
-                      Fase II — Cuadro de Eliminatorias
-                    </div>
-                    <KnockoutBracketView
-                      bracket={t.bracket}
-                      fixedPairs={t.fixedPairs}
-                      players={t.players}
-                      scoreConfig={t.scoreConfig}
-                      isEditable={false}
-                    />
-                  </div>
-                )}
-
-                {!t.groups && !t.bracket && (
-                  <div style={{ color: 'var(--grey-400)', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>
-                    El torneo aún no ha iniciado.
-                  </div>
-                )}
+                {standingsPanelContent}
               </div>
             </>
           )}
         </>
+      )}
+
+      {/* Mobile standings for non-knockout formats */}
+      {!isDesktop && t.format !== 'knockout' && (
+        <div style={{ margin: '0 24px 40px', padding: '20px', background: '#fafafa', border: '1px solid var(--grey-200)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 16 }}>
+            Clasificación
+          </div>
+          {standingsPanelContent}
+        </div>
       )}
     </div>
   );
