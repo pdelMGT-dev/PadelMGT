@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { label: 'CLUBES', href: '/superadmin/clubs' },
   { label: 'TORNEOS', href: '/superadmin/tournaments' },
   { label: 'JUEGOS RAPIDOS', href: '/superadmin/games' },
+  { label: 'SOLICITUDES', href: '/superadmin/requests' },
   { label: 'RELACIONES', href: '/superadmin/relations' },
   { label: 'PLANES', href: '/superadmin/plans' },
   { label: 'PROMOCIONES', href: '/superadmin/promotions' },
