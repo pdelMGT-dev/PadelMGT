@@ -62,11 +62,43 @@ CREATE TABLE score_corrections (
   round_num INTEGER,
   court_num INTEGER,
   requested_by TEXT,
+  requested_by_id TEXT,
   current_score TEXT,
   requested_score TEXT,
   reason TEXT,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  reviewed_by TEXT,
+  reviewed_at TIMESTAMPTZ,
+  review_notes TEXT,
+  affected_player_ids TEXT[],
+  ranking_adjusted BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Promo codes
+CREATE TABLE promo_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL,
+  type TEXT CHECK (type IN ('percent_off', 'fixed_off', 'free_trial', 'feature_unlock')),
+  value NUMERIC DEFAULT 0,
+  description TEXT,
+  max_uses INTEGER,
+  used_count INTEGER DEFAULT 0,
+  expires_at TIMESTAMPTZ,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Promo redemptions
+CREATE TABLE promo_redemptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  promo_id UUID REFERENCES promo_codes(id) ON DELETE SET NULL,
+  promo_code TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  user_email TEXT,
+  user_name TEXT,
+  redeemed_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Custom player fields definition

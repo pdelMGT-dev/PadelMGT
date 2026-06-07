@@ -10,6 +10,7 @@ import { createInvitation, getInvitationsForGame } from '@/lib/invitation-store'
 import { searchPlayers, getFriendsForPlayer } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, syncJoinRequestsFromSupabase, type JoinRequest } from '@/lib/join-request-store';
+import { createScoreCorrection, getScoreCorrectionsByEntity, type ScoreCorrectionRequest } from '@/lib/score-correction-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -121,6 +122,16 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   const [shareUrl, setShareUrl] = useState('');
   const [showQR, setShowQR] = useState(false);
 
+  // Score correction request
+  const [showCorrectionForm, setShowCorrectionForm] = useState(false);
+  const [corrRound, setCorrRound] = useState('');
+  const [corrCourt, setCorrCourt] = useState('');
+  const [corrCurrentScore, setCorrCurrentScore] = useState('');
+  const [corrRequestedScore, setCorrRequestedScore] = useState('');
+  const [corrReason, setCorrReason] = useState('');
+  const [corrSent, setCorrSent] = useState(false);
+  const [existingCorrections, setExistingCorrections] = useState<ScoreCorrectionRequest[]>([]);
+
   // Pair builder state (for americano parejas mode)
   const [pairSlots, setPairSlots] = useState<Array<{
     name: string;
@@ -198,6 +209,11 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     ]);
     setInviteFriends(getFriendsForPlayer(currentUser.id).filter(f => !allIds.has(f.id)));
   }, [currentUser, tournament]);
+
+  // ── Load existing score corrections for this tournament ───────────────────
+  useEffect(() => {
+    if (id) setExistingCorrections(getScoreCorrectionsByEntity(id));
+  }, [id]);
 
   // ── Initialize pairSlots for americano parejas / knockout ────────────────
   useEffect(() => {
@@ -309,6 +325,111 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
             </div>
           )}
         </div>
+
+        {/* Score Correction Section — only for creator/co-creator */}
+        {!isCancelled && currentUser && (tournament.creatorId === currentUser.id || (tournament.coCreatorIds ?? []).includes(currentUser.id)) && (
+          <div style={{ marginTop: 16, ...card }}>
+            <div style={secTitle}>Correcciones de Score</div>
+
+            {/* Existing corrections */}
+            {existingCorrections.length > 0 && (
+              <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {existingCorrections.map(c => {
+                  const statusCfg = {
+                    pending:  { label: 'Pendiente', bg: '#fef9c3', color: '#854d0e' },
+                    approved: { label: 'Aprobado',  bg: '#dcfce7', color: '#166534' },
+                    rejected: { label: 'Rechazado', bg: '#fee2e2', color: '#991b1b' },
+                  }[c.status];
+                  return (
+                    <div key={c.id} style={{ padding: '12px 14px', border: '1px solid var(--grey-200)', fontSize: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontWeight: 700 }}>Ronda {c.roundNum} — Cancha {c.courtNum}</span>
+                        <span style={{ background: statusCfg.bg, color: statusCfg.color, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>{statusCfg.label}</span>
+                      </div>
+                      <div style={{ color: 'var(--grey-500)', marginBottom: 4 }}>
+                        <span style={{ color: '#dc2626', fontWeight: 700 }}>{c.currentScore}</span>
+                        <span style={{ margin: '0 8px', color: 'var(--grey-400)' }}>→</span>
+                        <span style={{ color: '#166534', fontWeight: 700 }}>{c.requestedScore}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--grey-400)', fontStyle: 'italic' }}>{c.reason}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {corrSent ? (
+              <div style={{ padding: '16px', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
+                ✓ Solicitud enviada. El Super Admin revisará la corrección.
+              </div>
+            ) : showCorrectionForm ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={lbl}>Ronda #</label>
+                    <input style={inp} type="number" min="1" placeholder="ej: 3" value={corrRound} onChange={e => setCorrRound(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Cancha #</label>
+                    <input style={inp} type="number" min="1" placeholder="ej: 2" value={corrCourt} onChange={e => setCorrCourt(e.target.value)} />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={lbl}>Score actual (incorrecto)</label>
+                    <input style={inp} placeholder="ej: 6 – 4" value={corrCurrentScore} onChange={e => setCorrCurrentScore(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Score correcto</label>
+                    <input style={inp} placeholder="ej: 4 – 6" value={corrRequestedScore} onChange={e => setCorrRequestedScore(e.target.value)} />
+                  </div>
+                </div>
+                <div>
+                  <label style={lbl}>Motivo de la corrección</label>
+                  <textarea style={{ ...inp, minHeight: 72, resize: 'vertical' }} placeholder="Describe por qué el score necesita ser corregido..." value={corrReason} onChange={e => setCorrReason(e.target.value)} />
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={() => {
+                      if (!corrRound || !corrCourt || !corrCurrentScore || !corrRequestedScore || !corrReason.trim()) return;
+                      createScoreCorrection({
+                        type: 'tournament',
+                        entityId: tournament.id,
+                        entityName: tournament.name,
+                        roundNum: Number(corrRound),
+                        courtNum: Number(corrCourt),
+                        requestedBy: currentUser.name,
+                        requestedById: currentUser.id,
+                        currentScore: corrCurrentScore.trim(),
+                        requestedScore: corrRequestedScore.trim(),
+                        reason: corrReason.trim(),
+                      });
+                      setExistingCorrections(getScoreCorrectionsByEntity(tournament.id));
+                      setCorrSent(true);
+                      setShowCorrectionForm(false);
+                    }}
+                    style={{ padding: '10px 24px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                  >
+                    Enviar solicitud
+                  </button>
+                  <button
+                    onClick={() => setShowCorrectionForm(false)}
+                    style={{ padding: '10px 18px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: 'var(--grey-500)' }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setCorrSent(false); setShowCorrectionForm(true); }}
+                style={{ padding: '10px 20px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: 'var(--grey-600)', letterSpacing: '0.06em' }}
+              >
+                + Solicitar corrección de score
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   }

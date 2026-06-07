@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { registerPlayer, type PlayerSex } from '@/lib/player-store';
 import { authSignUp } from '@/lib/supabase';
 import { sendWelcomeEmail } from '@/lib/email';
+import { validatePromoCode, redeemPromoCode } from '@/lib/promotion-store';
 
 const COUNTRIES: string[] = [
   'Argentina', 'Bolivia', 'Brasil', 'Chile', 'Colombia', 'Costa Rica', 'Cuba',
@@ -34,6 +35,9 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [country,  setCountry]  = useState('');
   const [sex,      setSex]      = useState<PlayerSex | ''>('');
+  const [promoCode,    setPromoCode]    = useState('');
+  const [promoStatus,  setPromoStatus]  = useState<'idle' | 'valid' | 'invalid'>('idle');
+  const [promoMsg,     setPromoMsg]     = useState('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const [success,  setSuccess]  = useState(false);
@@ -43,6 +47,18 @@ export default function RegisterPage() {
     const redirect = new URLSearchParams(window.location.search).get('redirect');
     if (redirect) setLoginUrl(`/login?redirect=${encodeURIComponent(redirect)}`);
   }, []);
+
+  function handlePromoCheck() {
+    if (!promoCode.trim()) { setPromoStatus('idle'); setPromoMsg(''); return; }
+    const result = validatePromoCode(promoCode);
+    if (result.valid) {
+      setPromoStatus('valid');
+      setPromoMsg(result.promo.description || 'Código válido');
+    } else {
+      setPromoStatus('invalid');
+      setPromoMsg(result.error);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -85,6 +101,11 @@ export default function RegisterPage() {
       setError('Ya existe una cuenta con ese email.');
       setLoading(false);
       return;
+    }
+
+    // Redeem promo code if provided
+    if (promoCode.trim()) {
+      redeemPromoCode(promoCode.trim(), { id: player.id, email: player.email, name: player.name });
     }
 
     // Fire-and-forget welcome email — non-blocking
@@ -190,6 +211,35 @@ export default function RegisterPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Promo code field */}
+            <div style={{ marginBottom: 20 }}>
+              <label htmlFor="reg-promo" style={labelStyle}>Código promocional <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--grey-400)', fontSize: 10 }}>(opcional)</span></label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  id="reg-promo"
+                  type="text"
+                  placeholder="ej: WELCOME20"
+                  value={promoCode}
+                  onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoStatus('idle'); setPromoMsg(''); }}
+                  onBlur={handlePromoCheck}
+                  style={{ ...inputStyle, flex: 1, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}
+                />
+                <button
+                  type="button"
+                  onClick={handlePromoCheck}
+                  style={{ padding: '12px 16px', border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--grey-600)', whiteSpace: 'nowrap' }}
+                >
+                  Verificar
+                </button>
+              </div>
+              {promoStatus === 'valid' && (
+                <div style={{ marginTop: 6, fontSize: 12, color: '#166534', fontWeight: 600 }}>✓ {promoMsg}</div>
+              )}
+              {promoStatus === 'invalid' && (
+                <div style={{ marginTop: 6, fontSize: 12, color: '#dc2626' }}>{promoMsg}</div>
+              )}
             </div>
 
             {error && (

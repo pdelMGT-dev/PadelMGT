@@ -5,26 +5,13 @@ import { getSATournaments, saveSATournaments, getSATournamentsFromSupabase, type
 import { getTournament, saveTournament, getAllTournaments } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
 import type { CourtMatch, GameRound } from '@/lib/game-engine';
-
-interface ScoreCorrectionRequest {
-  id: string;
-  type: 'tournament' | 'game';
-  entityName: string;
-  roundNum: number;
-  courtNum: number;
-  requestedBy: string;
-  currentScore: string;
-  requestedScore: string;
-  reason: string;
-  createdAt: string;
-  status: 'pending' | 'approved' | 'rejected';
-}
-
-const MOCK_CORRECTIONS: ScoreCorrectionRequest[] = [
-  { id: 'sc-1', type: 'tournament', entityName: 'Torneo Primavera Madrid', roundNum: 3, courtNum: 2, requestedBy: 'Carlos Rodríguez', currentScore: '2 – 1', requestedScore: '1 – 2', reason: 'Error al registrar el resultado. El marcador real fue 1-2 a favor del equipo contrario.', createdAt: '2026-05-24T10:30:00Z', status: 'pending' },
-  { id: 'sc-2', type: 'tournament', entityName: 'Open Barcelona Padel', roundNum: 2, courtNum: 1, requestedBy: 'María García', currentScore: '3 – 0', requestedScore: '2 – 1', reason: 'Set score registrado incorrectamente por el sistema.', createdAt: '2026-05-23T16:45:00Z', status: 'pending' },
-  { id: 'sc-3', type: 'tournament', entityName: 'Alicante Padel Open', roundNum: 5, courtNum: 3, requestedBy: 'Javier Torres', currentScore: '1 – 2', requestedScore: '2 – 1', reason: 'Cambio de resultado acordado entre ambos equipos.', createdAt: '2026-05-22T09:15:00Z', status: 'approved' },
-];
+import {
+  getScoreCorrections,
+  updateScoreCorrectionStatus,
+  fetchCorrectionsFromSupabase,
+  mergeCorrectionsFromSupabase,
+  type ScoreCorrectionRequest,
+} from '@/lib/score-correction-store';
 
 const PAGE_SIZE = 15;
 
@@ -341,7 +328,7 @@ function TournamentDetailDrawer({
 
 export default function TournamentsPage() {
   const [tournaments, setTournaments] = useState<SATournament[]>([]);
-  const [corrections, setCorrections] = useState<ScoreCorrectionRequest[]>(MOCK_CORRECTIONS);
+  const [corrections, setCorrections] = useState<ScoreCorrectionRequest[]>([]);
   const [tab, setTab] = useState<'tournaments' | 'corrections'>('tournaments');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -363,6 +350,7 @@ export default function TournamentsPage() {
 
   useEffect(() => {
     setTournaments(getSATournaments());
+    setCorrections(getScoreCorrections().filter(c => c.type === 'tournament'));
 
     const localAll = getAllTournaments();
     const ids = new Set(localAll.filter(t => t.reorganizationRequested).map(t => t.id));
@@ -375,10 +363,17 @@ export default function TournamentsPage() {
           saveSATournaments(sbT);
         }
       });
+      fetchCorrectionsFromSupabase().then(remote => {
+        const tCorrections = remote.filter(c => c.type === 'tournament');
+        if (tCorrections.length > 0) {
+          mergeCorrectionsFromSupabase(tCorrections);
+          setCorrections(getScoreCorrections().filter(c => c.type === 'tournament'));
+        }
+      });
     }
 
     fetchFromSupabase();
-    const interval = setInterval(fetchFromSupabase, 5000);
+    const interval = setInterval(fetchFromSupabase, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -514,13 +509,15 @@ export default function TournamentsPage() {
   function handleApproveStep2() { if (!approveConfirm) return; setApproveConfirm({ ...approveConfirm, step: 2 }); }
   function handleApproveFinal() {
     if (!approveConfirm) return;
-    setCorrections(c => c.map(x => x.id === approveConfirm.corrId ? { ...x, status: 'approved' as const } : x));
+    updateScoreCorrectionStatus(approveConfirm.corrId, 'approved', { reviewedBy: 'Super Admin' });
+    setCorrections(getScoreCorrections().filter(c => c.type === 'tournament'));
     setApproveConfirm(null);
     toast('Correccion aprobada y aplicada');
   }
 
   function handleReject(corrId: string) {
-    setCorrections(c => c.map(x => x.id === corrId ? { ...x, status: 'rejected' as const } : x));
+    updateScoreCorrectionStatus(corrId, 'rejected', { reviewedBy: 'Super Admin' });
+    setCorrections(getScoreCorrections().filter(c => c.type === 'tournament'));
     setRejectConfirm(null);
     toast('Correccion rechazada');
   }

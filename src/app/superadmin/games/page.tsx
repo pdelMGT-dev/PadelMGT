@@ -2,26 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { getSAGames, saveSAGames, getSAGamesFromSupabase, type SAGame } from '@/lib/superadmin-data';
-
-interface ScoreCorrectionRequest {
-  id: string;
-  type: 'tournament' | 'game';
-  entityName: string;
-  roundNum: number;
-  courtNum: number;
-  requestedBy: string;
-  currentScore: string;
-  requestedScore: string;
-  reason: string;
-  createdAt: string;
-  status: 'pending' | 'approved' | 'rejected';
-}
-
-const MOCK_GAME_CORRECTIONS: ScoreCorrectionRequest[] = [
-  { id: 'gc-1', type: 'game', entityName: 'Juego Rapido - Madrid #1', roundNum: 2, courtNum: 1, requestedBy: 'David González', currentScore: '6 – 4', requestedScore: '4 – 6', reason: 'El resultado fue al reves, ganamos nosotros 6-4 en el segundo set.', createdAt: '2026-05-24T11:00:00Z', status: 'pending' },
-  { id: 'gc-2', type: 'game', entityName: 'Juego Rapido - Barcelona #1', roundNum: 4, courtNum: 2, requestedBy: 'Elena Ruiz', currentScore: '3 – 2', requestedScore: '2 – 3', reason: 'Error de conteo en el ultimo set.', createdAt: '2026-05-23T14:20:00Z', status: 'pending' },
-  { id: 'gc-3', type: 'game', entityName: 'Juego Rapido - Sevilla #1', roundNum: 1, courtNum: 1, requestedBy: 'Ana Sánchez', currentScore: '6 – 3', requestedScore: '6 – 3', reason: 'Confirmacion de score correcto.', createdAt: '2026-05-22T18:00:00Z', status: 'approved' },
-];
+import {
+  getScoreCorrections,
+  updateScoreCorrectionStatus,
+  fetchCorrectionsFromSupabase,
+  mergeCorrectionsFromSupabase,
+  type ScoreCorrectionRequest,
+} from '@/lib/score-correction-store';
 
 const PAGE_SIZE = 15;
 
@@ -83,7 +70,7 @@ function exportCSV(rows: Record<string, unknown>[], filename: string) {
 
 export default function GamesPage() {
   const [games, setGames] = useState<SAGame[]>([]);
-  const [corrections, setCorrections] = useState<ScoreCorrectionRequest[]>(MOCK_GAME_CORRECTIONS);
+  const [corrections, setCorrections] = useState<ScoreCorrectionRequest[]>([]);
   const [tab, setTab] = useState<'games' | 'corrections'>('games');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -97,6 +84,7 @@ export default function GamesPage() {
 
   useEffect(() => {
     setGames(getSAGames());
+    setCorrections(getScoreCorrections().filter(c => c.type === 'game'));
 
     function fetchFromSupabase() {
       getSAGamesFromSupabase().then(sbGames => {
@@ -105,10 +93,17 @@ export default function GamesPage() {
           saveSAGames(sbGames);
         }
       });
+      fetchCorrectionsFromSupabase().then(remote => {
+        const gameCorrections = remote.filter(c => c.type === 'game');
+        if (gameCorrections.length > 0) {
+          mergeCorrectionsFromSupabase(gameCorrections);
+          setCorrections(getScoreCorrections().filter(c => c.type === 'game'));
+        }
+      });
     }
 
     fetchFromSupabase();
-    const interval = setInterval(fetchFromSupabase, 5000);
+    const interval = setInterval(fetchFromSupabase, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -178,13 +173,15 @@ export default function GamesPage() {
   function handleApproveStep2() { if (!approveConfirm) return; setApproveConfirm({ ...approveConfirm, step: 2 }); }
   function handleApproveFinal() {
     if (!approveConfirm) return;
-    setCorrections(c => c.map(x => x.id === approveConfirm.corrId ? { ...x, status: 'approved' as const } : x));
+    updateScoreCorrectionStatus(approveConfirm.corrId, 'approved', { reviewedBy: 'Super Admin' });
+    setCorrections(getScoreCorrections().filter(c => c.type === 'game'));
     setApproveConfirm(null);
     toast('Correccion aprobada y aplicada');
   }
 
   function handleReject(corrId: string) {
-    setCorrections(c => c.map(x => x.id === corrId ? { ...x, status: 'rejected' as const } : x));
+    updateScoreCorrectionStatus(corrId, 'rejected', { reviewedBy: 'Super Admin' });
+    setCorrections(getScoreCorrections().filter(c => c.type === 'game'));
     setRejectConfirm(null);
     toast('Correccion rechazada');
   }
