@@ -263,7 +263,13 @@ export default function LeagueDetailPage() {
   const leagueCode = league.code ?? '';
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://padelmgt.com';
   const shareParams = leagueCode ? (() => {
-    const p = new URLSearchParams({ n: league.name, cb: league.createdByName, pub: league.isPublic ? '1' : '0' });
+    const p = new URLSearchParams({
+      id: league.id,
+      n: league.name,
+      cb: league.createdByName,
+      pub: league.isPublic ? '1' : '0',
+      open: league.isOpen ? '1' : '0',
+    });
     if (league.description) p.set('d', league.description.slice(0, 120));
     return p.toString();
   })() : '';

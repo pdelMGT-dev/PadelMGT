@@ -30,7 +30,7 @@ function leagueFromUrlParams(code: string): import('@/lib/player-league-store').
   const name = sp.get('n');
   if (!name) return null;
   return {
-    id: `url-${code}`,
+    id: sp.get('id') || `url-${code}`,
     code,
     name,
     description: sp.get('d') ?? undefined,
@@ -492,22 +492,8 @@ export default function PublicLeaguePage() {
                   </div>
                 )}
 
-                {/* ── URL-source banner ────────────────────────────────────── */}
-                {urlSource === 'url' && (
-                  <div style={{
-                    padding: '12px 20px',
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    fontSize: 13,
-                    color: 'rgba(255,255,255,0.55)',
-                    lineHeight: 1.5,
-                  }}>
-                    Para unirte a esta liga, pedile al organizador que te agregue directamente.
-                  </div>
-                )}
-
                 {/* ── JOIN SECTION ─────────────────────────────────────────── */}
-                {urlSource !== 'url' && (isMember ? (
+                {(isMember ? (
                   /* State D: already a member */
                   <div style={{
                     border: '1px solid rgba(214,255,0,0.25)',
@@ -692,6 +678,7 @@ export default function PublicLeaguePage() {
                   </div>
                 ))}
               </div>
+
 
               {/* ── RIGHT COLUMN: QR SIDEBAR (desktop only) ────────────────── */}
               <div>
