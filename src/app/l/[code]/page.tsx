@@ -61,6 +61,8 @@ export default function PublicLeaguePage() {
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const [urlSource, setUrlSource] = useState<'local' | 'remote' | 'url'>('local');
+  const [loginUrl, setLoginUrl] = useState(`/login?redirect=${encodeURIComponent('/l/' + code)}`);
+  const [registerUrl, setRegisterUrl] = useState(`/register?redirect=${encodeURIComponent('/l/' + code)}`);
 
   // Load all data on mount / when user changes
   useEffect(() => {
@@ -103,6 +105,9 @@ export default function PublicLeaguePage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setShareUrl(window.location.href);
+      const path = window.location.pathname + window.location.search;
+      setLoginUrl(`/login?redirect=${encodeURIComponent(path)}`);
+      setRegisterUrl(`/register?redirect=${encodeURIComponent(path)}`);
     }
   }, []);
 
@@ -562,7 +567,7 @@ export default function PublicLeaguePage() {
                   </div>
                 ) : !userIsLoggedIn ? (
                   /* State A: not logged in */
-                  <div style={{ border: '1px solid rgba(255,255,255,0.12)', padding: '28px 28px' }}>
+                  <div style={{ border: '1px solid rgba(255,255,255,0.12)', padding: '28px' }}>
                     <div style={{
                       fontFamily: 'var(--font-display)', fontSize: 14,
                       fontWeight: 700, textTransform: 'uppercase',
@@ -570,18 +575,30 @@ export default function PublicLeaguePage() {
                     }}>
                       Únete a esta liga
                     </div>
-                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>
-                      Solicitá unirte a esta liga iniciando sesión con tu cuenta.
+                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 24 }}>
+                      Iniciá sesión o creá una cuenta para solicitar unirte.
                     </div>
-                    <Link href={`/login?returnTo=/l/${code}`} style={{
-                      display: 'inline-block',
-                      padding: '13px 28px',
-                      background: 'var(--neon)', color: 'var(--black)',
-                      textDecoration: 'none', fontSize: 12, fontWeight: 700,
-                      textTransform: 'uppercase', letterSpacing: '0.1em',
-                    }}>
-                      Iniciar sesión para unirte →
-                    </Link>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                      <Link href={loginUrl} style={{
+                        flex: 1, minWidth: 140, textAlign: 'center',
+                        padding: '13px 20px',
+                        background: 'var(--neon)', color: 'var(--black)',
+                        textDecoration: 'none', fontSize: 12, fontWeight: 700,
+                        textTransform: 'uppercase', letterSpacing: '0.1em',
+                      }}>
+                        Iniciar sesión →
+                      </Link>
+                      <Link href={registerUrl} style={{
+                        flex: 1, minWidth: 140, textAlign: 'center',
+                        padding: '13px 20px',
+                        background: 'transparent', color: '#fff',
+                        border: '1px solid rgba(255,255,255,0.25)',
+                        textDecoration: 'none', fontSize: 12, fontWeight: 700,
+                        textTransform: 'uppercase', letterSpacing: '0.1em',
+                      }}>
+                        Crear cuenta
+                      </Link>
+                    </div>
                   </div>
                 ) : (
                   /* State B: logged in, not member, no request */

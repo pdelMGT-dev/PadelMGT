@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatePlayer, getPlayer } from '@/lib/player-store';
 import { syncAllFromSupabase, syncUserTournaments, syncUserGames } from '@/lib/supabase-sync';
@@ -104,6 +104,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [registerUrl, setRegisterUrl] = useState('/register');
+
+  useEffect(() => {
+    const redirect = new URLSearchParams(window.location.search).get('redirect');
+    if (redirect) setRegisterUrl(`/register?redirect=${encodeURIComponent(redirect)}`);
+  }, []);
 
   function getRedirectUrl(role: string): string {
     if (typeof window !== 'undefined') {
@@ -301,7 +307,7 @@ export default function LoginPage() {
 
           <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--grey-500)', marginTop: 24 }}>
             ¿No tienes cuenta?{' '}
-            <Link href="/register" style={{ color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>
+            <Link href={registerUrl} style={{ color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>
               Crear cuenta
             </Link>
           </p>

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { registerPlayer, type PlayerSex } from '@/lib/player-store';
 import { authSignUp } from '@/lib/supabase';
 import { sendWelcomeEmail } from '@/lib/email';
@@ -37,6 +37,12 @@ export default function RegisterPage() {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const [success,  setSuccess]  = useState(false);
+  const [loginUrl, setLoginUrl] = useState('/login');
+
+  useEffect(() => {
+    const redirect = new URLSearchParams(window.location.search).get('redirect');
+    if (redirect) setLoginUrl(`/login?redirect=${encodeURIComponent(redirect)}`);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -87,7 +93,7 @@ export default function RegisterPage() {
         <div style={{ width: 32, height: 32, background: 'var(--neon)', color: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18 }}>P</div>
         <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: '#fff', letterSpacing: '0.04em' }}>PADELMGT</span>
       </Link>
-      <Link href="/login" style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>
+      <Link href={loginUrl} style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>
         ¿Ya tenés cuenta? Iniciar sesión →
       </Link>
     </div>
@@ -109,7 +115,7 @@ export default function RegisterPage() {
             <p style={{ fontSize: 13, color: 'var(--grey-400)', margin: '0 0 32px' }}>
               Una vez confirmado el email, podés iniciar sesión.
             </p>
-            <Link href="/login" className="btn btn-primary" style={{ display: 'inline-block', padding: '14px 32px', fontSize: 14, textDecoration: 'none', borderRadius: 0 }}>
+            <Link href={loginUrl} className="btn btn-primary" style={{ display: 'inline-block', padding: '14px 32px', fontSize: 14, textDecoration: 'none', borderRadius: 0 }}>
               Ir a iniciar sesión →
             </Link>
           </div>
@@ -194,7 +200,7 @@ export default function RegisterPage() {
 
           <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--grey-500)', marginTop: 24 }}>
             ¿Ya tenés cuenta?{' '}
-            <Link href="/login" style={{ color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Iniciar sesión</Link>
+            <Link href={loginUrl} style={{ color: 'var(--black)', fontWeight: 600, textDecoration: 'none' }}>Iniciar sesión</Link>
           </p>
         </div>
       </div>
