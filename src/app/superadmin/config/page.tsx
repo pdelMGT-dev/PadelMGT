@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getSAAdminUsers, saveSAAdminUsers, getSAPlayers, getSAClubs, getSATournaments, seedPlayersToSupabase, seedClubsToSupabase, upsertTournamentToSupabase, type SAAdminUser } from '@/lib/superadmin-data';
+import { getGlobalRankingConfig, saveRankingConfig } from '@/lib/ranking-config-store';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
@@ -73,7 +74,7 @@ function downloadCSV(filename: string, rows: string[][]) {
 }
 
 export default function ConfigPage() {
-  const [tab, setTab] = useState<'admins' | 'general' | 'database' | 'stripe'>('admins');
+  const [tab, setTab] = useState<'admins' | 'general' | 'database' | 'stripe' | 'ranking'>('admins');
   const [admins, setAdmins] = useState<SAAdminUser[]>([]);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [editAdmin, setEditAdmin] = useState<SAAdminUser | null>(null);
@@ -102,6 +103,11 @@ export default function ConfigPage() {
   const [stripeSaved, setStripeSaved] = useState(false);
   // Danger zone
   const [clearCacheConfirm, setClearCacheConfirm] = useState<number>(0);
+  // Ranking config
+  const [rankWin, setRankWin] = useState(3);
+  const [rankDraw, setRankDraw] = useState(1);
+  const [rankLoss, setRankLoss] = useState(-1);
+  const [rankSaved, setRankSaved] = useState(false);
 
   useEffect(() => {
     setAdmins(getSAAdminUsers());
@@ -118,6 +124,11 @@ export default function ConfigPage() {
         if (cfg.lastChecked) setStripeLastChecked(cfg.lastChecked);
       }
     } catch {}
+    // Load ranking config
+    const cfg = getGlobalRankingConfig();
+    setRankWin(cfg.pointsWin);
+    setRankDraw(cfg.pointsDraw);
+    setRankLoss(cfg.pointsLoss);
   }, []);
 
   function saveStripeConfig() {
@@ -280,6 +291,7 @@ export default function ConfigPage() {
           { key: 'general', label: 'Configuracion General' },
           { key: 'database', label: 'Base de Datos' },
           { key: 'stripe', label: 'Stripe / Pagos' },
+          { key: 'ranking', label: 'Ranking' },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)} style={{
             padding: '10px 24px', border: 'none', background: 'none', cursor: 'pointer',
@@ -613,6 +625,52 @@ export default function ConfigPage() {
               <li>El endpoint de webhook ya está creado en <code style={{ background: '#e5e5e5', padding: '1px 5px', borderRadius: 3 }}>/api/stripe/webhook</code></li>
               <li>Tarjeta de prueba TEST: <code style={{ background: '#e5e5e5', padding: '1px 5px', borderRadius: 3 }}>4242 4242 4242 4242</code></li>
             </ol>
+          </div>
+        </div>
+      )}
+
+      {/* RANKING TAB */}
+      {tab === 'ranking' && (
+        <div style={{ maxWidth: 480 }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Puntos de Ranking</h2>
+          <p style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 24, lineHeight: 1.6 }}>
+            Define cuántos puntos se otorgan por cada resultado en el Ranking General de la plataforma.<br />
+            Afecta a todos los Juegos Rápidos y Torneos futuros.
+          </p>
+          <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {[
+              { label: 'Victoria', color: '#166534', value: rankWin, setter: setRankWin },
+              { label: 'Empate',   color: '#92400e', value: rankDraw, setter: setRankDraw },
+              { label: 'Derrota',  color: '#991b1b', value: rankLoss, setter: setRankLoss },
+            ].map(row => (
+              <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: row.color, marginBottom: 4 }}>{row.label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>Puntos que suma un jugador cuando {row.label.toLowerCase()}.</div>
+                </div>
+                <input
+                  type="number"
+                  value={row.value}
+                  onChange={e => row.setter(Number(e.target.value))}
+                  style={{ width: 72, padding: '8px 10px', border: '2px solid var(--grey-200)', fontSize: 18, fontWeight: 700, textAlign: 'center', fontFamily: 'var(--font-display)', color: row.color, outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+            ))}
+            <button
+              onClick={() => {
+                const cfg = getGlobalRankingConfig();
+                saveRankingConfig({ ...cfg, pointsWin: rankWin, pointsDraw: rankDraw, pointsLoss: rankLoss });
+                setRankSaved(true);
+                toast('Configuración de ranking guardada');
+                setTimeout(() => setRankSaved(false), 3000);
+              }}
+              style={{ padding: '12px', background: 'var(--black)', color: 'var(--neon)', border: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', alignSelf: 'flex-start', paddingLeft: 32, paddingRight: 32 }}
+            >
+              {rankSaved ? '✓ Guardado' : 'Guardar configuración'}
+            </button>
+          </div>
+          <div style={{ marginTop: 20, padding: '12px 16px', background: '#fffbeb', border: '1px solid #fcd34d', fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
+            ⚠ Los cambios aplican solo a juegos futuros. Las partidas ya registradas mantienen los puntos originales.
           </div>
         </div>
       )}

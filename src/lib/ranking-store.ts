@@ -5,6 +5,8 @@ import { calculateStandings } from './game-engine';
 import type { Tournament } from './tournament-store';
 import { updatePlayerRankingPoints } from './player-store';
 import { createLocalStore } from './local-store';
+import { getGlobalRankingConfig } from './ranking-config-store';
+export type { RankingTableConfig as RankingConfig } from './ranking-config-store';
 
 const _store = createLocalStore<RankingEntry[]>('padelmgt_ranking_history', [], { seedOnFirstLoad: false });
 
@@ -21,13 +23,8 @@ export interface RankingEntry {
   delta: number;
   newTotal: number;
   createdAt: string;
+  leagueId?: string;
 }
-
-const DELTA: Record<RankingResult, number> = {
-  win: 3,
-  draw: 1,
-  loss: -1,
-};
 
 function generateId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -63,10 +60,11 @@ function deriveResult(playerId: string, standings: Standing[]): RankingResult {
 /**
  * Apply game results to all confirmed players and persist the entries.
  */
-export function applyGameRankingResults(game: ActiveGame): RankingEntry[] {
+export function applyGameRankingResults(game: ActiveGame, leagueId?: string): RankingEntry[] {
   const all = _store.load();
   const created: RankingEntry[] = [];
   const isTraditional = game.scoreConfig?.type === 'traditional';
+  const cfg = getGlobalRankingConfig();
 
   for (const player of game.players) {
     if (all.some((e) => e.gameId === game.id && e.playerId === player.id)) continue;
@@ -75,9 +73,9 @@ export function applyGameRankingResults(game: ActiveGame): RankingEntry[] {
     let delta = 0;
     if (s) {
       if (isTraditional) {
-        delta = s.pointsFor * 3 - s.pointsAgainst;
+        delta = s.pointsFor * cfg.pointsWin - s.pointsAgainst * Math.abs(cfg.pointsLoss);
       } else {
-        delta = s.wins * 3 + s.draws - s.losses;
+        delta = s.wins * cfg.pointsWin + s.draws * cfg.pointsDraw + s.losses * cfg.pointsLoss;
       }
     }
 
@@ -96,6 +94,7 @@ export function applyGameRankingResults(game: ActiveGame): RankingEntry[] {
       delta,
       newTotal,
       createdAt: new Date().toISOString(),
+      ...(leagueId ? { leagueId } : {}),
     };
 
     all.push(entry);
@@ -110,13 +109,14 @@ export function applyGameRankingResults(game: ActiveGame): RankingEntry[] {
 /**
  * Apply tournament final standings to ranking and persist entries.
  */
-export function applyTournamentRankingResults(tournament: Tournament): RankingEntry[] {
+export function applyTournamentRankingResults(tournament: Tournament, leagueId?: string): RankingEntry[] {
   const all = _store.load();
   const created: RankingEntry[] = [];
 
   if (all.some((e) => e.gameId === tournament.id)) return [];
 
   const standings = calculateStandings(tournament);
+  const cfg = getGlobalRankingConfig();
 
   for (const standing of standings) {
     const player = tournament.players.find((p) => p.id === standing.playerId);
@@ -125,7 +125,7 @@ export function applyTournamentRankingResults(tournament: Tournament): RankingEn
     const wins = standing.wins;
     const draws = standing.draws ?? 0;
     const losses = standing.losses ?? (standing.played - wins - draws);
-    const delta = wins * 3 + draws * 1 + losses * (-1);
+    const delta = wins * cfg.pointsWin + draws * cfg.pointsDraw + losses * cfg.pointsLoss;
     const result: RankingResult = delta > 0 ? 'win' : delta < 0 ? 'loss' : 'draw';
 
     const current = getPlayerCurrentPoints(player.id);
@@ -142,6 +142,7 @@ export function applyTournamentRankingResults(tournament: Tournament): RankingEn
       delta,
       newTotal,
       createdAt: new Date().toISOString(),
+      ...(leagueId ? { leagueId } : {}),
     };
 
     all.push(entry);
