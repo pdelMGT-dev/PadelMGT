@@ -1,6 +1,7 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -22,8 +23,8 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 type JoinState = 'idle' | 'submitting' | 'success' | 'error';
 
-export default function PublicLeaguePage({ params }: { params: Promise<{ code: string }> }) {
-  const { code } = use(params);
+export default function PublicLeaguePage() {
+  const { code } = useParams<{ code: string }>();
   const { user: currentUser } = useCurrentUser();
 
   const [league, setLeague] = useState<PlayerLeague | null | undefined>(undefined);
