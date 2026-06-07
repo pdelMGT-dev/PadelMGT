@@ -17,6 +17,7 @@ import {
 } from '@/lib/superadmin-data';
 import { getAllPlayers, updatePlayer as updateRegisteredPlayer } from '@/lib/player-store';
 import type { PlanId } from '@/lib/plan-config';
+import { recordPlanChange } from '@/lib/plan-store';
 
 interface PlanOption { id: string; label: string; color: string; bg: string }
 
@@ -633,6 +634,19 @@ export default function PlayersPage() {
   function handleSavePlayer(p: SAPlayer) {
     const exists = players.find(x => x.id === p.id);
     const updated = exists ? players.map(x => x.id === p.id ? p : x) : [p, ...players];
+
+    // Track plan change if plan was modified
+    if (exists && exists.plan !== p.plan && p.plan) {
+      recordPlanChange({
+        userId: p.id,
+        userName: p.name,
+        userEmail: p.email,
+        fromPlan: (exists.plan ?? 'free') as PlanId,
+        toPlan: p.plan as PlanId,
+        changedBy: 'Super Admin',
+      });
+    }
+
     saveAndRefresh(updated);
     upsertSAPlayerToSupabase(p);
     // Sync plan to RegisteredPlayer store so getUserPlan() picks it up immediately
