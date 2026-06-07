@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { getSAClubs, saveSAClubs, getSAClubsFromSupabase, upsertSAClubToSupabase, deleteSAClubFromSupabase, type SAClub } from '@/lib/superadmin-data';
+import { getSANotes, addSANote, deleteSANote, type SANote } from '@/lib/sa-notes-store';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
@@ -333,6 +334,9 @@ export default function ClubsPage() {
   const [rejectConfirm, setRejectConfirm] = useState<{ step: number; clubId: string; reason: string } | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: number; msg: string; ok: boolean }>>([]);
   const [selectedClub, setSelectedClub] = useState<SAClub | null>(null);
+  const [clubDrawerTab, setClubDrawerTab] = useState<'profile' | 'notes'>('profile');
+  const [clubNotes, setClubNotes] = useState<SANote[]>([]);
+  const [clubNoteInput, setClubNoteInput] = useState('');
   const [sortKey, setSortKey] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
@@ -768,7 +772,12 @@ export default function ClubsPage() {
                 {pageClubs.map(c => (
                   <tr key={c.id}
                     style={{ borderBottom: '1px solid var(--grey-100)', cursor: 'pointer', background: bulkSelected.has(c.id) ? '#f0fdf4' : undefined }}
-                    onClick={() => setSelectedClub(c)}
+                    onClick={() => {
+                      setSelectedClub(c);
+                      setClubDrawerTab('profile');
+                      setClubNotes(getSANotes('club', c.id));
+                      setClubNoteInput('');
+                    }}
                     onMouseEnter={e => { if (!bulkSelected.has(c.id)) e.currentTarget.style.background = '#fafafa'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = bulkSelected.has(c.id) ? '#f0fdf4' : '#fff'; }}
                   >
@@ -872,9 +881,69 @@ export default function ClubsPage() {
             onClick={e => e.stopPropagation()}
           >
             {/* Close */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase' }}>Perfil del Club</div>
               <button onClick={() => setSelectedClub(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', lineHeight: 1 }}>×</button>
             </div>
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--grey-200)', marginBottom: 18 }}>
+              {([
+                { key: 'profile', label: 'Perfil' },
+                { key: 'notes', label: `Notas SA (${clubNotes.length})` },
+              ] as const).map(({ key, label }) => (
+                <button key={key} onClick={() => setClubDrawerTab(key)} style={{
+                  padding: '7px 16px', border: 'none', background: 'none', cursor: 'pointer',
+                  fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: clubDrawerTab === key ? 'var(--black)' : 'var(--grey-400)',
+                  borderBottom: clubDrawerTab === key ? '2px solid var(--turf-green)' : '2px solid transparent',
+                  marginBottom: -1,
+                }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {clubDrawerTab === 'notes' && (
+              <div>
+                <div style={{ marginBottom: 14 }}>
+                  <textarea
+                    value={clubNoteInput}
+                    onChange={e => setClubNoteInput(e.target.value)}
+                    placeholder="Nota privada sobre este club..."
+                    style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--grey-200)', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none', boxSizing: 'border-box', minHeight: 72, resize: 'vertical', display: 'block' }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (!clubNoteInput.trim()) return;
+                      addSANote('club', selectedClub.id, selectedClub.name, clubNoteInput.trim());
+                      setClubNotes(getSANotes('club', selectedClub.id));
+                      setClubNoteInput('');
+                    }}
+                    style={{ marginTop: 8, padding: '8px 20px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                  >
+                    Agregar nota
+                  </button>
+                </div>
+                {clubNotes.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>Sin notas. Solo visibles para Super Admins.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {clubNotes.map(note => (
+                      <div key={note.id} style={{ padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a' }}>
+                        <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--grey-800)', marginBottom: 6 }}>{note.note}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{note.createdBy} · {new Date(note.createdAt).toLocaleString('es-ES')}</div>
+                          <button onClick={() => { deleteSANote(note.id); setClubNotes(getSANotes('club', selectedClub.id)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {clubDrawerTab === 'profile' && <>
 
             {/* Section 1 — Identidad del Club */}
             <div style={{ marginBottom: 20 }}>
@@ -1086,6 +1155,7 @@ export default function ClubsPage() {
                 Cerrar
               </button>
             </div>
+            </>}
           </div>
         </>
       )}

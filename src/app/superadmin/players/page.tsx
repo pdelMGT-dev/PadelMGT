@@ -17,7 +17,10 @@ import {
 } from '@/lib/superadmin-data';
 import { getAllPlayers, updatePlayer as updateRegisteredPlayer } from '@/lib/player-store';
 import type { PlanId } from '@/lib/plan-config';
-import { recordPlanChange } from '@/lib/plan-store';
+import { recordPlanChange, getPlanChanges } from '@/lib/plan-store';
+import { getSANotes, addSANote, deleteSANote, type SANote } from '@/lib/sa-notes-store';
+import { getScoreCorrectionsByEntity } from '@/lib/score-correction-store';
+import { getRankingHistoryForPlayer, type RankingEntry } from '@/lib/ranking-store';
 
 interface PlanOption { id: string; label: string; color: string; bg: string }
 
@@ -470,6 +473,10 @@ export default function PlayersPage() {
   const [relType, setRelType] = useState<PlayerRelationship['type']>('friend');
   // Detail drawer
   const [selectedPlayer, setSelectedPlayer] = useState<SAPlayer | null>(null);
+  const [drawerTab, setDrawerTab] = useState<'profile' | 'history' | 'notes'>('profile');
+  const [drawerNotes, setDrawerNotes] = useState<SANote[]>([]);
+  const [drawerNoteInput, setDrawerNoteInput] = useState('');
+  const [drawerRankingHistory, setDrawerRankingHistory] = useState<RankingEntry[]>([]);
   // Inline reset password in drawer
   const [showResetPwField, setShowResetPwField] = useState(false);
   const [resetPwValue, setResetPwValue] = useState('');
@@ -953,7 +960,13 @@ export default function PlayersPage() {
                 return (
                   <tr key={p.id}
                     style={{ borderBottom: '1px solid var(--grey-100)', transition: 'background 0.1s', cursor: 'pointer', background: selectedIds.has(p.id) ? '#f0fdf4' : '#fff' }}
-                    onClick={() => setSelectedPlayer(p)}
+                    onClick={() => {
+                      setSelectedPlayer(p);
+                      setDrawerTab('profile');
+                      setDrawerNotes(getSANotes('player', p.id));
+                      setDrawerRankingHistory(getRankingHistoryForPlayer(p.id));
+                      setDrawerNoteInput('');
+                    }}
                     onMouseEnter={e => { if (!selectedIds.has(p.id)) e.currentTarget.style.background = '#fafafa'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = selectedIds.has(p.id) ? '#f0fdf4' : '#fff'; }}
                   >
@@ -1104,9 +1117,34 @@ export default function PlayersPage() {
             onClick={e => e.stopPropagation()}
           >
             {/* Close */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase' }}>
+                Perfil del Jugador
+              </div>
               <button onClick={() => setSelectedPlayer(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', lineHeight: 1 }}>×</button>
             </div>
+
+            {/* Drawer Tabs */}
+            <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--grey-200)', marginBottom: 20 }}>
+              {([
+                { key: 'profile', label: 'Perfil' },
+                { key: 'history', label: 'Historial' },
+                { key: 'notes', label: `Notas SA (${drawerNotes.length})` },
+              ] as const).map(({ key, label }) => (
+                <button key={key} onClick={() => setDrawerTab(key)} style={{
+                  padding: '7px 16px', border: 'none', background: 'none', cursor: 'pointer',
+                  fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: drawerTab === key ? 'var(--black)' : 'var(--grey-400)',
+                  borderBottom: drawerTab === key ? '2px solid var(--turf-green)' : '2px solid transparent',
+                  marginBottom: -1,
+                }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* ─── PROFILE TAB ──────────────────────────────────────────── */}
+            {drawerTab === 'profile' && <>
 
             {/* Section 1 — Identidad */}
             <div style={{ marginBottom: 24 }}>
@@ -1318,6 +1356,148 @@ export default function PlayersPage() {
                 Cerrar
               </button>
             </div>
+
+            </> /* end drawerTab === 'profile' */}
+
+            {/* ─── HISTORY TAB ───────────────────────────────────────────── */}
+            {drawerTab === 'history' && (
+              <div>
+                {/* Ranking history */}
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--grey-100)' }}>
+                    Historial de Ranking
+                  </div>
+                  {drawerRankingHistory.length === 0 ? (
+                    <div style={{ fontSize: 13, color: 'var(--grey-400)', padding: '12px 0' }}>Sin historial de ranking todavía.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {drawerRankingHistory.slice(0, 10).map(entry => (
+                        <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--grey-50)', fontSize: 12 }}>
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{entry.gameName}</div>
+                            <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{entry.gameDate}</div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, color: entry.delta > 0 ? '#166534' : entry.delta < 0 ? '#dc2626' : 'var(--grey-500)' }}>
+                              {entry.delta > 0 ? '+' : ''}{entry.delta}
+                            </span>
+                            <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>→ {entry.newTotal} pts</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Plan change history */}
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--grey-100)' }}>
+                    Historial de Plan
+                  </div>
+                  {(() => {
+                    const planHistory = getPlanChanges().filter(c => c.userId === selectedPlayer.id);
+                    if (planHistory.length === 0) return <div style={{ fontSize: 13, color: 'var(--grey-400)', padding: '12px 0' }}>Sin cambios de plan.</div>;
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {planHistory.slice(0, 8).map(c => (
+                          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--grey-50)', fontSize: 12 }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <span style={{ background: 'var(--grey-200)', padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{c.fromPlan}</span>
+                              <span style={{ color: 'var(--grey-400)' }}>→</span>
+                              <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{c.toPlan}</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--grey-400)', textAlign: 'right' }}>
+                              <div>{c.changedBy}</div>
+                              <div>{new Date(c.changedAt).toLocaleDateString('es-ES')}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Score corrections involving this player */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--grey-100)' }}>
+                    Correcciones de Score
+                  </div>
+                  {(() => {
+                    const corrections = getScoreCorrectionsByEntity(selectedPlayer.id);
+                    if (corrections.length === 0) return <div style={{ fontSize: 13, color: 'var(--grey-400)', padding: '12px 0' }}>Sin correcciones registradas.</div>;
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {corrections.slice(0, 5).map(c => (
+                          <div key={c.id} style={{ padding: '8px 12px', background: 'var(--grey-50)', fontSize: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ fontWeight: 600 }}>{c.entityName}</span>
+                              <span style={{ background: c.status === 'pending' ? '#fef9c3' : c.status === 'approved' ? '#dcfce7' : '#fee2e2', color: c.status === 'pending' ? '#854d0e' : c.status === 'approved' ? '#166534' : '#991b1b', padding: '1px 6px', borderRadius: 8, fontSize: 10, fontWeight: 700 }}>
+                                {c.status === 'pending' ? 'Pendiente' : c.status === 'approved' ? 'Aprobado' : 'Rechazado'}
+                              </span>
+                            </div>
+                            <div style={{ color: 'var(--grey-500)', marginTop: 2 }}>
+                              <span style={{ color: '#dc2626' }}>{c.currentScore}</span> → <span style={{ color: '#166534' }}>{c.requestedScore}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* ─── NOTES TAB ─────────────────────────────────────────────── */}
+            {drawerTab === 'notes' && (
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <textarea
+                    value={drawerNoteInput}
+                    onChange={e => setDrawerNoteInput(e.target.value)}
+                    placeholder="Agregá una nota privada sobre este jugador..."
+                    style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--grey-200)', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none', boxSizing: 'border-box', minHeight: 80, resize: 'vertical', display: 'block' }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (!drawerNoteInput.trim()) return;
+                      addSANote('player', selectedPlayer.id, selectedPlayer.name, drawerNoteInput.trim());
+                      setDrawerNotes(getSANotes('player', selectedPlayer.id));
+                      setDrawerNoteInput('');
+                    }}
+                    style={{ marginTop: 8, padding: '8px 20px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                  >
+                    Agregar nota
+                  </button>
+                </div>
+
+                {drawerNotes.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--grey-400)', padding: '12px 0' }}>Sin notas. Las notas son privadas y solo visibles para Super Admins.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {drawerNotes.map(note => (
+                      <div key={note.id} style={{ padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', position: 'relative' }}>
+                        <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--grey-800)', marginBottom: 6 }}>{note.note}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>
+                            {note.createdBy} · {new Date(note.createdAt).toLocaleString('es-ES')}
+                          </div>
+                          <button
+                            onClick={() => {
+                              deleteSANote(note.id);
+                              setDrawerNotes(getSANotes('player', selectedPlayer.id));
+                            }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 13, padding: '0 4px', lineHeight: 1 }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         </>
       )}
