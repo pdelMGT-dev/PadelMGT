@@ -243,7 +243,7 @@ export default function LeagueDetailPage() {
 
   function handleCopyUrl() {
     if (!league) return;
-    const url = `${window.location.origin}/l/${league.code}`;
+    const url = `${window.location.origin}/l/${league.code ?? ''}`;
     navigator.clipboard.writeText(url).then(() => {
       setQrCopied(true);
       setTimeout(() => setQrCopied(false), 2500);
@@ -252,7 +252,10 @@ export default function LeagueDetailPage() {
 
   if (!league) return <div style={{ padding: 40, color: 'var(--grey-400)' }}>Cargando...</div>;
 
-  const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}/l/${league.code}` : `https://padelmgt.com/l/${league.code}`;
+  const leagueCode = league.code ?? '';
+  const publicUrl = leagueCode
+    ? (typeof window !== 'undefined' ? `${window.location.origin}/l/${leagueCode}` : `https://padelmgt.com/l/${leagueCode}`)
+    : '';
   const selectedSeasonObj = selectedSid ? getLeagueSeason(selectedSid) : null;
 
   const tabStyle = (t: Tab): React.CSSProperties => ({
@@ -286,7 +289,7 @@ export default function LeagueDetailPage() {
                   Co-admin
                 </span>
               )}
-              <span style={{ fontSize: 11, color: 'var(--grey-400)', fontFamily: 'monospace' }}>{league.code}</span>
+              {leagueCode && <span style={{ fontSize: 11, color: 'var(--grey-400)', fontFamily: 'monospace' }}>{leagueCode}</span>}
             </div>
             {league.description && <div style={{ fontSize: 13, color: 'var(--grey-500)' }}>{league.description}</div>}
           </div>
@@ -590,7 +593,7 @@ export default function LeagueDetailPage() {
                   </div>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--grey-500)', lineHeight: 1.6 }}>
-                  Compartí este link o el QR para que los jugadores puedan solicitar unirse a la liga. El código único de tu liga es <strong style={{ fontFamily: 'monospace', color: 'var(--black)' }}>{league.code}</strong>.
+                  Compartí este link o el QR para que los jugadores puedan solicitar unirse a la liga. El código único de tu liga es <strong style={{ fontFamily: 'monospace', color: 'var(--black)' }}>{leagueCode}</strong>.
                 </div>
               </div>
             </div>

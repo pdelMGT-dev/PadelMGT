@@ -79,25 +79,54 @@ function generateLeagueCode(): string {
   return `LIGA-${new Date().getFullYear()}-${suffix}`;
 }
 
+// Migration: ensure every league has required fields
+
+function migrateLeagues(leagues: PlayerLeague[]): PlayerLeague[] {
+  let dirty = false;
+  const usedCodes = new Set(leagues.filter(l => l.code).map(l => l.code));
+  const migrated = leagues.map(l => {
+    const patch: Partial<PlayerLeague> = {};
+    if (!l.code) {
+      let code = generateLeagueCode();
+      while (usedCodes.has(code)) code = generateLeagueCode();
+      usedCodes.add(code);
+      patch.code = code;
+      dirty = true;
+    }
+    if (l.isPublic === undefined) { patch.isPublic = true; dirty = true; }
+    if (l.defaultPointsWin === undefined) { patch.defaultPointsWin = 3; dirty = true; }
+    if (l.defaultPointsDraw === undefined) { patch.defaultPointsDraw = 1; dirty = true; }
+    if (l.defaultPointsLoss === undefined) { patch.defaultPointsLoss = 0; dirty = true; }
+    return Object.keys(patch).length ? { ...l, ...patch } : l;
+  });
+  if (dirty) leagueStore.persist(migrated);
+  return migrated;
+}
+
+function loadLeagues(): PlayerLeague[] {
+  return migrateLeagues(leagueStore.load());
+}
+
 // Leagues
 
 export function getAllPlayerLeagues(): PlayerLeague[] {
-  return leagueStore.load();
+  return loadLeagues();
 }
 
 export function getPlayerLeague(id: string): PlayerLeague | null {
-  return leagueStore.load().find(l => l.id === id) ?? null;
+  return loadLeagues().find(l => l.id === id) ?? null;
 }
 
 export function getPlayerLeagueByCode(code: string): PlayerLeague | null {
-  return leagueStore.load().find(l => l.code === code) ?? null;
+  return loadLeagues().find(l => l.code === code) ?? null;
 }
 
 export function getMyLeagues(playerId: string): PlayerLeague[] {
+  const all = loadLeagues();
   const memberLeagueIds = new Set(
     memberStore.load().filter(m => m.playerId === playerId).map(m => m.leagueId)
   );
-  return leagueStore.load().filter(l => memberLeagueIds.has(l.id) || l.createdBy === playerId);
+  return all.filter(l => memberLeagueIds.has(l.id) || l.createdBy === playerId);
 }
 
 export function createPlayerLeague(params: {
