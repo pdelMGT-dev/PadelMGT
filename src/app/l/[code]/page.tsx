@@ -24,6 +24,27 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 type JoinState = 'idle' | 'submitting' | 'success' | 'error';
 
+function leagueFromUrlParams(code: string): import('@/lib/player-league-store').PlayerLeague | null {
+  if (typeof window === 'undefined') return null;
+  const sp = new URLSearchParams(window.location.search);
+  const name = sp.get('n');
+  if (!name) return null;
+  return {
+    id: `url-${code}`,
+    code,
+    name,
+    description: sp.get('d') ?? undefined,
+    createdBy: '',
+    createdByName: sp.get('cb') ?? '',
+    createdAt: '',
+    isOpen: sp.get('open') === '1',
+    isPublic: sp.get('pub') !== '0',
+    defaultPointsWin: 3,
+    defaultPointsDraw: 1,
+    defaultPointsLoss: 0,
+  };
+}
+
 export default function PublicLeaguePage() {
   const { code } = useParams<{ code: string }>();
   const { user: currentUser } = useCurrentUser();
@@ -39,6 +60,7 @@ export default function PublicLeaguePage() {
   const [joinState, setJoinState] = useState<JoinState>('idle');
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const [urlSource, setUrlSource] = useState<'local' | 'remote' | 'url'>('local');
 
   // Load all data on mount / when user changes
   useEffect(() => {
@@ -61,12 +83,21 @@ export default function PublicLeaguePage() {
     }
 
     const local = getPlayerLeagueByCode(code);
-    if (local) { populate(local); return; }
+    if (local) { setUrlSource('local'); populate(local); return; }
 
-    // Not in this browser's localStorage — try Supabase
+    // Not in this browser's localStorage — try Supabase, then URL params
     fetchLeagueByCodeFromSupabase(code)
-      .then(remote => { if (remote) populate(remote); else setLeague(null); })
-      .catch(() => setLeague(null));
+      .then(remote => {
+        if (remote) { setUrlSource('remote'); populate(remote); return; }
+        const fromUrl = leagueFromUrlParams(code);
+        if (fromUrl) { setUrlSource('url'); setLeague(fromUrl); }
+        else setLeague(null);
+      })
+      .catch(() => {
+        const fromUrl = leagueFromUrlParams(code);
+        if (fromUrl) { setUrlSource('url'); setLeague(fromUrl); }
+        else setLeague(null);
+      });
   }, [code, currentUser?.id]);
 
   useEffect(() => {
@@ -461,8 +492,22 @@ export default function PublicLeaguePage() {
                   </div>
                 )}
 
+                {/* ── URL-source banner ────────────────────────────────────── */}
+                {urlSource === 'url' && (
+                  <div style={{
+                    padding: '12px 20px',
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    fontSize: 13,
+                    color: 'rgba(255,255,255,0.55)',
+                    lineHeight: 1.5,
+                  }}>
+                    Para unirte a esta liga, pedile al organizador que te agregue directamente.
+                  </div>
+                )}
+
                 {/* ── JOIN SECTION ─────────────────────────────────────────── */}
-                {isMember ? (
+                {urlSource !== 'url' && (isMember ? (
                   /* State D: already a member */
                   <div style={{
                     border: '1px solid rgba(214,255,0,0.25)',
@@ -645,7 +690,7 @@ export default function PublicLeaguePage() {
                       )}
                     </div>
                   </div>
-                )}
+                ))}
               </div>
 
               {/* ── RIGHT COLUMN: QR SIDEBAR (desktop only) ────────────────── */}

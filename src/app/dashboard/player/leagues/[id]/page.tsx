@@ -251,9 +251,8 @@ export default function LeagueDetailPage() {
   }
 
   function handleCopyUrl() {
-    if (!league) return;
-    const url = `${window.location.origin}/l/${league.code ?? ''}`;
-    navigator.clipboard.writeText(url).then(() => {
+    if (!league || !publicUrl) return;
+    navigator.clipboard.writeText(publicUrl).then(() => {
       setQrCopied(true);
       setTimeout(() => setQrCopied(false), 2500);
     });
@@ -262,9 +261,13 @@ export default function LeagueDetailPage() {
   if (!league) return <div style={{ padding: 40, color: 'var(--grey-400)' }}>Cargando...</div>;
 
   const leagueCode = league.code ?? '';
-  const publicUrl = leagueCode
-    ? (typeof window !== 'undefined' ? `${window.location.origin}/l/${leagueCode}` : `https://padelmgt.com/l/${leagueCode}`)
-    : '';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://padelmgt.com';
+  const shareParams = leagueCode ? (() => {
+    const p = new URLSearchParams({ n: league.name, cb: league.createdByName, pub: league.isPublic ? '1' : '0' });
+    if (league.description) p.set('d', league.description.slice(0, 120));
+    return p.toString();
+  })() : '';
+  const publicUrl = leagueCode ? `${origin}/l/${leagueCode}?${shareParams}` : '';
   const selectedSeasonObj = selectedSid ? getLeagueSeason(selectedSid) : null;
 
   const tabStyle = (t: Tab): React.CSSProperties => ({
