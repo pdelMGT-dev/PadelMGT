@@ -124,6 +124,12 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
+    function saveSession(session: Record<string, unknown>, role: string) {
+      try { localStorage.setItem('padelmgt_user', JSON.stringify(session)); } catch { /* quota/private mode */ }
+      try { localStorage.removeItem('padelmgt_last_sync'); } catch { /* ignore */ }
+      try { document.cookie = `padelmgt_session=${role}; path=/; SameSite=Lax; max-age=86400`; } catch { /* ignore */ }
+    }
+
     // 1. Check built-in demo accounts (club, league, federation, super-admin, seed players)
     const mockUser = MOCK_USERS.find(u => u.email === email && u.password === password);
     if (mockUser) {
@@ -131,9 +137,7 @@ export default function LoginPage() {
         id: mockUser.id, name: mockUser.name, email: mockUser.email,
         shortId: mockUser.shortId, role: mockUser.role, sub: mockUser.sub,
       };
-      localStorage.setItem('padelmgt_user', JSON.stringify(session));
-      localStorage.removeItem('padelmgt_last_sync');
-      document.cookie = `padelmgt_session=${mockUser.role}; path=/; SameSite=Lax; max-age=86400`;
+      saveSession(session, mockUser.role);
       setLoading(false);
       router.push(getRedirectUrl(mockUser.role));
       return;
@@ -141,6 +145,23 @@ export default function LoginPage() {
 
     // 2. Supabase Auth (for real registered players)
     const { data: authData, error: authError } = await authSignIn(email, password);
+
+    // Distinguish "email not confirmed" from wrong credentials
+    if (authError) {
+      const msg = (authError as { message?: string }).message?.toLowerCase() ?? '';
+      if (msg.includes('email not confirmed') || msg.includes('not confirmed')) {
+        setError('Tu email aún no está confirmado. Revisá tu bandeja de entrada y hacé clic en el enlace de confirmación.');
+        setLoading(false);
+        return;
+      }
+      if (msg.includes('too many requests') || msg.includes('rate limit')) {
+        setError('Demasiados intentos. Esperá unos minutos antes de intentar de nuevo.');
+        setLoading(false);
+        return;
+      }
+      // Other Supabase errors → fall through to localStorage auth
+    }
+
     if (!authError && authData?.user) {
       const authUser = authData.user;
       // Fetch the player record from Supabase (by user_id first, then by email)
@@ -159,9 +180,7 @@ export default function LoginPage() {
           rankingPoints: (sbPlayer.ranking_points as number) ?? 0,
           ...(cf.plan ? { plan: cf.plan } : {}),
         };
-        localStorage.setItem('padelmgt_user', JSON.stringify(session));
-        localStorage.removeItem('padelmgt_last_sync');
-        document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
+        saveSession(session, 'player');
         setLoading(false);
         // Sync global data + user's own tournaments and games across devices
         syncAllFromSupabase();
@@ -175,14 +194,12 @@ export default function LoginPage() {
       // Auth succeeded but no player record — use auth user data as fallback
       const session = {
         id:      authUser.id,
-        name:    authUser.email?.split('@')[0] ?? 'Jugador',
+        name:    authUser.user_metadata?.full_name ?? authUser.email?.split('@')[0] ?? 'Jugador',
         email:   authUser.email ?? email,
         role:    'player' as UserRole,
         sub:     '',
       };
-      localStorage.setItem('padelmgt_user', JSON.stringify(session));
-      localStorage.removeItem('padelmgt_last_sync');
-      document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
+      saveSession(session, 'player');
       setLoading(false);
       router.push(getRedirectUrl('player'));
       return;
@@ -200,9 +217,7 @@ export default function LoginPage() {
         sub:     `${player.shortId} · ${player.city ?? player.country ?? ''}`,
         ...(player.plan ? { plan: player.plan } : {}),
       };
-      localStorage.setItem('padelmgt_user', JSON.stringify(session));
-      localStorage.removeItem('padelmgt_last_sync');
-      document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
+      saveSession(session, 'player');
       setLoading(false);
       syncAllFromSupabase().finally(() => router.push(getRedirectUrl('player')));
       return;

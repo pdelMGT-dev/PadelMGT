@@ -61,17 +61,23 @@ export default function RegisterPage() {
     let authUserId: string | undefined;
     const { data: authData, error: authError } = await authSignUp(email.trim(), password);
     if (authError) {
-      // Supabase Auth failed — common reasons: email already registered
       const msg = authError.message?.toLowerCase() ?? '';
-      if (msg.includes('already registered') || msg.includes('already been registered')) {
-        setError('Ya existe una cuenta con ese email.');
+      if (msg.includes('already registered') || msg.includes('already been registered') || msg.includes('already exists')) {
+        setError('Ya existe una cuenta con ese email. Intentá iniciar sesión.');
+      } else if (msg.includes('supabase no configurado') || msg.includes('not configured')) {
+        // Supabase not available — proceed with localStorage-only registration
+        authUserId = undefined;
       } else {
         setError(authError.message ?? 'Error al crear la cuenta.');
+        setLoading(false);
+        return;
       }
-      setLoading(false);
-      return;
+      if (!msg.includes('supabase no configurado') && !msg.includes('not configured')) {
+        setLoading(false);
+        return;
+      }
     }
-    authUserId = authData?.user?.id;
+    authUserId = authUserId ?? authData?.user?.id;
 
     // 2. Create player record in localStorage (+ fire-and-forget to Supabase players table)
     const player = registerPlayer({ name: name.trim(), email: email.trim(), country, sex, authUserId });
