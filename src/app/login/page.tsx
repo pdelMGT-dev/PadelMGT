@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { authenticatePlayer, getPlayer } from '@/lib/player-store';
+import { authenticatePlayer } from '@/lib/player-store';
 import { syncAllFromSupabase, syncUserTournaments, syncUserGames } from '@/lib/supabase-sync';
-import { authSignIn, fetchPlayerByUserId, fetchPlayerByEmail } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, authSignIn, fetchPlayerByUserId, fetchPlayerByEmail } from '@/lib/supabase';
 
 type UserRole = 'player' | 'club_manager' | 'league_organizer' | 'federation' | 'super_admin';
 
@@ -105,11 +105,27 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [registerUrl, setRegisterUrl] = useState('/register');
+  const [sbStatus, setSbStatus] = useState<'checking' | 'ok' | 'unconfigured' | 'error'>('checking');
 
   useEffect(() => {
     const redirect = new URLSearchParams(window.location.search).get('redirect');
     if (redirect) setRegisterUrl(`/register?redirect=${encodeURIComponent(redirect)}`);
+
+    if (!isSupabaseConfigured) { setSbStatus('unconfigured'); return; }
+    supabase!.auth.getSession()
+      .then(() => setSbStatus('ok'))
+      .catch(() => setSbStatus('error'));
   }, []);
+
+  async function handleResendConfirmation() {
+    if (!supabase || !email) return;
+    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    if (error) {
+      setError(`No se pudo reenviar: ${error.message}`);
+    } else {
+      setError('Email de confirmación reenviado. Revisá tu bandeja de entrada.');
+    }
+  }
 
   function getRedirectUrl(role: string): string {
     if (typeof window !== 'undefined') {
@@ -269,9 +285,27 @@ export default function LoginPage() {
           <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 36, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 8px', color: 'var(--black)' }}>
             Iniciar sesión
           </h1>
-          <p style={{ fontSize: 14, color: 'var(--grey-500)', margin: '0 0 36px' }}>
+          <p style={{ fontSize: 14, color: 'var(--grey-500)', margin: '0 0 20px' }}>
             Accede a tu cuenta de PadelMGT
           </p>
+
+          {/* Supabase connectivity status */}
+          {sbStatus === 'unconfigured' && (
+            <div style={{ padding: '10px 14px', background: '#fef9c3', border: '1px solid #fde68a', fontSize: 12, color: '#92400e', marginBottom: 20, lineHeight: 1.5 }}>
+              <strong>Servidor no configurado.</strong> Las variables de entorno de Supabase no están definidas en este entorno. Solo las cuentas de prueba están disponibles.
+            </div>
+          )}
+          {sbStatus === 'error' && (
+            <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', fontSize: 12, color: '#dc2626', marginBottom: 20, lineHeight: 1.5 }}>
+              <strong>Sin conexión al servidor.</strong> No se puede conectar con Supabase. Verificá tu conexión o desactivá bloqueadores de contenido.
+            </div>
+          )}
+          {sbStatus === 'ok' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#16a34a', marginBottom: 20 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
+              Servidor conectado
+            </div>
+          )}
 
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: 20 }}>
@@ -306,7 +340,18 @@ export default function LoginPage() {
                 style={inputStyle}
               />
               {error && (
-                <p style={{ fontSize: 13, color: '#e53e3e', marginTop: 8 }}>{error}</p>
+                <div style={{ marginTop: 8 }}>
+                  <p style={{ fontSize: 13, color: '#e53e3e', margin: 0 }}>{error}</p>
+                  {error.includes('confirmado') && (
+                    <button
+                      type="button"
+                      onClick={handleResendConfirmation}
+                      style={{ marginTop: 6, fontSize: 12, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                    >
+                      Reenviar email de confirmación
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
