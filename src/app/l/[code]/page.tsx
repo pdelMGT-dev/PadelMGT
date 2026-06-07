@@ -13,6 +13,7 @@ import {
   createLeagueJoinRequest,
   isLeagueMember,
   computeLeagueStandings,
+  fetchLeagueByCodeFromSupabase,
   type PlayerLeague,
   type LeagueSeason,
   type LeagueStandingEntry,
@@ -41,28 +42,31 @@ export default function PublicLeaguePage() {
 
   // Load all data on mount / when user changes
   useEffect(() => {
-    const l = getPlayerLeagueByCode(code);
-    setLeague(l ?? null);
-    if (!l) return;
-
-    const allSeasons = getLeagueSeasons(l.id);
-    setSeasons(allSeasons);
-
-    const active = getActiveSeason(l.id);
-    setActiveSeason(active);
-
-    const members = getLeagueMembers(l.id);
-    setMemberCount(members.length);
-
-    const games = getAllGames();
-    const computed = computeLeagueStandings(l.id, active?.id ?? null, games);
-    setStandings(computed);
-
-    if (currentUser) {
-      const req = getLeagueJoinRequestForPlayer(l.id, currentUser.id);
-      setJoinRequest(req);
-      setIsMember(isLeagueMember(l.id, currentUser.id));
+    function populate(l: PlayerLeague) {
+      setLeague(l);
+      const allSeasons = getLeagueSeasons(l.id);
+      setSeasons(allSeasons);
+      const active = getActiveSeason(l.id);
+      setActiveSeason(active);
+      const members = getLeagueMembers(l.id);
+      setMemberCount(members.length);
+      const games = getAllGames();
+      const computed = computeLeagueStandings(l.id, active?.id ?? null, games);
+      setStandings(computed);
+      if (currentUser) {
+        const req = getLeagueJoinRequestForPlayer(l.id, currentUser.id);
+        setJoinRequest(req);
+        setIsMember(isLeagueMember(l.id, currentUser.id));
+      }
     }
+
+    const local = getPlayerLeagueByCode(code);
+    if (local) { populate(local); return; }
+
+    // Not in this browser's localStorage — try Supabase
+    fetchLeagueByCodeFromSupabase(code)
+      .then(remote => { if (remote) populate(remote); else setLeague(null); })
+      .catch(() => setLeague(null));
   }, [code, currentUser?.id]);
 
   useEffect(() => {

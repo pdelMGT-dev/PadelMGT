@@ -2,6 +2,7 @@
 
 import { createLocalStore } from './local-store';
 import type { ActiveGame } from './game-engine';
+import { supabase } from './supabase';
 
 export interface PlayerLeague {
   id: string;
@@ -77,6 +78,102 @@ function generateLeagueCode(): string {
   let suffix = '';
   for (let i = 0; i < 6; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
   return `LIGA-${new Date().getFullYear()}-${suffix}`;
+}
+
+// ── Supabase sync helpers (best-effort, fire-and-forget) ──────────────────────
+
+async function syncLeagueToSupabase(league: PlayerLeague): Promise<void> {
+  if (!supabase || !league.code) return;
+  const row = {
+    id: league.id, code: league.code, name: league.name,
+    description: league.description ?? null,
+    created_by_name: league.createdByName,
+    created_at: league.createdAt,
+    is_open: league.isOpen, is_public: league.isPublic ?? true,
+    default_points_win: league.defaultPointsWin ?? 3,
+    default_points_draw: league.defaultPointsDraw ?? 1,
+    default_points_loss: league.defaultPointsLoss ?? 0,
+  };
+  const { error } = await supabase.from('player_leagues').upsert(
+    { ...row, created_by: league.createdBy }, { onConflict: 'id' }
+  );
+  if (error) {
+    await supabase.from('player_leagues').upsert(
+      { ...row, created_by: null }, { onConflict: 'id' }
+    );
+  }
+}
+
+export async function fetchLeagueByCodeFromSupabase(code: string): Promise<PlayerLeague | null> {
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.from('player_leagues').select('*').eq('code', code).maybeSingle();
+    if (!data) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const d = data as any;
+    return {
+      id: d.id, code: d.code, name: d.name,
+      description: d.description ?? undefined,
+      createdBy: d.created_by ?? '',
+      createdByName: d.created_by_name ?? '',
+      createdAt: d.created_at,
+      isOpen: d.is_open ?? false,
+      isPublic: d.is_public ?? true,
+      defaultPointsWin: d.default_points_win ?? 3,
+      defaultPointsDraw: d.default_points_draw ?? 1,
+      defaultPointsLoss: d.default_points_loss ?? 0,
+    };
+  } catch { return null; }
+}
+
+async function syncJoinRequestToSupabase(req: LeagueJoinRequest): Promise<void> {
+  if (!supabase) return;
+  const row = {
+    id: req.id, league_id: req.leagueId,
+    player_name: req.playerName, player_email: req.playerEmail ?? null,
+    message: req.message ?? null, status: req.status,
+    created_at: req.createdAt,
+    reviewed_at: req.reviewedAt ?? null, reviewed_by: req.reviewedBy ?? null,
+  };
+  const { error } = await supabase.from('league_join_requests').upsert(
+    { ...row, player_id: req.playerId }, { onConflict: 'id' }
+  );
+  if (error) {
+    await supabase.from('league_join_requests').upsert(
+      { ...row, player_id: null }, { onConflict: 'id' }
+    );
+  }
+}
+
+export async function fetchJoinRequestsFromSupabase(leagueId: string): Promise<LeagueJoinRequest[]> {
+  if (!supabase) return [];
+  try {
+    const { data } = await supabase.from('league_join_requests').select('*').eq('league_id', leagueId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((r: any) => ({
+      id: r.id as string,
+      leagueId: r.league_id as string,
+      playerId: (r.player_id as string | null) ?? '',
+      playerName: r.player_name as string,
+      playerEmail: (r.player_email as string | null) ?? undefined,
+      message: (r.message as string | null) ?? undefined,
+      status: r.status as 'pending' | 'approved' | 'rejected',
+      createdAt: r.created_at as string,
+      reviewedAt: (r.reviewed_at as string | null) ?? undefined,
+      reviewedBy: (r.reviewed_by as string | null) ?? undefined,
+    }));
+  } catch { return []; }
+}
+
+export function importLeagueJoinRequests(incoming: LeagueJoinRequest[]): void {
+  if (incoming.length === 0) return;
+  const all = requestStore.load();
+  const byId = new Map(all.map(r => [r.id, r]));
+  let dirty = false;
+  for (const r of incoming) {
+    if (!byId.has(r.id)) { byId.set(r.id, r); dirty = true; }
+  }
+  if (dirty) requestStore.persist(Array.from(byId.values()));
 }
 
 // Migration: ensure every league has required fields
@@ -162,6 +259,7 @@ export function createPlayerLeague(params: {
   all.push(league);
   leagueStore.persist(all);
   addLeagueMember({ leagueId: league.id, playerId: params.createdBy, playerName: params.createdByName, role: 'admin' });
+  syncLeagueToSupabase(league).catch(() => {});
   return league;
 }
 
@@ -170,6 +268,7 @@ export function savePlayerLeague(league: PlayerLeague): void {
   const idx = all.findIndex(l => l.id === league.id);
   if (idx >= 0) all[idx] = league; else all.push(league);
   leagueStore.persist(all);
+  syncLeagueToSupabase(league).catch(() => {});
 }
 
 export function deletePlayerLeague(id: string): void {
@@ -313,6 +412,7 @@ export function createLeagueJoinRequest(params: {
   };
   all.push(req);
   requestStore.persist(all);
+  syncJoinRequestToSupabase(req).catch(() => {});
   return req;
 }
 
@@ -326,6 +426,7 @@ export function reviewJoinRequest(
   if (idx < 0) return;
   all[idx] = { ...all[idx], status, reviewedAt: new Date().toISOString(), reviewedBy };
   requestStore.persist(all);
+  syncJoinRequestToSupabase(all[idx]).catch(() => {});
   if (status === 'approved') {
     addLeagueMember({ leagueId: all[idx].leagueId, playerId: all[idx].playerId, playerName: all[idx].playerName });
   }

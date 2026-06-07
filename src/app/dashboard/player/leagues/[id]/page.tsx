@@ -23,6 +23,8 @@ import {
   getLeaguePendingRequests,
   getLeagueJoinRequests,
   reviewJoinRequest,
+  fetchJoinRequestsFromSupabase,
+  importLeagueJoinRequests,
   type PlayerLeague,
   type LeagueSeason,
   type LeagueMember,
@@ -131,10 +133,17 @@ export default function LeagueDetailPage() {
     setMembers(mem);
     const games = getAllGames();
     setStandings(computeLeagueStandings(id, sid, games));
-    // Requests
+    // Requests — local first, then merge from Supabase
     const reqs = getLeagueJoinRequests(id);
     setJoinRequests(reqs);
     setPendingCount(reqs.filter(r => r.status === 'pending').length);
+    fetchJoinRequestsFromSupabase(id).then(remote => {
+      if (remote.length === 0) return;
+      importLeagueJoinRequests(remote);
+      const merged = getLeagueJoinRequests(id);
+      setJoinRequests(merged);
+      setPendingCount(merged.filter(r => r.status === 'pending').length);
+    }).catch(() => {});
     // Config
     setCfgName(l.name);
     setCfgDesc(l.description ?? '');
