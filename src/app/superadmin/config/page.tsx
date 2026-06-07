@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { getSAAdminUsers, saveSAAdminUsers, getSAPlayers, getSAClubs, getSATournaments, seedPlayersToSupabase, seedClubsToSupabase, upsertTournamentToSupabase, type SAAdminUser } from '@/lib/superadmin-data';
 import { getGlobalRankingConfig, saveRankingConfig } from '@/lib/ranking-config-store';
+import { getAuditLog, clearAuditLog, type AuditEntry } from '@/lib/audit-log-store';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
@@ -74,7 +75,7 @@ function downloadCSV(filename: string, rows: string[][]) {
 }
 
 export default function ConfigPage() {
-  const [tab, setTab] = useState<'admins' | 'general' | 'database' | 'stripe' | 'ranking'>('admins');
+  const [tab, setTab] = useState<'admins' | 'general' | 'database' | 'stripe' | 'ranking' | 'audit'>('admins');
   const [admins, setAdmins] = useState<SAAdminUser[]>([]);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [editAdmin, setEditAdmin] = useState<SAAdminUser | null>(null);
@@ -108,6 +109,8 @@ export default function ConfigPage() {
   const [rankDraw, setRankDraw] = useState(1);
   const [rankLoss, setRankLoss] = useState(-1);
   const [rankSaved, setRankSaved] = useState(false);
+  // Audit log
+  const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
 
   useEffect(() => {
     setAdmins(getSAAdminUsers());
@@ -129,6 +132,8 @@ export default function ConfigPage() {
     setRankWin(cfg.pointsWin);
     setRankDraw(cfg.pointsDraw);
     setRankLoss(cfg.pointsLoss);
+    // Load audit log
+    setAuditLog(getAuditLog(200));
   }, []);
 
   function saveStripeConfig() {
@@ -292,6 +297,7 @@ export default function ConfigPage() {
           { key: 'database', label: 'Base de Datos' },
           { key: 'stripe', label: 'Stripe / Pagos' },
           { key: 'ranking', label: 'Ranking' },
+          { key: 'audit', label: `Auditoria (${auditLog.length})` },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)} style={{
             padding: '10px 24px', border: 'none', background: 'none', cursor: 'pointer',
@@ -672,6 +678,63 @@ export default function ConfigPage() {
           <div style={{ marginTop: 20, padding: '12px 16px', background: '#fffbeb', border: '1px solid #fcd34d', fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
             ⚠ Los cambios aplican solo a juegos futuros. Las partidas ya registradas mantienen los puntos originales.
           </div>
+        </div>
+      )}
+
+      {/* AUDIT TAB */}
+      {tab === 'audit' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, textTransform: 'uppercase', margin: '0 0 4px' }}>Log de Auditoría</h2>
+              <p style={{ fontSize: 13, color: 'var(--grey-500)', margin: 0 }}>Registro de las últimas {auditLog.length} acciones del panel de administración.</p>
+            </div>
+            <button
+              onClick={() => { clearAuditLog(); setAuditLog([]); toast('Log de auditoría limpiado'); }}
+              style={{ padding: '8px 16px', background: 'transparent', border: '1px solid #fecaca', borderRadius: 4, color: '#dc2626', fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase' }}
+            >
+              Limpiar log
+            </button>
+          </div>
+          {auditLog.length === 0 ? (
+            <div style={{ padding: '48px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14, border: '1px dashed var(--grey-200)', borderRadius: 6 }}>
+              Sin actividad registrada todavía.
+            </div>
+          ) : (
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-200)' }}>
+                    <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Fecha</th>
+                    <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase' }}>Accion</th>
+                    <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase' }}>Actor</th>
+                    <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase' }}>Objetivo</th>
+                    <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase' }}>Detalles</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLog.map(entry => (
+                    <tr key={entry.id} style={{ borderBottom: '1px solid var(--grey-100)' }}>
+                      <td style={{ padding: '9px 14px', whiteSpace: 'nowrap', color: 'var(--grey-500)', fontSize: 11 }}>
+                        {new Date(entry.createdAt).toLocaleString('es-ES')}
+                      </td>
+                      <td style={{ padding: '9px 14px' }}>
+                        <span style={{ fontFamily: 'monospace', fontSize: 11, background: 'var(--grey-100)', padding: '2px 6px', borderRadius: 3, color: 'var(--grey-700)' }}>
+                          {entry.action}
+                        </span>
+                      </td>
+                      <td style={{ padding: '9px 14px', fontWeight: 600, color: 'var(--black)' }}>{entry.actor}</td>
+                      <td style={{ padding: '9px 14px', color: 'var(--grey-600)' }}>
+                        {entry.targetName ?? entry.targetId ?? '—'}
+                        {entry.targetType && <span style={{ fontSize: 10, color: 'var(--grey-400)', marginLeft: 4 }}>({entry.targetType})</span>}
+                      </td>
+                      <td style={{ padding: '9px 14px', color: 'var(--grey-500)', fontSize: 11 }}>{entry.details ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

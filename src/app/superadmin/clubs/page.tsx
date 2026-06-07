@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSAClubs, saveSAClubs, getSAClubsFromSupabase, upsertSAClubToSupabase, deleteSAClubFromSupabase, type SAClub } from '@/lib/superadmin-data';
 import { getSANotes, addSANote, deleteSANote, type SANote } from '@/lib/sa-notes-store';
+import { logAudit } from '@/lib/audit-log-store';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
@@ -486,9 +487,11 @@ export default function ClubsPage() {
   }
 
   function handleApprove(clubId: string) {
+    const club = clubs.find(c => c.id === clubId);
     const updated = clubs.map(c => c.id === clubId ? { ...c, status: 'active' as const } : c);
     saveAndRefresh(updated);
     if (selectedClub?.id === clubId) setSelectedClub(prev => prev ? { ...prev, status: 'active' as const } : prev);
+    logAudit('club_approved', 'Super Admin', { targetType: 'club', targetId: clubId, targetName: club?.name });
     toast('Club aprobado');
   }
 
@@ -496,10 +499,12 @@ export default function ClubsPage() {
   function handleRejectStep2() { if (!rejectConfirm) return; setRejectConfirm({ ...rejectConfirm, step: 2 }); }
   function handleRejectFinal() {
     if (!rejectConfirm) return;
+    const club = clubs.find(c => c.id === rejectConfirm.clubId);
     const updated = clubs.map(c => c.id === rejectConfirm.clubId ? { ...c, status: 'rejected' as const, rejectReason: rejectConfirm.reason || undefined } : c);
     saveAndRefresh(updated);
     if (selectedClub?.id === rejectConfirm.clubId) setSelectedClub(prev => prev ? { ...prev, status: 'rejected' as const, rejectReason: rejectConfirm.reason || undefined } : prev);
     setRejectConfirm(null);
+    logAudit('club_rejected', 'Super Admin', { targetType: 'club', targetId: rejectConfirm.clubId, targetName: club?.name, details: rejectConfirm.reason || undefined });
     toast('Club rechazado');
   }
 
@@ -507,11 +512,13 @@ export default function ClubsPage() {
   function handleDeleteStep2() { if (!deleteConfirm) return; setDeleteConfirm({ ...deleteConfirm, step: 2 }); }
   function handleDeleteFinal() {
     if (!deleteConfirm) return;
+    const club = clubs.find(c => c.id === deleteConfirm.clubId);
     const updated = clubs.filter(c => c.id !== deleteConfirm.clubId);
     saveAndRefresh(updated);
     deleteSAClubFromSupabase(deleteConfirm.clubId);
     if (selectedClub?.id === deleteConfirm.clubId) setSelectedClub(null);
     setDeleteConfirm(null);
+    logAudit('club_deleted', 'Super Admin', { targetType: 'club', targetId: deleteConfirm.clubId, targetName: club?.name });
     toast('Club eliminado');
   }
 

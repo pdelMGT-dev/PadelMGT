@@ -10,17 +10,40 @@ import {
   type ScoreCorrectionRequest,
 } from '@/lib/score-correction-store';
 
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
 const PAGE_SIZE = 15;
 
-function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+function Modal({ children, onClose, maxWidth = 520 }: { children: React.ReactNode; onClose: () => void; maxWidth?: number }) {
   return (
     <div
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
     >
-      <div style={{ background: '#fff', borderRadius: 8, padding: '32px 36px', width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+      <div style={{ background: '#fff', borderRadius: 8, padding: '32px 36px', width: '100%', maxWidth, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
         {children}
       </div>
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '8px 12px',
+  border: '1px solid var(--grey-200)',
+  borderRadius: 4,
+  fontSize: 13,
+  fontFamily: 'var(--font-body)',
+  color: 'var(--black)',
+  outline: 'none',
+  boxSizing: 'border-box',
+};
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <label style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--grey-500)', textTransform: 'uppercase' }}>{label}</label>
+      {children}
     </div>
   );
 }
@@ -68,6 +91,96 @@ function exportCSV(rows: Record<string, unknown>[], filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function GameForm({ initial, onSave, onCancel, mode }: {
+  initial: Partial<SAGame>;
+  onSave: (g: SAGame) => void;
+  onCancel: () => void;
+  mode: 'create' | 'edit';
+}) {
+  const today = new Date().toISOString().split('T')[0];
+  const [form, setForm] = useState<Partial<SAGame>>({
+    name: '',
+    date: today,
+    players: 8,
+    rounds: 4,
+    format: 'Americano',
+    scoreConfig: 'games',
+    status: 'ongoing',
+    ...initial,
+  });
+
+  function set(k: keyof SAGame, v: unknown) { setForm(f => ({ ...f, [k]: v })); }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    onSave({
+      id: form.id ?? uid(),
+      name: form.name ?? '',
+      date: form.date ?? today,
+      players: form.players ?? 8,
+      rounds: form.rounds ?? 0,
+      format: form.format ?? 'Americano',
+      scoreConfig: form.scoreConfig ?? 'games',
+      status: form.status ?? 'ongoing',
+    });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <h2 style={{ margin: '0 0 8px', fontFamily: 'var(--font-display)', fontSize: 20 }}>
+        {mode === 'create' ? 'Nuevo Juego Rapido' : 'Editar Juego'}
+      </h2>
+
+      <Field label="Nombre del Juego">
+        <input style={inputStyle} required value={form.name ?? ''} onChange={e => set('name', e.target.value)} placeholder="Juego Americano Noche..." />
+      </Field>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <Field label="Fecha">
+          <input style={inputStyle} type="date" value={form.date ?? today} onChange={e => set('date', e.target.value)} />
+        </Field>
+        <Field label="Jugadores">
+          <input style={inputStyle} type="number" min={2} max={64} value={form.players ?? 8} onChange={e => set('players', Number(e.target.value))} />
+        </Field>
+        <Field label="Rondas jugadas">
+          <input style={inputStyle} type="number" min={0} max={99} value={form.rounds ?? 0} onChange={e => set('rounds', Number(e.target.value))} />
+        </Field>
+        <Field label="Estado">
+          <select style={inputStyle} value={form.status ?? 'ongoing'} onChange={e => set('status', e.target.value as SAGame['status'])}>
+            <option value="ongoing">En curso</option>
+            <option value="completed">Finalizado</option>
+            <option value="cancelled">Cancelado</option>
+          </select>
+        </Field>
+        <Field label="Formato">
+          <select style={inputStyle} value={form.format ?? 'Americano'} onChange={e => set('format', e.target.value)}>
+            <option value="Americano">Americano</option>
+            <option value="Mexicano">Mexicano</option>
+            <option value="Grupos">Grupos</option>
+            <option value="Eliminacion directa">Eliminación directa</option>
+            <option value="Round Robin">Round Robin</option>
+          </select>
+        </Field>
+        <Field label="Modo de Score">
+          <select style={inputStyle} value={form.scoreConfig ?? 'games'} onChange={e => set('scoreConfig', e.target.value)}>
+            <option value="games">Games</option>
+            <option value="puntos">Puntos</option>
+            <option value="sets">Sets</option>
+            <option value="tiempo">Tiempo</option>
+          </select>
+        </Field>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+        <button type="button" onClick={onCancel} style={{ padding: '9px 20px', background: 'transparent', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
+        <button type="submit" style={{ padding: '9px 24px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          {mode === 'create' ? 'Crear Juego' : 'Guardar Cambios'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export default function GamesPage() {
   const [games, setGames] = useState<SAGame[]>([]);
   const [corrections, setCorrections] = useState<ScoreCorrectionRequest[]>([]);
@@ -78,6 +191,9 @@ export default function GamesPage() {
   const [rejectConfirm, setRejectConfirm] = useState<{ corrId: string } | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: number; msg: string; ok: boolean }>>([]);
   const [selectedGame, setSelectedGame] = useState<SAGame | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editGame, setEditGame] = useState<SAGame | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ gameId: string } | null>(null);
   const [sortKey, setSortKey] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
@@ -113,6 +229,36 @@ export default function GamesPage() {
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
   }
 
+  function saveAndRefresh(updated: SAGame[]) {
+    saveSAGames(updated);
+    setGames(updated);
+  }
+
+  function handleSaveGame(g: SAGame) {
+    const exists = games.find(x => x.id === g.id);
+    const updated = exists ? games.map(x => x.id === g.id ? g : x) : [g, ...games];
+    saveAndRefresh(updated);
+    if (selectedGame?.id === g.id) setSelectedGame(g);
+    setShowCreateModal(false);
+    setEditGame(null);
+    toast(exists ? 'Juego actualizado' : 'Juego creado correctamente');
+  }
+
+  function handleDeleteGame(gameId: string) {
+    const updated = games.filter(g => g.id !== gameId);
+    saveAndRefresh(updated);
+    if (selectedGame?.id === gameId) setSelectedGame(null);
+    setDeleteConfirm(null);
+    toast('Juego eliminado');
+  }
+
+  function handleStatusChange(gameId: string, status: SAGame['status']) {
+    const updated = games.map(g => g.id === gameId ? { ...g, status } : g);
+    saveAndRefresh(updated);
+    if (selectedGame?.id === gameId) setSelectedGame(prev => prev ? { ...prev, status } : prev);
+    toast(`Estado cambiado a: ${status === 'ongoing' ? 'En curso' : status === 'completed' ? 'Finalizado' : 'Cancelado'}`);
+  }
+
   function handleSort(key: string) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortKey(key); setSortDir('asc'); }
@@ -126,7 +272,7 @@ export default function GamesPage() {
 
   const filtered = games.filter(g => {
     const q = search.toLowerCase();
-    const matchSearch = !q || g.name.toLowerCase().includes(q);
+    const matchSearch = !q || g.name.toLowerCase().includes(q) || g.format.toLowerCase().includes(q);
     const matchStatus = statusFilter === 'all' || g.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -189,8 +335,11 @@ export default function GamesPage() {
   const corrById = Object.fromEntries(corrections.map(c => [c.id, c]));
   const approveTarget = approveConfirm ? corrById[approveConfirm.corrId] : null;
   const pendingCorrCount = corrections.filter(c => c.status === 'pending').length;
+  const ongoingCount = games.filter(g => g.status === 'ongoing').length;
+  const completedCount = games.filter(g => g.status === 'completed').length;
 
   const thStyle: React.CSSProperties = { padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', background: 'none', border: 'none', fontFamily: 'var(--font-body)' };
+  const deleteTarget = deleteConfirm ? games.find(g => g.id === deleteConfirm.gameId) : null;
 
   return (
     <div style={{ padding: '32px 40px', fontFamily: 'var(--font-body)' }}>
@@ -204,16 +353,36 @@ export default function GamesPage() {
       </div>
 
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Vista</div>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)' }}>Juegos Rapidos</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <div>
+          <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Gestion</div>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)' }}>Juegos Rapidos</h1>
+        </div>
+        <button onClick={() => setShowCreateModal(true)} style={{ padding: '9px 20px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', textTransform: 'uppercase' }}>
+          + Nuevo Juego
+        </button>
+      </div>
+
+      {/* KPI chips */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Total', value: games.length, color: '#3b82f6', bg: '#eff6ff' },
+          { label: 'En curso', value: ongoingCount, color: '#166534', bg: '#dcfce7' },
+          { label: 'Finalizados', value: completedCount, color: '#555', bg: '#f0f0f0' },
+          { label: 'Correcciones pendientes', value: pendingCorrCount, color: '#854d0e', bg: '#fef9c3' },
+        ].map(({ label, value, color, bg }) => (
+          <div key={label} style={{ background: bg, border: `1px solid ${color}22`, borderRadius: 6, padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 2, minWidth: 120 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'var(--font-display)', color }}>{value}</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color, textTransform: 'uppercase' }}>{label}</div>
+          </div>
+        ))}
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--grey-200)', marginBottom: 24 }}>
         {([
           { key: 'games', label: `Lista de Juegos (${games.length})` },
-          { key: 'corrections', label: `Correcciones de Score (${pendingCorrCount} pendiente${pendingCorrCount !== 1 ? 's' : ''})` },
+          { key: 'corrections', label: `Correcciones (${pendingCorrCount} pendiente${pendingCorrCount !== 1 ? 's' : ''})` },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)} style={{
             padding: '10px 24px', border: 'none', background: 'none', cursor: 'pointer',
@@ -231,7 +400,7 @@ export default function GamesPage() {
         <>
           {/* Toolbar */}
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center' }}>
-            <input placeholder="Buscar por nombre..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+            <input placeholder="Buscar por nombre o formato..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
               style={{ padding: '8px 12px', border: '1px solid var(--grey-200)', borderRadius: 4, fontSize: 13, width: 280, outline: 'none', fontFamily: 'var(--font-body)' }} />
             <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
               style={{ padding: '8px 12px', border: '1px solid var(--grey-200)', borderRadius: 4, fontSize: 13, width: 180, outline: 'none', fontFamily: 'var(--font-body)' }}>
@@ -261,6 +430,7 @@ export default function GamesPage() {
                     <th style={{ ...thStyle, cursor: 'default' }}>Score Mode</th>
                     <th onClick={() => handleSort('rounds')} style={{ ...thStyle, textAlign: 'center' }}>Rondas <SortIcon col="rounds" /></th>
                     <th onClick={() => handleSort('status')} style={thStyle}>Estado <SortIcon col="status" /></th>
+                    <th style={{ ...thStyle, cursor: 'default' }}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -278,11 +448,17 @@ export default function GamesPage() {
                       <td style={{ padding: '10px 14px', fontSize: 12, textTransform: 'capitalize' }}>{g.scoreConfig}</td>
                       <td style={{ padding: '10px 14px', textAlign: 'center' }}>{g.rounds}</td>
                       <td style={{ padding: '10px 14px' }}><StatusBadge status={g.status} /></td>
+                      <td style={{ padding: '10px 14px' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => setEditGame(g)} style={{ background: 'none', border: '1px solid var(--grey-200)', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--grey-600)' }}>EDT</button>
+                          <button onClick={() => setDeleteConfirm({ gameId: g.id })} style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, color: '#dc2626' }}>DEL</button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {pageGames.length === 0 && (
                     <tr>
-                      <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14 }}>No se encontraron juegos</td>
+                      <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14 }}>No se encontraron juegos</td>
                     </tr>
                   )}
                 </tbody>
@@ -306,6 +482,11 @@ export default function GamesPage() {
 
       {tab === 'corrections' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {corrections.length === 0 && (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14, background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6 }}>
+              No hay solicitudes de corrección de score
+            </div>
+          )}
           {corrections.map(corr => (
             <div key={corr.id} style={{
               background: '#fff',
@@ -381,7 +562,7 @@ export default function GamesPage() {
             </div>
 
             {/* Stats grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 28 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
               {[
                 { label: 'Jugadores', value: selectedGame.players },
                 { label: 'Rondas Jugadas', value: selectedGame.rounds },
@@ -395,13 +576,34 @@ export default function GamesPage() {
               ))}
             </div>
 
+            {/* Status quick change */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 10 }}>Cambiar Estado</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['ongoing', 'completed', 'cancelled'] as const).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => handleStatusChange(selectedGame.id, s)}
+                    style={{
+                      flex: 1, padding: '8px 4px', fontSize: 11, fontWeight: 600, borderRadius: 4, cursor: 'pointer', textTransform: 'capitalize', letterSpacing: '0.04em',
+                      background: selectedGame.status === s ? '#0a0a0a' : 'transparent',
+                      color: selectedGame.status === s ? '#fff' : 'var(--grey-500)',
+                      border: selectedGame.status === s ? '1px solid #0a0a0a' : '1px solid var(--grey-200)',
+                    }}
+                  >
+                    {s === 'ongoing' ? 'En curso' : s === 'completed' ? 'Finalizado' : 'Cancelado'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Corrections for this game */}
             {(() => {
-              const gameCorrs = corrections.filter(c => c.entityName.toLowerCase().includes(selectedGame.name.toLowerCase().slice(0, 10)));
+              const gameCorrs = corrections.filter(c => c.entityId === selectedGame.id || c.entityName.toLowerCase().includes(selectedGame.name.toLowerCase().slice(0, 10)));
               if (gameCorrs.length === 0) return null;
               return (
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 12 }}>Solicitudes de Correccion</div>
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 12 }}>Solicitudes de Correccion ({gameCorrs.length})</div>
                   {gameCorrs.map(c => (
                     <div key={c.id} style={{ padding: '10px 14px', border: '1px solid var(--grey-200)', borderRadius: 4, marginBottom: 8, fontSize: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -420,13 +622,49 @@ export default function GamesPage() {
               );
             })()}
 
-            <div style={{ marginTop: 24 }}>
-              <button onClick={() => setSelectedGame(null)} style={{ padding: '10px 20px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            {/* Action buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button onClick={() => setEditGame(selectedGame)} style={{ padding: '10px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                Editar Juego
+              </button>
+              <button onClick={() => { setDeleteConfirm({ gameId: selectedGame.id }); }}
+                style={{ padding: '10px', background: 'transparent', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                Eliminar Juego
+              </button>
+              <button onClick={() => setSelectedGame(null)} style={{ padding: '10px', background: 'var(--grey-50)', color: 'var(--grey-600)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, marginTop: 4 }}>
                 Cerrar
               </button>
             </div>
           </div>
         </>
+      )}
+
+      {/* CREATE MODAL */}
+      {showCreateModal && (
+        <Modal onClose={() => setShowCreateModal(false)}>
+          <GameForm mode="create" initial={{}} onSave={handleSaveGame} onCancel={() => setShowCreateModal(false)} />
+        </Modal>
+      )}
+
+      {/* EDIT MODAL */}
+      {editGame && (
+        <Modal onClose={() => setEditGame(null)}>
+          <GameForm mode="edit" initial={editGame} onSave={handleSaveGame} onCancel={() => setEditGame(null)} />
+        </Modal>
+      )}
+
+      {/* DELETE CONFIRM */}
+      {deleteConfirm && deleteTarget && (
+        <Modal onClose={() => setDeleteConfirm(null)}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 12 }}>Eliminar Juego</h2>
+          <p style={{ color: 'var(--grey-600)', lineHeight: 1.6, marginBottom: 24 }}>
+            ¿Estas seguro de que deseas eliminar <strong>{deleteTarget.name}</strong>? Esta accion no se puede deshacer.
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button onClick={() => setDeleteConfirm(null)} style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
+            <button onClick={() => handleDeleteGame(deleteTarget.id)} style={{ padding: '9px 20px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Eliminar</button>
+          </div>
+        </Modal>
       )}
 
       {/* APPROVE STEP 1 */}

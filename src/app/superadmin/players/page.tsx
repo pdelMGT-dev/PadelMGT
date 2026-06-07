@@ -21,6 +21,7 @@ import { recordPlanChange, getPlanChanges } from '@/lib/plan-store';
 import { getSANotes, addSANote, deleteSANote, type SANote } from '@/lib/sa-notes-store';
 import { getScoreCorrectionsByEntity } from '@/lib/score-correction-store';
 import { getRankingHistoryForPlayer, type RankingEntry } from '@/lib/ranking-store';
+import { logAudit } from '@/lib/audit-log-store';
 
 interface PlanOption { id: string; label: string; color: string; bg: string }
 
@@ -607,11 +608,13 @@ export default function PlayersPage() {
   }
   function handleDeleteFinal() {
     if (!deleteConfirm) return;
+    const target = players.find(p => p.id === deleteConfirm.playerId);
     const updated = players.filter(p => p.id !== deleteConfirm.playerId);
     saveAndRefresh(updated);
     deleteSAPlayerFromSupabase(deleteConfirm.playerId);
     setDeleteConfirm(null);
     if (selectedPlayer?.id === deleteConfirm.playerId) setSelectedPlayer(null);
+    logAudit('player_deleted', 'Super Admin', { targetType: 'player', targetId: deleteConfirm.playerId, targetName: target?.name });
     toast('Jugador eliminado correctamente');
   }
 
@@ -665,6 +668,7 @@ export default function PlayersPage() {
     setShowCreateModal(false);
     setEditPlayer(null);
     if (selectedPlayer?.id === p.id) setSelectedPlayer(p);
+    logAudit(exists ? 'player_updated' : 'player_created', 'Super Admin', { targetType: 'player', targetId: p.id, targetName: p.name, details: exists && exists.plan !== p.plan ? `plan: ${exists.plan} → ${p.plan}` : undefined });
     toast(exists ? 'Jugador actualizado' : 'Jugador creado correctamente');
   }
 

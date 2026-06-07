@@ -3,30 +3,41 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { saIsLoggedIn, saLogout } from '@/lib/superadmin-auth';
+import { saIsLoggedIn, saGetSession, saLogout, type SASession } from '@/lib/superadmin-auth';
 
-const NAV_ITEMS = [
-  { label: 'DASHBOARD', href: '/superadmin/dashboard' },
-  { label: 'JUGADORES', href: '/superadmin/players' },
-  { label: 'CLUBES', href: '/superadmin/clubs' },
-  { label: 'TORNEOS', href: '/superadmin/tournaments' },
-  { label: 'JUEGOS RAPIDOS', href: '/superadmin/games' },
-  { label: 'SOLICITUDES', href: '/superadmin/requests' },
-  { label: 'RELACIONES', href: '/superadmin/relations' },
-  { label: 'PLANES', href: '/superadmin/plans' },
-  { label: 'PROMOCIONES', href: '/superadmin/promotions' },
-  { label: 'STRIPE', href: '/superadmin/stripe' },
-  { label: 'CONFIGURACION', href: '/superadmin/config' },
+const ALL_NAV_ITEMS = [
+  { label: 'DASHBOARD',     href: '/superadmin/dashboard',   roles: ['superadmin'] },
+  { label: 'JUGADORES',     href: '/superadmin/players',     roles: ['superadmin', 'player_db'] },
+  { label: 'CLUBES',        href: '/superadmin/clubs',       roles: ['superadmin', 'clubs'] },
+  { label: 'TORNEOS',       href: '/superadmin/tournaments', roles: ['superadmin', 'score_corrections'] },
+  { label: 'JUEGOS RAPIDOS',href: '/superadmin/games',       roles: ['superadmin', 'score_corrections'] },
+  { label: 'SOLICITUDES',   href: '/superadmin/requests',    roles: ['superadmin'] },
+  { label: 'RELACIONES',    href: '/superadmin/relations',   roles: ['superadmin'] },
+  { label: 'PLANES',        href: '/superadmin/plans',       roles: ['superadmin', 'transactions'] },
+  { label: 'PROMOCIONES',   href: '/superadmin/promotions',  roles: ['superadmin', 'transactions'] },
+  { label: 'STRIPE',        href: '/superadmin/stripe',      roles: ['superadmin', 'transactions'] },
+  { label: 'CONFIGURACION', href: '/superadmin/config',      roles: ['superadmin'] },
 ];
+
+const ROLE_LABELS: Record<string, string> = {
+  superadmin: 'Super Admin',
+  score_corrections: 'Correcciones',
+  player_db: 'Jugadores',
+  transactions: 'Transacciones',
+  clubs: 'Clubes',
+};
 
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggedIn, setLoggedIn] = useState(false);
+  const [session, setSession] = useState<SASession | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    setLoggedIn(saIsLoggedIn());
+    const isIn = saIsLoggedIn();
+    setLoggedIn(isIn);
+    if (isIn) setSession(saGetSession());
   }, [pathname]);
 
   const isLoginPage = pathname === '/superadmin/login' || pathname === '/superadmin';
@@ -40,8 +51,12 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     router.push('/superadmin/login');
   }
 
-  const sessionRaw = typeof window !== 'undefined' ? sessionStorage.getItem('padelmgt_sa_session') : null;
-  const sessionEmail = sessionRaw ? (JSON.parse(sessionRaw) as { email: string }).email : '';
+  const role = session?.role ?? 'superadmin';
+  const navItems = ALL_NAV_ITEMS.filter(item => item.roles.includes(role));
+
+  // Redirect sub-admins away from pages they can't access
+  const currentItemAllowed = ALL_NAV_ITEMS.find(item => pathname.startsWith(item.href));
+  const isPageAllowed = !currentItemAllowed || currentItemAllowed.roles.includes(role);
 
   const sidebarContent = (
     <div style={{
@@ -69,18 +84,18 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
         </div>
         <div style={{
           fontSize: 10,
-          color: 'var(--grey-500)',
+          color: role === 'superadmin' ? 'var(--grey-500)' : '#d6ff00',
           letterSpacing: '0.15em',
           marginTop: 4,
           textTransform: 'uppercase',
         }}>
-          Super Admin
+          {ROLE_LABELS[role] ?? 'Admin'}
         </div>
       </div>
 
       {/* Nav */}
       <nav style={{ flex: 1, paddingTop: 16 }}>
-        {NAV_ITEMS.map(item => {
+        {navItems.map(item => {
           const isActive = pathname.startsWith(item.href);
           return (
             <Link
@@ -109,7 +124,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       {/* User + logout */}
       <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 10, wordBreak: 'break-all' }}>
-          {sessionEmail}
+          {session?.email ?? ''}
         </div>
         <button
           onClick={handleLogout}
@@ -131,6 +146,32 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       </div>
     </div>
   );
+
+  if (!isPageAllowed) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f0f0' }}>
+        <div style={{ display: 'block' }} className="sa-sidebar-desktop">
+          {sidebarContent}
+        </div>
+        <main style={{ marginLeft: 240, flex: 1, minHeight: '100vh', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }} className="sa-main">
+          <div style={{ fontSize: 48 }}>🔒</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700 }}>Acceso Restringido</div>
+          <div style={{ color: 'var(--grey-500)', fontSize: 14 }}>No tienes permisos para acceder a esta sección.</div>
+          {navItems[0] && (
+            <Link href={navItems[0].href} style={{ marginTop: 8, padding: '10px 24px', background: '#0a0a0a', color: '#fff', textDecoration: 'none', borderRadius: 4, fontSize: 13, fontWeight: 600 }}>
+              Ir a {navItems[0].label}
+            </Link>
+          )}
+        </main>
+        <style>{`
+          @media (max-width: 768px) {
+            .sa-sidebar-desktop { display: none !important; }
+            .sa-main { margin-left: 0 !important; }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f0f0' }}>
