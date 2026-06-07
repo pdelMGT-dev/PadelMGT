@@ -16,6 +16,7 @@ import type { RankingEntry } from '@/lib/ranking-store';
 import { getPlayerClubs } from '@/lib/club-membership-store';
 import { getSAClubs } from '@/lib/superadmin-data';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { getMyLeagues, getLeagueSeasons, getActiveSeason, type PlayerLeague, type LeagueSeason } from '@/lib/player-league-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -198,6 +199,7 @@ export default function QuickGamePage() {
     const memberships = getPlayerClubs(currentUser.id);
     setMyClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
     setAllClubs(getSAClubs().filter(c => c.status === 'active').map(c => ({ id: c.id, name: c.name, city: c.city || '', country: c.country || '', courts: c.courts || 0 })));
+    setMyLeagues(getMyLeagues(currentUser.id));
     // load invitations for this player
     const invs = getInvitationsForPlayer(currentUser.id).filter(i => i.status === 'pending');
     setMyInvitations(invs);
@@ -234,6 +236,12 @@ export default function QuickGamePage() {
   // Step IV — Tipo de pareja
   const [pairType, setPairType] = useState<PairType | null>(null);
 
+  // League (optional)
+  const [myLeagues, setMyLeagues]         = useState<PlayerLeague[]>([]);
+  const [selectedLeagueId, setSelectedLeagueId] = useState('');
+  const [selectedSeasonId, setSelectedSeasonId] = useState('');
+  const [leagueSeasons, setLeagueSeasons]       = useState<LeagueSeason[]>([]);
+
   // Step V — Configuración
   const [courts, setCourts]             = useState(1);
   const [scoreType, setScoreType]       = useState<ScoreType>('traditional');
@@ -242,6 +250,15 @@ export default function QuickGamePage() {
   const [tiebreak, setTiebreak]         = useState(7);
   const [deuceRule, setDeuceRule]       = useState<DeuceRule>('gold');
   const [pointTarget, setPointTarget]   = useState(16);
+
+  // Update league seasons when league selected
+  useEffect(() => {
+    if (!selectedLeagueId) { setLeagueSeasons([]); setSelectedSeasonId(''); return; }
+    const ss = getLeagueSeasons(selectedLeagueId);
+    setLeagueSeasons(ss);
+    const active = getActiveSeason(selectedLeagueId);
+    setSelectedSeasonId(active?.id ?? ss[ss.length - 1]?.id ?? '');
+  }, [selectedLeagueId]);
 
   // Load friends on step 3
   useEffect(() => {
@@ -327,6 +344,7 @@ export default function QuickGamePage() {
     setPairType(null);
     setCourts(1); setScoreType('traditional'); setSetsPerMatch(1);
     setGamesPerSet(6); setTiebreak(7); setDeuceRule('gold'); setPointTarget(16);
+    setSelectedLeagueId(''); setSelectedSeasonId(''); setLeagueSeasons([]);
   }
 
   function goToDashboard() { resetWizard(); setView('dashboard'); }
@@ -389,6 +407,8 @@ export default function QuickGamePage() {
       invitedPlayers,
       levelLabel: level ? LEVEL_LABEL[level] : 'Todos',
       creatorId: currentUser.id,
+      leagueId: selectedLeagueId || undefined,
+      seasonId: selectedSeasonId || undefined,
     });
 
     incrementUsage('games');
@@ -974,6 +994,42 @@ export default function QuickGamePage() {
             </div>
           )}
         </div>
+
+        {/* Optional: Link to League */}
+        {myLeagues.length > 0 && (
+          <div style={{ ...card, marginTop: 16 }}>
+            <div style={secTitle}>Vincular a Liga (opcional)</div>
+            <div style={{ marginBottom: selectedLeagueId ? 12 : 0 }}>
+              <label style={lbl}>Liga</label>
+              <select
+                style={sel}
+                value={selectedLeagueId}
+                onChange={e => setSelectedLeagueId(e.target.value)}
+              >
+                <option value="">— Sin liga —</option>
+                {myLeagues.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+            {selectedLeagueId && leagueSeasons.length > 0 && (
+              <div>
+                <label style={lbl}>Temporada</label>
+                <select
+                  style={sel}
+                  value={selectedSeasonId}
+                  onChange={e => setSelectedSeasonId(e.target.value)}
+                >
+                  <option value="">— Sin temporada —</option>
+                  {leagueSeasons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            )}
+            {selectedLeagueId && leagueSeasons.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 8 }}>
+                Esta liga no tiene temporadas aún. El resultado contará en la liga pero sin temporada específica.
+              </div>
+            )}
+          </div>
+        )}
 
         <NavBtns onNext={() => setStep(2)} nextLabel="Paso 2: Nivel →" disabled={!step1Valid} />
       </div>

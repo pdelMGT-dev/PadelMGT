@@ -116,6 +116,42 @@ CREATE TABLE friend_requests (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Player-created leagues
+CREATE TABLE player_leagues (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_by TEXT REFERENCES players(id) ON DELETE CASCADE,
+  created_by_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  is_open BOOLEAN DEFAULT FALSE
+);
+
+-- League seasons
+CREATE TABLE league_seasons (
+  id TEXT PRIMARY KEY,
+  league_id TEXT REFERENCES player_leagues(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  points_win INTEGER DEFAULT 3,
+  points_draw INTEGER DEFAULT 1,
+  points_loss INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'upcoming' CHECK (status IN ('upcoming', 'active', 'completed')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- League members
+CREATE TABLE league_members (
+  id TEXT PRIMARY KEY,
+  league_id TEXT REFERENCES player_leagues(id) ON DELETE CASCADE,
+  player_id TEXT REFERENCES players(id) ON DELETE CASCADE,
+  player_name TEXT,
+  role TEXT DEFAULT 'member' CHECK (role IN ('admin', 'member')),
+  joined_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(league_id, player_id)
+);
+
 -- Indexes for common queries
 CREATE INDEX idx_players_status ON players(status);
 CREATE INDEX idx_players_email ON players(email);

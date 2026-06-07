@@ -149,6 +149,8 @@ export interface ActiveGame {
   createdAt?: string;         // ISO date when game was first created
   reorganizationRequested?: boolean;
   reorganizationRequestedAt?: string;
+  leagueId?: string;   // player-created league this game belongs to
+  seasonId?: string;   // league season this game belongs to
 }
 
 export interface KnockoutConfig {

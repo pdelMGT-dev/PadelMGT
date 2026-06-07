@@ -118,6 +118,8 @@ export function createQuickGame(params: {
   invitedPlayers?: import('./game-engine').InvitedPlayer[];
   levelLabel?: string;
   creatorId?: string;
+  leagueId?: string;
+  seasonId?: string;
 }): ActiveGame {
   const game: ActiveGame = {
     id: generateId(),
@@ -144,6 +146,8 @@ export function createQuickGame(params: {
     standings: [],
     levelLabel: params.levelLabel,
     creatorId: params.creatorId,
+    leagueId: params.leagueId,
+    seasonId: params.seasonId,
   };
   saveGame(game);
   return game;
