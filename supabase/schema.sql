@@ -119,12 +119,32 @@ CREATE TABLE friend_requests (
 -- Player-created leagues
 CREATE TABLE player_leagues (
   id TEXT PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
   description TEXT,
   created_by TEXT REFERENCES players(id) ON DELETE CASCADE,
   created_by_name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  is_open BOOLEAN DEFAULT FALSE
+  is_open BOOLEAN DEFAULT FALSE,
+  is_public BOOLEAN DEFAULT TRUE,
+  default_points_win INTEGER DEFAULT 3,
+  default_points_draw INTEGER DEFAULT 1,
+  default_points_loss INTEGER DEFAULT 0
+);
+
+-- League join requests
+CREATE TABLE league_join_requests (
+  id TEXT PRIMARY KEY,
+  league_id TEXT REFERENCES player_leagues(id) ON DELETE CASCADE,
+  player_id TEXT REFERENCES players(id) ON DELETE CASCADE,
+  player_name TEXT,
+  player_email TEXT,
+  message TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  reviewed_at TIMESTAMPTZ,
+  reviewed_by TEXT REFERENCES players(id),
+  UNIQUE(league_id, player_id)
 );
 
 -- League seasons

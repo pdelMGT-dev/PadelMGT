@@ -63,6 +63,10 @@ export default function CreateLeaguePage() {
       createdBy: user.id,
       createdByName: user.name,
       isOpen,
+      isPublic: true,
+      defaultPointsWin: pointsWin,
+      defaultPointsDraw: pointsDraw,
+      defaultPointsLoss: pointsLoss,
     });
 
     if (addSeason) {

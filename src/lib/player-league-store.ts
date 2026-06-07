@@ -11,6 +11,11 @@ export interface PlayerLeague {
   createdByName: string;
   createdAt: string;
   isOpen: boolean;
+  isPublic: boolean;
+  code: string;
+  defaultPointsWin: number;
+  defaultPointsDraw: number;
+  defaultPointsLoss: number;
 }
 
 export interface LeagueSeason {
@@ -34,6 +39,19 @@ export interface LeagueMember {
   joinedAt: string;
 }
 
+export interface LeagueJoinRequest {
+  id: string;
+  leagueId: string;
+  playerId: string;
+  playerName: string;
+  playerEmail?: string;
+  message?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+
 export interface LeagueStandingEntry {
   playerId: string;
   playerName: string;
@@ -44,16 +62,24 @@ export interface LeagueStandingEntry {
   played: number;
 }
 
-const leagueStore = createLocalStore<PlayerLeague[]>('padelmgt_player_leagues', [], { seedOnFirstLoad: false });
-const seasonStore = createLocalStore<LeagueSeason[]>('padelmgt_player_league_seasons', [], { seedOnFirstLoad: false });
-const memberStore = createLocalStore<LeagueMember[]>('padelmgt_player_league_members', [], { seedOnFirstLoad: false });
+const leagueStore  = createLocalStore<PlayerLeague[]>('padelmgt_player_leagues', [], { seedOnFirstLoad: false });
+const seasonStore  = createLocalStore<LeagueSeason[]>('padelmgt_player_league_seasons', [], { seedOnFirstLoad: false });
+const memberStore  = createLocalStore<LeagueMember[]>('padelmgt_player_league_members', [], { seedOnFirstLoad: false });
+const requestStore = createLocalStore<LeagueJoinRequest[]>('padelmgt_league_join_requests', [], { seedOnFirstLoad: false });
 
 function genId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-// ── Leagues ────────────────────────────────────────────────────────────────
+function generateLeagueCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let suffix = '';
+  for (let i = 0; i < 6; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+  return `LIGA-${new Date().getFullYear()}-${suffix}`;
+}
+
+// Leagues
 
 export function getAllPlayerLeagues(): PlayerLeague[] {
   return leagueStore.load();
@@ -61,6 +87,10 @@ export function getAllPlayerLeagues(): PlayerLeague[] {
 
 export function getPlayerLeague(id: string): PlayerLeague | null {
   return leagueStore.load().find(l => l.id === id) ?? null;
+}
+
+export function getPlayerLeagueByCode(code: string): PlayerLeague | null {
+  return leagueStore.load().find(l => l.code === code) ?? null;
 }
 
 export function getMyLeagues(playerId: string): PlayerLeague[] {
@@ -76,15 +106,28 @@ export function createPlayerLeague(params: {
   createdBy: string;
   createdByName: string;
   isOpen?: boolean;
+  isPublic?: boolean;
+  defaultPointsWin?: number;
+  defaultPointsDraw?: number;
+  defaultPointsLoss?: number;
 }): PlayerLeague {
+  const existingCodes = new Set(leagueStore.load().map(l => l.code));
+  let code = generateLeagueCode();
+  while (existingCodes.has(code)) code = generateLeagueCode();
+
   const league: PlayerLeague = {
     id: genId(),
+    code,
     name: params.name,
     description: params.description,
     createdBy: params.createdBy,
     createdByName: params.createdByName,
     createdAt: new Date().toISOString(),
     isOpen: params.isOpen ?? false,
+    isPublic: params.isPublic ?? true,
+    defaultPointsWin: params.defaultPointsWin ?? 3,
+    defaultPointsDraw: params.defaultPointsDraw ?? 1,
+    defaultPointsLoss: params.defaultPointsLoss ?? 0,
   };
   const all = leagueStore.load();
   all.push(league);
@@ -104,9 +147,10 @@ export function deletePlayerLeague(id: string): void {
   leagueStore.persist(leagueStore.load().filter(l => l.id !== id));
   seasonStore.persist(seasonStore.load().filter(s => s.leagueId !== id));
   memberStore.persist(memberStore.load().filter(m => m.leagueId !== id));
+  requestStore.persist(requestStore.load().filter(r => r.leagueId !== id));
 }
 
-// ── Seasons ────────────────────────────────────────────────────────────────
+// Seasons
 
 export function getLeagueSeasons(leagueId: string): LeagueSeason[] {
   return seasonStore.load().filter(s => s.leagueId === leagueId);
@@ -129,15 +173,16 @@ export function createLeagueSeason(params: {
   pointsDraw?: number;
   pointsLoss?: number;
 }): LeagueSeason {
+  const league = getPlayerLeague(params.leagueId);
   const season: LeagueSeason = {
     id: genId(),
     leagueId: params.leagueId,
     name: params.name,
     startDate: params.startDate,
     endDate: params.endDate,
-    pointsWin: params.pointsWin ?? 3,
-    pointsDraw: params.pointsDraw ?? 1,
-    pointsLoss: params.pointsLoss ?? 0,
+    pointsWin: params.pointsWin ?? league?.defaultPointsWin ?? 3,
+    pointsDraw: params.pointsDraw ?? league?.defaultPointsDraw ?? 1,
+    pointsLoss: params.pointsLoss ?? league?.defaultPointsLoss ?? 0,
     status: 'upcoming',
   };
   const all = seasonStore.load();
@@ -153,7 +198,7 @@ export function saveLeagueSeason(season: LeagueSeason): void {
   seasonStore.persist(all);
 }
 
-// ── Members ────────────────────────────────────────────────────────────────
+// Members
 
 export function getLeagueMembers(leagueId: string): LeagueMember[] {
   return memberStore.load().filter(m => m.leagueId === leagueId);
@@ -203,7 +248,68 @@ export function updateMemberRole(leagueId: string, playerId: string, role: 'admi
   if (idx >= 0) { all[idx] = { ...all[idx], role }; memberStore.persist(all); }
 }
 
-// ── Standings ──────────────────────────────────────────────────────────────
+// Join Requests
+
+export function getLeagueJoinRequests(leagueId: string): LeagueJoinRequest[] {
+  return requestStore.load().filter(r => r.leagueId === leagueId);
+}
+
+export function getLeaguePendingRequests(leagueId: string): LeagueJoinRequest[] {
+  return requestStore.load().filter(r => r.leagueId === leagueId && r.status === 'pending');
+}
+
+export function getLeagueJoinRequestForPlayer(leagueId: string, playerId: string): LeagueJoinRequest | null {
+  return requestStore.load().find(r => r.leagueId === leagueId && r.playerId === playerId) ?? null;
+}
+
+export function createLeagueJoinRequest(params: {
+  leagueId: string;
+  playerId: string;
+  playerName: string;
+  playerEmail?: string;
+  message?: string;
+}): LeagueJoinRequest {
+  const all = requestStore.load();
+  const existing = all.find(r => r.leagueId === params.leagueId && r.playerId === params.playerId);
+  if (existing) return existing;
+  const req: LeagueJoinRequest = {
+    id: genId(),
+    leagueId: params.leagueId,
+    playerId: params.playerId,
+    playerName: params.playerName,
+    playerEmail: params.playerEmail,
+    message: params.message,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
+  all.push(req);
+  requestStore.persist(all);
+  return req;
+}
+
+export function reviewJoinRequest(
+  requestId: string,
+  status: 'approved' | 'rejected',
+  reviewedBy: string,
+): void {
+  const all = requestStore.load();
+  const idx = all.findIndex(r => r.id === requestId);
+  if (idx < 0) return;
+  all[idx] = { ...all[idx], status, reviewedAt: new Date().toISOString(), reviewedBy };
+  requestStore.persist(all);
+  if (status === 'approved') {
+    addLeagueMember({ leagueId: all[idx].leagueId, playerId: all[idx].playerId, playerName: all[idx].playerName });
+  }
+}
+
+export function getAdminPendingRequestsCount(playerId: string): number {
+  const adminLeagueIds = new Set<string>();
+  memberStore.load().filter(m => m.playerId === playerId && m.role === 'admin').forEach(m => adminLeagueIds.add(m.leagueId));
+  leagueStore.load().filter(l => l.createdBy === playerId).forEach(l => adminLeagueIds.add(l.id));
+  return requestStore.load().filter(r => adminLeagueIds.has(r.leagueId) && r.status === 'pending').length;
+}
+
+// Standings
 
 export function computeLeagueStandings(
   leagueId: string,
@@ -211,7 +317,13 @@ export function computeLeagueStandings(
   games: ActiveGame[],
 ): LeagueStandingEntry[] {
   const season = seasonId ? getLeagueSeason(seasonId) : getActiveSeason(leagueId);
-  const cfg = { pointsWin: 3, pointsDraw: 1, pointsLoss: 0, ...(season ?? {}) };
+  const league = getPlayerLeague(leagueId);
+  const cfg = {
+    pointsWin:  league?.defaultPointsWin  ?? 3,
+    pointsDraw: league?.defaultPointsDraw ?? 1,
+    pointsLoss: league?.defaultPointsLoss ?? 0,
+    ...(season ?? {}),
+  };
 
   const leagueGames = games.filter(g => {
     if (g.leagueId !== leagueId) return false;

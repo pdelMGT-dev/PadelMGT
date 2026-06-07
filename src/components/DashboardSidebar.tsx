@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import { getPendingCount } from '@/lib/friend-request-store';
+import { getAdminPendingRequestsCount } from '@/lib/player-league-store';
 import { syncAllFromSupabase } from '@/lib/supabase-sync';
 import { authSignOut } from '@/lib/supabase';
 import LogoIcon from './LogoIcon';
@@ -71,11 +72,15 @@ export default function DashboardSidebar() {
   const pathname = usePathname();
   const router   = useRouter();
   const { user } = useCurrentUser();
-  const [friendBadge, setFriendBadge] = useState(0);
-  const [mobileOpen,  setMobileOpen]  = useState(false);
+  const [friendBadge,  setFriendBadge]  = useState(0);
+  const [leagueBadge,  setLeagueBadge]  = useState(0);
+  const [mobileOpen,   setMobileOpen]   = useState(false);
 
   useEffect(() => {
-    if (user?.role === 'player') setFriendBadge(getPendingCount(user.id));
+    if (user?.role === 'player') {
+      setFriendBadge(getPendingCount(user.id));
+      setLeagueBadge(getAdminPendingRequestsCount(user.id));
+    }
     // Sync all Supabase tables to localStorage (debounced to 30s)
     syncAllFromSupabase();
   }, [user]);
@@ -168,6 +173,11 @@ export default function DashboardSidebar() {
               {item.href === '/dashboard/player/friends' && friendBadge > 0 && (
                 <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: '#ee0005', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
                   {friendBadge}
+                </span>
+              )}
+              {item.href === '/dashboard/player/leagues' && leagueBadge > 0 && (
+                <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: '#ee0005', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                  {leagueBadge}
                 </span>
               )}
             </Link>

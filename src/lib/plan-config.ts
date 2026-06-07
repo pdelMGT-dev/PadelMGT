@@ -33,6 +33,13 @@ interface PlayerLimits {
   maxTournamentsPerMonth: number;
 }
 
+const PRO_LIMITS: PlayerLimits = {
+  maxPlayersPerGame: 32,
+  maxGamesPerMonth: -1,
+  maxPlayersPerTournament: 64,
+  maxTournamentsPerMonth: -1,
+};
+
 const PLAYER_LIMITS: Record<string, PlayerLimits> = {
   free: {
     maxPlayersPerGame: 8,
@@ -40,12 +47,11 @@ const PLAYER_LIMITS: Record<string, PlayerLimits> = {
     maxPlayersPerTournament: 16,
     maxTournamentsPerMonth: 1,
   },
-  player_pro: {
-    maxPlayersPerGame: 32,
-    maxGamesPerMonth: -1,
-    maxPlayersPerTournament: 64,
-    maxTournamentsPerMonth: -1,
-  },
+  player_pro:     PRO_LIMITS,
+  liga_free:      PRO_LIMITS,
+  liga_basic:     PRO_LIMITS,
+  liga_pro:       PRO_LIMITS,
+  liga_unlimited: { maxPlayersPerGame: -1, maxGamesPerMonth: -1, maxPlayersPerTournament: -1, maxTournamentsPerMonth: -1 },
   infinity: {
     maxPlayersPerGame: -1,
     maxGamesPerMonth: -1,
