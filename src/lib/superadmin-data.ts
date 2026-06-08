@@ -602,17 +602,34 @@ export async function getSATournamentsFromSupabase(): Promise<SATournament[] | n
       .select('*')
       .order('created_at', { ascending: false });
     if (error) return null;
-    return (data ?? []).map(row => ({
-      id: row.id as string,
-      name: row.name as string,
-      club: (row.club as string) ?? '',
-      city: (row.city as string) ?? '',
-      date: ((row.start_date as string) ?? '').split('T')[0],
-      players: (row.max_players as number) ?? 0,
-      status: (row.status as SATournament['status']) ?? 'upcoming',
-      rounds: ((row.data as Record<string, unknown>)?.currentRound as number) ?? 0,
-      format: (row.format as string) ?? 'Americano',
-    }));
+    return (data ?? []).map(row => {
+      const fullData = row.data as Record<string, unknown> | null;
+      const actualPlayers = Array.isArray(fullData?.players) ? (fullData!.players as unknown[]).length : 0;
+      return {
+        id: row.id as string,
+        name: row.name as string,
+        club: (row.club as string) ?? '',
+        city: (row.city as string) ?? '',
+        date: ((row.start_date as string) ?? '').split('T')[0],
+        players: actualPlayers || (row.max_players as number) || 0,
+        status: (row.status as SATournament['status']) ?? 'upcoming',
+        rounds: (fullData?.currentRound as number) ?? 0,
+        format: (row.format as string) ?? 'Americano',
+      };
+    });
+  } catch { return null; }
+}
+
+export async function getFullTournamentFromSupabase(id: string): Promise<Record<string, unknown> | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('tournaments')
+      .select('data')
+      .eq('id', id)
+      .single();
+    if (error || !data) return null;
+    return (data.data as Record<string, unknown>) ?? null;
   } catch { return null; }
 }
 

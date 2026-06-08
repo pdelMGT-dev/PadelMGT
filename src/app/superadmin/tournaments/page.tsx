@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getSATournaments, saveSATournaments, getSATournamentsFromSupabase, type SATournament } from '@/lib/superadmin-data';
+import { getSATournaments, saveSATournaments, getSATournamentsFromSupabase, getFullTournamentFromSupabase, upsertTournamentToSupabase, type SATournament } from '@/lib/superadmin-data';
 import { getTournament, saveTournament, getAllTournaments } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
 import type { CourtMatch, GameRound } from '@/lib/game-engine';
@@ -84,14 +84,35 @@ function TournamentDetailDrawer({
   onStatusChange: (id: string, status: SATournament['status']) => void;
 }) {
   const [full, setFull] = useState<Tournament | null>(null);
+  const [loading, setLoading] = useState(true);
   const [editScore, setEditScore] = useState<{ roundIdx: number; courtIdx: number; p1: string; p2: string } | null>(null);
   const [scoreInput, setScoreInput] = useState({ p1: '', p2: '' });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    // Try to load full tournament from local store, then all tournaments
-    const t = getTournament(summary.id) ?? getAllTournaments().find(t => t.name === summary.name) ?? null;
-    setFull(t);
+    setLoading(true);
+    // Try localStorage first (same browser as creator)
+    const local = getTournament(summary.id) ?? getAllTournaments().find(t => t.name === summary.name) ?? null;
+    if (local) {
+      setFull(local);
+      setLoading(false);
+      return;
+    }
+    // Fall back to Supabase data column
+    getFullTournamentFromSupabase(summary.id).then(sbData => {
+      if (sbData) setFull(sbData as unknown as Tournament);
+      setLoading(false);
+    });
   }, [summary.id, summary.name]);
+
+  async function persistToSupabase(updated: Tournament) {
+    setSaving(true);
+    try {
+      await upsertTournamentToSupabase(updated as unknown as Record<string, unknown>);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   function playerName(id: string): string {
     return full?.players.find(p => p.id === id)?.name ?? id;
@@ -99,8 +120,8 @@ function TournamentDetailDrawer({
 
   function handleSaveScore() {
     if (!full || !editScore) return;
-    const p1Score = Number(editScore.p1);
-    const p2Score = Number(editScore.p2);
+    const p1Score = Number(scoreInput.p1);
+    const p2Score = Number(scoreInput.p2);
     if (isNaN(p1Score) || isNaN(p2Score)) return;
 
     const rounds: GameRound[] = full.rounds.map((r, ri) => {
@@ -114,6 +135,7 @@ function TournamentDetailDrawer({
     const updated: Tournament = { ...full, rounds };
     setFull(updated);
     saveTournament(updated);
+    persistToSupabase(updated);
     setEditScore(null);
   }
 
@@ -205,6 +227,7 @@ function TournamentDetailDrawer({
                     reorganizationRequestedAt: undefined,
                   };
                   saveTournament(updated);
+                  persistToSupabase(updated);
                   setFull(updated);
                   onStatusChange(summary.id, 'upcoming');
                 }}
@@ -226,7 +249,7 @@ function TournamentDetailDrawer({
               {full.players.map((p, i) => (
                 <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: i % 2 === 0 ? '#fff' : 'var(--grey-50)', fontSize: 13 }}>
                   <span style={{ fontWeight: 500 }}>{p.name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p.level ?? '—'}</span>
+                  <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>{(p as { level?: string }).level ?? '—'}</span>
                 </div>
               ))}
             </div>
@@ -292,6 +315,7 @@ function TournamentDetailDrawer({
                               const updated = { ...full, rounds };
                               setFull(updated);
                               saveTournament(updated);
+                              persistToSupabase(updated);
                               setEditScore(null);
                             }}
                               style={{ padding: '6px 14px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
@@ -312,9 +336,21 @@ function TournamentDetailDrawer({
           </div>
         )}
 
-        {!full && (
+        {loading && (
+          <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: 'var(--grey-400)' }}>
+            Cargando datos del torneo…
+          </div>
+        )}
+
+        {!loading && !full && (
           <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: 'var(--grey-300)' }}>
-            Este torneo fue creado antes de la versión actual o sus datos no están disponibles localmente.
+            No hay datos detallados disponibles para este torneo.
+          </div>
+        )}
+
+        {saving && (
+          <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, fontSize: 12, color: '#166534', marginBottom: 12 }}>
+            Guardando cambios en Supabase…
           </div>
         )}
 
@@ -507,12 +543,37 @@ export default function TournamentsPage() {
 
   function handleApproveStep1(corrId: string) { setApproveConfirm({ step: 1, corrId }); }
   function handleApproveStep2() { if (!approveConfirm) return; setApproveConfirm({ ...approveConfirm, step: 2 }); }
-  function handleApproveFinal() {
+  async function handleApproveFinal() {
     if (!approveConfirm) return;
+    const corr = corrections.find(c => c.id === approveConfirm.corrId);
     updateScoreCorrectionStatus(approveConfirm.corrId, 'approved', { reviewedBy: 'Super Admin' });
     setCorrections(getScoreCorrections().filter(c => c.type === 'tournament'));
     setApproveConfirm(null);
     toast('Correccion aprobada y aplicada');
+
+    // Apply the score correction to the tournament in Supabase
+    if (corr) {
+      try {
+        const sbData = await getFullTournamentFromSupabase(corr.entityId);
+        if (sbData) {
+          const t = sbData as unknown as Tournament;
+          const [p1Str, p2Str] = corr.requestedScore.split(/[-–]/);
+          const p1Score = parseInt(p1Str?.trim() ?? '', 10);
+          const p2Score = parseInt(p2Str?.trim() ?? '', 10);
+          if (!isNaN(p1Score) && !isNaN(p2Score)) {
+            const roundIdx = corr.roundNum - 1;
+            const courtIdx = corr.courtNum - 1;
+            const rounds = (t.rounds ?? []).map((r, ri) => ri !== roundIdx ? r : {
+              ...r,
+              courts: r.courts.map((c, ci) => ci !== courtIdx ? c : {
+                ...c, pair1Score: p1Score, pair2Score: p2Score, status: 'completed' as const,
+              }),
+            });
+            await upsertTournamentToSupabase({ ...t, rounds } as unknown as Record<string, unknown>);
+          }
+        }
+      } catch { /* non-blocking */ }
+    }
   }
 
   function handleReject(corrId: string) {
