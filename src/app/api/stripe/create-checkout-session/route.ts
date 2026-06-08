@@ -36,9 +36,7 @@ const TRIAL_DAYS: Record<string, number> = {
 
 export async function POST(request: NextRequest) {
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-  if (!stripeSecretKey || stripeSecretKey.startsWith('sk_test_...')) {
-    return NextResponse.json({ error: 'Stripe no configurado' }, { status: 503 });
-  }
+  const isDevMode = process.env.STRIPE_DEV_MODE === 'true';
 
   let plan: string, userEmail: string | undefined;
   try {
@@ -52,13 +50,19 @@ export async function POST(request: NextRequest) {
   const envKey  = PRICE_ENV_MAP[plan];
   const priceId = envKey ? process.env[envKey] : undefined;
 
-  if (!envKey || !priceId || priceId.startsWith('price_...')) {
+  if (!envKey || (!isDevMode && (!priceId || priceId.startsWith('price_...')))) {
     return NextResponse.json({ error: 'Plan no válido o precio no configurado' }, { status: 400 });
   }
 
   const appUrl      = process.env.NEXT_PUBLIC_APP_URL ?? 'https://padelmgt.com';
   const successPath = DASHBOARD_REDIRECT[plan] ?? '/dashboard/player?subscription=success';
   const trialDays   = TRIAL_DAYS[plan] ?? 0;
+
+  // Dev mode: return a fake checkout URL that skips Stripe
+  if (isDevMode || !stripeSecretKey || stripeSecretKey.startsWith('sk_test_...')) {
+    const fakeUrl = `${appUrl}${successPath}&plan=${plan}&session_id=cs_dev_${Date.now()}`;
+    return NextResponse.json({ url: fakeUrl });
+  }
 
   try {
     const Stripe = (await import('stripe')).default;

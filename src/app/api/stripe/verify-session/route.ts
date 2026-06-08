@@ -6,9 +6,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'session_id requerido' }, { status: 400 });
   }
 
+  // Dev mode: fake session IDs created locally
+  if (sessionId.startsWith('cs_dev_')) {
+    const plan = request.nextUrl.searchParams.get('plan') ?? undefined;
+    return NextResponse.json({ status: 'paid', plan, customerEmail: undefined });
+  }
+
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeSecretKey || stripeSecretKey.startsWith('sk_test_...')) {
-    // Stripe not configured — trust the plan from query param (dev mode)
     return NextResponse.json({ status: 'not_configured' });
   }
 
