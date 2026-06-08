@@ -78,16 +78,18 @@ export function getMatchHistoryForPlayer(userId: string): MatchEntry[] {
   const entries: MatchEntry[] = [];
 
   for (const game of getAllGames()) {
-    if (!game.players.some(p => p.id === userId)) continue;
+    const gPlayers = Array.isArray(game.players) ? game.players : [];
+    if (!gPlayers.some(p => p.id === userId)) continue;
     entries.push(
-      ...extractFromEntity(userId, game.id, 'game', game.name, game.date, game.time, game.rounds as never, game.players)
+      ...extractFromEntity(userId, game.id, 'game', game.name, game.date, game.time, game.rounds as never, gPlayers)
     );
   }
 
   for (const t of getAllTournaments()) {
-    if (!t.players.some(p => p.id === userId)) continue;
+    const tPlayers = Array.isArray(t.players) ? t.players : [];
+    if (!tPlayers.some(p => p.id === userId)) continue;
     entries.push(
-      ...extractFromEntity(userId, t.id, 'tournament', t.name, t.date, t.time, t.rounds as never, t.players)
+      ...extractFromEntity(userId, t.id, 'tournament', t.name, t.date, t.time, t.rounds as never, tPlayers)
     );
   }
 
@@ -120,11 +122,12 @@ export function getNextEventForPlayer(userId: string): UpcomingEvent | null {
   for (const game of getAllGames()) {
     if (game.cancelledAt) continue;
     if (game.status === 'finished') continue;
-    if (!game.players.some(p => p.id === userId) && game.creatorId !== userId) continue;
+    const gPlayers = Array.isArray(game.players) ? game.players : [];
+    if (!gPlayers.some(p => p.id === userId) && game.creatorId !== userId) continue;
     events.push({
       id: game.id, name: game.name, date: game.date, time: game.time,
       club: game.club, city: game.city, format: game.format,
-      players: game.players.length, maxPlayers: game.maxPlayers,
+      players: gPlayers.length, maxPlayers: game.maxPlayers,
       entityType: 'game',
       sortKey: `${game.date}${game.time ?? ''}`,
     });
@@ -133,11 +136,12 @@ export function getNextEventForPlayer(userId: string): UpcomingEvent | null {
   for (const t of getAllTournaments()) {
     if (t.cancelledAt) continue;
     if (t.status === 'finished') continue;
-    if (!t.players.some(p => p.id === userId) && t.creatorId !== userId) continue;
+    const tPlayers = Array.isArray(t.players) ? t.players : [];
+    if (!tPlayers.some(p => p.id === userId) && t.creatorId !== userId) continue;
     events.push({
       id: t.id, name: t.name, date: t.date, time: t.time ?? '',
       club: t.club, city: t.city, format: t.format,
-      players: t.players.length, maxPlayers: t.maxPlayers,
+      players: tPlayers.length, maxPlayers: t.maxPlayers,
       entityType: 'tournament',
       sortKey: `${t.date}${t.time ?? ''}`,
     });
@@ -159,13 +163,14 @@ export function getActiveEventsForPlayer(userId: string): {
   for (const game of getAllGames()) {
     if (game.cancelledAt) continue;
     if (game.status === 'finished') continue;
-    const isCreator = game.creatorId === userId || game.players.some(p => p.id === userId && p.isCreator);
-    const isPlayer = game.players.some(p => p.id === userId);
+    const players = Array.isArray(game.players) ? game.players : [];
+    const isCreator = game.creatorId === userId || players.some(p => p.id === userId && p.isCreator);
+    const isPlayer = players.some(p => p.id === userId);
     if (!isCreator && !isPlayer) continue;
     result.push({
       id: game.id, name: game.name, date: game.date, time: game.time,
       club: game.club, city: game.city, status: game.status, format: game.format,
-      players: game.players.length, maxPlayers: game.maxPlayers,
+      players: players.length, maxPlayers: game.maxPlayers,
       entityType: 'game' as const, isCreator,
     });
   }
@@ -173,13 +178,14 @@ export function getActiveEventsForPlayer(userId: string): {
   for (const t of getAllTournaments()) {
     if (t.cancelledAt) continue;
     if (t.status === 'finished') continue;
+    const tPlayers = Array.isArray(t.players) ? t.players : [];
     const isCreator = t.creatorId === userId;
-    const isPlayer = t.players.some(p => p.id === userId);
+    const isPlayer = tPlayers.some(p => p.id === userId);
     if (!isCreator && !isPlayer) continue;
     result.push({
       id: t.id, name: t.name, date: t.date, time: t.time ?? '',
       club: t.club, city: t.city, status: t.status, format: t.format,
-      players: t.players.length, maxPlayers: t.maxPlayers,
+      players: tPlayers.length, maxPlayers: t.maxPlayers,
       entityType: 'tournament' as const, isCreator,
     });
   }
