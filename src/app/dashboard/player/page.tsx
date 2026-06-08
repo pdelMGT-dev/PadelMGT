@@ -86,8 +86,9 @@ export default function PlayerHomePage() {
       const updatedInvitedPlayers = game.invitedPlayers.map(ip =>
         ip.id === currentUser.id ? { ...ip, status: 'accepted' as const } : ip
       );
-      const alreadyInPlayers = game.players.some(p => p.id === currentUser.id);
-      const updatedPlayers = alreadyInPlayers ? game.players : [
+      const safePlayers = Array.isArray(game.players) ? game.players : [];
+      const alreadyInPlayers = safePlayers.some(p => p.id === currentUser.id);
+      const updatedPlayers = alreadyInPlayers ? safePlayers : [
         ...game.players,
         { id: currentUser.id, name: currentUser.name, ranking: 1000, isCreator: false, email: currentUser.email, shortId: currentUser.shortId },
       ];

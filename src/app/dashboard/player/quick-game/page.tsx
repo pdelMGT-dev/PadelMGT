@@ -450,9 +450,10 @@ export default function QuickGamePage() {
       const updatedInvited = (game.invitedPlayers ?? []).map(p =>
         p.id === currentUser.id ? { ...p, status: 'accepted' as const } : p
       );
-      const alreadyPlayer = game.players.some(p => p.id === currentUser.id);
-      const updatedPlayers = alreadyPlayer ? game.players : [
-        ...game.players,
+      const gamePlayers0 = Array.isArray(game.players) ? game.players : [];
+      const alreadyPlayer = gamePlayers0.some(p => p.id === currentUser.id);
+      const updatedPlayers = alreadyPlayer ? gamePlayers0 : [
+        ...gamePlayers0,
         { id: currentUser.id, name: currentUser.name, ranking: 1000, isCreator: false, email: currentUser.email, shortId: currentUser.shortId },
       ];
       saveGame({ ...game, invitedPlayers: updatedInvited, players: updatedPlayers });
@@ -484,7 +485,7 @@ export default function QuickGamePage() {
     const activeGames = games.filter(g =>
       g.status !== 'finished' && !g.cancelledAt && (
         g.creatorId === uid ||
-        (uid && g.players.some(p => p.id === uid)) ||
+        (uid && Array.isArray(g.players) && g.players.some(p => p.id === uid)) ||
         (uid && g.invitedPlayers?.some(p => p.id === uid && p.status === 'accepted'))
       )
     );
@@ -604,8 +605,8 @@ export default function QuickGamePage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 1, background: 'var(--grey-200)' }}>
               {activeGames.map(g => {
                 const si = STATUS_INFO[g.status as GameStatus] ?? { label: g.status, color: 'var(--grey-400)' };
-                const isCreator = g.creatorId === uid || (uid && g.players.some(p => p.id === uid && p.isCreator));
-                const confirmedCount = g.players.length;
+                const isCreator = g.creatorId === uid || (uid && Array.isArray(g.players) && g.players.some(p => p.id === uid && p.isCreator));
+                const confirmedCount = Array.isArray(g.players) ? g.players.length : 0;
                 return (
                   <div key={g.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -643,7 +644,7 @@ export default function QuickGamePage() {
             <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
               {activeGames.map((g, idx) => {
                 const si = STATUS_INFO[g.status as GameStatus] ?? { label: g.status, color: 'var(--grey-400)' };
-                const isCreator = g.creatorId === uid || (uid && g.players.some(p => p.id === uid && p.isCreator));
+                const isCreator = g.creatorId === uid || (uid && Array.isArray(g.players) && g.players.some(p => p.id === uid && p.isCreator));
                 return (
                   <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 20px', borderTop: idx === 0 ? 'none' : '1px solid var(--grey-100)' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -651,7 +652,7 @@ export default function QuickGamePage() {
                       <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{g.date} · {g.time} · {g.club}, {g.city}</div>
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, color: si.color, whiteSpace: 'nowrap' }}>{si.label}</span>
-                    <span style={{ fontSize: 12, color: 'var(--grey-400)', whiteSpace: 'nowrap' }}>{g.players.length}/{g.maxPlayers}</span>
+                    <span style={{ fontSize: 12, color: 'var(--grey-400)', whiteSpace: 'nowrap' }}>{Array.isArray(g.players) ? g.players.length : 0}/{g.maxPlayers}</span>
                     <Link href={`/dashboard/player/quick-game/${g.id}`}
                       style={{ padding: '6px 14px', background: 'var(--black)', color: '#fff', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' }}>
                       {isCreator ? 'Gestionar' : 'Ver'}
@@ -756,7 +757,7 @@ export default function QuickGamePage() {
               </div>
               <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
                 {pageGames.map((g, idx) => {
-                  const isCreator = g.creatorId === uid || (uid && g.players.some(p => p.id === uid && p.isCreator));
+                  const isCreator = g.creatorId === uid || (uid && Array.isArray(g.players) && g.players.some(p => p.id === uid && p.isCreator));
                   const myRankingEntry = uid ? getRankingHistoryForGame(g.id).find(e => e.playerId === uid) : null;
                   const standing = uid ? g.standings.find(s => s.playerId === uid) : null;
                   const posIdx = uid ? g.standings.findIndex(s => s.playerId === uid) : -1;
