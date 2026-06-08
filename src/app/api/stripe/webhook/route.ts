@@ -16,6 +16,22 @@ function derivePlanFromPriceId(priceId: string): string {
   return PRICE_TO_PLAN[priceId] ?? 'player_pro';
 }
 
+// Normalize billing-variant plan IDs to their base plan for DB storage
+const PLAN_NORMALIZE: Record<string, string> = {
+  player_pro_year:     'player_pro',
+  player_pro_monthly:  'player_pro',
+  liga_basic_yearly:   'liga_basic',
+  liga_pro_yearly:     'liga_pro',
+  liga_unlimited_yearly: 'liga_unlimited',
+  club_starter_yearly: 'club_starter',
+  club_pro_yearly:     'club_pro',
+  club_liga_yearly:    'club_liga',
+};
+
+function normalizePlan(plan: string): string {
+  return PLAN_NORMALIZE[plan] ?? plan;
+}
+
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
@@ -83,7 +99,7 @@ export async function POST(request: NextRequest) {
         const { error: subErr } = await sb.from('subscriptions').upsert({
           stripe_subscription_id: sub['id'],
           stripe_customer_id:     sub['customer'],
-          plan: resolvedPlan,
+          plan: normalizePlan(resolvedPlan),
           status,
           email,
           updated_at: new Date().toISOString(),
@@ -115,13 +131,14 @@ export async function POST(request: NextRequest) {
         }
 
         if (player) {
-          console.log(`[Stripe] Updating player ${player['id']} with plan=${resolvedPlan}`);
+          const normalizedPlan = normalizePlan(resolvedPlan);
+          console.log(`[Stripe] Updating player ${player['id']} with plan=${normalizedPlan}`);
           const cf = (player['custom_fields'] as Record<string, unknown>) ?? {};
           const { error: updateErr } = await sb.from('players')
-            .update({ custom_fields: { ...cf, plan: resolvedPlan, subscriptionStatus: status } })
+            .update({ custom_fields: { ...cf, plan: normalizedPlan, subscriptionStatus: status } })
             .eq('id', player['id']);
           if (updateErr) console.error('[Stripe] player update error:', updateErr.message);
-          else console.log(`[Stripe] Player ${player['id']} plan updated to ${resolvedPlan} ✓`);
+          else console.log(`[Stripe] Player ${player['id']} plan updated to ${normalizedPlan} ✓`);
         } else {
           console.warn(`[Stripe] No player record found for email=${email} — plan not saved to players table`);
         }
