@@ -62,19 +62,16 @@ export async function POST(request: NextRequest) {
         );
 
         // Reflect plan on the player record so the dashboard can check it
-        await sb.from('players')
-          .update({ custom_fields: sb.rpc ? undefined : undefined })
-          .eq('email', email.toLowerCase())
+        const { data: player } = await sb.from('players')
           .select('id, custom_fields')
-          .maybeSingle()
-          .then(async ({ data }) => {
-            if (!data) return;
-            const cf = (data['custom_fields'] as Record<string, unknown>) ?? {};
-            await sb.from('players')
-              .update({ custom_fields: { ...cf, plan, subscriptionStatus: status } })
-              .eq('id', data['id']);
-          })
-          .catch(err => console.warn('[Supabase] player plan update failed:', err));
+          .eq('email', email.toLowerCase())
+          .maybeSingle();
+        if (player) {
+          const cf = (player['custom_fields'] as Record<string, unknown>) ?? {};
+          await sb.from('players')
+            .update({ custom_fields: { ...cf, plan, subscriptionStatus: status } })
+            .eq('id', player['id']);
+        }
       }
       break;
     }
@@ -91,18 +88,16 @@ export async function POST(request: NextRequest) {
           .eq('stripe_subscription_id', sub['id'])
           .catch(err => console.warn('[Supabase] subscription cancel failed:', err));
 
-        await sb.from('players')
+        const { data: player } = await sb.from('players')
           .select('id, custom_fields')
           .eq('email', email.toLowerCase())
-          .maybeSingle()
-          .then(async ({ data }) => {
-            if (!data) return;
-            const cf = (data['custom_fields'] as Record<string, unknown>) ?? {};
-            await sb.from('players')
-              .update({ custom_fields: { ...cf, plan: 'free', subscriptionStatus: 'canceled' } })
-              .eq('id', data['id']);
-          })
-          .catch(err => console.warn('[Supabase] player plan downgrade failed:', err));
+          .maybeSingle();
+        if (player) {
+          const cf = (player['custom_fields'] as Record<string, unknown>) ?? {};
+          await sb.from('players')
+            .update({ custom_fields: { ...cf, plan: 'free', subscriptionStatus: 'canceled' } })
+            .eq('id', player['id']);
+        }
       }
       break;
     }
