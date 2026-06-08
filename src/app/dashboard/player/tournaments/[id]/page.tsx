@@ -7,7 +7,7 @@ import type { Tournament } from '@/lib/tournament-store';
 import type { GamePlayer, InvitedPlayer } from '@/lib/game-engine';
 import { startTournament } from '@/lib/tournament-engine';
 import { createInvitation, getInvitationsForGame } from '@/lib/invitation-store';
-import { searchPlayers, getFriendsForPlayer } from '@/lib/player-store';
+import { searchPlayers, getFriendsForPlayer, addFriendship } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, syncJoinRequestsFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { createScoreCorrection, getScoreCorrectionsByEntity, type ScoreCorrectionRequest } from '@/lib/score-correction-store';
@@ -750,6 +750,10 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     saveTournament(updated);
     setTournament(updated);
     approveJoinRequest(req.id);
+    // Add friendship between creator and the approved player
+    if (currentUser?.id) {
+      addFriendship(currentUser.id, req.playerId);
+    }
     setJoinRequests(prev => prev.filter(r => r.id !== req.id));
   }
 

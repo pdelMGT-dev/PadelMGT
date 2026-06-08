@@ -708,6 +708,10 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     saveGame(updated);
     setGame(updated);
     approveJoinRequest(req.id);
+    // Add friendship between creator and the approved player
+    if (currentUser?.id) {
+      addFriendship(currentUser.id, req.playerId);
+    }
     setJoinRequests(prev => prev.filter(r => r.id !== req.id));
   }
 

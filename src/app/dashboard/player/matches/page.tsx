@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getMatchHistoryForPlayer, type MatchEntry } from '@/lib/match-history';
+import { fetchGamesByCreator, fetchTournamentsByCreator } from '@/lib/supabase';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 type SortField = 'date' | 'pareja' | 'rivales';
 type SortDir = 'asc' | 'desc';
@@ -77,6 +78,95 @@ export default function PlayerMatchesPage() {
   useEffect(() => {
     if (!currentUser) return;
     setAllMatches(getMatchHistoryForPlayer(currentUser.id));
+  }, [currentUser]);
+
+  // Merge match history from Supabase (games/tournaments created by the user on other devices)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    async function loadFromSupabase() {
+      try {
+        const [sbGames, sbTournaments] = await Promise.all([
+          fetchGamesByCreator(currentUser!.id),
+          fetchTournamentsByCreator(currentUser!.id),
+        ]);
+
+        const extraEntries: MatchEntry[] = [];
+        const existingIds = new Set(getMatchHistoryForPlayer(currentUser!.id).map(m => m.id));
+
+        // Parse games from Supabase
+        for (const raw of (sbGames ?? [])) {
+          try {
+            const g = raw as { id: string; name: string; date: string; time?: string; players?: { id: string; name: string }[]; rounds?: { num: number; status: string; courts: { courtNum: number; pair1: string[]; pair2: string[]; pair1Score: number | null; pair2Score: number | null; status: string }[] }[] };
+            const players = g.players ?? [];
+            for (const round of (g.rounds ?? [])) {
+              for (const court of round.courts) {
+                if (court.pair1Score === null || court.pair2Score === null) continue;
+                const inPair1 = court.pair1.includes(currentUser!.id);
+                const inPair2 = court.pair2.includes(currentUser!.id);
+                if (!inPair1 && !inPair2) continue;
+                const entryId = `${g.id}-r${round.num}-c${court.courtNum}`;
+                if (existingIds.has(entryId)) continue;
+                const myPair = inPair1 ? court.pair1 : court.pair2;
+                const theirPair = inPair1 ? court.pair2 : court.pair1;
+                const myScore = inPair1 ? court.pair1Score : court.pair2Score;
+                const theirScore = inPair1 ? court.pair2Score : court.pair1Score;
+                const partnerIds = myPair.filter(id => id !== currentUser!.id);
+                const partnerName = partnerIds.length > 0 ? (players.find(p => p.id === partnerIds[0])?.name ?? partnerIds[0]) : '—';
+                const opponentNames = theirPair.map(id => players.find(p => p.id === id)?.name ?? id).join(' / ');
+                const result: 'V' | 'D' | 'T' = myScore > theirScore ? 'V' : myScore < theirScore ? 'D' : 'T';
+                extraEntries.push({ id: entryId, date: g.date ?? '', time: g.time, gameName: g.name ?? '', gameId: g.id, entityType: 'game', roundNum: round.num, partner: partnerName, opponents: opponentNames, userScore: myScore, opponentScore: theirScore, result, scoreLabel: `${myScore} – ${theirScore}` });
+                existingIds.add(entryId);
+              }
+            }
+          } catch { /* skip malformed */ }
+        }
+
+        // Parse tournaments from Supabase
+        for (const raw of (sbTournaments ?? [])) {
+          try {
+            const t = raw as { id: string; name: string; date: string; time?: string; players?: { id: string; name: string }[]; rounds?: { num: number; status: string; courts: { courtNum: number; pair1: string[]; pair2: string[]; pair1Score: number | null; pair2Score: number | null; status: string }[] }[] };
+            const players = t.players ?? [];
+            for (const round of (t.rounds ?? [])) {
+              for (const court of round.courts) {
+                if (court.pair1Score === null || court.pair2Score === null) continue;
+                const inPair1 = court.pair1.includes(currentUser!.id);
+                const inPair2 = court.pair2.includes(currentUser!.id);
+                if (!inPair1 && !inPair2) continue;
+                const entryId = `${t.id}-r${round.num}-c${court.courtNum}`;
+                if (existingIds.has(entryId)) continue;
+                const myPair = inPair1 ? court.pair1 : court.pair2;
+                const theirPair = inPair1 ? court.pair2 : court.pair1;
+                const myScore = inPair1 ? court.pair1Score : court.pair2Score;
+                const theirScore = inPair1 ? court.pair2Score : court.pair1Score;
+                const partnerIds = myPair.filter(id => id !== currentUser!.id);
+                const partnerName = partnerIds.length > 0 ? (players.find(p => p.id === partnerIds[0])?.name ?? partnerIds[0]) : '—';
+                const opponentNames = theirPair.map(id => players.find(p => p.id === id)?.name ?? id).join(' / ');
+                const result: 'V' | 'D' | 'T' = myScore > theirScore ? 'V' : myScore < theirScore ? 'D' : 'T';
+                extraEntries.push({ id: entryId, date: t.date ?? '', time: t.time, gameName: t.name ?? '', gameId: t.id, entityType: 'tournament', roundNum: round.num, partner: partnerName, opponents: opponentNames, userScore: myScore, opponentScore: theirScore, result, scoreLabel: `${myScore} – ${theirScore}` });
+                existingIds.add(entryId);
+              }
+            }
+          } catch { /* skip malformed */ }
+        }
+
+        if (extraEntries.length > 0) {
+          setAllMatches(prev => {
+            const merged = [...prev, ...extraEntries];
+            merged.sort((a, b) => {
+              const dateCmp = b.date.localeCompare(a.date);
+              if (dateCmp !== 0) return dateCmp;
+              return b.roundNum - a.roundNum;
+            });
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.warn('[matches] Supabase load failed:', err);
+      }
+    }
+
+    loadFromSupabase();
   }, [currentUser]);
 
   const gameNames = ['Todos', ...Array.from(new Set(allMatches.map(m => m.gameName)))];

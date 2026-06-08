@@ -1,8 +1,21 @@
 // player-store.ts — Single source of truth for all registered players
-import { registerPlayerToSupabase } from './superadmin-data';
 import { SEED_PLAYERS, SEED_FRIENDSHIPS } from './seeds/players';
 import { createLocalStore, isServer } from './local-store';
 export { SEED_PLAYERS, SEED_FRIENDSHIPS };
+
+/** Sync player data to Supabase via the server-side API route (uses service role key). */
+async function syncPlayerToSupabase(p: RegisteredPlayer & { authUserId?: string }): Promise<void> {
+  if (typeof window === 'undefined') return; // server-side: skip
+  try {
+    await fetch('/api/player/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(p),
+    });
+  } catch (err) {
+    console.warn('[player-store] syncPlayerToSupabase failed:', err);
+  }
+}
 
 const STORAGE_KEY = 'padelmgt_registered_players';
 const _store = createLocalStore<RegisteredPlayer[]>(STORAGE_KEY, SEED_PLAYERS);
@@ -113,8 +126,8 @@ export function registerPlayer(params: RegisterParams): RegisteredPlayer | null 
     authUserId: params.authUserId,
   };
   _store.persist([...all, newPlayer]);
-  registerPlayerToSupabase({ ...newPlayer, authUserId: params.authUserId })
-    .catch(err => console.warn('[Supabase] registerPlayer failed:', err));
+  syncPlayerToSupabase({ ...newPlayer, authUserId: params.authUserId })
+    .catch(err => console.warn('[player-store] registerPlayer sync failed:', err));
   return newPlayer;
 }
 
@@ -206,7 +219,7 @@ export function updatePlayerRankingPoints(playerId: string, delta: number): void
   if (idx < 0) return;
   all[idx] = { ...all[idx], rankingPoints: Math.max(0, all[idx].rankingPoints + delta) };
   _store.persist(all);
-  registerPlayerToSupabase(all[idx]).catch(err => console.warn('[Supabase] updateRankingPoints failed:', err));
+  syncPlayerToSupabase(all[idx]).catch(err => console.warn('[player-store] updateRankingPoints sync failed:', err));
 }
 
 /** Update any fields on an existing player and sync to Supabase. */
@@ -229,6 +242,6 @@ export function updatePlayer(playerId: string, updates: Partial<RegisteredPlayer
       }
     } catch { /* silent */ }
   }
-  registerPlayerToSupabase(updated).catch(err => console.warn('[Supabase] updatePlayer failed:', err));
+  syncPlayerToSupabase(updated).catch(err => console.warn('[player-store] updatePlayer sync failed:', err));
   return updated;
 }

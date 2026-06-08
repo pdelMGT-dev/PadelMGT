@@ -6,6 +6,7 @@ import { getPlayerByEmail, getFriendsForPlayer } from '@/lib/player-store';
 import { getFriendsSnapshots, saveFriendsSnapshot, getAvailableYears, getFriendsSnapshot } from '@/lib/friends-ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import type { RegisteredPlayer } from '@/lib/player-store';
+import { getSAPlayersFromSupabase } from '@/lib/superadmin-data';
 
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -25,6 +26,7 @@ export default function PlayerRankingPage() {
   const [pts, setPts] = useState<number>(0);
   const [rank, setRank] = useState<number | null>(null);
   const [name, setName] = useState('');
+  const [allPlayers, setAllPlayers] = useState<Array<{id: string; name: string; rankingPoints: number; country?: string}>>([]);
 
   // Tab state
   const [activeTab, setActiveTab] = useState<Tab>('global');
@@ -48,6 +50,24 @@ export default function PlayerRankingPage() {
     setRank(full?.ranking ?? user.ranking ?? null);
     setName(full?.name ?? user.name ?? '');
     setCurrentPlayer(full);
+
+    // Fetch all players from Supabase for global ranking
+    getSAPlayersFromSupabase().then(players => {
+      if (players && players.length > 0) {
+        const sorted = players
+          .filter(p => p.status === 'active')
+          .sort((a, b) => (b.rankingPoints ?? 0) - (a.rankingPoints ?? 0));
+        setAllPlayers(sorted.map(p => ({
+          id: p.id,
+          name: p.name,
+          rankingPoints: p.rankingPoints ?? 0,
+          country: p.country,
+        })));
+        // Update current user rank
+        const myRank = sorted.findIndex(p => p.email?.toLowerCase() === user.email?.toLowerCase()) + 1;
+        if (myRank > 0) setRank(myRank);
+      }
+    });
 
     if (full) {
       const friends = getFriendsForPlayer(full.id);
@@ -191,6 +211,59 @@ export default function PlayerRankingPage() {
                 <Link href="/dashboard/player/tournaments" className="btn btn-secondary btn-sm" style={{ borderRadius: 0 }}>
                   Ver Torneos →
                 </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Global leaderboard from Supabase */}
+          {allPlayers.length > 0 && (
+            <div style={{ marginTop: 32 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>Top 20 — Ranking Global</div>
+              <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
+                {/* Table header */}
+                <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr 80px 100px', padding: '12px 20px', borderBottom: '1px solid var(--grey-200)', background: 'var(--grey-50)' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>#</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Jugador</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>País</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', textAlign: 'right' }}>Puntos</div>
+                </div>
+                {allPlayers.slice(0, 20).map((player, idx) => {
+                  const isMe = player.id === currentPlayer?.id ||
+                    player.name.toLowerCase() === name.toLowerCase();
+                  return (
+                    <div
+                      key={player.id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '48px 1fr 80px 100px',
+                        padding: '14px 20px',
+                        borderBottom: idx < Math.min(allPlayers.length, 20) - 1 ? '1px solid var(--grey-100)' : 'none',
+                        background: isMe ? 'rgba(214,255,0,0.06)' : 'transparent',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32 }}>
+                        <RankBadge pos={idx + 1} />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 14, fontWeight: isMe ? 700 : 500, color: 'var(--black)' }}>
+                          {player.name}
+                        </span>
+                        {isMe && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+                            color: 'var(--black)', background: 'var(--neon, #d6ff00)',
+                            padding: '2px 6px', borderRadius: 2,
+                          }}>TÚ</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--grey-500)' }}>{player.country || '—'}</div>
+                      <div style={{ textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--black)' }}>
+                        {(player.rankingPoints ?? 0).toLocaleString()}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
