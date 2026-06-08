@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+const PRICE_TO_PLAN: Record<string, string> = {
+  [process.env.STRIPE_PRICE_PLAYER_PRO_MONTHLY  ?? '']: 'player_pro',
+  [process.env.STRIPE_PRICE_PLAYER_PRO_YEARLY   ?? '']: 'player_pro',
+  [process.env.STRIPE_PRICE_LIGA_BASIC_MONTHLY  ?? '']: 'liga_basic',
+  [process.env.STRIPE_PRICE_LIGA_PRO_MONTHLY    ?? '']: 'liga_pro',
+  [process.env.STRIPE_PRICE_LIGA_UNLIMITED_MONTHLY ?? '']: 'liga_unlimited',
+  [process.env.STRIPE_PRICE_CLUB_STARTER_MONTHLY ?? '']: 'club_starter',
+  [process.env.STRIPE_PRICE_CLUB_PRO_MONTHLY    ?? '']: 'club_pro',
+  [process.env.STRIPE_PRICE_CLUB_LIGA_MONTHLY   ?? '']: 'club_liga',
+};
+
+function derivePlanFromPriceId(priceId: string): string {
+  return PRICE_TO_PLAN[priceId] ?? 'player_pro';
+}
+
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
@@ -42,26 +57,38 @@ export async function POST(request: NextRequest) {
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
       const sub    = event.data.object;
-      const plan   = (sub['metadata'] as Record<string, string>)?.plan ?? 'club';
-      const email  = (sub['metadata'] as Record<string, string>)?.userEmail ?? '';
-      const status = sub['status'] as string; // 'active' | 'trialing' | 'past_due' | etc.
+      const plan   = (sub['metadata'] as Record<string, string>)?.plan ?? '';
+      let   email  = (sub['metadata'] as Record<string, string>)?.userEmail ?? '';
+      const status = sub['status'] as string;
 
-      console.log(`[Stripe] Subscription ${event.type}: plan=${plan} email=${email} status=${status}`);
+      // If metadata is missing email, fetch it from the Stripe customer object
+      if (!email && sub['customer']) {
+        try {
+          const Stripe = (await import('stripe')).default;
+          const stripe = new Stripe(stripeSecretKey!);
+          const customer = await stripe.customers.retrieve(sub['customer'] as string);
+          if ('email' in customer && customer.email) email = customer.email;
+        } catch { /* non-blocking */ }
+      }
+
+      // Derive plan from price ID if not in metadata
+      const resolvedPlan = plan || derivePlanFromPriceId(
+        ((sub['items'] as Record<string, unknown>)?.['data'] as Array<Record<string, unknown>>)?.[0]
+          ?.['price'] ? (((sub['items'] as Record<string, unknown>)?.['data'] as Array<Record<string, unknown>>)[0]['price'] as Record<string, unknown>)['id'] as string : ''
+      );
+
+      console.log(`[Stripe] Subscription ${event.type}: plan=${resolvedPlan} email=${email} status=${status}`);
 
       if (sb && email) {
-        // Upsert into subscriptions table; also patch player's custom_fields.plan
         await sb.from('subscriptions').upsert({
           stripe_subscription_id: sub['id'],
           stripe_customer_id:     sub['customer'],
-          plan,
+          plan: resolvedPlan,
           status,
           email,
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'stripe_subscription_id' }).catch(err =>
-          console.warn('[Supabase] subscription upsert failed:', err)
-        );
+        }, { onConflict: 'stripe_subscription_id' });
 
-        // Reflect plan on the player record so the dashboard can check it
         const { data: player } = await sb.from('players')
           .select('id, custom_fields')
           .eq('email', email.toLowerCase())
@@ -69,7 +96,7 @@ export async function POST(request: NextRequest) {
         if (player) {
           const cf = (player['custom_fields'] as Record<string, unknown>) ?? {};
           await sb.from('players')
-            .update({ custom_fields: { ...cf, plan, subscriptionStatus: status } })
+            .update({ custom_fields: { ...cf, plan: resolvedPlan, subscriptionStatus: status } })
             .eq('id', player['id']);
         }
       }
