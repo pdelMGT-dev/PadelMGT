@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       console.log(`[Stripe] Subscription ${event.type}: plan=${resolvedPlan} email=${email} status=${status}`);
 
       if (sb && email) {
-        await sb.from('subscriptions').upsert({
+        const { error: subErr } = await sb.from('subscriptions').upsert({
           stripe_subscription_id: sub['id'],
           stripe_customer_id:     sub['customer'],
           plan: resolvedPlan,
@@ -88,16 +88,42 @@ export async function POST(request: NextRequest) {
           email,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'stripe_subscription_id' });
+        if (subErr) console.error('[Stripe] subscriptions upsert error:', subErr.message);
 
-        const { data: player } = await sb.from('players')
+        // Try lookup by email first
+        let { data: player, error: playerErr } = await sb.from('players')
           .select('id, custom_fields')
           .eq('email', email.toLowerCase())
           .maybeSingle();
+        if (playerErr) console.warn('[Stripe] player lookup by email error:', playerErr.message);
+
+        // Fallback: look up auth user by email, then player by user_id
+        if (!player) {
+          console.log(`[Stripe] No player found by email=${email}, trying auth lookup...`);
+          const { data: authList } = await sb.auth.admin.listUsers();
+          const authUser = authList?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+          if (authUser) {
+            console.log(`[Stripe] Found auth user: ${authUser.id}, looking up player by user_id...`);
+            const { data: playerByUid } = await sb.from('players')
+              .select('id, custom_fields')
+              .eq('user_id', authUser.id)
+              .maybeSingle();
+            if (playerByUid) player = playerByUid;
+          } else {
+            console.warn(`[Stripe] No auth user found with email=${email}`);
+          }
+        }
+
         if (player) {
+          console.log(`[Stripe] Updating player ${player['id']} with plan=${resolvedPlan}`);
           const cf = (player['custom_fields'] as Record<string, unknown>) ?? {};
-          await sb.from('players')
+          const { error: updateErr } = await sb.from('players')
             .update({ custom_fields: { ...cf, plan: resolvedPlan, subscriptionStatus: status } })
             .eq('id', player['id']);
+          if (updateErr) console.error('[Stripe] player update error:', updateErr.message);
+          else console.log(`[Stripe] Player ${player['id']} plan updated to ${resolvedPlan} ✓`);
+        } else {
+          console.warn(`[Stripe] No player record found for email=${email} — plan not saved to players table`);
         }
       }
       break;
