@@ -236,6 +236,21 @@ export function updatePlan(id: PlanId, updates: Partial<SubscriptionPlan>): Subs
   return updated;
 }
 
+export function addPlan(plan: SubscriptionPlan): SubscriptionPlan {
+  const all = _planStore.load();
+  const withTimestamp = { ...plan, updatedAt: new Date().toISOString() };
+  _planStore.persist([...all, withTimestamp]);
+  return withTimestamp;
+}
+
+export function deletePlan(id: string): boolean {
+  const all = _planStore.load();
+  const filtered = all.filter(p => p.id !== id);
+  if (filtered.length === all.length) return false;
+  _planStore.persist(filtered);
+  return true;
+}
+
 export function getPlanChanges(): PlanChangeRecord[] {
   return _changeStore.load();
 }

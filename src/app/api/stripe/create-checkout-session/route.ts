@@ -38,11 +38,12 @@ export async function POST(request: NextRequest) {
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   const isDevMode = process.env.STRIPE_DEV_MODE === 'true';
 
-  let plan: string, userEmail: string | undefined;
+  let plan: string, userEmail: string | undefined, couponCode: string | undefined;
   try {
-    const body = await request.json() as { plan: string; userEmail?: string };
-    plan      = body.plan;
-    userEmail = body.userEmail;
+    const body = await request.json() as { plan: string; userEmail?: string; couponCode?: string };
+    plan       = body.plan;
+    userEmail  = body.userEmail;
+    couponCode = body.couponCode;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
@@ -68,12 +69,23 @@ export async function POST(request: NextRequest) {
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(stripeSecretKey);
 
+    // Resolve coupon: look up Stripe promotion code if provided
+    let stripePromotionCodeId: string | undefined;
+    if (couponCode) {
+      try {
+        const promoCodes = await stripe.promotionCodes.list({ code: couponCode, active: true, limit: 1 });
+        if (promoCodes.data.length > 0) stripePromotionCodeId = promoCodes.data[0].id;
+      } catch { /* coupon lookup failed — proceed without discount */ }
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${appUrl}${successPath}&plan=${plan}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${appUrl}/pricing`,
+      allow_promotion_codes: !stripePromotionCodeId, // allow manual entry if no auto-apply
+      ...(stripePromotionCodeId ? { discounts: [{ promotion_code: stripePromotionCodeId }] } : {}),
       ...(userEmail ? { customer_email: userEmail } : {}),
       subscription_data: {
         ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 // ── Dynamic plan data ─────────────────────────────────────────────────────────
 
@@ -35,14 +35,42 @@ function px(id: string, pm: PlanMap, fallback: {
   };
 }
 
-// ── Checkout button ───────────────────────────────────────────────────────────
+interface ActivePromo {
+  id: string;
+  code: string;
+  type: string;
+  value: number;
+  description: string;
+  maxUses: number | null;
+  usedCount: number;
+  expiresAt: string | null;
+  unlockPlan: string | null;
+  unlockMonths: number | null;
+  displayText: string;
+  displayBadge: string;
+}
 
+// ── Checkout helper ───────────────────────────────────────────────────────────
+async function startCheckout(planId: string, couponCode?: string): Promise<string | null> {
+  const userRaw   = typeof window !== 'undefined' ? localStorage.getItem('padelmgt_user') : null;
+  const userEmail = userRaw ? (JSON.parse(userRaw) as { email?: string }).email : undefined;
+  const res = await fetch('/api/stripe/create-checkout-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan: planId, userEmail, couponCode }),
+  });
+  const data = await res.json() as { url?: string; error?: string };
+  return data.url ?? null;
+}
+
+// ── Checkout button ───────────────────────────────────────────────────────────
 function CheckoutBtn({
-  planId, label, style,
+  planId, label, style, couponCode,
 }: {
   planId: string | null;
   label: string;
   style?: React.CSSProperties;
+  couponCode?: string;
 }) {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
@@ -52,16 +80,9 @@ function CheckoutBtn({
   async function go() {
     setError(''); setLoading(true);
     try {
-      const userRaw   = typeof window !== 'undefined' ? localStorage.getItem('padelmgt_user') : null;
-      const userEmail = userRaw ? (JSON.parse(userRaw) as { email?: string }).email : undefined;
-      const res  = await fetch('/api/stripe/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: planId, userEmail }),
-      });
-      const data = await res.json() as { url?: string; error?: string };
-      if (data.url) { window.location.href = data.url; return; }
-      setError(data.error ?? 'Error al iniciar el pago');
+      const url = await startCheckout(planId, couponCode);
+      if (url) { window.location.href = url; return; }
+      setError('Error al iniciar el pago');
     } catch { setError('Error de conexión'); }
     setLoading(false);
   }
@@ -74,6 +95,148 @@ function CheckoutBtn({
         {loading ? 'Redirigiendo...' : label}
       </button>
       {error && <p style={{ marginTop: 6, fontSize: 11, color: '#dc2626', textAlign: 'center' }}>{error}</p>}
+    </div>
+  );
+}
+
+// ── Promo Banner ──────────────────────────────────────────────────────────────
+function PromoBanner({ promo, onApply }: { promo: ActivePromo; onApply: (code: string) => void }) {
+  const [loading, setLoading] = useState(false);
+  const pct = promo.maxUses ? Math.min(100, (promo.usedCount / promo.maxUses) * 100) : 0;
+  const remaining = promo.maxUses ? promo.maxUses - promo.usedCount : null;
+  const barColor = pct >= 90 ? '#ef4444' : pct >= 75 ? '#f97316' : '#c8f135';
+
+  const daysLeft = promo.expiresAt
+    ? Math.max(0, Math.ceil((new Date(promo.expiresAt).getTime() - Date.now()) / 86_400_000))
+    : null;
+
+  const urgentDays = daysLeft !== null && daysLeft <= 30;
+  const daysBadgeColor = daysLeft !== null ? (daysLeft <= 7 ? '#ef4444' : daysLeft <= 14 ? '#f97316' : 'rgba(255,255,255,0.35)') : 'transparent';
+
+  async function handleActivate() {
+    setLoading(true);
+    try {
+      if (promo.unlockPlan) {
+        const url = await startCheckout(promo.unlockPlan, promo.code);
+        if (url) { window.location.href = url; return; }
+      } else {
+        onApply(promo.code);
+        const el = document.getElementById('promo-code-input');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ background: '#111', color: '#fff', padding: '28px 36px', marginBottom: 0, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at top right, rgba(200,241,53,0.07) 0%, transparent 60%)', pointerEvents: 'none' }} />
+      <div style={{ maxWidth: 900, margin: '0 auto', position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+              {promo.displayBadge && (
+                <span style={{ background: 'var(--neon)', color: '#111', fontSize: 9, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '3px 10px' }}>
+                  {promo.displayBadge}
+                </span>
+              )}
+              {urgentDays && daysLeft !== null && (
+                <span style={{ background: daysBadgeColor, color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', padding: '2px 8px', borderRadius: 2 }}>
+                  ⏱ {daysLeft === 0 ? 'Último día' : `${daysLeft} días`}
+                </span>
+              )}
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 4, color: '#fff' }}>
+              {promo.displayText || promo.description}
+            </div>
+            {promo.maxUses && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em' }}>CUPOS UTILIZADOS</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: remaining !== null && remaining <= 20 ? '#ef4444' : 'rgba(255,255,255,0.8)' }}>
+                    {remaining !== null && remaining <= 20 ? `¡Solo ${remaining} restantes!` : `${promo.usedCount} de ${promo.maxUses}`}
+                  </span>
+                </div>
+                <div style={{ height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 3, transition: 'width 0.5s ease' }} />
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+            <button
+              onClick={handleActivate}
+              disabled={loading}
+              style={{ padding: '13px 28px', background: 'var(--neon)', color: '#111', border: 'none', cursor: loading ? 'wait' : 'pointer', fontSize: 13, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: loading ? 0.8 : 1 }}
+            >
+              {loading ? 'Redirigiendo...' : 'Activar oferta →'}
+            </button>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.06em' }}>Código: {promo.code}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Promo Code Input ──────────────────────────────────────────────────────────
+function PromoCodeInput({ onApply, applied }: { onApply: (code: string) => void; applied: string }) {
+  const [input, setInput] = useState('');
+  const [status, setStatus] = useState<'idle' | 'ok' | 'error'>('idle');
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    if (applied) { setInput(applied); setStatus('ok'); setMsg('Código aplicado. Se descontará en el checkout.'); }
+  }, [applied]);
+
+  async function validate() {
+    if (!input.trim()) return;
+    setStatus('idle'); setMsg('');
+    try {
+      const res  = await fetch(`/api/promos/active`);
+      const data = await res.json() as { promos: ActivePromo[] };
+      const found = data.promos.find(p => p.code === input.toUpperCase().trim());
+      if (found) {
+        setStatus('ok');
+        setMsg(found.displayText || found.description || 'Código válido');
+        onApply(found.code);
+      } else {
+        setStatus('error');
+        setMsg('Código no encontrado o inactivo');
+      }
+    } catch {
+      setStatus('error'); setMsg('Error al validar el código');
+    }
+  }
+
+  return (
+    <div id="promo-code-input" style={{ padding: '32px 0', borderTop: '1px solid var(--grey-200)', marginTop: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--grey-600)', marginBottom: 10 }}>¿Tienes un código promocional?</div>
+      <div style={{ display: 'flex', gap: 0, maxWidth: 400 }}>
+        <input
+          value={input}
+          onChange={e => { setInput(e.target.value.toUpperCase()); setStatus('idle'); setMsg(''); }}
+          onKeyDown={e => e.key === 'Enter' && validate()}
+          placeholder="CÓDIGO"
+          style={{ flex: 1, padding: '10px 14px', border: `1px solid ${status === 'ok' ? '#166534' : status === 'error' ? '#dc2626' : 'var(--grey-200)'}`, outline: 'none', fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.08em', background: '#fff' }}
+        />
+        <button
+          onClick={validate}
+          style={{ padding: '10px 20px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}
+        >
+          Aplicar
+        </button>
+      </div>
+      {msg && (
+        <div style={{ marginTop: 6, fontSize: 12, color: status === 'ok' ? '#166534' : '#dc2626', fontWeight: 500 }}>
+          {status === 'ok' ? '✓ ' : '✕ '}{msg}
+        </div>
+      )}
+      {status === 'ok' && (
+        <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 4 }}>
+          El descuento se aplicará en el siguiente paso al seleccionar un plan.
+        </div>
+      )}
     </div>
   );
 }
@@ -97,11 +260,11 @@ function FeatureList({ items, dark }: { items: string[]; dark?: boolean }) {
 }
 
 function PlanCard({
-  name, role, price, period, desc, features, cta, planId, href, highlight, badge,
+  name, role, price, period, desc, features, cta, planId, href, highlight, badge, couponCode,
 }: {
   name: string; role: string; price: string; period: string; desc: string;
   features: string[]; cta: string; planId?: string | null; href?: string | null;
-  highlight?: boolean; badge?: string;
+  highlight?: boolean; badge?: string; couponCode?: string;
 }) {
   const dark = !!highlight;
   return (
@@ -138,7 +301,7 @@ function PlanCard({
             fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', fontSize: 12,
           }}>{cta}</Link>
         ) : planId ? (
-          <CheckoutBtn planId={planId} label={cta} style={{
+          <CheckoutBtn planId={planId} label={cta} couponCode={couponCode} style={{
             background: dark ? 'var(--neon)' : 'transparent',
             color: 'var(--black)',
             border: dark ? 'none' : '2px solid var(--black)',
@@ -171,6 +334,8 @@ function SectionHeader({ emoji, title, sub }: { emoji: string; title: string; su
 
 export default function PricingPage() {
   const [pm, setPm] = useState<PlanMap>({});
+  const [promos, setPromos] = useState<ActivePromo[]>([]);
+  const [appliedCode, setAppliedCode] = useState('');
 
   useEffect(() => {
     fetch('/api/plans')
@@ -183,6 +348,15 @@ export default function PricingPage() {
       .catch(() => {});
   }, []);
 
+  const loadPromos = useCallback(async () => {
+    try {
+      const res  = await fetch('/api/promos/active');
+      const data = await res.json() as { promos: ActivePromo[] };
+      setPromos(data.promos ?? []);
+    } catch { /* show no promos on error */ }
+  }, []);
+
+  useEffect(() => { void loadPromos(); }, [loadPromos]);
   return (
     <div>
       {/* Hero */}
@@ -196,6 +370,15 @@ export default function PricingPage() {
         </div>
       </div>
 
+      {/* Active promotions banners */}
+      {promos.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {promos.map(p => (
+            <PromoBanner key={p.id} promo={p} onApply={setAppliedCode} />
+          ))}
+        </div>
+      )}
+
       <section style={{ padding: '72px 48px 96px' }}>
         <div style={{ maxWidth: 1440, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 80 }}>
 
@@ -208,12 +391,14 @@ export default function PricingPage() {
                   desc: 'Empieza gratis. Sin tarjeta de crédito.',
                   features: ['3 Juegos Rápidos por mes','Hasta 8 jugadores por JR','1 torneo por mes','Hasta 16 jugadores por torneo','Ranking personal','Invitaciones por QR'] })}
                 role="Jugador" cta="Crear cuenta gratis" href="/signup?role=player"
+                couponCode={appliedCode}
               />
               <PlanCard
                 {...px('player_pro', pm, { price: '$3', period: '/mes', name: 'Pro', highlight: true,
                   desc: 'Para el jugador que organiza 2-3 veces por semana.',
                   features: ['Juegos Rápidos ilimitados','Hasta 32 jugadores por JR','Torneos ilimitados','Hasta 64 jugadores por torneo','Ranking + historial completo','Estadísticas avanzadas'] })}
                 role="Jugador" badge="Más popular" cta="Activar Pro" planId="player_pro"
+                couponCode={appliedCode}
               />
               <PlanCard
                 name={pm['player_pro'] ? `${pm['player_pro'].name} Anual` : 'Pro Anual'}
@@ -221,7 +406,7 @@ export default function PricingPage() {
                 period="/año · $2.08/mes" role="Jugador"
                 desc={pm['player_pro'] ? `Ahorrá pagando ${pm['player_pro'].name} por adelantado (30% descuento).` : 'Ahorrá 30% pagando por adelantado.'}
                 features={['Todo lo de Pro mensual','Facturación anual (30% ahorro)','Sin compromiso mensual']}
-                cta="Activar Pro Anual" planId="player_pro_year"
+                cta="Activar Pro Anual" planId="player_pro_year" couponCode={appliedCode}
               />
             </div>
           </div>
@@ -235,24 +420,28 @@ export default function PricingPage() {
                   desc: 'Para ligas vecinales o grupos pequeños.',
                   features: ['Hasta 30 jugadores','2 torneos activos','Ranking básico','1 categoría'] })}
                 role="Liga" cta="Empezar gratis" href="/signup?role=league_organizer"
+                couponCode={appliedCode}
               />
               <PlanCard
                 {...px('liga_basic', pm, { price: '$9', period: '/mes', name: 'Básico',
                   desc: 'Para la liga del club o circuito local.',
                   features: ['Hasta 100 jugadores','Torneos ilimitados','Ranking independiente','Historial de temporadas'] })}
                 role="Liga" cta="Activar Básico" planId="liga_basic"
+                couponCode={appliedCode}
               />
               <PlanCard
                 {...px('liga_pro', pm, { price: '$19', period: '/mes', name: 'Pro', highlight: true,
                   desc: 'Para circuitos regionales serios.',
                   features: ['Hasta 500 jugadores','Multi-categoría y género','Ranking con puntos propios','Reportes por temporada','Soporte prioritario'] })}
                 role="Liga" badge="Recomendado" cta="Activar Pro" planId="liga_pro"
+                couponCode={appliedCode}
               />
               <PlanCard
                 {...px('liga_unlimited', pm, { price: '$39', period: '/mes', name: 'Ilimitado',
                   desc: 'Para circuitos nacionales o multi-sede.',
                   features: ['Jugadores ilimitados','White-label básico','API read-only','Estadísticas avanzadas','Exportar datos (CSV)'] })}
                 role="Liga" cta="Activar Ilimitado" planId="liga_unlimited"
+                couponCode={appliedCode}
               />
             </div>
           </div>
@@ -266,18 +455,21 @@ export default function PricingPage() {
                   desc: 'Para clubes pequeños que quieren gestionar torneos y miembros.',
                   features: ['Hasta 150 miembros','Torneos ilimitados','Dashboard del club','Gestión de canchas','Soporte por email'] })}
                 role="Club" cta="Prueba 14 días gratis" planId="club_starter"
+                couponCode={appliedCode}
               />
               <PlanCard
                 {...px('club_pro', pm, { price: '$49', period: '/mes', name: 'Pro', highlight: true,
                   desc: 'Para clubes con reservas online y pagos integrados.',
                   features: ['Miembros ilimitados','Reservas online + pagos','Múltiples canchas','Estadísticas avanzadas','Ranking del club','Soporte prioritario'] })}
                 role="Club" badge="Más popular" cta="Prueba 14 días gratis" planId="club_pro"
+                couponCode={appliedCode}
               />
               <PlanCard
                 {...px('club_liga', pm, { price: '$69', period: '/mes', name: 'Club + Liga',
                   desc: 'Para clubes que también organizan su propio circuito.',
                   features: ['Todo lo de Club Pro','Ranking independiente','Gestión de liga interna','Multi-categoría','Reportes combinados'] })}
                 role="Club" cta="Prueba 14 días gratis" planId="club_liga"
+                couponCode={appliedCode}
               />
             </div>
             <p style={{ marginTop: 16, fontSize: 12, color: 'var(--grey-400)' }}>
@@ -294,12 +486,14 @@ export default function PricingPage() {
                   desc: 'Para federaciones con hasta 20 clubes afiliados.',
                   features: ['Hasta 20 clubes afiliados','Ranking oficial nacional','Torneos sancionados','Multi-categoría y género','Panel de administración'] })}
                 role="Federación" cta="Contactar ventas" planId="fed_basic"
+                couponCode={appliedCode}
               />
               <PlanCard
                 {...px('fed_pro', pm, { price: '$199', period: '/mes', name: 'Pro', highlight: true,
                   desc: 'Para federaciones nacionales con escala real.',
                   features: ['Clubes ilimitados','White-label completo','API full access','Integración sistemas propios','SLA básico garantizado','Gerente de cuenta'] })}
                 role="Federación" cta="Contactar ventas" planId="fed_pro"
+                couponCode={appliedCode}
               />
               <PlanCard
                 name="Enterprise" role="Federación" price="Custom" period="cotización a medida"
@@ -376,6 +570,9 @@ export default function PricingPage() {
               ))}
             </div>
           </div>
+
+          {/* Promo code input */}
+          <PromoCodeInput onApply={setAppliedCode} applied={appliedCode} />
 
         </div>
       </section>
