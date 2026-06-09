@@ -184,8 +184,6 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   const [koGroupSetInputs, setKoGroupSetInputs] = useState<Record<string, Array<{ p1: string; p2: string }>>>({});
   const [koGroupHistoryOpen, setKoGroupHistoryOpen] = useState<Record<string, boolean>>({});
   const [advanceConfirm, setAdvanceConfirm] = useState(false);
-  const [standingsPanelOpen, setStandingsPanelOpen] = useState(false);
-  const [screenW, setScreenW] = useState(1400);
   const [standingsTab, setStandingsTab] = useState<'groups' | 'bracket'>('groups');
   const [koGroupPhaseOpen, setKoGroupPhaseOpen] = useState(true);
   const [koBracketPhaseOpen, setKoBracketPhaseOpen] = useState(true);
@@ -228,14 +226,6 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     }
   }, [tournament, id, router]);
 
-  // ── Screen width tracking ─────────────────────────────────────────────────
-  useEffect(() => {
-    const update = () => setScreenW(window.innerWidth);
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, []);
-
   // ── Sync accordion states based on current knockout phase ─────────────────
   useEffect(() => {
     if (!tournament) return;
@@ -276,7 +266,6 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   }
 
   const t = tournament;
-  const isDesktop = screenW >= 1024;
 
   // ── Access control ────────────────────────────────────────────────────────
   const canManage = currentUser != null && (
@@ -821,7 +810,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <div style={{ paddingBottom: isDesktop ? 0 : 80 }}>
+    <div>
 
       {/* ── Sticky top bar ── */}
       <div style={{
@@ -1942,25 +1931,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
         })()}
       </div>
 
-      {/* ── Right column: always-visible standings (desktop only) ── */}
-      {isDesktop && (
-        <div style={{
-          borderLeft: '1px solid var(--grey-200)',
-          padding: '20px 20px',
-          background: '#fafafa',
-          position: 'sticky',
-          top: 65,
-          height: 'calc(100vh - 65px)',
-          overflowY: 'auto',
-        }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 16 }}>
-            Clasificación
-          </div>
-          {standingsPanelContent}
-        </div>
-      )}
-
-      </div>{/* end body grid */}
+      </div>{/* end body */}
 
       {/* Pulse animation for active dot */}
       <style>{`
@@ -1969,40 +1940,6 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
           50% { opacity: 0.5; transform: scale(1.3); }
         }
       `}</style>
-
-      {/* ── Mobile/tablet: floating button + drawer (only when NOT desktop) ── */}
-      {!isDesktop && t.format === 'knockout' && (
-        <>
-          <button
-            onClick={() => setStandingsPanelOpen(true)}
-            style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 100, padding: '12px 20px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
-          >
-            ▦ Clasificación
-          </button>
-          {standingsPanelOpen && (
-            <>
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200 }} onClick={() => setStandingsPanelOpen(false)} />
-              <div style={{ position: 'fixed', top: 0, right: 0, width: '90vw', maxWidth: 760, height: '100vh', background: '#fff', zIndex: 201, overflowY: 'auto', padding: '28px 32px', boxShadow: '-4px 0 40px rgba(0,0,0,0.15)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase' }}>Clasificación y Bracket</div>
-                  <button onClick={() => setStandingsPanelOpen(false)} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: 'var(--grey-400)', lineHeight: 1 }}>×</button>
-                </div>
-                {standingsPanelContent}
-              </div>
-            </>
-          )}
-        </>
-      )}
-
-      {/* Mobile standings for non-knockout formats */}
-      {!isDesktop && t.format !== 'knockout' && (
-        <div style={{ margin: '0 24px 40px', padding: '20px', background: '#fafafa', border: '1px solid var(--grey-200)' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 16 }}>
-            Clasificación
-          </div>
-          {standingsPanelContent}
-        </div>
-      )}
     </div>
   );
 }
