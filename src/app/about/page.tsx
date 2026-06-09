@@ -1,13 +1,20 @@
-import Link from 'next/link';
+'use client';
 
-const team = [
+import Link from 'next/link';
+import { useState, useEffect } from 'react';
+
+interface TeamMember { name: string; role: string; country: string; bio: string; }
+interface Milestone  { year: string; event: string; }
+interface Stat       { value: string; label: string; }
+
+const DEFAULT_TEAM: TeamMember[] = [
   { name: 'Martín Rodríguez', role: 'CEO & Co-Founder', country: '🇦🇷', bio: 'Ex-jugador profesional y fanático del pádel. Fundó PadelMGT para resolver los problemas que vivió como organizador.' },
   { name: 'Valentina Cruz', role: 'CTO & Co-Founder', country: '🇨🇴', bio: 'Ingeniera de software con 10 años de experiencia en plataformas deportivas a escala.' },
   { name: 'Diego Morales', role: 'Head of Product', country: '🇲🇽', bio: 'Diseñador y estratega de producto. Obsesionado con la experiencia de usuario en deportes.' },
   { name: 'Ana Fernández', role: 'Head of Growth', country: '🇨🇱', bio: 'Especialista en crecimiento de comunidades deportivas en América Latina.' },
 ];
 
-const milestones = [
+const DEFAULT_MILESTONES: Milestone[] = [
   { year: '2023', event: 'Fundación de PadelMGT en Buenos Aires con el primer torneo piloto.' },
   { year: '2024', event: 'Lanzamiento público. 1,000 jugadores registrados en el primer mes.' },
   { year: '2025', event: 'Expansión a 8 países de América Latina y España.' },
@@ -15,6 +22,37 @@ const milestones = [
 ];
 
 export default function AboutPage() {
+  const [team, setTeam] = useState<TeamMember[]>(DEFAULT_TEAM);
+  const [milestones, setMilestones] = useState<Milestone[]>(DEFAULT_MILESTONES);
+  const [stats, setStats] = useState<{ players: Stat; clubs: Stat; leagues: Stat; countries: Stat }>({
+    players:   { value: '12,400+', label: 'Jugadores activos' },
+    clubs:     { value: '380',     label: 'Clubes registrados' },
+    leagues:   { value: '47',      label: 'Ligas activas' },
+    countries: { value: '9',       label: 'Países' },
+  });
+
+  useEffect(() => {
+    fetch('/api/stats')
+      .then(r => r.json() as Promise<{ players: Stat; clubs: Stat; leagues: Stat; countries: Stat }>)
+      .then(d => setStats({
+        players:   { value: d.players?.value   ?? '12,400+', label: 'Jugadores activos' },
+        clubs:     { value: d.clubs?.value     ?? '380',     label: 'Clubes registrados' },
+        leagues:   { value: d.leagues?.value   ?? '47',      label: 'Ligas activas' },
+        countries: { value: d.countries?.value ?? '9',       label: 'Países' },
+      }))
+      .catch(() => {});
+
+    fetch('/api/about-content')
+      .then(r => r.json() as Promise<{ team: TeamMember[]; milestones: Milestone[] }>)
+      .then(d => {
+        if (d.team?.length)       setTeam(d.team);
+        if (d.milestones?.length) setMilestones(d.milestones);
+      })
+      .catch(() => {});
+  }, []);
+
+  const statList = [stats.players, stats.clubs, stats.leagues, stats.countries];
+
   return (
     <div>
       <div className="page-header">
@@ -41,15 +79,10 @@ export default function AboutPage() {
             </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: 'var(--grey-200)' }}>
-            {[
-              { n: '12,400+', l: 'Jugadores activos' },
-              { n: '380', l: 'Clubes registrados' },
-              { n: '47', l: 'Ligas activas' },
-              { n: '9', l: 'Países' },
-            ].map((s) => (
-              <div key={s.l} style={{ background: '#fff', padding: '40px 32px' }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, fontWeight: 600, letterSpacing: '-0.03em', color: 'var(--black)', lineHeight: 1 }}>{s.n}</div>
-                <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginTop: 8 }}>{s.l}</div>
+            {statList.map((s) => (
+              <div key={s.label} style={{ background: '#fff', padding: '40px 32px' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, fontWeight: 600, letterSpacing: '-0.03em', color: 'var(--black)', lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginTop: 8 }}>{s.label}</div>
               </div>
             ))}
           </div>
@@ -117,12 +150,18 @@ export default function AboutPage() {
       <section style={{ background: '#111', color: '#fff', padding: '80px 48px' }}>
         <div style={{ maxWidth: 1440, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 32 }}>
           <div>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 8px', lineHeight: 0.95 }}>¿HABLAMOS?</h3>
-            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 15, margin: 0 }}>Contáctanos si quieres saber más, hacer una demo o simplemente hablar de pádel.</p>
+            <h2 className="section-title" style={{ color: '#fff', marginBottom: 16 }}>ÚNETE A LA COMUNIDAD</h2>
+            <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.65)', margin: 0, maxWidth: 480 }}>
+              Miles de jugadores y clubes ya confían en PadelMGT. Empieza gratis hoy.
+            </p>
           </div>
-          <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
-            <Link href="/signup" className="btn btn-on-dark btn-lg">Crear cuenta gratis</Link>
-            <Link href="/pricing" className="btn btn-outline-dark btn-lg">Ver Planes</Link>
+          <div style={{ display: 'flex', gap: 16, flexShrink: 0 }}>
+            <Link href="/register" style={{ padding: '14px 32px', background: 'var(--neon)', color: 'var(--black)', fontWeight: 700, fontSize: 13, letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none' }}>
+              Comenzar gratis
+            </Link>
+            <Link href="/pricing" style={{ padding: '14px 32px', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', fontWeight: 700, fontSize: 13, letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none' }}>
+              Ver planes
+            </Link>
           </div>
         </div>
       </section>
