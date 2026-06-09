@@ -1,7 +1,39 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+// ── Dynamic plan data ─────────────────────────────────────────────────────────
+
+interface FetchedPlan {
+  id: string;
+  name: string;
+  description: string;
+  priceMonthly: number;
+  priceAnnual: number;
+  features: Array<{ text: string; included: boolean }>;
+  isFeatured: boolean;
+  isActive: boolean;
+}
+
+type PlanMap = Record<string, FetchedPlan>;
+
+/** Merge fetched plan data with hardcoded fallback values */
+function px(id: string, pm: PlanMap, fallback: {
+  price: string; period: string; desc: string; features: string[];
+  name?: string; highlight?: boolean;
+}) {
+  const p = pm[id];
+  const features = p?.features.filter(f => f.included).map(f => f.text);
+  return {
+    name:      p?.name           ?? fallback.name ?? id,
+    price:     p ? (p.priceMonthly === 0 ? '$0' : `$${p.priceMonthly}`) : fallback.price,
+    period:    fallback.period,
+    desc:      p?.description    ?? fallback.desc,
+    features:  features?.length  ? features : fallback.features,
+    highlight: p ? p.isFeatured  : (fallback.highlight ?? false),
+  };
+}
 
 // ── Checkout button ───────────────────────────────────────────────────────────
 
@@ -138,6 +170,19 @@ function SectionHeader({ emoji, title, sub }: { emoji: string; title: string; su
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PricingPage() {
+  const [pm, setPm] = useState<PlanMap>({});
+
+  useEffect(() => {
+    fetch('/api/plans')
+      .then(r => r.json() as Promise<{ plans: FetchedPlan[] }>)
+      .then(data => {
+        if (Array.isArray(data.plans) && data.plans.length > 0) {
+          setPm(Object.fromEntries(data.plans.map(p => [p.id, p])));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <div>
       {/* Hero */}
@@ -159,39 +204,23 @@ export default function PricingPage() {
             <SectionHeader emoji="🎾" title="Jugadores" sub="Para jugadores que quieren rankear, crear partidos y torneos con sus amigos." />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 2, background: 'var(--grey-200)' }}>
               <PlanCard
-                name="Free" role="Jugador" price="$0" period="para siempre"
-                desc="Empieza gratis. Sin tarjeta de crédito."
-                features={[
-                  '3 Juegos Rápidos por mes',
-                  'Hasta 8 jugadores por JR',
-                  '1 torneo por mes',
-                  'Hasta 16 jugadores por torneo',
-                  'Ranking personal',
-                  'Invitaciones por QR',
-                ]}
-                cta="Crear cuenta gratis" href="/signup?role=player"
+                {...px('free', pm, { price: '$0', period: 'para siempre', name: 'Free',
+                  desc: 'Empieza gratis. Sin tarjeta de crédito.',
+                  features: ['3 Juegos Rápidos por mes','Hasta 8 jugadores por JR','1 torneo por mes','Hasta 16 jugadores por torneo','Ranking personal','Invitaciones por QR'] })}
+                role="Jugador" cta="Crear cuenta gratis" href="/signup?role=player"
               />
               <PlanCard
-                name="Pro" role="Jugador" price="$3" period="/mes" highlight badge="Más popular"
-                desc="Para el jugador que organiza 2-3 veces por semana."
-                features={[
-                  'Juegos Rápidos ilimitados',
-                  'Hasta 32 jugadores por JR',
-                  'Torneos ilimitados',
-                  'Hasta 64 jugadores por torneo',
-                  'Ranking + historial completo',
-                  'Estadísticas avanzadas',
-                ]}
-                cta="Activar Pro" planId="player_pro"
+                {...px('player_pro', pm, { price: '$3', period: '/mes', name: 'Pro', highlight: true,
+                  desc: 'Para el jugador que organiza 2-3 veces por semana.',
+                  features: ['Juegos Rápidos ilimitados','Hasta 32 jugadores por JR','Torneos ilimitados','Hasta 64 jugadores por torneo','Ranking + historial completo','Estadísticas avanzadas'] })}
+                role="Jugador" badge="Más popular" cta="Activar Pro" planId="player_pro"
               />
               <PlanCard
-                name="Pro Anual" role="Jugador" price="$25" period="/año · $2.08/mes"
-                desc="Ahorrá 30% pagando por adelantado."
-                features={[
-                  'Todo lo de Pro mensual',
-                  'Facturación anual (30% ahorro)',
-                  'Sin compromiso mensual',
-                ]}
+                name={pm['player_pro'] ? `${pm['player_pro'].name} Anual` : 'Pro Anual'}
+                price={pm['player_pro']?.priceAnnual ? `$${pm['player_pro'].priceAnnual}` : '$25'}
+                period="/año · $2.08/mes" role="Jugador"
+                desc={pm['player_pro'] ? `Ahorrá pagando ${pm['player_pro'].name} por adelantado (30% descuento).` : 'Ahorrá 30% pagando por adelantado.'}
+                features={['Todo lo de Pro mensual','Facturación anual (30% ahorro)','Sin compromiso mensual']}
                 cta="Activar Pro Anual" planId="player_pro_year"
               />
             </div>
@@ -202,50 +231,28 @@ export default function PricingPage() {
             <SectionHeader emoji="🏆" title="Ligas y Organizadores" sub="Para organizar circuitos, ligas privadas o torneos recurrentes con Ranking Independiente." />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 2, background: 'var(--grey-200)' }}>
               <PlanCard
-                name="Free" role="Liga" price="$0" period="para siempre"
-                desc="Para ligas vecinales o grupos pequeños."
-                features={[
-                  'Hasta 30 jugadores',
-                  '2 torneos activos',
-                  'Ranking básico',
-                  '1 categoría',
-                ]}
-                cta="Empezar gratis" href="/signup?role=league_organizer"
+                {...px('liga_free', pm, { price: '$0', period: 'para siempre', name: 'Free',
+                  desc: 'Para ligas vecinales o grupos pequeños.',
+                  features: ['Hasta 30 jugadores','2 torneos activos','Ranking básico','1 categoría'] })}
+                role="Liga" cta="Empezar gratis" href="/signup?role=league_organizer"
               />
               <PlanCard
-                name="Básico" role="Liga" price="$9" period="/mes"
-                desc="Para la liga del club o circuito local."
-                features={[
-                  'Hasta 100 jugadores',
-                  'Torneos ilimitados',
-                  'Ranking independiente',
-                  'Historial de temporadas',
-                ]}
-                cta="Activar Básico" planId="liga_basic"
+                {...px('liga_basic', pm, { price: '$9', period: '/mes', name: 'Básico',
+                  desc: 'Para la liga del club o circuito local.',
+                  features: ['Hasta 100 jugadores','Torneos ilimitados','Ranking independiente','Historial de temporadas'] })}
+                role="Liga" cta="Activar Básico" planId="liga_basic"
               />
               <PlanCard
-                name="Pro" role="Liga" price="$19" period="/mes" highlight badge="Recomendado"
-                desc="Para circuitos regionales serios."
-                features={[
-                  'Hasta 500 jugadores',
-                  'Multi-categoría y género',
-                  'Ranking con puntos propios',
-                  'Reportes por temporada',
-                  'Soporte prioritario',
-                ]}
-                cta="Activar Pro" planId="liga_pro"
+                {...px('liga_pro', pm, { price: '$19', period: '/mes', name: 'Pro', highlight: true,
+                  desc: 'Para circuitos regionales serios.',
+                  features: ['Hasta 500 jugadores','Multi-categoría y género','Ranking con puntos propios','Reportes por temporada','Soporte prioritario'] })}
+                role="Liga" badge="Recomendado" cta="Activar Pro" planId="liga_pro"
               />
               <PlanCard
-                name="Ilimitado" role="Liga" price="$39" period="/mes"
-                desc="Para circuitos nacionales o multi-sede."
-                features={[
-                  'Jugadores ilimitados',
-                  'White-label básico',
-                  'API read-only',
-                  'Estadísticas avanzadas',
-                  'Exportar datos (CSV)',
-                ]}
-                cta="Activar Ilimitado" planId="liga_unlimited"
+                {...px('liga_unlimited', pm, { price: '$39', period: '/mes', name: 'Ilimitado',
+                  desc: 'Para circuitos nacionales o multi-sede.',
+                  features: ['Jugadores ilimitados','White-label básico','API read-only','Estadísticas avanzadas','Exportar datos (CSV)'] })}
+                role="Liga" cta="Activar Ilimitado" planId="liga_unlimited"
               />
             </div>
           </div>
@@ -255,41 +262,22 @@ export default function PricingPage() {
             <SectionHeader emoji="🏢" title="Clubes" sub="Fee mensual fijo. Sin comisiones, sin sorpresas. Sabés exactamente cuánto pagás." />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 2, background: 'var(--grey-200)' }}>
               <PlanCard
-                name="Starter" role="Club" price="$29" period="/mes"
-                desc="Para clubes pequeños que quieren gestionar torneos y miembros."
-                features={[
-                  'Hasta 150 miembros',
-                  'Torneos ilimitados',
-                  'Dashboard del club',
-                  'Gestión de canchas',
-                  'Soporte por email',
-                ]}
-                cta="Prueba 14 días gratis" planId="club_starter"
+                {...px('club_starter', pm, { price: '$29', period: '/mes', name: 'Starter',
+                  desc: 'Para clubes pequeños que quieren gestionar torneos y miembros.',
+                  features: ['Hasta 150 miembros','Torneos ilimitados','Dashboard del club','Gestión de canchas','Soporte por email'] })}
+                role="Club" cta="Prueba 14 días gratis" planId="club_starter"
               />
               <PlanCard
-                name="Pro" role="Club" price="$49" period="/mes" highlight badge="Más popular"
-                desc="Para clubes con reservas online y pagos integrados."
-                features={[
-                  'Miembros ilimitados',
-                  'Reservas online + pagos',
-                  'Múltiples canchas',
-                  'Estadísticas avanzadas',
-                  'Ranking del club',
-                  'Soporte prioritario',
-                ]}
-                cta="Prueba 14 días gratis" planId="club_pro"
+                {...px('club_pro', pm, { price: '$49', period: '/mes', name: 'Pro', highlight: true,
+                  desc: 'Para clubes con reservas online y pagos integrados.',
+                  features: ['Miembros ilimitados','Reservas online + pagos','Múltiples canchas','Estadísticas avanzadas','Ranking del club','Soporte prioritario'] })}
+                role="Club" badge="Más popular" cta="Prueba 14 días gratis" planId="club_pro"
               />
               <PlanCard
-                name="Club + Liga" role="Club" price="$69" period="/mes"
-                desc="Para clubes que también organizan su propio circuito."
-                features={[
-                  'Todo lo de Club Pro',
-                  'Ranking independiente',
-                  'Gestión de liga interna',
-                  'Multi-categoría',
-                  'Reportes combinados',
-                ]}
-                cta="Prueba 14 días gratis" planId="club_liga"
+                {...px('club_liga', pm, { price: '$69', period: '/mes', name: 'Club + Liga',
+                  desc: 'Para clubes que también organizan su propio circuito.',
+                  features: ['Todo lo de Club Pro','Ranking independiente','Gestión de liga interna','Multi-categoría','Reportes combinados'] })}
+                role="Club" cta="Prueba 14 días gratis" planId="club_liga"
               />
             </div>
             <p style={{ marginTop: 16, fontSize: 12, color: 'var(--grey-400)' }}>
@@ -302,40 +290,21 @@ export default function PricingPage() {
             <SectionHeader emoji="🏛️" title="Federaciones" sub="Para federaciones nacionales o regionales que necesitan ranking oficial, multi-club y control total." />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 2, background: 'var(--grey-200)' }}>
               <PlanCard
-                name="Básica" role="Federación" price="$99" period="/mes"
-                desc="Para federaciones con hasta 20 clubes afiliados."
-                features={[
-                  'Hasta 20 clubes afiliados',
-                  'Ranking oficial nacional',
-                  'Torneos sancionados',
-                  'Multi-categoría y género',
-                  'Panel de administración',
-                ]}
-                cta="Contactar ventas" planId="fed_basic"
+                {...px('fed_basic', pm, { price: '$99', period: '/mes', name: 'Básica',
+                  desc: 'Para federaciones con hasta 20 clubes afiliados.',
+                  features: ['Hasta 20 clubes afiliados','Ranking oficial nacional','Torneos sancionados','Multi-categoría y género','Panel de administración'] })}
+                role="Federación" cta="Contactar ventas" planId="fed_basic"
               />
               <PlanCard
-                name="Pro" role="Federación" price="$199" period="/mes" highlight
-                desc="Para federaciones nacionales con escala real."
-                features={[
-                  'Clubes ilimitados',
-                  'White-label completo',
-                  'API full access',
-                  'Integración sistemas propios',
-                  'SLA básico garantizado',
-                  'Gerente de cuenta',
-                ]}
-                cta="Contactar ventas" planId="fed_pro"
+                {...px('fed_pro', pm, { price: '$199', period: '/mes', name: 'Pro', highlight: true,
+                  desc: 'Para federaciones nacionales con escala real.',
+                  features: ['Clubes ilimitados','White-label completo','API full access','Integración sistemas propios','SLA básico garantizado','Gerente de cuenta'] })}
+                role="Federación" cta="Contactar ventas" planId="fed_pro"
               />
               <PlanCard
                 name="Enterprise" role="Federación" price="Custom" period="cotización a medida"
                 desc="Federaciones con requerimientos especiales o contratos a largo plazo."
-                features={[
-                  'Todo lo de Pro',
-                  'Contrato anual con descuento',
-                  'SLA garantizado 99.9%',
-                  'Integración legacy systems',
-                  'Capacitación presencial',
-                ]}
+                features={['Todo lo de Pro','Contrato anual con descuento','SLA garantizado 99.9%','Integración legacy systems','Capacitación presencial']}
                 cta="Hablar con el equipo" href="/about"
               />
             </div>

@@ -8,6 +8,7 @@ import {
   type SubscriptionPlan,
   type PlanFeature,
 } from '@/lib/plan-store';
+import { saGetSession } from '@/lib/superadmin-auth';
 
 const GROUP_LABELS: Record<string, string> = {
   player: 'Jugador',
@@ -68,6 +69,12 @@ export default function PlansPage() {
   const [stripeSync, setStripeSync] = useState<StripeSyncStatus>({ status: 'idle', message: '', lastSync: null });
   const [toasts, setToasts] = useState<Array<{ id: number; msg: string; ok: boolean }>>([]);
   const [stripePrices, setStripePrices] = useState<Record<string, { monthly?: number; annual?: number }>>({});
+  const [publishing, setPublishing] = useState(false);
+  const [publishedAt, setPublishedAt] = useState<string | null>(null);
+  // Homepage stats config
+  const [statsConfig, setStatsConfig] = useState({ players: '12,400+', clubs: '380', leagues: '47' });
+  const [statsDisplay, setStatsDisplay] = useState<'real' | 'custom'>('real');
+  const [savingStats, setSavingStats] = useState(false);
 
   useEffect(() => {
     setPlans(getPlans());
@@ -93,6 +100,68 @@ export default function PlansPage() {
   useEffect(() => {
     syncFromStripe();
   }, [syncFromStripe]);
+
+  // Load homepage stats config
+  useEffect(() => {
+    fetch('/api/sa/stats')
+      .then(r => r.json() as Promise<{ config: Record<string, { display: string; useReal: boolean }> | null }>)
+      .then(data => {
+        if (data.config) {
+          setStatsConfig({
+            players: data.config.players?.display ?? '12,400+',
+            clubs:   data.config.clubs?.display   ?? '380',
+            leagues: data.config.leagues?.display ?? '47',
+          });
+          setStatsDisplay(data.config.players?.useReal ? 'real' : 'custom');
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function publishPlans() {
+    setPublishing(true);
+    const session = saGetSession();
+    try {
+      const res = await fetch('/api/sa/plans/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plans, updatedBy: session?.email ?? 'superadmin' }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string };
+      if (json.ok) {
+        setPublishedAt(new Date().toISOString());
+        toast('Planes publicados en el sitio ✓');
+      } else {
+        toast(json.error ?? 'Error al publicar', false);
+      }
+    } catch {
+      toast('Error de conexión', false);
+    }
+    setPublishing(false);
+  }
+
+  async function saveStatsConfig() {
+    setSavingStats(true);
+    const session = saGetSession();
+    const config = {
+      players: { display: statsConfig.players, useReal: statsDisplay === 'real' },
+      clubs:   { display: statsConfig.clubs,   useReal: statsDisplay === 'real' },
+      leagues: { display: statsConfig.leagues, useReal: statsDisplay === 'real' },
+    };
+    try {
+      const res = await fetch('/api/sa/stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config, updatedBy: session?.email ?? 'superadmin' }),
+      });
+      const json = await res.json() as { ok?: boolean };
+      if (json.ok) toast('Estadísticas del home guardadas ✓');
+      else toast('Error al guardar stats', false);
+    } catch {
+      toast('Error de conexión', false);
+    }
+    setSavingStats(false);
+  }
 
   function toast(msg: string, ok = true) {
     const id = Date.now();
@@ -165,9 +234,26 @@ export default function PlansPage() {
       </div>
 
       {/* Header */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Suscripciones</div>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)' }}>Planes y Precios</h1>
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Suscripciones</div>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)' }}>Planes y Precios</h1>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <button
+            onClick={publishPlans}
+            disabled={publishing}
+            style={{ padding: '10px 22px', background: publishing ? 'var(--grey-300)' : '#111', color: '#c8f135', border: 'none', cursor: publishing ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            {publishing ? '⟳ Publicando...' : '↑ Publicar al sitio web'}
+          </button>
+          {publishedAt && (
+            <div style={{ fontSize: 11, color: '#166534' }}>Publicado: {new Date(publishedAt).toLocaleString('es-ES')}</div>
+          )}
+          <div style={{ fontSize: 11, color: 'var(--grey-400)', maxWidth: 260, textAlign: 'right', lineHeight: 1.4 }}>
+            Publica los precios editados en la página pública /pricing
+          </div>
+        </div>
       </div>
 
       {/* Stripe sync banner */}
@@ -224,6 +310,53 @@ export default function PlansPage() {
       {/* PRICING TAB */}
       {tab === 'pricing' && (
         <div>
+
+          {/* Homepage stats config */}
+          <div style={{ marginBottom: 32, padding: '20px 24px', border: '1px solid var(--grey-200)', background: '#fafafa' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', marginBottom: 2 }}>Estadísticas del Home</div>
+                <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Números que aparecen en el hero de la página de inicio (12,400+ · 380 · 47)</div>
+              </div>
+              <button
+                onClick={saveStatsConfig}
+                disabled={savingStats}
+                style={{ padding: '8px 18px', background: 'var(--black)', color: '#c8f135', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: savingStats ? 0.7 : 1 }}
+              >
+                {savingStats ? 'Guardando...' : 'Guardar stats'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+              {(['real', 'custom'] as const).map(mode => (
+                <label key={mode} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}>
+                  <input type="radio" checked={statsDisplay === mode} onChange={() => setStatsDisplay(mode)} />
+                  {mode === 'real' ? 'Usar datos reales de Supabase' : 'Mostrar valores personalizados'}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              {([
+                { key: 'players', label: 'Jugadores' },
+                { key: 'clubs',   label: 'Clubes' },
+                { key: 'leagues', label: 'Ligas Activas' },
+              ] as { key: keyof typeof statsConfig; label: string }[]).map(({ key, label }) => (
+                <div key={key}>
+                  <label style={{ ...lbl, marginBottom: 4 }}>{label}</label>
+                  <input
+                    style={{ ...inp, opacity: statsDisplay === 'real' ? 0.5 : 1 }}
+                    disabled={statsDisplay === 'real'}
+                    value={statsConfig[key]}
+                    onChange={e => setStatsConfig(c => ({ ...c, [key]: e.target.value }))}
+                    placeholder={key === 'players' ? '12,400+' : key === 'clubs' ? '380' : '47'}
+                  />
+                  <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 3 }}>
+                    {statsDisplay === 'real' ? 'Se mostrará el conteo real de Supabase' : 'Texto exacto a mostrar'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {Object.entries(grouped).map(([group, groupPlans]) => (
             <div key={group} style={{ marginBottom: 36 }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>

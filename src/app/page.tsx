@@ -43,6 +43,26 @@ export default function HomePage() {
   const [players, setPlayers] = useState(topPlayers);
   const [matches, setMatches] = useState(liveMatches);
   const [selectedCountry, setSelectedCountry] = useState(topPlayers[0].countryName);
+  const [heroStats, setHeroStats] = useState([
+    { n: '12,400+', l: 'Jugadores' },
+    { n: '380',     l: 'Clubes' },
+    { n: '47',      l: 'Ligas Activas' },
+  ]);
+
+  useEffect(() => {
+    fetch('/api/stats')
+      .then(r => r.json() as Promise<{ players: { value: string }; clubs: { value: string }; leagues: { value: string } }>)
+      .then(data => {
+        if (data.players && data.clubs && data.leagues) {
+          setHeroStats([
+            { n: data.players.value, l: 'Jugadores' },
+            { n: data.clubs.value,   l: 'Clubes' },
+            { n: data.leagues.value, l: 'Ligas Activas' },
+          ]);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     getSAPlayersFromSupabase().then(sb => {
@@ -109,11 +129,7 @@ export default function HomePage() {
           </div>
         </div>
         <div className="hero-stats">
-          {[
-            { n: '12,400+', l: 'Jugadores' },
-            { n: '380', l: 'Clubes' },
-            { n: '47', l: 'Ligas Activas' },
-          ].map((s) => (
+          {heroStats.map((s) => (
             <div key={s.l}>
               <div className="hero-stat-num">{s.n}</div>
               <div className="hero-stat-label">{s.l}</div>
