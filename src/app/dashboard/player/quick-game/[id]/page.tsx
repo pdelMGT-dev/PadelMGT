@@ -861,7 +861,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   if (!canManage) {
     return (
-      <div style={{ padding: `${isMobile ? '16px' : '40px'} ${isMobile ? '16px' : '40px'} 80px`, maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ padding: `${isMobile ? '16px' : '40px'} ${isMobile ? '16px' : '40px'} 80px`, maxWidth: 1100, margin: '0 auto' }}>
         {toast && (
           <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none' }}>
             {toast}
@@ -963,7 +963,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   // ── CREATOR VIEW ──────────────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: `${isMobile ? '16px' : '40px'} ${isMobile ? '16px' : '40px'} 80px`, maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ padding: `${isMobile ? '16px' : '40px'} ${isMobile ? '16px' : '40px'} 80px`, maxWidth: 1100, margin: '0 auto' }}>
       {/* Toast */}
       {toast && (
         <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none' }}>

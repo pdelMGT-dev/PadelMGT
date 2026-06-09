@@ -187,6 +187,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   const [standingsPanelOpen, setStandingsPanelOpen] = useState(false);
   const [screenW, setScreenW] = useState(1400);
   const [standingsTab, setStandingsTab] = useState<'groups' | 'bracket'>('groups');
+  const [koGroupPhaseOpen, setKoGroupPhaseOpen] = useState(true);
+  const [koBracketPhaseOpen, setKoBracketPhaseOpen] = useState(true);
 
   // ── User loaded via useCurrentUser hook ──────────────────────────────────
 
@@ -233,6 +235,15 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, []);
+
+  // ── Sync accordion states based on current knockout phase ─────────────────
+  useEffect(() => {
+    if (!tournament) return;
+    if (tournament.format !== 'knockout') return;
+    const isInBracket = tournament.knockoutConfig?.currentPhase === 'bracket';
+    setKoGroupPhaseOpen(!isInBracket); // groups closed when in bracket phase
+    setKoBracketPhaseOpen(isInBracket);
+  }, [tournament?.knockoutConfig?.currentPhase]);
 
   // ── Guard: loading ────────────────────────────────────────────────────────
   if (tournament === undefined) {
@@ -853,21 +864,14 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
         ))}
       </div>
 
-      {/* ── Body: responsive grid ── */}
-      <div style={{
-        display: isDesktop ? 'grid' : 'block',
-        gridTemplateColumns: isDesktop ? '1fr 380px' : undefined,
-        alignItems: 'flex-start',
-        minHeight: isDesktop ? 'calc(100vh - 65px)' : undefined,
-      }}>
+      {/* ── Body: single column ── */}
+      <div>
 
-      {/* ── Left / Main column ── */}
+      {/* ── Main column ── */}
       <div style={{
-        maxWidth: isDesktop ? 'none' : 900,
-        margin: isDesktop ? 0 : '0 auto',
+        maxWidth: 1400,
+        margin: '0 auto',
         padding: '24px 32px',
-        overflowY: isDesktop ? 'auto' : undefined,
-        maxHeight: isDesktop ? 'calc(100vh - 65px)' : undefined,
       }}>
 
         {/* ── INFO PANEL: collapsible accordion ── */}
@@ -1024,8 +1028,10 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
           </div>
         )}
 
-        {/* ── KNOCKOUT: Group Stage ── */}
-        {t.format === 'knockout' && t.knockoutConfig?.currentPhase === 'group_stage' && t.groups && (() => {
+        {/* ── KNOCKOUT: Group Stage accordion ── */}
+        {t.format === 'knockout' && t.groups && (() => {
+          const groupPhaseActive = t.knockoutConfig?.currentPhase === 'group_stage';
+          const groupPhaseComplete = t.knockoutConfig?.currentPhase === 'bracket';
           const allMatches = t.groups.groups.flatMap(g => g.matches);
           const allGroupMatchesDone = allMatches.every(m => m.status === 'completed');
           const maxRound = allMatches.reduce((acc, m) => Math.max(acc, m.roundNum ?? 1), 1);
@@ -1062,7 +1068,22 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
           }
 
           return (
-            <div style={{ marginBottom: 32 }}>
+            <div style={{ marginBottom: 8 }}>
+              {/* Accordion header */}
+              <div
+                onClick={() => setKoGroupPhaseOpen(o => !o)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', background: '#fff', border: '1px solid var(--grey-200)', cursor: 'pointer', marginBottom: 1 }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Fase I — Grupos</span>
+                  {groupPhaseComplete && <span style={{ fontSize: 11, color: 'var(--grey-400)', fontWeight: 600 }}>✓ COMPLETADA</span>}
+                  {groupPhaseActive && <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--turf-green)', fontWeight: 600 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--turf-green)', display: 'inline-block', animation: 'pulse 2s infinite' }} />EN JUEGO</span>}
+                </div>
+                <span style={{ fontSize: 14, color: 'var(--grey-400)', transform: koGroupPhaseOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
+              </div>
+              {/* Accordion content */}
+              {(koGroupPhaseOpen && groupPhaseActive) && (
+              <div style={{ marginBottom: 0 }}>
               {/* Section header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div>
@@ -1340,20 +1361,30 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                   );
                 })}
               </div>
+              </div>
+              )}
             </div>
           );
         })()}
 
-        {/* ── KNOCKOUT: Bracket ── */}
-        {t.format === 'knockout' && t.knockoutConfig?.currentPhase === 'bracket' && t.bracket && (() => {
+        {/* ── KNOCKOUT: Bracket accordion ── */}
+        {t.format === 'knockout' && t.bracket && (() => {
+          const bracketActive = t.knockoutConfig?.currentPhase === 'bracket';
           const pairs = t.fixedPairs ?? [];
           return (
-            <div style={{ marginBottom: 32 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
-                  {t.knockoutConfig.hasGroups ? 'Fase II — Cuadro de Eliminatorias' : 'Cuadro de Eliminatorias'}
+            <div style={{ marginBottom: 8 }}>
+              <div
+                onClick={() => setKoBracketPhaseOpen(o => !o)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', background: '#fff', border: '1px solid var(--grey-200)', cursor: 'pointer', marginBottom: 1 }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.groups ? 'Fase II — Cuadro' : 'Cuadro de Eliminatorias'}</span>
+                  {bracketActive && <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--turf-green)', fontWeight: 600 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--turf-green)', display: 'inline-block', animation: 'pulse 2s infinite' }} />EN JUEGO</span>}
                 </div>
+                <span style={{ fontSize: 14, color: 'var(--grey-400)', transform: koBracketPhaseOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
               </div>
+              {koBracketPhaseOpen && (
+              <div style={{ marginBottom: 0 }}>
               <KnockoutBracketView
                 bracket={t.bracket}
                 fixedPairs={pairs}
@@ -1370,14 +1401,39 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                   }
                 }}
               />
+              </div>
+              )}
             </div>
           );
         })()}
 
+        {/* ── KNOCKOUT: Classification tabs (integrated, below accordions) ── */}
+        {t.format === 'knockout' && (t.groups || t.bracket) && (
+          <div style={{ marginBottom: 32, marginTop: 24 }}>
+            <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)', marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
+              Clasificación
+            </div>
+            {standingsPanelContent}
+          </div>
+        )}
+
         {/* ── RONDAS ── */}
         {t.format !== 'knockout' && <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
             Rondas
+          </div>
+          <button
+            onClick={() => {
+              const allOpen = sortedRounds.every(r => roundOpen[r.num]);
+              const newState: Record<number, boolean> = {};
+              sortedRounds.forEach(r => { newState[r.num] = !allOpen; });
+              setRoundOpen(newState);
+            }}
+            style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', background: 'transparent', border: '1px solid var(--grey-200)', padding: '4px 10px', cursor: 'pointer' }}
+          >
+            {sortedRounds.every(r => roundOpen[r.num]) ? 'Colapsar todas' : 'Expandir todas'}
+          </button>
           </div>
 
           {sortedRounds.map(round => {
