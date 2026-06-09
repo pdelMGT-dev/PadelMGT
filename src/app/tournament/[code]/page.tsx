@@ -698,28 +698,60 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
           {/* Players list (pending/open) */}
           {(isPending || isLive) && (
             <div style={{ marginBottom: 32 }}>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', margin: '0 0 16px' }}>
-                JUGADORES <span style={{ fontSize: 16, color: 'var(--grey-400)', fontWeight: 400 }}>{tournament.players.length}/{tournament.maxPlayers}</span>
-              </h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 2 }}>
-                {tournament.players.map(p => (
-                  <div key={p.id} style={{ padding: '12px 16px', background: '#fff', border: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
-                      {p.name[0]?.toUpperCase()}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: p.isCreator ? 700 : 500 }}>{p.name}</div>
-                      {p.isCreator && <div style={{ fontSize: 9, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Organizador</div>}
-                    </div>
+              {tournament.pairType === 'parejas' && pairs.length > 0 ? (
+                <>
+                  <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', margin: '0 0 16px' }}>
+                    EQUIPOS <span style={{ fontSize: 16, color: 'var(--grey-400)', fontWeight: 400 }}>{pairs.length}/{Math.floor(tournament.maxPlayers / 2)}</span>
+                  </h2>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 2 }}>
+                    {pairs.map((fp, i) => {
+                      const isCreatorPair = fp.player1Id === tournament.creatorId || fp.player2Id === tournament.creatorId;
+                      const label = fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`;
+                      return (
+                        <div key={fp.pairIndex} style={{ padding: '12px 16px', background: '#fff', border: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 11, color: 'var(--grey-400)', fontWeight: 700, minWidth: 20 }}>{i + 1}.</span>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: isCreatorPair ? 700 : 500 }}>{label}</div>
+                            {fp.name?.trim() && <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{fp.player1Name} / {fp.player2Name}</div>}
+                            {isCreatorPair && <div style={{ fontSize: 9, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Organizador</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {Array.from({ length: Math.max(0, Math.floor(tournament.maxPlayers / 2) - pairs.length) }).map((_, i) => (
+                      <div key={`empty-${i}`} style={{ padding: '12px 16px', background: 'var(--grey-50)', border: '1px dashed #e0e0e0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1px dashed #d0d0d0', flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: '#bbb' }}>Disponible</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {Array.from({ length: Math.max(0, tournament.maxPlayers - tournament.players.length) }).map((_, i) => (
-                  <div key={`empty-${i}`} style={{ padding: '12px 16px', background: 'var(--grey-50)', border: '1px dashed #e0e0e0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1px dashed #d0d0d0', flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, color: '#bbb' }}>Disponible</span>
+                </>
+              ) : (
+                <>
+                  <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', margin: '0 0 16px' }}>
+                    JUGADORES <span style={{ fontSize: 16, color: 'var(--grey-400)', fontWeight: 400 }}>{tournament.players.length}/{tournament.maxPlayers}</span>
+                  </h2>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 2 }}>
+                    {tournament.players.map(p => (
+                      <div key={p.id} style={{ padding: '12px 16px', background: '#fff', border: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
+                          {p.name[0]?.toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: p.isCreator ? 700 : 500 }}>{p.name}</div>
+                          {p.isCreator && <div style={{ fontSize: 9, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Organizador</div>}
+                        </div>
+                      </div>
+                    ))}
+                    {Array.from({ length: Math.max(0, tournament.maxPlayers - tournament.players.length) }).map((_, i) => (
+                      <div key={`empty-${i}`} style={{ padding: '12px 16px', background: 'var(--grey-50)', border: '1px dashed #e0e0e0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1px dashed #d0d0d0', flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: '#bbb' }}>Disponible</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              )}
             </div>
           )}
 

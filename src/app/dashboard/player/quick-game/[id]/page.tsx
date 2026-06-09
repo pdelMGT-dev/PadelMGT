@@ -941,20 +941,44 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
           </div>
         )}
 
-        {/* Players list */}
+        {/* Players / Teams list */}
         <div style={cardStyle}>
-          <div style={secTitle}>Jugadores ({game.players.length}/{game.maxPlayers})</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {game.players.map(p => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 32, height: 32, background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
-                  {initials(p.name)}
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</span>
-                {p.isCreator && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--neon)', padding: '2px 6px', fontWeight: 700 }}>CREADOR</span>}
+          {game.pairType === 'parejas' && game.fixedPairs && game.fixedPairs.length > 0 ? (
+            <>
+              <div style={secTitle}>Equipos ({game.fixedPairs.length}/{Math.floor(game.maxPlayers / 2)})</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {game.fixedPairs.map((fp, i) => {
+                  const isCreatorPair = fp.player1Id === game.creatorId || fp.player2Id === game.creatorId;
+                  const label = fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`;
+                  return (
+                    <div key={fp.pairIndex} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 10, color: 'var(--grey-400)', minWidth: 18, textAlign: 'right', fontWeight: 700 }}>{i + 1}.</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: isCreatorPair ? 700 : 500 }}>{label}</div>
+                        {fp.name?.trim() && <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{fp.player1Name} / {fp.player2Name}</div>}
+                      </div>
+                      {isCreatorPair && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--neon)', padding: '2px 6px', fontWeight: 700 }}>CREADOR</span>}
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <>
+              <div style={secTitle}>Jugadores ({game.players.length}/{game.maxPlayers})</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {game.players.map(p => (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 32, height: 32, background: 'var(--grey-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--grey-500)', flexShrink: 0 }}>
+                      {initials(p.name)}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</span>
+                    {p.isCreator && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--neon)', padding: '2px 6px', fontWeight: 700 }}>CREADOR</span>}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     );

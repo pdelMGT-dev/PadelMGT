@@ -925,30 +925,51 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
 
-              {/* Col 2: Jugadores */}
+              {/* Col 2: Jugadores / Equipos */}
               <div style={card}>
-                <div style={secTitle}>Jugadores ({t.players.length}/{t.maxPlayers})</div>
-                <div style={{ fontSize: 11, color: 'var(--grey-500)', marginBottom: 12 }}>
-                  Jugadores confirmados: <strong>{t.players.length}</strong>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {t.players.map((p, i) => {
-                    const isCreatorPlayer = p.id === t.creatorId || p.isCreator;
-                    return (
-                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                        <span style={{ fontSize: 10, color: 'var(--grey-400)', minWidth: 18, textAlign: 'right', fontWeight: 700 }}>
-                          {i + 1}.
-                        </span>
-                        <span style={{ fontWeight: isCreatorPlayer ? 700 : 400, color: 'var(--black)' }}>
-                          {p.name}
-                        </span>
-                        {isCreatorPlayer && (
-                          <span style={{ fontSize: 12, color: '#f59e0b' }}>★</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                {t.pairType === 'parejas' && t.fixedPairs && t.fixedPairs.length > 0 ? (
+                  <>
+                    <div style={secTitle}>Equipos ({t.fixedPairs.length}/{Math.floor(t.maxPlayers / 2)})</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-500)', marginBottom: 12 }}>
+                      Equipos confirmados: <strong>{t.fixedPairs.length}</strong>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {t.fixedPairs.map((fp, i) => {
+                        const isCreatorPair = fp.player1Id === t.creatorId || fp.player2Id === t.creatorId;
+                        const label = fp.name?.trim() || `${fp.player1Name} / ${fp.player2Name}`;
+                        return (
+                          <div key={fp.pairIndex} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                            <span style={{ fontSize: 10, color: 'var(--grey-400)', minWidth: 18, textAlign: 'right', fontWeight: 700 }}>{i + 1}.</span>
+                            <div>
+                              <span style={{ fontWeight: isCreatorPair ? 700 : 400, color: 'var(--black)' }}>{label}</span>
+                              {fp.name?.trim() && <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{fp.player1Name} / {fp.player2Name}</div>}
+                            </div>
+                            {isCreatorPair && <span style={{ fontSize: 12, color: '#f59e0b' }}>★</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={secTitle}>Jugadores ({t.players.length}/{t.maxPlayers})</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-500)', marginBottom: 12 }}>
+                      Jugadores confirmados: <strong>{t.players.length}</strong>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {t.players.map((p, i) => {
+                        const isCreatorPlayer = p.id === t.creatorId || p.isCreator;
+                        return (
+                          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                            <span style={{ fontSize: 10, color: 'var(--grey-400)', minWidth: 18, textAlign: 'right', fontWeight: 700 }}>{i + 1}.</span>
+                            <span style={{ fontWeight: isCreatorPlayer ? 700 : 400, color: 'var(--black)' }}>{p.name}</span>
+                            {isCreatorPlayer && <span style={{ fontSize: 12, color: '#f59e0b' }}>★</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Col 3: QR Código */}
