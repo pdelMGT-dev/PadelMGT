@@ -15,8 +15,9 @@ const ALL_NAV_ITEMS = [
   { label: 'RELACIONES',    href: '/superadmin/relations',   roles: ['superadmin'] },
   { label: 'PLANES',        href: '/superadmin/plans',       roles: ['superadmin', 'transactions'] },
   { label: 'PROMOCIONES',   href: '/superadmin/promotions',  roles: ['superadmin', 'transactions'] },
-  { label: 'STRIPE',        href: '/superadmin/stripe',      roles: ['superadmin', 'transactions'] },
-  { label: 'CONFIGURACION', href: '/superadmin/config',      roles: ['superadmin'] },
+  { label: 'STRIPE',        href: '/superadmin/stripe',          roles: ['superadmin', 'transactions'] },
+  { label: 'EMAILS',        href: '/superadmin/email-templates', roles: ['superadmin'] },
+  { label: 'CONFIGURACION', href: '/superadmin/config',          roles: ['superadmin'] },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
