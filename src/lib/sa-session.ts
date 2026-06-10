@@ -54,6 +54,11 @@ export async function signSAToken(payload: Omit<SATokenPayload, 'exp'>): Promise
   return `${body}.${sig}`;
 }
 
+/** Route-handler guard: returns the SA session payload or null (→ 401). */
+export async function requireSARequest(request: { cookies: { get(name: string): { value: string } | undefined } }): Promise<SATokenPayload | null> {
+  return verifySAToken(request.cookies.get(SA_COOKIE_NAME)?.value);
+}
+
 export async function verifySAToken(token: string | undefined | null): Promise<SATokenPayload | null> {
   if (!token) return null;
   const secret = getSecret();
