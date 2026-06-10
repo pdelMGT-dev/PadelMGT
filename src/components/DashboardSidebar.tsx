@@ -97,6 +97,7 @@ export default function DashboardSidebar() {
 
   const isSuperAdmin = user?.role === 'super_admin';
   const currentPlan  = typeof window !== 'undefined' ? getUserPlan() : 'free';
+  const photoUrl     = (user as { photoUrl?: string } | null)?.photoUrl;
 
   const planBadgeLabel: Partial<Record<string, string>> = {
     player_pro:     'Pro', liga_basic: 'Básico', liga_pro: 'Pro',
@@ -216,9 +217,13 @@ export default function DashboardSidebar() {
       {/* User */}
       <div style={{ padding: '14px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <Link href={activeRole === 'player' ? '/dashboard/player/profile' : '#'} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, textDecoration: 'none' }}>
-          <div style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', background: isSuperAdmin ? '#d97706' : 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: '#fff' }}>
-            {initials}
-          </div>
+          {photoUrl ? (
+            <img src={photoUrl} alt="avatar" style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', objectFit: 'cover' }} />
+          ) : (
+            <div style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', background: isSuperAdmin ? '#d97706' : 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: '#fff' }}>
+              {initials}
+            </div>
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>

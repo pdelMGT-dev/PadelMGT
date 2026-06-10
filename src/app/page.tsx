@@ -74,7 +74,7 @@ export default function HomePage() {
           name: p.name,
           country: flags[p.country] ?? p.country,
           countryName: p.country,
-          club: p.club ?? '',
+          club: p.city ?? '',
           level: p.level ?? '',
           wins: 0,
           losses: 0,

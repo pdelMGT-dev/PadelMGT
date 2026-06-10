@@ -360,8 +360,8 @@ export default function ConfigPage() {
 
   function handleExportPlayers() {
     const players = getSAPlayers();
-    const headers = ['ID', 'Nombre', 'Email', 'Telefono', 'Ciudad', 'Pais', 'Ranking', 'Club', 'Estado', 'Rol', 'Fecha de Ingreso'];
-    const rows = players.map(p => [p.id, p.name, p.email, p.phone, p.city, p.country, String(p.ranking), p.club ?? '', p.status, p.role, p.joinedAt]);
+    const headers = ['ID', 'Nombre', 'Email', 'Telefono', 'Ciudad', 'Pais', 'Ranking', 'Nivel', 'Estado', 'Rol', 'Fecha de Ingreso'];
+    const rows = players.map(p => [p.id, p.name, p.email, p.phone, p.city, p.country, String(p.ranking), p.level ?? '', p.status, p.role, p.joinedAt]);
     downloadCSV('jugadores.csv', [headers, ...rows]);
     toast('Jugadores exportados');
   }

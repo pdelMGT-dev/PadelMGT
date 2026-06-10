@@ -270,3 +270,54 @@ export function checkTournamentGate(maxPlayers: number): GateResult {
 export function isPlayerProOrAbove(): boolean { return getUserPlan() !== 'free'; }
 
 export function getMonthlyUsage(): { games: number; tournaments: number } { return readUsage(); }
+
+// ── Multi-plan helpers ─────────────────────────────────────────────────────────
+
+const PLAYER_PLAN_STORAGE = 'padelmgt_active_plans';
+
+interface ActivePlanEntry {
+  planId: PlanId;
+  startedAt: string;
+  expiresAt?: string;
+}
+
+/** Returns all currently active plan entries for the logged-in user. */
+export function getActivePlans(): ActivePlanEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(PLAYER_PLAN_STORAGE);
+    if (!raw) {
+      const freePlan: ActivePlanEntry = { planId: 'free', startedAt: new Date().toISOString() };
+      localStorage.setItem(PLAYER_PLAN_STORAGE, JSON.stringify([freePlan]));
+      return [freePlan];
+    }
+    return JSON.parse(raw) as ActivePlanEntry[];
+  } catch { return []; }
+}
+
+/** Check whether the user currently has a specific plan active. */
+export function hasActivePlan(planId: PlanId): boolean {
+  return getActivePlans().some(p => p.planId === planId);
+}
+
+/** Add a plan to the active-plans list (idempotent). Liga Pro/Unlimited auto-adds player_pro. */
+export function addActivePlan(planId: PlanId, expiresAt?: string): void {
+  if (typeof window === 'undefined') return;
+  const plans = getActivePlans();
+  if (plans.some(p => p.planId === planId)) return;
+  plans.push({ planId, startedAt: new Date().toISOString(), expiresAt });
+  if ((planId === 'liga_pro' || planId === 'liga_unlimited') && !plans.some(p => p.planId === 'player_pro')) {
+    plans.push({ planId: 'player_pro', startedAt: new Date().toISOString(), expiresAt });
+  }
+  localStorage.setItem(PLAYER_PLAN_STORAGE, JSON.stringify(plans));
+}
+
+/** Remove a plan from the active-plans list. Always keeps 'free'. */
+export function removeActivePlan(planId: PlanId): void {
+  if (typeof window === 'undefined') return;
+  const plans = getActivePlans().filter(p => p.planId !== planId);
+  if (!plans.some(p => p.planId === 'free')) {
+    plans.push({ planId: 'free', startedAt: new Date().toISOString() });
+  }
+  localStorage.setItem(PLAYER_PLAN_STORAGE, JSON.stringify(plans));
+}

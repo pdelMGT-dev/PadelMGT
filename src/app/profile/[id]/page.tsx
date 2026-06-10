@@ -109,7 +109,7 @@ export default function PlayerProfilePage({ params }: Props) {
             <div style={{ flex: 1 }}>
               <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 600, color: '#fff', textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 8px' }}>{p.name}</h1>
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>
-                {p.city}, {p.country} · {p.club}
+                {[p.city, p.country].filter(Boolean).join(', ')}
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <span className="chip" style={{ fontSize: 11, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', border: 'none' }}>{p.level}</span>
@@ -200,7 +200,7 @@ export default function PlayerProfilePage({ params }: Props) {
               <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 700, marginBottom: 16 }}>Resumen de Carrera</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                 {[
-                  { label: 'Club',           value: p.club },
+                  { label: 'Ciudad',         value: p.city },
                   { label: 'Mejor resultado', value: p.bestResult },
                   { label: 'Racha actual',   value: p.streak },
                   { label: 'Formato favorito', value: p.favouriteFormat },

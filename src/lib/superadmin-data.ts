@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { MOCK_PLAYERS as _MOCK_PLAYERS, MOCK_CLUBS as _MOCK_CLUBS, MOCK_TOURNAMENTS as _MOCK_TOURNAMENTS, MOCK_GAMES as _MOCK_GAMES } from './seeds/sa-data';
+import { normalizeLegacyLevel } from './level-config';
 
 export interface SAPlayer {
   id: string;
@@ -11,7 +12,8 @@ export interface SAPlayer {
   sex?: 'M' | 'F';
   city: string;
   country: string;
-  level?: 'beginner' | 'intermediate' | 'advanced';
+  level?: import('./level-config').PlayerLevel;
+  federationLevel?: string;  // read-only for player, set by federation
   ranking: number;
   rankingPoints: number;
   status: 'active' | 'blocked' | 'suspended';
@@ -20,7 +22,7 @@ export interface SAPlayer {
   profileCompleted?: boolean;
   joinedAt: string;
   lastActive: string;
-  club?: string;
+  // club removed — use club_memberships table (getPlayerClubs)
   photoUrl?: string;
   customFields?: Record<string, string>;
 }
@@ -183,7 +185,7 @@ export function getSAPlayers(): SAPlayer[] {
         sex: (['M', 'F'].includes(p.sex as string) ? p.sex as 'M' | 'F' : undefined),
         city: (p.city as string) || '',
         country: (p.country as string) || 'ES',
-        level: (['beginner', 'intermediate', 'advanced'].includes(p.level as string) ? p.level as SAPlayer['level'] : undefined),
+        level: normalizeLegacyLevel(p.level as string | undefined),
         ranking: typeof p.ranking === 'number' ? p.ranking : 0,
         rankingPoints: typeof p.rankingPoints === 'number' ? p.rankingPoints : typeof p.points === 'number' ? p.points : 0,
         status: (['active', 'blocked', 'suspended'].includes(p.status as string) ? p.status as SAPlayer['status'] : 'active'),
@@ -191,7 +193,6 @@ export function getSAPlayers(): SAPlayer[] {
         profileCompleted: typeof p.profileCompleted === 'boolean' ? p.profileCompleted : true,
         joinedAt: (p.joinedAt as string) || (p.createdAt as string) || new Date().toISOString().split('T')[0],
         lastActive: (p.lastActive as string) || new Date().toISOString().split('T')[0],
-        club: (p.club as string) || undefined,
         photoUrl: (p.photoUrl as string) || (p.photo as string) || undefined,
         customFields: (p.customFields as Record<string, string>) || {},
       }));
@@ -221,7 +222,6 @@ export function saveSAPlayers(players: SAPlayer[]): void {
     ranking: p.ranking,
     rankingPoints: p.rankingPoints,
     profileCompleted: p.profileCompleted,
-    club: p.club,
     phone: p.phone,
     photoUrl: p.photoUrl,
     customFields: p.customFields,
@@ -411,7 +411,7 @@ function rowToSAPlayer(row: Record<string, unknown>): SAPlayer {
     sex: (['M', 'F'].includes(cf.sex) ? cf.sex as SAPlayer['sex'] : undefined),
     city: (row.city as string) ?? '',
     country: (row.country as string) ?? 'ES',
-    level: (['beginner', 'intermediate', 'advanced'].includes(cf.level) ? cf.level as SAPlayer['level'] : undefined),
+    level: normalizeLegacyLevel(cf.level),
     ranking: (row.ranking as number) ?? 0,
     rankingPoints: (row.ranking_points as number) ?? 0,
     status: (row.status as SAPlayer['status']) ?? 'active',
@@ -420,7 +420,6 @@ function rowToSAPlayer(row: Record<string, unknown>): SAPlayer {
     profileCompleted: cf.profileCompleted === 'true',
     joinedAt: ((row.joined_at as string) ?? '').split('T')[0],
     lastActive: ((row.last_active as string) ?? '').split('T')[0],
-    club: (row.club as string) ?? undefined,
     customFields: cf,
   };
 }
@@ -436,7 +435,6 @@ function playerToRow(p: SAPlayer): Record<string, unknown> {
     ranking_points: p.rankingPoints ?? p.ranking ?? 0,
     status: p.status,
     role: p.role,
-    club: p.club || null,
     // Store extended fields in custom_fields JSONB so they round-trip correctly
     custom_fields: {
       ...(p.customFields ?? {}),

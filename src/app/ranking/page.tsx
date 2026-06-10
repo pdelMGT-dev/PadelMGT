@@ -43,7 +43,7 @@ export default function RankingPage() {
           pts: p.rankingPoints ?? 0,
           tournaments: 0,
           wins: 0,
-          club: p.club ?? '',
+          club: '',
         })));
       }
     });

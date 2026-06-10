@@ -288,7 +288,6 @@ function PlayerForm({
       role: form.role ?? 'player',
       status: form.status ?? 'active',
       plan: form.plan ?? 'free',
-      club: form.club ?? undefined,
       profileCompleted: form.profileCompleted ?? true,
       joinedAt: form.joinedAt ?? now,
       lastActive: form.lastActive ?? now,
@@ -323,9 +322,18 @@ function PlayerForm({
         <Field label="Nivel de juego">
           <select style={inputStyle} value={form.level ?? ''} onChange={e => set('level', e.target.value === '' ? undefined : e.target.value as SAPlayer['level'])}>
             <option value="">Sin nivel</option>
-            <option value="beginner">Principiante</option>
-            <option value="intermediate">Intermedio</option>
-            <option value="advanced">Avanzado</option>
+            <option value="1.0">1.0 — Iniciante</option>
+            <option value="1.5">1.5 — Iniciante+</option>
+            <option value="2.0">2.0 — Básico</option>
+            <option value="2.5">2.5 — Básico+</option>
+            <option value="3.0">3.0 — Intermedio</option>
+            <option value="3.5">3.5 — Intermedio+</option>
+            <option value="4.0">4.0 — Avanzado</option>
+            <option value="4.5">4.5 — Avanzado+</option>
+            <option value="5.0">5.0 — Élite</option>
+            <option value="5.5">5.5 — Élite+</option>
+            <option value="6.0">6.0 — Profesional</option>
+            <option value="7.0">7.0 — Top Mundial</option>
           </select>
         </Field>
         <Field label="Ciudad">
@@ -334,12 +342,7 @@ function PlayerForm({
         <Field label="Pais">
           <input style={inputStyle} value={form.country ?? ''} onChange={e => set('country', e.target.value)} />
         </Field>
-        <Field label="Club">
-          <select style={{ ...inputStyle, appearance: 'auto' }} value={form.club ?? ''} onChange={e => set('club', e.target.value)}>
-            <option value="">— Sin club —</option>
-            {getSAClubs().map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-          </select>
-        </Field>
+        {/* Club memberships are managed in the club_memberships store — not a direct field on the player */}
         <Field label="Posicion Ranking">
           <input style={inputStyle} type="number" min={0} value={form.ranking ?? 0} onChange={e => set('ranking', Number(e.target.value))} />
         </Field>
@@ -710,7 +713,7 @@ export default function PlayersPage() {
   function handleBulkApply() {
     if (!bulkAction || selectedIds.size === 0) return;
     const statusOpts = ['active', 'blocked', 'suspended'];
-    const levelOpts = ['beginner', 'intermediate', 'advanced'];
+    const levelOpts = ['1.0', '1.5', '2.0', '2.5', '3.0', '3.5', '4.0', '4.5', '5.0', '5.5', '6.0', '7.0'];
     const roleOpts = ['player', 'club_admin', 'federation_admin'];
     let updated = [...players];
     if (statusOpts.includes(bulkAction)) {
@@ -898,7 +901,7 @@ export default function PlayersPage() {
             Importar CSV
           </button>
           <button
-            onClick={() => exportCSV(filtered.map(p => ({ ID: p.id, ShortID: p.shortId, Nombre: p.name, Email: p.email, Telefono: p.phone, Sexo: p.sex ?? '', Nivel: p.level ?? '', Ciudad: p.city, Pais: p.country, RankingPos: p.ranking, PtsRanking: p.rankingPoints, Club: p.club ?? '', Rol: p.role, Estado: p.status, Perfil: p.profileCompleted ? 'Completo' : 'Incompleto', Ingreso: p.joinedAt, UltActivo: p.lastActive })), 'jugadores.csv')}
+            onClick={() => exportCSV(filtered.map(p => ({ ID: p.id, ShortID: p.shortId, Nombre: p.name, Email: p.email, Telefono: p.phone, Sexo: p.sex ?? '', Nivel: p.level ?? '', Ciudad: p.city, Pais: p.country, RankingPos: p.ranking, PtsRanking: p.rankingPoints, Rol: p.role, Estado: p.status, Perfil: p.profileCompleted ? 'Completo' : 'Incompleto', Ingreso: p.joinedAt, UltActivo: p.lastActive })), 'jugadores.csv')}
             style={{ padding: '9px 16px', border: '1px solid var(--grey-200)', borderRadius: 4, background: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', cursor: 'pointer', color: 'var(--grey-600)', textTransform: 'uppercase' }}
           >
             Exportar CSV
@@ -996,7 +999,7 @@ export default function PlayersPage() {
                     <td style={{ padding: '10px 14px', color: 'var(--grey-600)', whiteSpace: 'nowrap' }}>{p.city}{p.city && p.country ? ' / ' : ''}{p.country}</td>
                     <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--black)', whiteSpace: 'nowrap' }}>#{p.ranking}</td>
                     <td style={{ padding: '10px 14px', color: 'var(--grey-600)', whiteSpace: 'nowrap' }}>{p.rankingPoints.toLocaleString()} pts</td>
-                    <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.club ?? '—'}</td>
+                    <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.city ?? '—'}</td>
                     <td style={{ padding: '10px 14px' }}><RoleBadge role={p.role} /></td>
                     <td style={{ padding: '10px 14px' }}><PlanBadge plan={p.plan} /></td>
                     <td style={{ padding: '10px 14px' }}><StatusBadge status={p.status} /></td>
@@ -1100,7 +1103,7 @@ export default function PlayersPage() {
             Aplicar
           </button>
           <button
-            onClick={() => exportCSV(players.filter(p => selectedIds.has(p.id)).map(p => ({ ID: p.id, Nombre: p.name, Email: p.email, Nivel: p.level ?? '', Estado: p.status, Club: p.club ?? '' })), 'jugadores_seleccion.csv')}
+            onClick={() => exportCSV(players.filter(p => selectedIds.has(p.id)).map(p => ({ ID: p.id, Nombre: p.name, Email: p.email, Nivel: p.level ?? '', Estado: p.status, Ciudad: p.city ?? '' })), 'jugadores_seleccion.csv')}
             style={{ background: 'none', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 4, color: '#ccc', padding: '6px 12px', cursor: 'pointer', fontSize: 12 }}
           >
             Exportar
@@ -1189,7 +1192,7 @@ export default function PlayersPage() {
                 <InfoRow label="Telefono"><span>{selectedPlayer.phone || '—'}</span></InfoRow>
                 <InfoRow label="Sexo"><span>{selectedPlayer.sex === 'M' ? 'Masculino' : selectedPlayer.sex === 'F' ? 'Femenino' : 'No especificado'}</span></InfoRow>
                 <InfoRow label="Nivel">
-                  <span>{selectedPlayer.level === 'beginner' ? 'Principiante' : selectedPlayer.level === 'intermediate' ? 'Intermedio' : selectedPlayer.level === 'advanced' ? 'Avanzado' : '—'}</span>
+                  <span>{selectedPlayer.level ?? '—'}</span>
                 </InfoRow>
                 <InfoRow label="Ciudad"><span>{selectedPlayer.city || '—'}</span></InfoRow>
                 <InfoRow label="Pais"><span>{selectedPlayer.country || '—'}</span></InfoRow>
@@ -1216,7 +1219,7 @@ export default function PlayersPage() {
                   <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>pts</div>
                 </div>
               </div>
-              {selectedPlayer.club && <InfoRow label="Club"><span>{selectedPlayer.club}</span></InfoRow>}
+              {selectedPlayer.city && <InfoRow label="Ciudad"><span>{selectedPlayer.city}</span></InfoRow>}
             </div>
 
             {/* Section 4 — Sistema */}

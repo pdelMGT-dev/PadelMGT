@@ -13,12 +13,12 @@
 interface SAPlayer {
   id: string; shortId: string; name: string; email: string; phone: string;
   sex?: 'M' | 'F'; city: string; country: string;
-  level?: 'beginner' | 'intermediate' | 'advanced';
+  level?: '1.0' | '1.5' | '2.0' | '2.5' | '3.0' | '3.5' | '4.0' | '4.5' | '5.0' | '5.5' | '6.0' | '7.0';
   ranking: number; rankingPoints: number;
   status: 'active' | 'blocked' | 'suspended';
   role: 'player' | 'club_admin' | 'federation_admin';
   profileCompleted?: boolean; joinedAt: string; lastActive: string;
-  club?: string; photoUrl?: string; customFields?: Record<string, string>;
+  photoUrl?: string; customFields?: Record<string, string>;
 }
 
 interface SAClub {
@@ -46,16 +46,16 @@ interface SAGame {
 // ── Mock players (shown in SA panel when localStorage has no real data) ────────
 
 export const MOCK_PLAYERS: SAPlayer[] = [
-  { id: 'mock-1', shortId: '#00001', name: 'Carlos Rodriguez', email: 'carlos@padelmgt.es', phone: '+34 612 345 678', sex: 'M', city: 'Madrid', country: 'ES', level: 'advanced', ranking: 1, rankingPoints: 1250, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-01-15', lastActive: '2026-05-20', club: 'Club Padel Madrid' },
-  { id: 'mock-2', shortId: '#00002', name: 'Maria Garcia', email: 'maria@padelmgt.es', phone: '+34 623 456 789', sex: 'F', city: 'Barcelona', country: 'ES', level: 'intermediate', ranking: 2, rankingPoints: 980, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-02-10', lastActive: '2026-05-22', club: 'RC Padel Barcelona' },
-  { id: 'mock-3', shortId: '#00003', name: 'Alejandro Martinez', email: 'alejandro@padelmgt.es', phone: '+34 634 567 890', sex: 'M', city: 'Valencia', country: 'ES', level: 'advanced', ranking: 3, rankingPoints: 760, status: 'active', role: 'club_admin', profileCompleted: true, joinedAt: '2024-01-20', lastActive: '2026-05-18', club: 'Padel Valencia CF' },
-  { id: 'mock-4', shortId: '#00004', name: 'Lucia Fernandez', email: 'lucia@padelmgt.es', phone: '+34 645 678 901', sex: 'F', city: 'Sevilla', country: 'ES', level: 'advanced', ranking: 4, rankingPoints: 1100, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-03-05', lastActive: '2026-05-21' },
-  { id: 'mock-5', shortId: '#00005', name: 'Pablo Lopez', email: 'pablo@padelmgt.es', phone: '+34 656 789 012', sex: 'M', city: 'Malaga', country: 'ES', level: 'beginner', ranking: 5, rankingPoints: 450, status: 'blocked', role: 'player', profileCompleted: false, joinedAt: '2024-04-12', lastActive: '2026-04-30' },
-  { id: 'mock-6', shortId: '#00006', name: 'Ana Sanchez', email: 'ana@padelmgt.es', phone: '+34 667 890 123', sex: 'F', city: 'Bilbao', country: 'ES', level: 'intermediate', ranking: 6, rankingPoints: 820, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-02-28', lastActive: '2026-05-19', club: 'Padel Bilbao Sport' },
-  { id: 'mock-7', shortId: '#00007', name: 'David Gonzalez', email: 'david@padelmgt.es', phone: '+34 678 901 234', sex: 'M', city: 'Zaragoza', country: 'ES', level: 'intermediate', ranking: 7, rankingPoints: 630, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-03-18', lastActive: '2026-05-15' },
-  { id: 'mock-8', shortId: '#00008', name: 'Elena Ruiz', email: 'elena@padelmgt.es', phone: '+34 689 012 345', sex: 'F', city: 'Madrid', country: 'ES', level: 'advanced', ranking: 8, rankingPoints: 950, status: 'suspended', role: 'player', profileCompleted: false, joinedAt: '2024-01-30', lastActive: '2026-05-10' },
-  { id: 'mock-9', shortId: '#00009', name: 'Javier Torres', email: 'javier@padelmgt.es', phone: '+34 690 123 456', sex: 'M', city: 'Alicante', country: 'ES', level: 'advanced', ranking: 9, rankingPoints: 1050, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-04-25', lastActive: '2026-05-23', club: 'Costa Padel Alicante' },
-  { id: 'mock-10', shortId: '#00010', name: 'Sofia Diaz', email: 'sofia@padelmgt.es', phone: '+34 601 234 567', sex: 'F', city: 'Barcelona', country: 'ES', level: 'intermediate', ranking: 10, rankingPoints: 780, status: 'active', role: 'federation_admin', profileCompleted: true, joinedAt: '2024-02-14', lastActive: '2026-05-24' },
+  { id: 'mock-1', shortId: '#00001', name: 'Carlos Rodriguez', email: 'carlos@padelmgt.es', phone: '+34 612 345 678', sex: 'M', city: 'Madrid', country: 'ES', level: '5.0', ranking: 1, rankingPoints: 1250, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-01-15', lastActive: '2026-05-20' },
+  { id: 'mock-2', shortId: '#00002', name: 'Maria Garcia', email: 'maria@padelmgt.es', phone: '+34 623 456 789', sex: 'F', city: 'Barcelona', country: 'ES', level: '3.5', ranking: 2, rankingPoints: 980, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-02-10', lastActive: '2026-05-22' },
+  { id: 'mock-3', shortId: '#00003', name: 'Alejandro Martinez', email: 'alejandro@padelmgt.es', phone: '+34 634 567 890', sex: 'M', city: 'Valencia', country: 'ES', level: '4.5', ranking: 3, rankingPoints: 760, status: 'active', role: 'club_admin', profileCompleted: true, joinedAt: '2024-01-20', lastActive: '2026-05-18' },
+  { id: 'mock-4', shortId: '#00004', name: 'Lucia Fernandez', email: 'lucia@padelmgt.es', phone: '+34 645 678 901', sex: 'F', city: 'Sevilla', country: 'ES', level: '4.0', ranking: 4, rankingPoints: 1100, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-03-05', lastActive: '2026-05-21' },
+  { id: 'mock-5', shortId: '#00005', name: 'Pablo Lopez', email: 'pablo@padelmgt.es', phone: '+34 656 789 012', sex: 'M', city: 'Malaga', country: 'ES', level: '1.5', ranking: 5, rankingPoints: 450, status: 'blocked', role: 'player', profileCompleted: false, joinedAt: '2024-04-12', lastActive: '2026-04-30' },
+  { id: 'mock-6', shortId: '#00006', name: 'Ana Sanchez', email: 'ana@padelmgt.es', phone: '+34 667 890 123', sex: 'F', city: 'Bilbao', country: 'ES', level: '3.0', ranking: 6, rankingPoints: 820, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-02-28', lastActive: '2026-05-19' },
+  { id: 'mock-7', shortId: '#00007', name: 'David Gonzalez', email: 'david@padelmgt.es', phone: '+34 678 901 234', sex: 'M', city: 'Zaragoza', country: 'ES', level: '3.0', ranking: 7, rankingPoints: 630, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-03-18', lastActive: '2026-05-15' },
+  { id: 'mock-8', shortId: '#00008', name: 'Elena Ruiz', email: 'elena@padelmgt.es', phone: '+34 689 012 345', sex: 'F', city: 'Madrid', country: 'ES', level: '4.0', ranking: 8, rankingPoints: 950, status: 'suspended', role: 'player', profileCompleted: false, joinedAt: '2024-01-30', lastActive: '2026-05-10' },
+  { id: 'mock-9', shortId: '#00009', name: 'Javier Torres', email: 'javier@padelmgt.es', phone: '+34 690 123 456', sex: 'M', city: 'Alicante', country: 'ES', level: '4.5', ranking: 9, rankingPoints: 1050, status: 'active', role: 'player', profileCompleted: true, joinedAt: '2024-04-25', lastActive: '2026-05-23' },
+  { id: 'mock-10', shortId: '#00010', name: 'Sofia Diaz', email: 'sofia@padelmgt.es', phone: '+34 601 234 567', sex: 'F', city: 'Barcelona', country: 'ES', level: '3.5', ranking: 10, rankingPoints: 780, status: 'active', role: 'federation_admin', profileCompleted: true, joinedAt: '2024-02-14', lastActive: '2026-05-24' },
 ];
 
 // ── Mock clubs ────────────────────────────────────────────────────────────────

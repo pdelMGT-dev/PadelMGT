@@ -1,6 +1,7 @@
 // player-store.ts — Single source of truth for all registered players
 import { SEED_PLAYERS, SEED_FRIENDSHIPS } from './seeds/players';
 import { createLocalStore, isServer } from './local-store';
+import { normalizeLegacyLevel } from './level-config';
 export { SEED_PLAYERS, SEED_FRIENDSHIPS };
 
 /** Sync player data to Supabase via the server-side API route (uses service role key). */
@@ -20,8 +21,8 @@ async function syncPlayerToSupabase(p: RegisteredPlayer & { authUserId?: string 
 const STORAGE_KEY = 'padelmgt_registered_players';
 const _store = createLocalStore<RegisteredPlayer[]>(STORAGE_KEY, SEED_PLAYERS);
 
-export type PlayerLevel = 'beginner' | 'intermediate' | 'advanced';
-export type PlayerSex   = 'M' | 'F';
+export type { PlayerLevel } from './level-config';
+export type PlayerSex = 'M' | 'F';
 
 export interface RegisteredPlayer {
   id: string;
@@ -33,13 +34,15 @@ export interface RegisteredPlayer {
   sex?: PlayerSex;
   country?: string;
   city?: string;
-  level?: PlayerLevel;
+  level?: import('./level-config').PlayerLevel;
+  /** Photo URL (Supabase Storage or external URL). */
+  photoUrl?: string;
   ranking: number;
   rankingPoints: number;
   profileCompleted?: boolean;
   /** Supabase Auth user UUID, set on registration via Supabase Auth. */
   authUserId?: string;
-  /** Plan assigned by SA or Stripe (e.g. 'free', 'player_pro'). */
+  /** Highest active plan (backwards compat). Authoritative list in subscriptions table. */
   plan?: string;
 }
 
@@ -120,6 +123,8 @@ export function registerPlayer(params: RegisterParams): RegisteredPlayer | null 
     // password intentionally not stored — managed by Supabase Auth
     sex: params.sex,
     country: params.country,
+    level: '1.0',
+    plan: 'free',
     ranking: all.length + 1,
     rankingPoints: 0,
     profileCompleted: false,

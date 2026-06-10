@@ -6,6 +6,7 @@ import type { ActiveGame } from '@/lib/game-engine';
 import { updatePlayer } from '@/lib/player-store';
 import { getRankingHistoryForGame } from '@/lib/ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { PLAYER_LEVELS, LEVEL_CONFIG, getLevelInfo, normalizeLegacyLevel, type PlayerLevel } from '@/lib/level-config';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,6 +20,8 @@ type UserProfile = {
   phone?: string; description?: string; nationality?: string;
   sex?: 'masculino' | 'femenino'; birthDate?: string;
   avatarBase64?: string;
+  photoUrl?: string;
+  city?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -98,8 +101,11 @@ export default function PlayerProfilePage() {
   const [fPhone, setFPhone] = useState('');
   const [fDesc, setFDesc] = useState('');
   const [fNat, setFNat] = useState('');
+  const [fCity, setFCity] = useState('');
   const [fSex, setFSex] = useState<'masculino' | 'femenino' | ''>('');
   const [fBirth, setFBirth] = useState('');
+  const [fLevel, setFLevel] = useState<PlayerLevel>('1.0');
+  const [levelExpanded, setLevelExpanded] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -121,8 +127,10 @@ export default function PlayerProfilePage() {
     setFPhone(user.phone || '');
     setFDesc(user.description || '');
     setFNat(user.nationality || '');
+    setFCity(user.city || '');
     setFSex(user.sex || '');
     setFBirth(user.birthDate || '');
+    setFLevel(normalizeLegacyLevel(user.level));
   }, [user?.id]);
 
   // ---------------------------------------------------------------------------
@@ -151,12 +159,21 @@ export default function PlayerProfilePage() {
       phone: fPhone.trim() || undefined,
       description: fDesc.trim() || undefined,
       nationality: fNat || undefined,
+      city: fCity.trim() || undefined,
       sex: fSex || undefined,
       birthDate: fBirth || undefined,
+      level: fLevel,
     };
     setSessionUser(updated as unknown as Parameters<typeof setSessionUser>[0]);
     setUser(updated);
-    if (updated.id) updatePlayer(updated.id, { ...updated, country: updated.nationality });
+    if (updated.id) {
+      updatePlayer(updated.id, {
+        country: updated.nationality,
+        city: updated.city,
+        level: fLevel,
+        photoUrl: updated.photoUrl,
+      });
+    }
     setSaveMsg('¡Perfil actualizado!');
     setTimeout(() => setSaveMsg(''), 3000);
   }
@@ -164,21 +181,27 @@ export default function PlayerProfilePage() {
   function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !user) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('La imagen no puede superar 2 MB.');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
-      const updated = { ...user, avatarBase64: base64 };
+      const updated = { ...user, avatarBase64: base64, photoUrl: base64 };
       setSessionUser(updated as unknown as Parameters<typeof setSessionUser>[0]);
       setUser(updated);
+      if (user.id) updatePlayer(user.id, { photoUrl: base64 });
     };
     reader.readAsDataURL(file);
   }
 
   function handleDeleteAvatar() {
     if (!user) return;
-    const updated = { ...user, avatarBase64: undefined };
+    const updated = { ...user, avatarBase64: undefined, photoUrl: undefined };
     setSessionUser(updated as unknown as Parameters<typeof setSessionUser>[0]);
     setUser(updated);
+    if (user.id) updatePlayer(user.id, { photoUrl: undefined });
   }
 
   // ---------------------------------------------------------------------------
@@ -234,10 +257,11 @@ export default function PlayerProfilePage() {
   // ---------------------------------------------------------------------------
 
   function AvatarCircle({ size, fontSize }: { size: number; fontSize: number }) {
-    if (user!.avatarBase64) {
+    const src = user!.avatarBase64 || user!.photoUrl;
+    if (src) {
       return (
         <img
-          src={user!.avatarBase64}
+          src={src}
           alt="avatar"
           style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
         />
@@ -283,7 +307,7 @@ export default function PlayerProfilePage() {
             {user.name}
           </div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--grey-400)', marginBottom: 12 }}>
-            {user.level && <span>{user.level}</span>}
+            {user.level && <span>{getLevelInfo(user.level).label} — {getLevelInfo(user.level).group}</span>}
             {user.level && user.clubName && <span style={{ margin: '0 6px' }}>·</span>}
             {user.clubName && <span>{user.clubName}</span>}
           </div>
@@ -299,15 +323,18 @@ export default function PlayerProfilePage() {
                 {user.points} pts
               </span>
             )}
-            {user.level && (
-              <span style={{
-                background: 'rgba(255,255,255,0.1)', color: '#fff',
-                fontFamily: 'var(--font-body)', fontSize: 11,
-                padding: '3px 10px',
-              }}>
-                {user.level}
-              </span>
-            )}
+            {user.level && (() => {
+              const li = getLevelInfo(user.level);
+              return (
+                <span style={{
+                  background: li.color + '33', color: li.color,
+                  fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 700,
+                  padding: '3px 10px', border: `1px solid ${li.color}55`,
+                }}>
+                  {li.level} {li.group}
+                </span>
+              );
+            })()}
             {user.clubName && (
               <span style={{
                 background: 'rgba(255,255,255,0.1)', color: '#fff',
@@ -580,7 +607,7 @@ export default function PlayerProfilePage() {
                 >
                   Subir foto
                 </button>
-                {user.avatarBase64 && (
+                {(user.avatarBase64 || user.photoUrl) && (
                   <button
                     type="button"
                     onClick={handleDeleteAvatar}
@@ -627,7 +654,7 @@ export default function PlayerProfilePage() {
                 <input style={inp} value={fPhone} onChange={e => setFPhone(e.target.value)} placeholder="+34 600 000 000" />
               </div>
               <div style={{ position: 'relative' }}>
-                <label style={lbl}>Nacionalidad</label>
+                <label style={lbl}>País</label>
                 <select
                   style={sel}
                   value={fNat}
@@ -639,6 +666,12 @@ export default function PlayerProfilePage() {
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Row 2b: City */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>Ciudad</label>
+              <input style={inp} value={fCity} onChange={e => setFCity(e.target.value)} placeholder="Tu ciudad" />
             </div>
 
             {/* Description */}
@@ -695,6 +728,98 @@ export default function PlayerProfilePage() {
                 fontFamily: 'var(--font-body)', fontSize: 13, color: '#92400E',
               }}>
                 Jugador menor de 16 años. La plataforma permite registrar menores de edad. Se requiere autorización de un tutor para participar en torneos.
+              </div>
+            )}
+          </div>
+
+          {/* Level selector */}
+          <div style={{ background: '#fff', padding: 28, border: '1px solid var(--grey-100)' }}>
+            <div style={{ ...lbl, fontSize: 12, marginBottom: 4 }}>Nivel de Juego</div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--grey-400)', marginBottom: 16 }}>
+              Seleccioná el nivel que mejor describe tu habilidad actual.
+            </div>
+
+            {/* Current level display */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
+                background: LEVEL_CONFIG[fLevel]?.color ?? '#9CA3AF',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: '#fff',
+              }}>
+                {fLevel}
+              </div>
+              <div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, textTransform: 'uppercase', color: 'var(--black)' }}>
+                  {LEVEL_CONFIG[fLevel]?.group}
+                </div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--grey-500)', marginTop: 2 }}>
+                  {LEVEL_CONFIG[fLevel]?.description}
+                </div>
+              </div>
+            </div>
+
+            {/* Level grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
+              {PLAYER_LEVELS.map(lvl => {
+                const info = LEVEL_CONFIG[lvl];
+                const active = fLevel === lvl;
+                return (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() => setFLevel(lvl)}
+                    title={`${info.group} — ${info.description}`}
+                    style={{
+                      padding: '8px 4px', cursor: 'pointer',
+                      border: active ? `2px solid ${info.color}` : '1px solid var(--grey-200)',
+                      background: active ? info.color : '#fff',
+                      color: active ? '#fff' : 'var(--grey-600)',
+                      fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700,
+                      transition: 'all 0.1s',
+                    }}
+                  >
+                    {lvl}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Expand/collapse full descriptions */}
+            <button
+              type="button"
+              onClick={() => setLevelExpanded(!levelExpanded)}
+              style={{ marginTop: 12, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--grey-400)', padding: 0, textDecoration: 'underline' }}
+            >
+              {levelExpanded ? 'Ocultar descripción de niveles' : 'Ver descripción de todos los niveles'}
+            </button>
+
+            {levelExpanded && (
+              <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {PLAYER_LEVELS.map(lvl => {
+                  const info = LEVEL_CONFIG[lvl];
+                  return (
+                    <div key={lvl} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }} onClick={() => setFLevel(lvl)}>
+                      <div style={{
+                        flexShrink: 0, width: 36, height: 36, borderRadius: '50%',
+                        background: info.color,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: 700, color: '#fff',
+                        border: fLevel === lvl ? '2px solid var(--black)' : '2px solid transparent',
+                      }}>
+                        {lvl}
+                      </div>
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: 'var(--black)' }}>
+                          {info.label} — <span style={{ color: info.color }}>{info.group}</span>
+                        </div>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--grey-500)', marginTop: 1 }}>
+                          {info.description}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
