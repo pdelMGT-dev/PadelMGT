@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
-import LogoIcon from './LogoIcon';
+import BrandLogo from './BrandLogo';
 
 const leftLinks = [
   { href: '/', label: 'Inicio' },
@@ -43,8 +43,7 @@ export default function Navbar() {
 
           {/* Center logo */}
           <Link href="/" className="logo" style={{ justifySelf: 'center' }}>
-            <LogoIcon white={isHome} />
-            PadelMGT
+            <BrandLogo variant={isHome ? 'white' : 'full'} height={30} />
           </Link>
 
           {/* Right nav + actions */}
@@ -76,9 +75,8 @@ export default function Navbar() {
       {mobileOpen && (
         <div className="mobile-menu-overlay">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 }}>
-            <Link href="/" className="logo" style={{ color: '#fff' }} onClick={() => setMobileOpen(false)}>
-              <LogoIcon white />
-              PadelMGT
+            <Link href="/" className="logo" onClick={() => setMobileOpen(false)}>
+              <BrandLogo variant="white" height={28} />
             </Link>
             <button onClick={() => setMobileOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4 }}>
               <X size={24} />

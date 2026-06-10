@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
+import BrandLogo from '@/components/BrandLogo';
 import {
   getPlayerLeagueByCode,
   getLeagueSeasons,
@@ -243,13 +244,8 @@ export default function PublicLeaguePage() {
         <div style={{ position: 'relative', maxWidth: 1200, margin: '0 auto', padding: 'clamp(32px,6vw,64px) clamp(20px,5vw,48px) clamp(40px,6vw,72px)' }}>
 
           {/* PadelMGT Logo */}
-          <Link href="/" style={{
-            display: 'inline-block', textDecoration: 'none',
-            fontFamily: 'var(--font-display)', fontSize: 12,
-            fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
-            color: 'var(--neon)', marginBottom: 48,
-          }}>
-            PADELMGT
+          <Link href="/" style={{ display: 'inline-block', textDecoration: 'none', marginBottom: 48 }}>
+            <BrandLogo variant="white" height={28} />
           </Link>
 
           {/* Private badge */}

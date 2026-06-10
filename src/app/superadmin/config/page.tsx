@@ -7,9 +7,6 @@ import { getAuditLog, clearAuditLog, type AuditEntry } from '@/lib/audit-log-sto
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
-interface TeamMember { name: string; role: string; country: string; bio: string; }
-interface Milestone  { year: string; event: string; }
-
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div
@@ -78,7 +75,7 @@ function downloadCSV(filename: string, rows: string[][]) {
 }
 
 export default function ConfigPage() {
-  const [tab, setTab] = useState<'admins' | 'general' | 'database' | 'stripe' | 'ranking' | 'audit' | 'sitio'>('admins');
+  const [tab, setTab] = useState<'admins' | 'general' | 'database' | 'stripe' | 'ranking' | 'audit' | 'brand'>('admins');
   const [admins, setAdmins] = useState<SAAdminUser[]>([]);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [editAdmin, setEditAdmin] = useState<SAAdminUser | null>(null);
@@ -114,28 +111,10 @@ export default function ConfigPage() {
   const [rankSaved, setRankSaved] = useState(false);
   // Audit log
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
-  // Sitio web
-  type StatMode = 'real' | 'custom';
-  const [statsMode, setStatsMode] = useState<StatMode>('real');
-  const [statsValues, setStatsValues] = useState({ players: '12,400+', clubs: '380', leagues: '47', countries: '9' });
-  const [savingStats, setSavingStats] = useState(false);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
-    { name: 'Martín Rodríguez', role: 'CEO & Co-Founder', country: '🇦🇷', bio: 'Ex-jugador profesional y fanático del pádel. Fundó PadelMGT para resolver los problemas que vivió como organizador.' },
-    { name: 'Valentina Cruz', role: 'CTO & Co-Founder', country: '🇨🇴', bio: 'Ingeniera de software con 10 años de experiencia en plataformas deportivas a escala.' },
-    { name: 'Diego Morales', role: 'Head of Product', country: '🇲🇽', bio: 'Diseñador y estratega de producto. Obsesionado con la experiencia de usuario en deportes.' },
-    { name: 'Ana Fernández', role: 'Head of Growth', country: '🇨🇱', bio: 'Especialista en crecimiento de comunidades deportivas en América Latina.' },
-  ]);
-  const [milestones, setMilestones] = useState<Milestone[]>([
-    { year: '2023', event: 'Fundación de PadelMGT en Buenos Aires con el primer torneo piloto.' },
-    { year: '2024', event: 'Lanzamiento público. 1,000 jugadores registrados en el primer mes.' },
-    { year: '2025', event: 'Expansión a 8 países de América Latina y España.' },
-    { year: '2026', event: 'Más de 12,400 jugadores activos y 380 clubes en la plataforma.' },
-  ]);
-  const [savingAbout, setSavingAbout] = useState(false);
-  const [editTeamIdx, setEditTeamIdx] = useState<number | null>(null);
-  const [editTeamForm, setEditTeamForm] = useState<TeamMember>({ name: '', role: '', country: '', bio: '' });
-  const [editMsIdx, setEditMsIdx] = useState<number | null>(null);
-  const [editMsForm, setEditMsForm] = useState<Milestone>({ year: '', event: '' });
+  // Brand
+  const [brandLogos, setBrandLogos] = useState({ logoFull: '', logoWhite: '', logoBlack: '', logoIcon: '' });
+  const [brandSaving, setBrandSaving] = useState(false);
+  const [brandLoaded, setBrandLoaded] = useState(false);
 
   useEffect(() => {
     setAdmins(getSAAdminUsers());
@@ -159,28 +138,14 @@ export default function ConfigPage() {
     setRankLoss(cfg.pointsLoss);
     // Load audit log
     setAuditLog(getAuditLog(200));
-    // Load sitio web config
-    fetch('/api/sa/stats')
-      .then(r => r.json() as Promise<{ config: Record<string, { display: string; useReal: boolean }> | null }>)
-      .then(d => {
-        if (d.config) {
-          setStatsValues({
-            players:   d.config.players?.display   ?? '12,400+',
-            clubs:     d.config.clubs?.display     ?? '380',
-            leagues:   d.config.leagues?.display   ?? '47',
-            countries: d.config.countries?.display ?? '9',
-          });
-          setStatsMode(d.config.players?.useReal ? 'real' : 'custom');
-        }
+    // Load branding
+    fetch('/api/sa/branding', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) setBrandLogos({ logoFull: data.logoFull ?? '', logoWhite: data.logoWhite ?? '', logoBlack: data.logoBlack ?? '', logoIcon: data.logoIcon ?? '' });
+        setBrandLoaded(true);
       })
-      .catch(() => {});
-    fetch('/api/sa/about-content')
-      .then(r => r.json() as Promise<{ content: { team?: TeamMember[]; milestones?: Milestone[] } | null }>)
-      .then(d => {
-        if (d.content?.team?.length)       setTeamMembers(d.content.team);
-        if (d.content?.milestones?.length) setMilestones(d.content.milestones);
-      })
-      .catch(() => {});
+      .catch(() => setBrandLoaded(true));
   }, []);
 
   function saveStripeConfig() {
@@ -263,38 +228,6 @@ export default function ConfigPage() {
 
   function handleDeleteStep1(adminId: string) { setDeleteConfirm({ step: 1, adminId }); }
   function handleDeleteStep2() { if (!deleteConfirm) return; setDeleteConfirm({ ...deleteConfirm, step: 2 }); }
-
-  async function saveStats() {
-    setSavingStats(true);
-    const config = {
-      players:   { display: statsValues.players,   useReal: statsMode === 'real' },
-      clubs:     { display: statsValues.clubs,     useReal: statsMode === 'real' },
-      leagues:   { display: statsValues.leagues,   useReal: statsMode === 'real' },
-      countries: { display: statsValues.countries, useReal: statsMode === 'real' },
-    };
-    try {
-      const res = await fetch('/api/sa/stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config }) });
-      const json = await res.json() as { ok?: boolean };
-      if (json.ok) toast('Estadísticas guardadas ✓');
-      else toast('Error al guardar estadísticas', false);
-    } catch { toast('Error de conexión', false); }
-    setSavingStats(false);
-  }
-
-  async function saveAboutContent() {
-    setSavingAbout(true);
-    try {
-      const res = await fetch('/api/sa/about-content', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: { team: teamMembers, milestones } }),
-      });
-      const json = await res.json() as { ok?: boolean };
-      if (json.ok) toast('Contenido del /about guardado ✓');
-      else toast('Error al guardar', false);
-    } catch { toast('Error de conexión', false); }
-    setSavingAbout(false);
-  }
   function handleDeleteFinal() {
     if (!deleteConfirm) return;
     const updated = admins.filter(a => a.id !== deleteConfirm.adminId);
@@ -348,6 +281,28 @@ export default function ConfigPage() {
     }
   }
 
+  async function saveBranding() {
+    setBrandSaving(true);
+    try {
+      const res = await fetch('/api/sa/branding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ branding: brandLogos }),
+      });
+      if (res.ok) { toast('Logos guardados correctamente'); }
+      else { const e = await res.json(); toast(e.error ?? 'Error al guardar', false); }
+    } catch { toast('Error de conexión', false); }
+    setBrandSaving(false);
+  }
+
+  function handleLogoFile(key: keyof typeof brandLogos, file: File) {
+    if (file.size > 500_000) { toast('Imagen demasiado grande (máx 500KB)', false); return; }
+    const reader = new FileReader();
+    reader.onload = e => setBrandLogos(prev => ({ ...prev, [key]: e.target?.result as string ?? '' }));
+    reader.readAsDataURL(file);
+  }
+
   const adminById = Object.fromEntries(admins.map(a => [a.id, a]));
   const deleteTarget = deleteConfirm ? adminById[deleteConfirm.adminId] : null;
 
@@ -376,8 +331,8 @@ export default function ConfigPage() {
           { key: 'database', label: 'Base de Datos' },
           { key: 'stripe', label: 'Stripe / Pagos' },
           { key: 'ranking', label: 'Ranking' },
-          { key: 'sitio', label: 'Sitio Web' },
           { key: 'audit', label: `Auditoria (${auditLog.length})` },
+          { key: 'brand', label: 'Marca' },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)} style={{
             padding: '10px 24px', border: 'none', background: 'none', cursor: 'pointer',
@@ -761,132 +716,6 @@ export default function ConfigPage() {
         </div>
       )}
 
-      {/* SITIO WEB TAB */}
-      {tab === 'sitio' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
-
-          {/* Stats section */}
-          <div style={{ border: '1px solid var(--grey-200)', background: '#fafafa' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--grey-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--black)', marginBottom: 2 }}>Estadísticas del Sitio</div>
-                <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Aparecen en el hero de la página principal y en la página /about</div>
-              </div>
-              <button onClick={saveStats} disabled={savingStats} style={{ padding: '8px 18px', background: 'var(--black)', color: '#c8f135', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: savingStats ? 0.6 : 1 }}>
-                {savingStats ? 'Guardando...' : 'Guardar'}
-              </button>
-            </div>
-            <div style={{ padding: '16px 20px' }}>
-              <div style={{ display: 'flex', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
-                {(['real', 'custom'] as const).map(m => (
-                  <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}>
-                    <input type="radio" checked={statsMode === m} onChange={() => setStatsMode(m)} />
-                    {m === 'real' ? 'Usar datos reales de Supabase' : 'Mostrar valores personalizados'}
-                  </label>
-                ))}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                {([
-                  { key: 'players' as const,   label: 'Jugadores',    placeholder: '12,400+' },
-                  { key: 'clubs' as const,      label: 'Clubes',       placeholder: '380' },
-                  { key: 'leagues' as const,    label: 'Ligas Activas',placeholder: '47' },
-                  { key: 'countries' as const,  label: 'Países',       placeholder: '9' },
-                ]).map(({ key, label, placeholder }) => (
-                  <div key={key}>
-                    <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-500)', display: 'block', marginBottom: 5 }}>{label}</label>
-                    <input
-                      style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--grey-200)', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none', boxSizing: 'border-box', opacity: statsMode === 'real' ? 0.5 : 1 }}
-                      disabled={statsMode === 'real'}
-                      value={statsValues[key]}
-                      onChange={e => setStatsValues(v => ({ ...v, [key]: e.target.value }))}
-                      placeholder={placeholder}
-                    />
-                    <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 3 }}>
-                      {statsMode === 'real' ? 'Dato real de Supabase' : 'Texto a mostrar'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Team members section */}
-          <div style={{ border: '1px solid var(--grey-200)' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--grey-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--black)', marginBottom: 2 }}>Equipo</div>
-                <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Miembros del equipo que aparecen en /about</div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => { setEditTeamIdx(teamMembers.length); setEditTeamForm({ name: '', role: '', country: '', bio: '' }); }}
-                  style={{ padding: '7px 14px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--grey-600)' }}
-                >
-                  + Agregar
-                </button>
-                <button onClick={saveAboutContent} disabled={savingAbout} style={{ padding: '7px 14px', background: 'var(--black)', color: '#c8f135', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', opacity: savingAbout ? 0.6 : 1 }}>
-                  {savingAbout ? 'Guardando...' : 'Guardar'}
-                </button>
-              </div>
-            </div>
-            <div>
-              {teamMembers.map((m, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', borderBottom: '1px solid var(--grey-100)' }}>
-                  <div style={{ width: 40, height: 40, background: 'var(--court-blue-deep)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff', fontSize: 14, flexShrink: 0 }}>
-                    {m.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{m.name} {m.country}</div>
-                    <div style={{ fontSize: 11, color: 'var(--grey-500)' }}>{m.role}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={() => { setEditTeamIdx(i); setEditTeamForm({ ...m }); }} style={{ padding: '4px 10px', border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer', fontSize: 11, color: 'var(--grey-600)' }}>Editar</button>
-                    <button onClick={() => { const t = teamMembers.filter((_, j) => j !== i); setTeamMembers(t); }} style={{ padding: '4px 10px', border: '1px solid #fecaca', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#dc2626' }}>×</button>
-                  </div>
-                </div>
-              ))}
-              {teamMembers.length === 0 && (
-                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>Sin miembros del equipo. Agrega el primero.</div>
-              )}
-            </div>
-          </div>
-
-          {/* Milestones section */}
-          <div style={{ border: '1px solid var(--grey-200)' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--grey-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--black)', marginBottom: 2 }}>Hitos / Historia</div>
-                <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Línea de tiempo que aparece en /about</div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => { setEditMsIdx(milestones.length); setEditMsForm({ year: '', event: '' }); }} style={{ padding: '7px 14px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--grey-600)' }}>
-                  + Agregar
-                </button>
-                <button onClick={saveAboutContent} disabled={savingAbout} style={{ padding: '7px 14px', background: 'var(--black)', color: '#c8f135', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', opacity: savingAbout ? 0.6 : 1 }}>
-                  {savingAbout ? 'Guardando...' : 'Guardar'}
-                </button>
-              </div>
-            </div>
-            <div>
-              {milestones.map((ms, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', borderBottom: '1px solid var(--grey-100)' }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--neon)', background: 'var(--black)', padding: '4px 10px', flexShrink: 0 }}>{ms.year}</div>
-                  <div style={{ flex: 1, fontSize: 13, color: 'var(--grey-600)' }}>{ms.event}</div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={() => { setEditMsIdx(i); setEditMsForm({ ...ms }); }} style={{ padding: '4px 10px', border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer', fontSize: 11, color: 'var(--grey-600)' }}>Editar</button>
-                    <button onClick={() => { const ms2 = milestones.filter((_, j) => j !== i); setMilestones(ms2); }} style={{ padding: '4px 10px', border: '1px solid #fecaca', background: '#fff', cursor: 'pointer', fontSize: 11, color: '#dc2626' }}>×</button>
-                  </div>
-                </div>
-              ))}
-              {milestones.length === 0 && (
-                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>Sin hitos. Agrega el primero.</div>
-              )}
-            </div>
-          </div>
-
-        </div>
-      )}
-
       {/* AUDIT TAB */}
       {tab === 'audit' && (
         <div>
@@ -941,6 +770,88 @@ export default function ConfigPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* BRAND TAB */}
+      {tab === 'brand' && (
+        <div style={{ maxWidth: 680 }}>
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, margin: '0 0 6px' }}>Identidad de Marca</h2>
+            <p style={{ color: 'var(--grey-500)', fontSize: 13, margin: 0 }}>
+              Sube los logos de la plataforma. Cada variante se usa en contextos distintos (fondo oscuro, fondo claro, icono).
+              Formatos admitidos: PNG, SVG. Máx 500 KB por imagen.
+            </p>
+          </div>
+
+          {!brandLoaded ? (
+            <div style={{ color: 'var(--grey-400)', fontSize: 13 }}>Cargando configuración...</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+              {([
+                { key: 'logoFull',  label: 'Logo Principal',        bg: '#fff',   desc: 'Para fondos blancos/claros' },
+                { key: 'logoWhite', label: 'Logo Blanco',           bg: '#0a0a0a', desc: 'Para fondos oscuros / navbar' },
+                { key: 'logoBlack', label: 'Logo Negro',            bg: '#f5f5f5', desc: 'Para impresión y variantes' },
+                { key: 'logoIcon',  label: 'Ícono (cuadrado)',      bg: '#fff',   desc: 'Para favicon y app icon' },
+              ] as const).map(({ key, label, bg, desc }) => {
+                const src = brandLogos[key];
+                const isDefault = src.startsWith('/assets/');
+                return (
+                  <div key={key} style={{ border: '1px solid var(--grey-200)', borderRadius: 8, overflow: 'hidden' }}>
+                    {/* Preview */}
+                    <div style={{ background: bg, height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid var(--grey-200)' }}>
+                      {src ? (
+                        <img src={src} alt={label} style={{ maxHeight: 80, maxWidth: '80%', objectFit: 'contain' }} />
+                      ) : (
+                        <div style={{ color: 'var(--grey-300)', fontSize: 12 }}>Sin imagen</div>
+                      )}
+                    </div>
+                    {/* Info + upload */}
+                    <div style={{ padding: '12px 16px', background: '#fff' }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{label}</div>
+                      <div style={{ fontSize: 11, color: 'var(--grey-400)', marginBottom: 10 }}>{desc}</div>
+                      {isDefault && <div style={{ fontSize: 10, color: 'var(--grey-400)', marginBottom: 8, fontStyle: 'italic' }}>Usando imagen predeterminada</div>}
+                      <label style={{ display: 'inline-block', cursor: 'pointer', padding: '6px 14px', background: 'var(--grey-100)', border: '1px solid var(--grey-200)', borderRadius: 4, fontSize: 12, fontWeight: 600, color: 'var(--grey-700)' }}>
+                        Subir imagen
+                        <input
+                          type="file"
+                          accept="image/png,image/svg+xml,image/webp"
+                          style={{ display: 'none' }}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoFile(key, f); }}
+                        />
+                      </label>
+                      {!isDefault && (
+                        <button
+                          onClick={() => setBrandLogos(prev => ({ ...prev, [key]: `/assets/brand/${key.replace('logo', 'logo-').toLowerCase()}.png` }))}
+                          style={{ marginLeft: 8, padding: '6px 12px', background: 'transparent', border: '1px solid var(--grey-200)', borderRadius: 4, fontSize: 12, cursor: 'pointer', color: 'var(--grey-500)' }}
+                        >
+                          Restablecer
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button
+              onClick={saveBranding}
+              disabled={brandSaving || !brandLoaded}
+              style={{ padding: '10px 28px', background: brandSaving ? 'var(--grey-300)' : '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: brandSaving ? 'not-allowed' : 'pointer' }}
+            >
+              {brandSaving ? 'Guardando...' : 'Guardar Logos'}
+            </button>
+          </div>
+
+          <div style={{ marginTop: 32, padding: '16px 20px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', borderRadius: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--grey-700)', marginBottom: 6 }}>Archivos estáticos (fallback)</div>
+            <div style={{ fontSize: 12, color: 'var(--grey-500)', lineHeight: 1.7 }}>
+              Para mayor rendimiento, sube también los archivos PNG directamente a <code style={{ background: 'var(--grey-100)', padding: '1px 4px', borderRadius: 3 }}>public/assets/brand/</code>:
+              <br />logo-full.png · logo-white.png · logo-black.png · logo-icon.png
+            </div>
+          </div>
         </div>
       )}
 
@@ -1011,70 +922,6 @@ export default function ConfigPage() {
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={() => setDeleteConfirm(null)} style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
             <button onClick={handleDeleteFinal} style={{ padding: '9px 20px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Confirmar eliminacion definitiva</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* EDIT TEAM MEMBER MODAL */}
-      {editTeamIdx !== null && (
-        <Modal onClose={() => setEditTeamIdx(null)}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 20 }}>
-            {editTeamIdx < teamMembers.length ? 'Editar miembro' : 'Nuevo miembro'}
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <Field label="Nombre">
-              <input style={inputStyle} value={editTeamForm.name} onChange={e => setEditTeamForm(f => ({ ...f, name: e.target.value }))} />
-            </Field>
-            <Field label="Rol / Cargo">
-              <input style={inputStyle} value={editTeamForm.role} onChange={e => setEditTeamForm(f => ({ ...f, role: e.target.value }))} placeholder="CEO & Co-Founder" />
-            </Field>
-            <Field label="País (emoji)">
-              <input style={inputStyle} value={editTeamForm.country} onChange={e => setEditTeamForm(f => ({ ...f, country: e.target.value }))} placeholder="🇦🇷" />
-            </Field>
-            <Field label="Bio">
-              <textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} value={editTeamForm.bio} onChange={e => setEditTeamForm(f => ({ ...f, bio: e.target.value }))} />
-            </Field>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-              <button onClick={() => setEditTeamIdx(null)} style={{ padding: '9px 20px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
-              <button onClick={() => {
-                if (!editTeamForm.name) return;
-                const updated = [...teamMembers];
-                updated[editTeamIdx] = { ...editTeamForm };
-                setTeamMembers(updated);
-                setEditTeamIdx(null);
-              }} style={{ padding: '9px 24px', background: '#0a0a0a', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                Guardar
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* EDIT MILESTONE MODAL */}
-      {editMsIdx !== null && (
-        <Modal onClose={() => setEditMsIdx(null)}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 20 }}>
-            {editMsIdx < milestones.length ? 'Editar hito' : 'Nuevo hito'}
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <Field label="Año">
-              <input style={inputStyle} value={editMsForm.year} onChange={e => setEditMsForm(f => ({ ...f, year: e.target.value }))} placeholder="2023" />
-            </Field>
-            <Field label="Evento">
-              <textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} value={editMsForm.event} onChange={e => setEditMsForm(f => ({ ...f, event: e.target.value }))} />
-            </Field>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-              <button onClick={() => setEditMsIdx(null)} style={{ padding: '9px 20px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
-              <button onClick={() => {
-                if (!editMsForm.year) return;
-                const updated = [...milestones];
-                updated[editMsIdx] = { ...editMsForm };
-                setMilestones(updated);
-                setEditMsIdx(null);
-              }} style={{ padding: '9px 24px', background: '#0a0a0a', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                Guardar
-              </button>
-            </div>
           </div>
         </Modal>
       )}

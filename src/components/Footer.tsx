@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import LogoIcon from './LogoIcon';
+import BrandLogo from './BrandLogo';
 
 const cols = [
   {
@@ -45,14 +45,8 @@ export default function Footer() {
       <div className="footer-grid">
         {/* Brand */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <LogoIcon white size={38} />
-            <span style={{
-              fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 26,
-              textTransform: 'uppercase', letterSpacing: '-0.01em',
-            }}>
-              PadelMGT
-            </span>
+          <div style={{ marginBottom: 16 }}>
+            <BrandLogo variant="white" height={38} />
           </div>
           <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', maxWidth: 300, lineHeight: 1.65, margin: 0 }}>
             Por <strong style={{ color: '#fff' }}>Automatable</strong>. La plataforma para crear y gestionar

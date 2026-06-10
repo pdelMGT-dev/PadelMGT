@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { registerPlayer, type PlayerSex } from '@/lib/player-store';
+import BrandLogo from '@/components/BrandLogo';
 import { authSignUp } from '@/lib/supabase';
 import { sendWelcomeEmail } from '@/lib/email';
 import { validatePromoCode, redeemPromoCode } from '@/lib/promotion-store';
@@ -116,9 +117,8 @@ export default function RegisterPage() {
 
   const headerBar = (
     <div style={{ background: 'var(--black)', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-      <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-        <div style={{ width: 32, height: 32, background: 'var(--neon)', color: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18 }}>P</div>
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: '#fff', letterSpacing: '0.04em' }}>PADELMGT</span>
+      <Link href="/" style={{ textDecoration: 'none' }}>
+        <BrandLogo variant="white" height={32} />
       </Link>
       <Link href={loginUrl} style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>
         ¿Ya tenés cuenta? Iniciar sesión →

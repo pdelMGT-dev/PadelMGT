@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { saIsLoggedIn, saGetSession, saLogout, type SASession } from '@/lib/superadmin-auth';
+import BrandLogo from '@/components/BrandLogo';
 
 const ALL_NAV_ITEMS = [
   { label: 'DASHBOARD',     href: '/superadmin/dashboard',   roles: ['superadmin'] },
@@ -46,8 +47,8 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     return <>{children}</>;
   }
 
-  function handleLogout() {
-    saLogout();
+  async function handleLogout() {
+    await saLogout();
     router.push('/superadmin/login');
   }
 
@@ -72,21 +73,13 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       zIndex: 100,
     }}>
       {/* Logo */}
-      <div style={{ padding: '28px 24px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <div style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 22,
-          fontWeight: 700,
-          color: '#fff',
-          letterSpacing: '0.05em',
-        }}>
-          PADEL MGT
-        </div>
+      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <BrandLogo variant="white" height={28} />
         <div style={{
           fontSize: 10,
           color: role === 'superadmin' ? 'var(--grey-500)' : '#d6ff00',
           letterSpacing: '0.15em',
-          marginTop: 4,
+          marginTop: 6,
           textTransform: 'uppercase',
         }}>
           {ROLE_LABELS[role] ?? 'Admin'}

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { saLogin } from '@/lib/superadmin-auth';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function SuperAdminLogin() {
   const router = useRouter();
@@ -38,16 +39,8 @@ export default function SuperAdminLogin() {
         padding: 48,
       }}>
         <div style={{ textAlign: 'center', maxWidth: 400 }}>
-          <div style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 56,
-            fontWeight: 700,
-            color: '#fff',
-            letterSpacing: '0.06em',
-            lineHeight: 1,
-            marginBottom: 12,
-          }}>
-            PADEL MGT
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
+            <BrandLogo variant="white" height={56} />
           </div>
           <div style={{
             fontSize: 11,

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { authenticatePlayer } from '@/lib/player-store';
 import { syncAllFromSupabase, syncUserTournaments, syncUserGames } from '@/lib/supabase-sync';
 import { supabase, isSupabaseConfigured, authSignIn, fetchPlayerByUserId, fetchPlayerByEmail } from '@/lib/supabase';
+import BrandLogo from '@/components/BrandLogo';
 
 type UserRole = 'player' | 'club_manager' | 'league_organizer' | 'federation' | 'super_admin';
 
@@ -273,9 +274,8 @@ export default function LoginPage() {
     <div style={{ minHeight: '100vh', background: 'var(--grey-50)', display: 'flex', flexDirection: 'column' }}>
       {/* Hero bar */}
       <div style={{ background: 'var(--black)', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <div style={{ width: 32, height: 32, background: 'var(--neon)', color: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18 }}>P</div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: '#fff', letterSpacing: '0.04em' }}>PADELMGT</span>
+        <Link href="/" style={{ textDecoration: 'none' }}>
+          <BrandLogo variant="white" height={32} />
         </Link>
         <Link href="/" style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>
           ← Volver al inicio

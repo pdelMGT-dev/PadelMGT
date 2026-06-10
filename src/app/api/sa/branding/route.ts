@@ -1,59 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { requireSARequest } from '@/lib/sa-session';
+import { requireSARequest, saUnauthorized } from '@/lib/sa-session';
+import { serviceClient } from '@/lib/supabase-server';
 
-// SA-managed branding (logo variants). Values are data URLs (uploaded images)
-// or static paths. Protected by the signed SA session cookie.
-
-const MAX_DATA_URL = 700 * 1024; // ~500KB image → ~700KB base64
-const ALLOWED_KEYS = new Set(['logoFull', 'logoWhite', 'logoBlack', 'logoIcon']);
-
-function supabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
+const DEFAULTS = {
+  logoFull:  '/assets/brand/logo-full.png',
+  logoWhite: '/assets/brand/logo-white.png',
+  logoBlack: '/assets/brand/logo-black.png',
+  logoIcon:  '/assets/brand/logo-icon.png',
+};
 
 export async function GET(request: NextRequest) {
-  if (!(await requireSARequest(request))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const sb = supabaseAdmin();
-  if (!sb) return NextResponse.json({ branding: null });
+  const session = await requireSARequest(request);
+  if (!session) return saUnauthorized();
 
-  const { data } = await sb.from('platform_config').select('value').eq('key', 'branding').maybeSingle();
-  return NextResponse.json({ branding: data?.value ?? null });
+  try {
+    const sb = serviceClient();
+    if (sb) {
+      const { data } = await sb
+        .from('platform_config')
+        .select('value')
+        .eq('key', 'branding')
+        .single();
+      if (data?.value) return NextResponse.json({ ...DEFAULTS, ...data.value });
+    }
+  } catch {}
+  return NextResponse.json(DEFAULTS);
 }
 
 export async function POST(request: NextRequest) {
   const session = await requireSARequest(request);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session || session.role !== 'superadmin') return saUnauthorized();
 
-  const sb = supabaseAdmin();
-  if (!sb) return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
-
-  let body: { branding: Record<string, string> };
-  try { body = await request.json() as typeof body; }
-  catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
-
-  const branding: Record<string, string> = {};
-  for (const [k, v] of Object.entries(body.branding ?? {})) {
-    if (!ALLOWED_KEYS.has(k) || typeof v !== 'string' || !v) continue;
-    const isDataUrl = v.startsWith('data:image/');
-    const isPath = v.startsWith('/');
-    if (!isDataUrl && !isPath) continue;
-    if (isDataUrl && v.length > MAX_DATA_URL) {
-      return NextResponse.json({ error: `La imagen de ${k} supera los 500KB` }, { status: 413 });
-    }
-    branding[k] = v;
+  let body: { branding?: Record<string, string> };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 
-  const { error } = await sb.from('platform_config').upsert({
-    key:        'branding',
-    value:      branding,
-    updated_by: session.email,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'key' });
+  const { branding } = body;
+  if (!branding || typeof branding !== 'object') {
+    return NextResponse.json({ error: 'Missing branding data' }, { status: 400 });
+  }
 
-  if (error) return NextResponse.json({ error: 'DB error' }, { status: 500 });
+  // Validate: each value must be a data URL (max 500KB) or a valid path
+  const cleaned: Record<string, string> = {};
+  for (const [k, v] of Object.entries(branding)) {
+    if (typeof v !== 'string') continue;
+    if (v.startsWith('data:image/')) {
+      if (v.length > 700_000) {
+        return NextResponse.json({ error: `Image ${k} too large (max 500KB)` }, { status: 400 });
+      }
+      cleaned[k] = v;
+    } else if (v.startsWith('/')) {
+      cleaned[k] = v;
+    }
+  }
+
+  const sb = serviceClient();
+  if (!sb) return NextResponse.json({ error: 'DB not configured' }, { status: 503 });
+
+  const { error } = await sb
+    .from('platform_config')
+    .upsert({ key: 'branding', value: cleaned }, { onConflict: 'key' });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
   return NextResponse.json({ ok: true });
 }

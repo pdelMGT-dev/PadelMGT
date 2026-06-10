@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateUserPassword, exchangeCodeForSession } from '@/lib/supabase';
+import BrandLogo from '@/components/BrandLogo';
 
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
@@ -83,9 +84,8 @@ export default function ResetPasswordPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--grey-50)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ background: 'var(--black)', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <div style={{ width: 32, height: 32, background: 'var(--neon)', color: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18 }}>P</div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, textTransform: 'uppercase', color: '#fff', letterSpacing: '0.04em' }}>PADELMGT</span>
+        <Link href="/" style={{ textDecoration: 'none' }}>
+          <BrandLogo variant="white" height={32} />
         </Link>
       </div>
 

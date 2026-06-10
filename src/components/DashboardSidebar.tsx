@@ -8,7 +8,7 @@ import { getPendingCount } from '@/lib/friend-request-store';
 import { getAdminPendingRequestsCount } from '@/lib/player-league-store';
 import { syncAllFromSupabase } from '@/lib/supabase-sync';
 import { authSignOut } from '@/lib/supabase';
-import LogoIcon from './LogoIcon';
+import BrandLogo from './BrandLogo';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getUserPlan } from '@/lib/plan-config';
 
@@ -127,9 +127,8 @@ export default function DashboardSidebar() {
   const sidebarContent = (
     <>
       {/* Logo */}
-      <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', padding: '24px 20px 20px' }}>
-        <LogoIcon white size={28} />
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 17, textTransform: 'uppercase', color: '#fff', letterSpacing: '-0.01em' }}>PadelMGT</span>
+      <Link href="/" style={{ display: 'flex', alignItems: 'center', padding: '20px 20px 18px', textDecoration: 'none' }}>
+        <BrandLogo variant="white" height={28} />
       </Link>
 
       {/* Super-admin role switcher */}

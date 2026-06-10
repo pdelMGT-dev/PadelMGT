@@ -1,10 +1,5 @@
 import type { SAAdminUser } from './superadmin-data';
 
-// Superadmin auth — credentials are validated SERVER-SIDE via /api/sa/login.
-// The server sets a signed httpOnly cookie (padelmgt_sa_token) that the
-// middleware verifies cryptographically. The sessionStorage record below is
-// only a UI hint (name/role display); it grants no access by itself.
-
 const SESSION_KEY = 'padelmgt_sa_session';
 
 export interface SASession {
@@ -20,19 +15,12 @@ export async function saLogin(email: string, password: string): Promise<boolean>
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
+      credentials: 'include',
     });
     if (!res.ok) return false;
-    const data = await res.json() as { ok: boolean; email: string; role: SASession['role']; subAdminId?: string };
-    if (!data.ok) return false;
-    const session: SASession = {
-      email: data.email,
-      role: data.role,
-      loginAt: new Date().toISOString(),
-      ...(data.subAdminId ? { subAdminId: data.subAdminId } : {}),
-    };
+    const data = await res.json();
+    const session: SASession = { email, role: data.role, loginAt: new Date().toISOString() };
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    // Legacy role cookie kept for middleware's role-based dashboard routing
-    document.cookie = 'padelmgt_session=super_admin; path=/; max-age=28800; SameSite=Lax';
     return true;
   } catch {
     return false;
@@ -59,9 +47,10 @@ export function saIsSuperAdmin(): boolean {
   return saGetRole() === 'superadmin';
 }
 
-export function saLogout(): void {
+export async function saLogout(): Promise<void> {
   sessionStorage.removeItem(SESSION_KEY);
+  try {
+    await fetch('/api/sa/login', { method: 'DELETE', credentials: 'include' });
+  } catch {}
   document.cookie = 'padelmgt_session=; path=/; max-age=0';
-  // Clear the signed httpOnly cookie server-side
-  void fetch('/api/sa/login', { method: 'DELETE' }).catch(() => {});
 }
