@@ -174,6 +174,39 @@ export function incrementUsage(type: 'games' | 'tournaments'): void {
   try { localStorage.setItem(USAGE_PREFIX + monthKey(), JSON.stringify(usage)); } catch { /* ignore */ }
 }
 
+// ── Server-verified plan cache ────────────────────────────────────────────────
+// /api/me/plan derives the plan from the verified Supabase session (Stripe
+// webhook + SA are the sources of truth). When available, this OVERRIDES any
+// client-stored plan so editing localStorage no longer unlocks features.
+const VERIFIED_PLAN_KEY = 'padelmgt_verified_plan_v1';
+const VERIFIED_PLAN_TTL = 5 * 60 * 1000;
+
+interface VerifiedPlanCache { plan: string; verified: boolean; fetchedAt: number; }
+
+function getVerifiedPlan(): VerifiedPlanCache | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(VERIFIED_PLAN_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw) as VerifiedPlanCache;
+    if (Date.now() - cache.fetchedAt > VERIFIED_PLAN_TTL) return null;
+    return cache;
+  } catch { return null; }
+}
+
+export async function initVerifiedPlan(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (getVerifiedPlan()) return;
+  try {
+    const res = await fetch('/api/me/plan');
+    if (!res.ok) return;
+    const data = await res.json() as { plan?: string; verified?: boolean };
+    sessionStorage.setItem(VERIFIED_PLAN_KEY, JSON.stringify({
+      plan: data.plan ?? 'free', verified: !!data.verified, fetchedAt: Date.now(),
+    }));
+  } catch { /* offline — fall back to local resolution */ }
+}
+
 // ── Plan resolution ──────────────────────────────────────────────────────────
 export function getUserPlan(): PlanId {
   if (typeof window === 'undefined') return 'free';
@@ -182,6 +215,11 @@ export function getUserPlan(): PlanId {
     if (!raw) return 'free';
     const s = JSON.parse(raw) as { id?: string; plan?: string; role?: string };
     if (s.role && BYPASS_ROLES.has(s.role)) return 'fed_pro';
+
+    // Server-verified plan wins over anything stored client-side
+    const verified = getVerifiedPlan();
+    if (verified?.verified) return (verified.plan as PlanId) ?? 'free';
+
     if (s.id) {
       const allPlayers = getAllPlayers();
       const playerRecord = allPlayers.find(p => p.id === s.id);

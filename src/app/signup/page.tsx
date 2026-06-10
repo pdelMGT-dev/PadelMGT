@@ -2,10 +2,19 @@
 
 import Link from 'next/link';
 import { useState, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { registerPlayer, type PlayerSex } from '@/lib/player-store';
 import { sanitizeText, isValidEmail } from '@/lib/sanitize';
 import { authSignUp } from '@/lib/supabase';
+
+// Roles a signup link may request (?role=...). Anything else falls back to
+// player. super_admin is NEVER assignable through signup.
+const SIGNUP_ROLES: Record<string, { dashboard: string; label: string }> = {
+  player:           { dashboard: '/dashboard/player', label: 'Jugador' },
+  club_manager:     { dashboard: '/dashboard/club',   label: 'Club' },
+  league_organizer: { dashboard: '/dashboard/league', label: 'Liga' },
+  federation:       { dashboard: '/dashboard/federation', label: 'Federación' },
+};
 
 const COUNTRIES: string[] = [
   'Argentina', 'Bolivia', 'Brasil', 'Chile', 'Colombia', 'Costa Rica', 'Cuba',
@@ -31,6 +40,9 @@ const inputStyle: React.CSSProperties = {
 
 function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedRole = searchParams.get('role') ?? 'player';
+  const signupRole = SIGNUP_ROLES[requestedRole] ? requestedRole : 'player';
   const [name,     setName]     = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -55,7 +67,10 @@ function SignupForm() {
 
     // 1. Register in Supabase Auth
     let authUserId: string | undefined;
-    const { data: authData, error: authError } = await authSignUp(cleanEmail, password);
+    const { data: authData, error: authError } = await authSignUp(
+      cleanEmail, password,
+      signupRole !== 'player' ? { padelmgt_role: signupRole } : undefined,
+    );
     if (authError) {
       const msg = authError.message?.toLowerCase() ?? '';
       if (msg.includes('already registered') || msg.includes('already been registered')) {
@@ -76,18 +91,19 @@ function SignupForm() {
       return;
     }
 
+    const roleInfo = SIGNUP_ROLES[signupRole];
     const session = {
       id:         player.id,
       name:       player.name,
       email:      player.email,
       shortId:    player.shortId,
-      role:       'player',
+      role:       signupRole,
       sub:        `${player.shortId} · ${player.country ?? ''}`,
       firstLogin: true,
     };
     localStorage.setItem('padelmgt_user', JSON.stringify(session));
-    document.cookie = `padelmgt_session=player; path=/; SameSite=Lax; max-age=86400`;
-    router.push('/dashboard/player');
+    document.cookie = `padelmgt_session=${signupRole}; path=/; SameSite=Lax; max-age=86400`;
+    router.push(roleInfo.dashboard);
   }
 
   return (

@@ -1,16 +1,29 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-export const supabase: SupabaseClient | null = (url && key) ? createClient(url, key) : null;
+// In the browser use the SSR cookie-based client so the auth session is
+// stored in cookies and the middleware / route handlers can verify it
+// server-side. On the server (imports from API routes / RSC) fall back to a
+// plain client — server code should use supabase-server.ts for auth'd access.
+function makeClient(): SupabaseClient | null {
+  if (!url || !key) return null;
+  if (typeof window !== 'undefined') {
+    return createBrowserClient(url, key) as unknown as SupabaseClient;
+  }
+  return createClient(url, key);
+}
+
+export const supabase: SupabaseClient | null = makeClient();
 export const isSupabaseConfigured = !!(url && key);
 
 // ── Auth helpers ───────────────────────────────────────────────────────────────
 
-export async function authSignUp(email: string, password: string) {
+export async function authSignUp(email: string, password: string, metadata?: Record<string, string>) {
   if (!supabase) return { data: null, error: { message: 'Supabase no configurado' } };
-  return supabase.auth.signUp({ email, password });
+  return supabase.auth.signUp({ email, password, ...(metadata ? { options: { data: metadata } } : {}) });
 }
 
 export async function authSignIn(email: string, password: string) {

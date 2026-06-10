@@ -177,6 +177,12 @@ export default function LoginPage() {
 
     if (!authError && authData?.user) {
       const authUser = authData.user;
+      // Role comes from Supabase Auth user metadata (set at signup via ?role=).
+      // super_admin is never derivable here — the SA area has its own signed login.
+      const metaRole = (authUser.user_metadata?.padelmgt_role as string) ?? 'player';
+      const userRole: UserRole = (['player', 'club_manager', 'league_organizer', 'federation'].includes(metaRole)
+        ? metaRole : 'player') as UserRole;
+
       // Fetch the player record from Supabase (by user_id first, then by email)
       let sbPlayer = await fetchPlayerByUserId(authUser.id);
       if (!sbPlayer) sbPlayer = await fetchPlayerByEmail(authUser.email ?? email);
@@ -188,19 +194,19 @@ export default function LoginPage() {
           name:          (sbPlayer.name as string),
           email:         (sbPlayer.email as string),
           shortId:       cf.shortId || (sbPlayer.short_id as string) || '',
-          role:          'player' as UserRole,
+          role:          userRole,
           sub:           `${cf.shortId ?? ''} · ${(sbPlayer.city as string) ?? (sbPlayer.country as string) ?? ''}`,
           rankingPoints: (sbPlayer.ranking_points as number) ?? 0,
           ...(cf.plan ? { plan: cf.plan } : {}),
         };
-        saveSession(session, 'player');
+        saveSession(session, userRole);
         setLoading(false);
         // Sync global data + user's own tournaments and games across devices
         syncAllFromSupabase();
         Promise.allSettled([
           syncUserTournaments(sbPlayer.id as string),
           syncUserGames(sbPlayer.id as string),
-        ]).finally(() => router.push(getRedirectUrl('player')));
+        ]).finally(() => router.push(getRedirectUrl(userRole)));
         return;
       }
 
@@ -209,12 +215,12 @@ export default function LoginPage() {
         id:      authUser.id,
         name:    authUser.user_metadata?.full_name ?? authUser.email?.split('@')[0] ?? 'Jugador',
         email:   authUser.email ?? email,
-        role:    'player' as UserRole,
+        role:    userRole,
         sub:     '',
       };
-      saveSession(session, 'player');
+      saveSession(session, userRole);
       setLoading(false);
-      router.push(getRedirectUrl('player'));
+      router.push(getRedirectUrl(userRole));
       return;
     }
 
