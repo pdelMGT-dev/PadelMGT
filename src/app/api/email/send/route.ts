@@ -26,6 +26,49 @@ async function fetchTemplate(type: string): Promise<{ subject: string; html_body
   }
 }
 
+// ── Abuse protections ─────────────────────────────────────────────────────────
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** Escape user-supplied text before interpolating into HTML emails */
+function esc(s: unknown): string {
+  return String(s ?? '')
+    .slice(0, 200)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Only allow join URLs pointing at our own app */
+function safeJoinUrl(raw: unknown): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://padelmgt.com';
+  const fallback = appUrl;
+  if (typeof raw !== 'string') return fallback;
+  try {
+    const url = new URL(raw);
+    const allowed = new URL(appUrl);
+    if (url.origin === allowed.origin || url.hostname.endsWith('.vercel.app')) return url.href;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// Best-effort in-memory rate limit: 20 emails / 10 min per IP
+const ipCounts = new Map<string, { count: number; resetAt: number }>();
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = ipCounts.get(ip);
+  if (!entry || entry.resetAt < now) {
+    ipCounts.set(ip, { count: 1, resetAt: now + 10 * 60 * 1000 });
+    return false;
+  }
+  entry.count++;
+  return entry.count > 20;
+}
+
 export async function POST(request: NextRequest) {
   const apiKey   = process.env.RESEND_API_KEY;
   const fromAddr = process.env.RESEND_FROM_EMAIL ?? 'PadelMGT <no-reply@padelmgt.com>';
@@ -33,6 +76,23 @@ export async function POST(request: NextRequest) {
   if (!apiKey || apiKey.startsWith('re_...')) {
     console.warn('[Email] RESEND_API_KEY not configured — skipping email');
     return NextResponse.json({ sent: false, reason: 'not_configured' });
+  }
+
+  // Same-origin check: reject cross-site callers (weak CSRF/abuse barrier)
+  const origin = request.headers.get('origin');
+  if (origin) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://padelmgt.com';
+    try {
+      const o = new URL(origin);
+      const allowed = new URL(appUrl);
+      const ok = o.origin === allowed.origin || o.hostname.endsWith('.vercel.app') || o.hostname === 'localhost';
+      if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    } catch { /* malformed origin — let it pass to validation below */ }
+  }
+
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  if (rateLimited(ip)) {
+    return NextResponse.json({ error: 'Rate limit' }, { status: 429 });
   }
 
   let body: Record<string, unknown>;
@@ -43,18 +103,25 @@ export async function POST(request: NextRequest) {
   }
 
   const type = body.type as string;
-  const to   = body.to as string;
+  const to = typeof body.to === 'string' ? body.to.trim() : '';
 
   if (!type) return NextResponse.json({ error: 'Missing email type' }, { status: 400 });
-  if (!to)   return NextResponse.json({ error: 'Missing recipient' },   { status: 400 });
 
-  // Build variable map from request body (all string fields become template vars)
+  // Single valid email only — no arrays, no header injection
+  if (!to || !EMAIL_RE.test(to) || to.length > 254) {
+    return NextResponse.json({ error: 'Invalid recipient' }, { status: 400 });
+  }
+
+  // Build variable map from request body. All user-supplied string fields are
+  // HTML-escaped before interpolation (injection protection); URLs that end up
+  // in href attributes are validated against our own origin.
   const baseVars: Record<string, string> = {
     appUrl:      process.env.NEXT_PUBLIC_APP_URL ?? 'https://padelmgt.com',
     currentYear: String(new Date().getFullYear()),
   };
   for (const [k, v] of Object.entries(body)) {
-    if (typeof v === 'string') baseVars[k] = v;
+    if (typeof v !== 'string' || k === 'to' || k === 'type') continue;
+    baseVars[k] = /url$/i.test(k) ? safeJoinUrl(v) : esc(v);
   }
   // Convenience: dashboardUrl default if not provided
   if (!baseVars.dashboardUrl) {
@@ -87,7 +154,7 @@ export async function POST(request: NextRequest) {
     const { error } = await resend.emails.send({ from: fromAddr, to, subject, html });
     if (error) {
       console.error('[Email] Resend error:', error);
-      return NextResponse.json({ sent: false, error: (error as { message?: string }).message });
+      return NextResponse.json({ sent: false, error: 'Send failed' });
     }
     return NextResponse.json({ sent: true });
   } catch (err) {

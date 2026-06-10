@@ -36,7 +36,9 @@ const TRIAL_DAYS: Record<string, number> = {
 
 export async function POST(request: NextRequest) {
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-  const isDevMode = process.env.STRIPE_DEV_MODE === 'true';
+  // Dev mode requires explicit opt-in AND non-production. A missing Stripe key
+  // in production must NOT silently grant fake "paid" checkouts.
+  const isDevMode = process.env.STRIPE_DEV_MODE === 'true' && process.env.NODE_ENV !== 'production';
 
   let plan: string, userEmail: string | undefined, couponCode: string | undefined;
   try {
@@ -59,10 +61,15 @@ export async function POST(request: NextRequest) {
   const successPath = DASHBOARD_REDIRECT[plan] ?? '/dashboard/player?subscription=success';
   const trialDays   = TRIAL_DAYS[plan] ?? 0;
 
-  // Dev mode: return a fake checkout URL that skips Stripe
-  if (isDevMode || !stripeSecretKey || stripeSecretKey.startsWith('sk_test_...')) {
+  // Dev mode: return a fake checkout URL that skips Stripe (never in production)
+  if (isDevMode) {
     const fakeUrl = `${appUrl}${successPath}&plan=${plan}&session_id=cs_dev_${Date.now()}`;
     return NextResponse.json({ url: fakeUrl });
+  }
+
+  // Stripe not configured and not in dev mode → explicit error, no fake success
+  if (!stripeSecretKey || stripeSecretKey.startsWith('sk_test_...')) {
+    return NextResponse.json({ error: 'Pagos no disponibles temporalmente' }, { status: 503 });
   }
 
   try {

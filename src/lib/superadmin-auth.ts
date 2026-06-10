@@ -1,7 +1,11 @@
 import type { SAAdminUser } from './superadmin-data';
 
+// Superadmin auth — credentials are validated SERVER-SIDE via /api/sa/login.
+// The server sets a signed httpOnly cookie (padelmgt_sa_token) that the
+// middleware verifies cryptographically. The sessionStorage record below is
+// only a UI hint (name/role display); it grants no access by itself.
+
 const SESSION_KEY = 'padelmgt_sa_session';
-const CREDENTIALS = { email: 'superadmin@padelmgt.com', password: 'PadelMGT2026!' };
 
 export interface SASession {
   email: string;
@@ -10,30 +14,29 @@ export interface SASession {
   subAdminId?: string;
 }
 
-export function saLogin(email: string, password: string): boolean {
-  if (email === CREDENTIALS.email && password === CREDENTIALS.password) {
-    const session: SASession = { email, role: 'superadmin', loginAt: new Date().toISOString() };
+export async function saLogin(email: string, password: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/sa/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json() as { ok: boolean; email: string; role: SASession['role']; subAdminId?: string };
+    if (!data.ok) return false;
+    const session: SASession = {
+      email: data.email,
+      role: data.role,
+      loginAt: new Date().toISOString(),
+      ...(data.subAdminId ? { subAdminId: data.subAdminId } : {}),
+    };
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    // Legacy role cookie kept for middleware's role-based dashboard routing
     document.cookie = 'padelmgt_session=super_admin; path=/; max-age=28800; SameSite=Lax';
     return true;
+  } catch {
+    return false;
   }
-
-  // Check sub-admins from localStorage
-  try {
-    const raw = localStorage.getItem('padelmgt_sa_admin_users');
-    if (raw) {
-      const users: SAAdminUser[] = JSON.parse(raw);
-      const user = users.find(u => u.email === email && u.status === 'active');
-      if (user) {
-        const session: SASession = { email, role: user.role, loginAt: new Date().toISOString(), subAdminId: user.id };
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-        document.cookie = 'padelmgt_session=super_admin; path=/; max-age=28800; SameSite=Lax';
-        return true;
-      }
-    }
-  } catch {}
-
-  return false;
 }
 
 export function saIsLoggedIn(): boolean {
@@ -59,4 +62,6 @@ export function saIsSuperAdmin(): boolean {
 export function saLogout(): void {
   sessionStorage.removeItem(SESSION_KEY);
   document.cookie = 'padelmgt_session=; path=/; max-age=0';
+  // Clear the signed httpOnly cookie server-side
+  void fetch('/api/sa/login', { method: 'DELETE' }).catch(() => {});
 }

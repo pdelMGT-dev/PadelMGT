@@ -12,11 +12,11 @@ export default function SuperAdminLogin() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const ok = saLogin(email, password);
+    const ok = await saLogin(email, password);
     if (ok) {
       router.replace('/superadmin/dashboard');
     } else {

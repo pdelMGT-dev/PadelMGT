@@ -19,7 +19,12 @@ interface MockUser {
   sub: string;
 }
 
-const MOCK_USERS: MockUser[] = [
+// Demo accounts are only active when explicitly enabled via env flag.
+// They must NEVER include a super_admin role: the superadmin area requires
+// a signed server-issued token (see /api/sa/login) and has its own login.
+const DEMO_ACCOUNTS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DEMO_ACCOUNTS === 'true';
+
+const ALL_MOCK_USERS: MockUser[] = [
   // ── Jugadores ──────────────────────────────────────────────────────────────
   {
     id: 'player-001',
@@ -78,17 +83,9 @@ const MOCK_USERS: MockUser[] = [
     role: 'federation',
     sub: '380 clubes · 9 países',
   },
-  // ── Master / Super Admin ───────────────────────────────────────────────────
-  {
-    id: 'super-admin-001',
-    email: 'master@padelmgt.com',
-    password: 'master2026',
-    name: 'Master Admin',
-    shortId: '#SA001',
-    role: 'super_admin',
-    sub: 'Acceso total a la plataforma',
-  },
 ];
+
+const MOCK_USERS: MockUser[] = DEMO_ACCOUNTS_ENABLED ? ALL_MOCK_USERS : [];
 
 const ROLE_REDIRECT: Record<UserRole, string> = {
   player: '/dashboard/player',
@@ -372,7 +369,8 @@ export default function LoginPage() {
             </Link>
           </p>
 
-          {/* Dev credentials panel */}
+          {/* Dev credentials panel — only when demo accounts are enabled */}
+          {DEMO_ACCOUNTS_ENABLED && (
           <details style={{ marginTop: 28, borderTop: '1px dashed var(--grey-200)', paddingTop: 20 }}>
             <summary style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-400)', cursor: 'pointer', userSelect: 'none' }}>
               Cuentas de prueba
@@ -385,7 +383,6 @@ export default function LoginPage() {
                 { label: 'Club',      email: 'cantera@padelmgt.com', pass: 'club123',    color: '#6b7280' },
                 { label: 'Liga',      email: 'liga@padelmgt.com',    pass: 'liga123',    color: '#6b7280' },
                 { label: 'Federación',email: 'federacion@padelmgt.com', pass: 'fed123', color: '#6b7280' },
-                { label: 'Master',    email: 'master@padelmgt.com',  pass: 'master2026', color: '#d97706' },
               ].map((u) => (
                 <button
                   key={u.email}
@@ -404,6 +401,7 @@ export default function LoginPage() {
               ))}
             </div>
           </details>
+          )}
         </div>
       </div>
     </div>

@@ -539,30 +539,35 @@ export async function deleteSAClubFromSupabase(id: string): Promise<void> {
   try { await supabase.from('clubs').delete().eq('id', id); } catch { /* silent */ }
 }
 
-// Admin users
+// Admin users — go through the protected /api/sa/admins routes (signed SA
+// cookie required). The admin_users table is locked to service_role via RLS.
 export async function getSAAdminUsersFromSupabase(): Promise<SAAdminUser[] | null> {
-  if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from('admin_users').select('*').order('created_at', { ascending: false });
-    if (error) return null;
-    return (data ?? []).map(row => rowToSAAdminUser(row as Record<string, unknown>));
+    const res = await fetch('/api/sa/admins');
+    if (!res.ok) return null;
+    const data = await res.json() as { admins: Record<string, unknown>[] };
+    return (data.admins ?? []).map(row => rowToSAAdminUser(row));
   } catch { return null; }
 }
 
 export async function upsertSAAdminUserToSupabase(user: SAAdminUser): Promise<void> {
-  if (!supabase) return;
   try {
-    await supabase.from('admin_users').upsert({
-      id: user.id, name: user.name, email: user.email,
-      role: user.role, status: user.status,
-      created_at: user.createdAt || new Date().toISOString(),
+    await fetch('/api/sa/admins', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: user.id, name: user.name, email: user.email,
+        role: user.role, status: user.status,
+        password: user.password, createdAt: user.createdAt,
+      }),
     });
   } catch { /* silent */ }
 }
 
 export async function deleteSAAdminUserFromSupabase(id: string): Promise<void> {
-  if (!supabase) return;
-  try { await supabase.from('admin_users').delete().eq('id', id); } catch { /* silent */ }
+  try {
+    await fetch(`/api/sa/admins?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+  } catch { /* silent */ }
 }
 
 // Bulk seed: push all localStorage players to Supabase (one-time migration)

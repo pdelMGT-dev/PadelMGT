@@ -6,8 +6,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'session_id requerido' }, { status: 400 });
   }
 
-  // Dev mode: fake session IDs created locally
+  // Dev mode: fake session IDs — ONLY honored when dev mode is explicitly
+  // enabled AND we are not in production. Otherwise this would let anyone
+  // self-upgrade to any plan with ?session_id=cs_dev_x&plan=club_liga.
   if (sessionId.startsWith('cs_dev_')) {
+    const devModeAllowed = process.env.STRIPE_DEV_MODE === 'true' && process.env.NODE_ENV !== 'production';
+    if (!devModeAllowed) {
+      return NextResponse.json({ status: 'error' }, { status: 400 });
+    }
     const plan = request.nextUrl.searchParams.get('plan') ?? undefined;
     return NextResponse.json({ status: 'paid', plan, customerEmail: undefined });
   }
