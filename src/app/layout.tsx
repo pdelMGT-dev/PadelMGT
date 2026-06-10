@@ -3,6 +3,8 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import ConditionalFooter from "@/components/ConditionalFooter";
 import { ClientProviders } from "@/components/ClientProviders";
+import PWARegister from "@/components/PWARegister";
+import InstallPrompt from "@/components/InstallPrompt";
 
 export const metadata: Metadata = {
   title: "PadelMGT — Crea. Juega. Rankea.",
@@ -14,7 +16,11 @@ export const metadata: Metadata = {
     title: "PadelMGT",
   },
   icons: {
-    apple: "/assets/logo.png",
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
   },
 };
 
@@ -22,7 +28,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
-  themeColor: "#d6ff00",
+  themeColor: "#111111",
 };
 
 export default function RootLayout({
@@ -38,6 +44,8 @@ export default function RootLayout({
           <main>{children}</main>
           <ConditionalFooter />
         </ClientProviders>
+        <PWARegister />
+        <InstallPrompt />
       </body>
     </html>
   );

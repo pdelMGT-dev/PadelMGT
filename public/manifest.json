@@ -1,26 +1,40 @@
 {
+  "id": "padelmgt",
   "name": "PadelMGT — Crea. Juega. Rankea.",
   "short_name": "PadelMGT",
   "description": "La plataforma para crear y gestionar torneos, ligas y clubes de pádel. Diseñada para Latinoamérica.",
-  "start_url": "/",
+  "start_url": "/dashboard/player",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#111111",
-  "theme_color": "#d6ff00",
+  "theme_color": "#111111",
   "lang": "es",
   "categories": ["sports", "utilities"],
   "icons": [
     {
-      "src": "/assets/logo.png",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/assets/logo.png",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -28,13 +42,22 @@
       "name": "Mis Torneos",
       "short_name": "Torneos",
       "url": "/dashboard/player/tournaments",
-      "description": "Ver y crear torneos"
+      "description": "Ver y crear torneos",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Juego Rápido",
       "short_name": "J. Rápido",
       "url": "/dashboard/player/quick-game",
-      "description": "Crear un juego rápido"
+      "description": "Crear un juego rápido",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mi Ranking",
+      "short_name": "Ranking",
+      "url": "/dashboard/player/ranking",
+      "description": "Ver mi ranking",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
