@@ -711,12 +711,45 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                           {round.courts.map(court => {
                             const p1W = (court.pair1Score ?? 0) > (court.pair2Score ?? 0);
                             const p2W = (court.pair2Score ?? 0) > (court.pair1Score ?? 0);
+                            const hasSets = court.sets && court.sets.length > 0;
                             return (
-                              <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--grey-50)', fontSize: 12 }}>
-                                <span style={{ fontSize: 9, color: 'var(--grey-400)', width: 48, flexShrink: 0, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>C{court.courtNum}</span>
-                                <span style={{ fontWeight: p1W ? 700 : 400, flex: 1, color: p1W ? 'var(--black)' : 'var(--grey-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getFinishedPairLabel(court.pair1)}</span>
-                                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, minWidth: 64, textAlign: 'center', letterSpacing: '0.02em', flexShrink: 0 }}>{getScoreDisplay(court)}</span>
-                                <span style={{ fontWeight: p2W ? 700 : 400, flex: 1, textAlign: 'right', color: p2W ? 'var(--black)' : 'var(--grey-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getFinishedPairLabel(court.pair2)}</span>
+                              <div key={court.courtNum} style={{ marginBottom: 6, border: '1px solid var(--grey-100)', overflow: 'hidden' }}>
+                                {/* Header: court label + set column labels */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-100)' }}>
+                                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Cancha {court.courtNum}</span>
+                                  <div style={{ display: 'flex', gap: 2 }}>
+                                    {hasSets
+                                      ? court.sets!.map((_, i) => (
+                                          <div key={i} style={{ width: 34, textAlign: 'center', fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>S{i + 1}</div>
+                                        ))
+                                      : <div style={{ width: 48, textAlign: 'center', fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>PTS</div>
+                                    }
+                                  </div>
+                                </div>
+                                {/* Pair 1 row */}
+                                <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px', borderBottom: '1px solid var(--grey-50)' }}>
+                                  <span style={{ flex: 1, fontSize: 12, fontWeight: p1W ? 700 : 400, color: p1W ? 'var(--black)' : 'var(--grey-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getFinishedPairLabel(court.pair1)}</span>
+                                  <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                                    {hasSets
+                                      ? court.sets!.map((s, i) => (
+                                          <div key={i} style={{ width: 34, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: s.p1 > s.p2 ? 700 : 400, color: s.p1 > s.p2 ? 'var(--black)' : 'var(--grey-400)' }}>{s.p1}</div>
+                                        ))
+                                      : <div style={{ width: 48, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: p1W ? 700 : 400, color: p1W ? 'var(--black)' : 'var(--grey-400)' }}>{court.pair1Score ?? '—'}</div>
+                                    }
+                                  </div>
+                                </div>
+                                {/* Pair 2 row */}
+                                <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px' }}>
+                                  <span style={{ flex: 1, fontSize: 12, fontWeight: p2W ? 700 : 400, color: p2W ? 'var(--black)' : 'var(--grey-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getFinishedPairLabel(court.pair2)}</span>
+                                  <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                                    {hasSets
+                                      ? court.sets!.map((s, i) => (
+                                          <div key={i} style={{ width: 34, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: s.p2 > s.p1 ? 700 : 400, color: s.p2 > s.p1 ? 'var(--black)' : 'var(--grey-400)' }}>{s.p2}</div>
+                                        ))
+                                      : <div style={{ width: 48, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: p2W ? 700 : 400, color: p2W ? 'var(--black)' : 'var(--grey-400)' }}>{court.pair2Score ?? '—'}</div>
+                                    }
+                                  </div>
+                                </div>
                               </div>
                             );
                           })}
@@ -750,12 +783,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
               </thead>
               <tbody>
                 {finalStandings.map((s, i) => {
-                  const isMe = currentUser && s.playerId === currentUser.id;
-                  let rowLabel = s.playerName;
-                  if (isParejas && t.fixedPairs) {
-                    const pair = t.fixedPairs.find(fp => fp.player1Id === s.playerId);
-                    if (pair) rowLabel = pair.name || `${pair.player1Name} / ${pair.player2Name}`;
-                  }
+                  const isMe = currentUser && (s.playerId === currentUser.id || s.player2Id === currentUser.id);
+                  const rowLabel = s.playerName;
                   const posIcon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1);
                   return (
                     <tr key={s.playerId} style={{ borderBottom: '1px solid var(--grey-100)', background: isMe ? 'rgba(214,255,0,0.06)' : 'transparent' }}>

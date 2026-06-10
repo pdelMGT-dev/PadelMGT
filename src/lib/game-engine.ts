@@ -80,6 +80,7 @@ export interface GameRound {
 export interface Standing {
   playerId: string;
   playerName: string;
+  player2Id?: string;    // set in parejas mode: the second player of the pair
   pts: number;          // points scored (for points mode) or match wins * 3 + draws
   wins: number;         // courts/matches won
   losses: number;
@@ -702,6 +703,48 @@ export function generateWorldCupGroups(
 // ---------------------------------------------------------------------------
 
 export function calculateStandings(game: ActiveGame): Standing[] {
+  // ── Parejas fijas: one entry per pair ────────────────────────────────────
+  const isPairejas = game.pairType === 'parejas' && (game.fixedPairs?.length ?? 0) > 0;
+  if (isPairejas && game.fixedPairs) {
+    const pairMap = new Map<string, Standing>();
+    const playerToPairKey = new Map<string, string>(); // both player1 and player2 → player1Id
+    for (const fp of game.fixedPairs) {
+      pairMap.set(fp.player1Id, {
+        playerId: fp.player1Id,
+        player2Id: fp.player2Id,
+        playerName: fp.name ?? `${fp.player1Name} / ${fp.player2Name}`,
+        pts: 0, wins: 0, losses: 0, draws: 0, played: 0,
+        diff: 0, pointsFor: 0, pointsAgainst: 0,
+      });
+      playerToPairKey.set(fp.player1Id, fp.player1Id);
+      playerToPairKey.set(fp.player2Id, fp.player1Id);
+    }
+    for (const round of game.rounds) {
+      for (const court of round.courts) {
+        if (court.status !== 'completed') continue;
+        if (court.pair1Score === null || court.pair2Score === null) continue;
+        const s1 = court.pair1Score;
+        const s2 = court.pair2Score;
+        const k1 = playerToPairKey.get(court.pair1[0]);
+        const k2 = playerToPairKey.get(court.pair2[0]);
+        const st1 = k1 ? pairMap.get(k1) : undefined;
+        const st2 = k2 ? pairMap.get(k2) : undefined;
+        if (st1) {
+          st1.played += 1; st1.pointsFor += s1; st1.pointsAgainst += s2; st1.diff += s1 - s2; st1.pts += s1;
+          if (s1 > s2) st1.wins += 1; else if (s1 === s2) st1.draws += 1; else st1.losses += 1;
+        }
+        if (st2) {
+          st2.played += 1; st2.pointsFor += s2; st2.pointsAgainst += s1; st2.diff += s2 - s1; st2.pts += s2;
+          if (s2 > s1) st2.wins += 1; else if (s2 === s1) st2.draws += 1; else st2.losses += 1;
+        }
+      }
+    }
+    return Array.from(pairMap.values()).sort((a, b) =>
+      b.pts !== a.pts ? b.pts - a.pts : b.diff !== a.diff ? b.diff - a.diff : b.pointsFor - a.pointsFor
+    );
+  }
+
+  // ── Individual mode ───────────────────────────────────────────────────────
   const map = new Map<string, Standing>();
 
   for (const player of game.players) {

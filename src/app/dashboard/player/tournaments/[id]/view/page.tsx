@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getTournament, saveTournament } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
+import { calculateStandings } from '@/lib/game-engine';
 import { getInvitationsForPlayer, respondToInvitation } from '@/lib/invitation-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 
@@ -165,7 +166,8 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
   const pendingInvited = (t.invitedPlayers ?? []).filter(ip =>
     ip.status === 'pending' && (t.status === 'created' || t.status === 'starting_soon')
   );
-  const hasStandings = t.standings && t.standings.length > 0;
+  const computedStandings = calculateStandings(t);
+  const hasStandings = computedStandings.length > 0;
 
   // My invitation status from invitedPlayers array
   const myInvitedEntry = currentUser
@@ -394,9 +396,8 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
             const pair = t.fixedPairs!.find(p => p.player1Id === playerId);
             return pair?.name ? `${pair.player1Name} / ${pair.player2Name}` : null;
           }
-          const isMe = (playerId: string) => currentUser && (
-            playerId === currentUser.id ||
-            (isParejas && t.fixedPairs!.some(p => p.player1Id === playerId && (p.player1Id === currentUser.id || p.player2Id === currentUser.id)))
+          const isMe = (s: { playerId: string; player2Id?: string }) => currentUser && (
+            s.playerId === currentUser.id || s.player2Id === currentUser.id
           );
           return (
             <div style={card}>
@@ -416,8 +417,8 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
                   </tr>
                 </thead>
                 <tbody>
-                  {t.standings.map((s, i) => {
-                    const me = isMe(s.playerId);
+                  {computedStandings.map((s, i) => {
+                    const me = isMe(s);
                     const sub = pairSub(s.playerId);
                     return (
                       <tr key={s.playerId} style={{
