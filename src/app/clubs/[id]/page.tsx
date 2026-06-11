@@ -6,6 +6,8 @@ import { useParams } from 'next/navigation';
 import { clubs } from '@/lib/data';
 import type { Club } from '@/lib/types';
 import { getSAClubsFromSupabase } from '@/lib/superadmin-data';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { joinClub, isClubMember } from '@/lib/club-membership-store';
 
 const mockTournaments = [
   { name: 'Americano de Mayo', format: 'Americano', date: '2026-05-18', players: 12, maxPlayers: 16, status: 'upcoming' },
@@ -17,8 +19,21 @@ export default function ClubDetailPage() {
   const params = useParams();
   const id = params?.id as string;
 
+  const { user } = useCurrentUser();
   const [club, setClub] = useState<Club | null>(null);
   const [loading, setLoading] = useState(true);
+  const [joined, setJoined] = useState(false);
+
+  // Reflect existing membership once club + user are known
+  useEffect(() => {
+    if (user?.id && club?.id) setJoined(isClubMember(user.id, club.id));
+  }, [user?.id, club?.id]);
+
+  function handleJoinClub() {
+    if (!user?.id || !club) return;
+    joinClub(user.id, { id: club.id, name: club.name, city: club.city, country: club.country });
+    setJoined(true);
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -198,7 +213,15 @@ export default function ClubDetailPage() {
               <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '28px' }}>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--black)', marginBottom: 8 }}>¿Quieres ser miembro?</div>
                 <p style={{ fontSize: 13, color: 'var(--grey-500)', lineHeight: 1.5, marginBottom: 16 }}>Accede a reservas prioritarias, torneos y descuentos exclusivos.</p>
-                <Link href="/signup" className="btn btn-secondary btn-sm" style={{ display: 'block', textAlign: 'center', borderRadius: 0 }}>Unirme al Club</Link>
+                {!user ? (
+                  <Link href="/signup" className="btn btn-secondary btn-sm" style={{ display: 'block', textAlign: 'center', borderRadius: 0 }}>Unirme al Club</Link>
+                ) : joined ? (
+                  <div style={{ display: 'block', textAlign: 'center', padding: '8px 16px', background: 'rgba(30,170,82,0.1)', border: '1px solid rgba(30,170,82,0.3)', color: 'var(--turf-green)', fontWeight: 700, fontSize: 13 }}>
+                    ✓ Ya sos miembro
+                  </div>
+                ) : (
+                  <button onClick={handleJoinClub} className="btn btn-primary btn-sm" style={{ display: 'block', width: '100%', textAlign: 'center', borderRadius: 0, cursor: 'pointer' }}>Unirme al Club</button>
+                )}
               </div>
             </div>
           </div>

@@ -784,9 +784,15 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                 <div style={{ background: 'var(--neon)', padding: '20px 24px' }}>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 4, color: 'var(--black)' }}>TORNEO COMPLETO</div>
                   <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.6)', marginBottom: 14 }}>Podés unirte a la lista de espera</div>
-                  <button style={{ width: '100%', padding: '12px', background: 'var(--black)', color: '#fff', border: 'none', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
-                    Lista de Espera
-                  </button>
+                  {myRequest || requestSent ? (
+                    <div style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.08)', color: 'var(--black)', textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      ✓ En lista de espera
+                    </div>
+                  ) : (
+                    <button onClick={handleJoinRequest} disabled={!currentUserId} style={{ width: '100%', padding: '12px', background: 'var(--black)', color: '#fff', border: 'none', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: currentUserId ? 'pointer' : 'not-allowed', opacity: currentUserId ? 1 : 0.5 }}>
+                      {currentUserId ? 'Lista de Espera' : 'Iniciá sesión para unirte'}
+                    </button>
+                  )}
                 </div>
               ) : isEnrolled ? (
                 <div style={{ background: 'rgba(30,170,82,0.1)', border: '1px solid rgba(30,170,82,0.3)', padding: '16px 20px', textAlign: 'center' }}>

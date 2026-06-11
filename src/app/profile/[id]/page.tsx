@@ -190,9 +190,9 @@ export default function PlayerProfilePage({ params }: Props) {
               <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 700, marginBottom: 10 }}>Invitar a jugar</div>
               <div style={{ width: 100, height: 100, background: 'rgba(255,255,255,0.08)', margin: '0 auto 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>QR</div>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 16, lineHeight: 1.5 }}>Escaneá para retar a {p.name.split(' ')[0]} a un juego</div>
-              <button style={{ width: '100%', padding: '10px', background: 'var(--neon)', color: 'var(--black)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <Link href="/signup" style={{ display: 'block', width: '100%', padding: '10px', background: 'var(--neon)', color: 'var(--black)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}>
                 Enviar Desafío
-              </button>
+              </Link>
             </div>
 
             {/* Career summary */}

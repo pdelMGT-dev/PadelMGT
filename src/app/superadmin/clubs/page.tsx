@@ -490,6 +490,8 @@ export default function ClubsPage() {
     const club = clubs.find(c => c.id === clubId);
     const updated = clubs.map(c => c.id === clubId ? { ...c, status: 'active' as const } : c);
     saveAndRefresh(updated);
+    const approved = updated.find(c => c.id === clubId);
+    if (approved) upsertSAClubToSupabase(approved); // propagate so it appears on public /clubs
     if (selectedClub?.id === clubId) setSelectedClub(prev => prev ? { ...prev, status: 'active' as const } : prev);
     logAudit('club_approved', 'Super Admin', { targetType: 'club', targetId: clubId, targetName: club?.name });
     toast('Club aprobado');
@@ -502,6 +504,8 @@ export default function ClubsPage() {
     const club = clubs.find(c => c.id === rejectConfirm.clubId);
     const updated = clubs.map(c => c.id === rejectConfirm.clubId ? { ...c, status: 'rejected' as const, rejectReason: rejectConfirm.reason || undefined } : c);
     saveAndRefresh(updated);
+    const rejected = updated.find(c => c.id === rejectConfirm.clubId);
+    if (rejected) upsertSAClubToSupabase(rejected);
     if (selectedClub?.id === rejectConfirm.clubId) setSelectedClub(prev => prev ? { ...prev, status: 'rejected' as const, rejectReason: rejectConfirm.reason || undefined } : prev);
     setRejectConfirm(null);
     logAudit('club_rejected', 'Super Admin', { targetType: 'club', targetId: rejectConfirm.clubId, targetName: club?.name, details: rejectConfirm.reason || undefined });
@@ -528,6 +532,8 @@ export default function ClubsPage() {
     const newStatus: SAClub['status'] = club.status === 'active' ? 'inactive' : 'active';
     const updated = clubs.map(c => c.id === clubId ? { ...c, status: newStatus } : c);
     saveAndRefresh(updated);
+    const toggled = updated.find(c => c.id === clubId);
+    if (toggled) upsertSAClubToSupabase(toggled);
     if (selectedClub?.id === clubId) setSelectedClub(prev => prev ? { ...prev, status: newStatus } : prev);
     toast(newStatus === 'active' ? 'Club activado' : 'Club desactivado');
   }
@@ -535,6 +541,8 @@ export default function ClubsPage() {
   function handleChangePlan(clubId: string, plan: SAClub['plan']) {
     const updated = clubs.map(c => c.id === clubId ? { ...c, plan } : c);
     saveAndRefresh(updated);
+    const changed = updated.find(c => c.id === clubId);
+    if (changed) upsertSAClubToSupabase(changed);
     if (selectedClub?.id === clubId) setSelectedClub(prev => prev ? { ...prev, plan } : prev);
     setDrawerPlan(plan);
     toast('Plan actualizado');
@@ -544,6 +552,8 @@ export default function ClubsPage() {
     if (!selectedClub) return;
     const updated = clubs.map(c => c.id === selectedClub.id ? { ...c, status: 'rejected' as const, rejectReason: drawerRejectReason || undefined } : c);
     saveAndRefresh(updated);
+    const rejected = updated.find(c => c.id === selectedClub.id);
+    if (rejected) upsertSAClubToSupabase(rejected);
     setSelectedClub(prev => prev ? { ...prev, status: 'rejected' as const, rejectReason: drawerRejectReason || undefined } : prev);
     setShowDrawerRejectInput(false);
     setDrawerRejectReason('');
@@ -553,14 +563,17 @@ export default function ClubsPage() {
   function handleBulkApply() {
     if (!bulkAction || bulkSelected.size === 0) return;
     let updated = [...clubs];
+    const PLAN_VALUES = ['free', 'basic', 'pro', 'club_starter', 'club_pro', 'club_liga', 'liga_free', 'liga_basic', 'liga_pro', 'liga_unlimited', 'fed_basic', 'fed_pro', 'infinity'];
     if (bulkAction === 'delete') {
       const ids = new Set(bulkSelected);
       updated = clubs.filter(c => !ids.has(c.id));
       ids.forEach(id => deleteSAClubFromSupabase(id));
     } else if (['active', 'inactive', 'pending', 'rejected'].includes(bulkAction)) {
       updated = clubs.map(c => bulkSelected.has(c.id) ? { ...c, status: bulkAction as SAClub['status'] } : c);
-    } else if (['free', 'basic', 'pro'].includes(bulkAction)) {
+      updated.filter(c => bulkSelected.has(c.id)).forEach(c => upsertSAClubToSupabase(c));
+    } else if (PLAN_VALUES.includes(bulkAction)) {
       updated = clubs.map(c => bulkSelected.has(c.id) ? { ...c, plan: bulkAction as SAClub['plan'] } : c);
+      updated.filter(c => bulkSelected.has(c.id)).forEach(c => upsertSAClubToSupabase(c));
     }
     saveAndRefresh(updated);
     setBulkSelected(new Set());
@@ -726,12 +739,20 @@ export default function ClubsPage() {
                 </div>
                 {club.address && <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 6 }}>{club.address}</div>}
                 <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--grey-500)', flexWrap: 'wrap' }}>
-                  <span>Admin: <strong>{club.adminEmail}</strong></span>
+                  <span>Admin: <strong>{club.adminEmail || '—'}</strong></span>
                   <span>Propietario: <strong>{club.ownerName || '—'}</strong></span>
                   <span>Canchas: <strong>{club.courts}</strong></span>
                   <span>Miembros: <strong>{club.members}</strong></span>
                   <span>Plan: <PlanBadge plan={club.plan} /></span>
                 </div>
+                {club.mapsUrl && (
+                  <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
+                    <a href={club.mapsUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: 12, fontWeight: 600, color: 'var(--court-blue)', textDecoration: 'none' }}>
+                      🔗 Verificar club (web / maps) ↗
+                    </a>
+                  </div>
+                )}
                 {club.message && (
                   <div style={{ marginTop: 8, fontSize: 12, color: 'var(--grey-500)', fontStyle: 'italic', borderLeft: '3px solid var(--grey-200)', paddingLeft: 10 }}>
                     "{club.message}"

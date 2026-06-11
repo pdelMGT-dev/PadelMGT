@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { clubs as initialClubs, countries, cities } from '@/lib/data';
 import { getSAClubsFromSupabase } from '@/lib/superadmin-data';
+import ClubSuggestionModal from '@/components/ClubSuggestionModal';
 
 export default function ClubsPage() {
   const [search, setSearch] = useState('');
   const [country, setCountry] = useState('All Countries');
   const [city, setCity] = useState('All Cities');
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [showSuggest, setShowSuggest] = useState(false);
   const [clubs, setClubs] = useState(initialClubs as {
     id: string; name: string; country: string; city: string; address: string;
     courts: number; members: number; rating: number; amenities: string[];
@@ -93,6 +95,28 @@ export default function ClubsPage() {
                 Lista
               </button>
             </div>
+          </div>
+
+          {/* "Can't find your club?" banner */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap',
+            background: 'var(--grey-50)', border: '1px dashed var(--grey-300)', padding: '18px 24px', marginBottom: 32,
+          }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--black)' }}>
+                ¿No encontrás tu club?
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--grey-500)', marginTop: 2 }}>
+                Sugerilo y lo agregamos al directorio una vez verificado.
+              </div>
+            </div>
+            <button
+              onClick={() => setShowSuggest(true)}
+              className="btn btn-primary btn-sm"
+              style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+            >
+              + Solicitar agregar club
+            </button>
           </div>
 
           {/* Grid view */}
@@ -195,6 +219,8 @@ export default function ClubsPage() {
           <Link href="/signup?role=club_manager" className="btn btn-on-dark btn-lg" style={{ flexShrink: 0 }}>Registrar Club</Link>
         </div>
       </section>
+
+      {showSuggest && <ClubSuggestionModal onClose={() => setShowSuggest(false)} />}
     </div>
   );
 }

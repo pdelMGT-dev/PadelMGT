@@ -248,7 +248,7 @@ export default function DashboardSidebar() {
       {/* Mobile top bar */}
       <div className="dash-mobile-bar">
         <Link href="/" className="logo" style={{ color: '#fff', textDecoration: 'none' }}>
-          <LogoIcon white size={24} />
+          <BrandLogo variant="white" height={24} />
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>PadelMGT</span>
         </Link>
         <button

@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   getSAPlayers,
-  getSAClubs,
   saveSAPlayers,
   getPlayerCustomFields,
   savePlayerCustomFields,
@@ -22,6 +21,7 @@ import { getSANotes, addSANote, deleteSANote, type SANote } from '@/lib/sa-notes
 import { getScoreCorrectionsByEntity } from '@/lib/score-correction-store';
 import { getRankingHistoryForPlayer, type RankingEntry } from '@/lib/ranking-store';
 import { logAudit } from '@/lib/audit-log-store';
+import { getLevelInfo, PLAYER_LEVELS } from '@/lib/level-config';
 
 interface PlanOption { id: string; label: string; color: string; bg: string }
 
@@ -136,14 +136,10 @@ function RoleBadge({ role }: { role: SAPlayer['role'] }) {
 
 function LevelBadge({ level }: { level?: SAPlayer['level'] }) {
   if (!level) return <span style={{ color: 'var(--grey-300)', fontSize: 12 }}>—</span>;
-  const cfg = {
-    beginner:     { label: 'Principiante', bg: '#f0f0f0', color: '#555' },
-    intermediate: { label: 'Intermedio',   bg: '#dbeafe', color: '#1d4ed8' },
-    advanced:     { label: 'Avanzado',     bg: '#fef3c7', color: '#92400e' },
-  }[level];
+  const info = getLevelInfo(level);
   return (
-    <span style={{ background: cfg.bg, color: cfg.color, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
-      {cfg.label}
+    <span style={{ background: info.color + '22', color: info.color, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700, border: `1px solid ${info.color}55` }}>
+      {info.level} · {info.group}
     </span>
   );
 }
@@ -254,7 +250,7 @@ function PlayerForm({
 }) {
   const [form, setForm] = useState<Partial<SAPlayer>>({
     name: '', email: '', phone: '', city: '', country: 'ES',
-    ranking: 0, rankingPoints: 0, role: 'player', status: 'active', club: '',
+    ranking: 0, rankingPoints: 0, role: 'player', status: 'active',
     sex: undefined, level: undefined, profileCompleted: true, plan: 'free',
     photoUrl: '', customFields: {}, ...initial,
   });
@@ -775,7 +771,6 @@ export default function PlayersPage() {
         city: ['ciudad', 'city'],
         country: ['pais', 'country'],
         ranking: ['ranking', 'puntos', 'points'],
-        club: ['club'],
       };
       headers.forEach((h, i) => {
         const hl = h.toLowerCase();
@@ -805,7 +800,6 @@ export default function PlayersPage() {
       country: row[reverseMap['country']] ?? 'ES',
       ranking: Number(row[reverseMap['ranking']]) || 0,
       rankingPoints: 0,
-      club: row[reverseMap['club']] ?? undefined,
       status: 'active' as const,
       role: 'player' as const,
       joinedAt: now,
@@ -1080,9 +1074,9 @@ export default function PlayersPage() {
               <option value="suspended">Suspender</option>
             </optgroup>
             <optgroup label="Nivel">
-              <option value="beginner">Principiante</option>
-              <option value="intermediate">Intermedio</option>
-              <option value="advanced">Avanzado</option>
+              {PLAYER_LEVELS.map(lvl => (
+                <option key={lvl} value={lvl}>{getLevelInfo(lvl).level} · {getLevelInfo(lvl).group}</option>
+              ))}
             </optgroup>
             <optgroup label="Rol">
               <option value="player">Jugador</option>

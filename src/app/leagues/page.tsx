@@ -140,7 +140,7 @@ export default function LeaguesPage() {
                       </span>
                     </td>
                     <td style={{ color: 'var(--grey-500)', fontSize: 13 }}>{l.season}</td>
-                    <td><Link href={`/leagues/${l.id}`} className="btn btn-secondary btn-sm">Ver →</Link></td>
+                    <td><Link href={`/tournaments/detail/${l.id}`} className="btn btn-secondary btn-sm">Ver →</Link></td>
                   </tr>
                 ))}
               </tbody>

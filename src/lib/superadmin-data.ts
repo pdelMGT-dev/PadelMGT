@@ -521,14 +521,27 @@ export async function getSAClubsFromSupabase(): Promise<SAClub[] | null> {
 
 export async function upsertSAClubToSupabase(club: SAClub): Promise<void> {
   if (!supabase) return;
+  const core = {
+    id: club.id, name: club.name, city: club.city, country: club.country,
+    courts: club.courts, members: club.members, status: club.status,
+    admin_email: club.adminEmail, plan: club.plan,
+    joined_at: club.joinedAt || new Date().toISOString(),
+  };
   try {
-    const { error } = await supabase.from('clubs').upsert({
-      id: club.id, name: club.name, city: club.city, country: club.country,
-      courts: club.courts, members: club.members, status: club.status,
-      admin_email: club.adminEmail, plan: club.plan,
-      joined_at: club.joinedAt || new Date().toISOString(),
-    });
-    if (error) console.error('[Supabase] upsertClub error:', error.message);
+    // Try the richer row first (extra columns require migration 008). If those
+    // columns don't exist yet, fall back to the core columns so the write — and
+    // crucially, status changes like approvals — still persist to Supabase.
+    const full = {
+      ...core,
+      address: club.address || null,
+      club_type: club.clubType || null,
+      maps_url: club.mapsUrl || null,
+    };
+    let { error } = await supabase.from('clubs').upsert(full);
+    if (error) {
+      ({ error } = await supabase.from('clubs').upsert(core));
+      if (error) console.error('[Supabase] upsertClub error:', error.message);
+    }
   } catch (err) { console.error('[Supabase] upsertClub exception:', err); }
 }
 

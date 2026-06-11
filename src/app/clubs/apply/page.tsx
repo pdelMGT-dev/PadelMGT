@@ -310,8 +310,8 @@ export default function ClubApplyPage() {
             <Link href="/" className="btn btn-secondary">
               Volver al inicio
             </Link>
-            <Link href="/clubs/apply/status" className="btn btn-primary">
-              Ver estado de mi solicitud
+            <Link href="/clubs" className="btn btn-primary">
+              Ver clubes
             </Link>
           </div>
         </div>

@@ -11,6 +11,7 @@ import {
   type FriendRequest,
 } from '@/lib/friend-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { getLevelInfo } from '@/lib/level-config';
 type Tab = 'friends' | 'requests' | 'search' | 'sent';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -22,10 +23,6 @@ const AVATAR_COLORS = ['#1e3a8a', '#7c3aed', '#065f46', '#9a3412', '#1e40af', '#
 function avatarBg(id: string) {
   return AVATAR_COLORS[id.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
 }
-
-const LEVEL_LABEL: Record<string, string> = {
-  beginner: 'Principiante', intermediate: 'Intermedio', advanced: 'Avanzado',
-};
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -45,7 +42,7 @@ function Avatar({ player, size = 48 }: { player: RegisteredPlayer; size?: number
 function PlayerMeta({ p }: { p: RegisteredPlayer }) {
   return (
     <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 2 }}>
-      {[p.level ? LEVEL_LABEL[p.level] : null, p.city, p.country].filter(Boolean).join(' · ')}
+      {[p.level ? `${getLevelInfo(p.level).level} ${getLevelInfo(p.level).group}` : null, p.city, p.country].filter(Boolean).join(' · ')}
     </div>
   );
 }

@@ -302,6 +302,10 @@ export function createLeagueSeason(params: {
   pointsLoss?: number;
 }): LeagueSeason {
   const league = getPlayerLeague(params.leagueId);
+  const all = seasonStore.load();
+  // The first season of a league becomes active immediately so a brand-new
+  // league shows as "En curso" (not "Completada") and standings have a season.
+  const isFirstSeason = !all.some(s => s.leagueId === params.leagueId);
   const season: LeagueSeason = {
     id: genId(),
     leagueId: params.leagueId,
@@ -311,9 +315,8 @@ export function createLeagueSeason(params: {
     pointsWin: params.pointsWin ?? league?.defaultPointsWin ?? 3,
     pointsDraw: params.pointsDraw ?? league?.defaultPointsDraw ?? 1,
     pointsLoss: params.pointsLoss ?? league?.defaultPointsLoss ?? 0,
-    status: 'upcoming',
+    status: isFirstSeason ? 'active' : 'upcoming',
   };
-  const all = seasonStore.load();
   all.push(season);
   seasonStore.persist(all);
   return season;

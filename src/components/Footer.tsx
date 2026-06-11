@@ -32,9 +32,9 @@ const cols = [
   {
     title: 'Soporte',
     links: [
-      { href: '#', label: 'Centro de Ayuda' },
-      { href: '#', label: 'API' },
-      { href: '#', label: 'Estado del Servicio' },
+      { href: 'mailto:soporte@padelmgt.com', label: 'Centro de Ayuda' },
+      { href: '/terms', label: 'Términos' },
+      { href: '/privacy', label: 'Privacidad' },
     ],
   },
 ];
