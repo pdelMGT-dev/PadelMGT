@@ -7,8 +7,11 @@ export default function ProfileError({ error, reset }: { error: Error; reset: ()
   useEffect(() => { console.error('[Profile]', error); }, [error]);
   return (
     <div style={{ padding: '80px 40px', textAlign: 'center' }}>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 16 }}>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>
         No se pudo cargar el perfil
+      </div>
+      <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--grey-300)', marginBottom: 16, maxWidth: 520, margin: '0 auto 16px', wordBreak: 'break-word' }}>
+        {error?.message}
       </div>
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
         <button onClick={reset} style={{ padding: '10px 24px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>

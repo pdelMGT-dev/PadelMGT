@@ -4,11 +4,14 @@
 import type { ActiveGame, GameFormat, PairType, ScoreConfig, GamePlayer, InvitedPlayer, KnockoutConfig } from './game-engine';
 import { upsertTournamentToSupabase } from './superadmin-data';
 import { createLocalStore } from './local-store';
+import { sanitizeGameRecords } from './store-sanitize';
 
 export type Tournament = ActiveGame;
 
 const _store  = createLocalStore<Tournament[]>('padelmgt_tournaments', [], { seedOnFirstLoad: false });
-const load    = () => _store.load();
+// Sanitize on load: Supabase-synced rows can contain null entries in
+// players/standings/rounds which crash pages that iterate them in render.
+const load    = () => sanitizeGameRecords<Tournament>(_store.load());
 const persist = (items: Tournament[]) => _store.persist(items);
 
 function generateId(): string {

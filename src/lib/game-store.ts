@@ -19,6 +19,7 @@ import {
 } from './game-engine';
 import { upsertGameToSupabase, deleteGameFromSupabase } from './superadmin-data';
 import { createLocalStore } from './local-store';
+import { sanitizeGameRecords } from './store-sanitize';
 import { INITIAL_GAMES } from './seeds/games';
 
 // Re-export engine functions so consumers can import from one place.
@@ -61,7 +62,9 @@ function generateId(): string {
 // ---------------------------------------------------------------------------
 
 export function getAllGames(): ActiveGame[] {
-  return _store.load();
+  // Sanitize on every load: Supabase-synced rows can contain null entries in
+  // players/standings/rounds which crash pages that iterate them in render.
+  return sanitizeGameRecords<ActiveGame>(_store.load());
 }
 
 export function getGame(id: string): ActiveGame | null {

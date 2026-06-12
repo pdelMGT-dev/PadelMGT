@@ -155,9 +155,9 @@ export function applyTournamentRankingResults(tournament: Tournament, leagueId?:
 }
 
 export function getRankingHistoryForPlayer(playerId: string): RankingEntry[] {
-  return _store.load().filter((e) => e.playerId === playerId);
+  return _store.load().filter((e) => e && e.playerId === playerId);
 }
 
 export function getRankingHistoryForGame(gameId: string): RankingEntry[] {
-  return _store.load().filter((e) => e.gameId === gameId);
+  return _store.load().filter((e) => e && e.gameId === gameId);
 }
