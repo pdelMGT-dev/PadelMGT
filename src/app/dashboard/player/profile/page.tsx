@@ -233,23 +233,25 @@ export default function PlayerProfilePage() {
 
   // Use real ranking history from completed games; empty for new users
   const chartData: number[] = (() => {
-    const games = typeof window !== 'undefined' ? getAllGames().filter(g => g.status === 'finished') : [];
-    if (games.length === 0) return [];
-    return games.slice(-10).map(g => {
-      const history = getRankingHistoryForGame(g.id);
-      const userId = user?.id ?? '';
-      const entry = history.find(h => h.playerId === userId);
-      return entry?.points ?? 0;
-    }).filter(v => v > 0);
+    try {
+      const games = typeof window !== 'undefined' ? getAllGames().filter(g => g.status === 'finished') : [];
+      if (games.length === 0) return [];
+      return games.slice(-10).map(g => {
+        const history = getRankingHistoryForGame(g.id);
+        const userId = user?.id ?? '';
+        const entry = history.find(h => h.playerId === userId);
+        return entry?.points ?? 0;
+      }).filter(v => v > 0);
+    } catch { return []; }
   })();
-  const chartMin = Math.min(...chartData);
-  const chartMax = Math.max(...chartData);
-  const chartRange = chartMax - chartMin || 1;
-  const chartPoints = chartData.map((v, i) => {
+  const chartMin = chartData.length > 0 ? Math.min(...chartData) : 0;
+  const chartMax = chartData.length > 0 ? Math.max(...chartData) : 0;
+  const chartRange = (chartMax - chartMin) || 1;
+  const chartPoints = chartData.length >= 2 ? chartData.map((v, i) => {
     const x = (i / (chartData.length - 1)) * 500;
     const y = 80 - ((v - chartMin) / chartRange) * 70 + 5;
     return { x, y, v };
-  });
+  }) : [];
   const polylinePoints = chartPoints.map(p => `${p.x},${p.y}`).join(' ');
 
   // ---------------------------------------------------------------------------

@@ -69,14 +69,17 @@ const statusLabel: Record<string, { label: string; color: string }> = {
 
 /** Parse YYYY-MM-DD → { day, month } using UTC to avoid timezone shifts */
 function parseDateParts(dateStr: string): { day: number; month: string } {
-  const [, m, d] = dateStr.split('-').map(Number);
+  if (!dateStr) return { day: 0, month: '' };
+  const [, m, d] = (dateStr + '').split('-').map(Number);
   const monthNames = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  return { day: d, month: monthNames[m - 1] ?? '' };
+  return { day: d || 0, month: monthNames[(m || 1) - 1] ?? '' };
 }
 
 /** Return ISO week number (Mon=1 … Sun=7) start date for a YYYY-MM-DD date */
 function weekMondayStr(dateStr: string): string {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return '9999-99-99';
   const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return '9999-99-99';
   const day = d.getDay(); // 0=Sun
   const diff = (day === 0 ? -6 : 1 - day); // days to Monday
   d.setDate(d.getDate() + diff);
@@ -276,8 +279,8 @@ export default function PlayerCalendarPage() {
       });
     }
 
-    // Sort by date ascending
-    calEvents.sort((a, b) => a.date.localeCompare(b.date));
+    // Sort by date ascending — guard against null/undefined dates from Supabase
+    calEvents.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
 
     setEvents(calEvents);
     setTournamentsCount(myTournaments.length);
