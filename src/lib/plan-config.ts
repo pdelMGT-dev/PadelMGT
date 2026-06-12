@@ -207,6 +207,31 @@ export async function initVerifiedPlan(): Promise<void> {
   } catch { /* offline — fall back to local resolution */ }
 }
 
+/** Always fetches fresh plan from server (bypasses TTL). Use on dashboard mount
+ *  so SA changes are reflected immediately without waiting for cache expiry. */
+export async function refreshVerifiedPlan(): Promise<PlanId> {
+  if (typeof window === 'undefined') return 'free';
+  try {
+    const res = await fetch('/api/me/plan');
+    if (!res.ok) return getUserPlan();
+    const data = await res.json() as { plan?: string; verified?: boolean };
+    const plan = (data.plan ?? 'free') as PlanId;
+    sessionStorage.setItem(VERIFIED_PLAN_KEY, JSON.stringify({
+      plan, verified: !!data.verified, fetchedAt: Date.now(),
+    }));
+    // Also keep localStorage user record in sync so role/plan checks stay accurate
+    try {
+      const raw = localStorage.getItem('padelmgt_user');
+      if (raw) {
+        const u = JSON.parse(raw) as Record<string, unknown>;
+        u.plan = plan;
+        localStorage.setItem('padelmgt_user', JSON.stringify(u));
+      }
+    } catch { /* ignore */ }
+    return plan;
+  } catch { return getUserPlan(); }
+}
+
 // ── Plan resolution ──────────────────────────────────────────────────────────
 export function getUserPlan(): PlanId {
   if (typeof window === 'undefined') return 'free';

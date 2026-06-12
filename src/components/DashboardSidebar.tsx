@@ -10,7 +10,7 @@ import { syncAllFromSupabase } from '@/lib/supabase-sync';
 import { authSignOut } from '@/lib/supabase';
 import BrandLogo from './BrandLogo';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { getUserPlan } from '@/lib/plan-config';
+import { getUserPlan, refreshVerifiedPlan, type PlanId } from '@/lib/plan-config';
 
 type Role = 'player' | 'club' | 'league' | 'federation' | 'super_admin';
 
@@ -96,8 +96,17 @@ export default function DashboardSidebar() {
     : 'player';
 
   const isSuperAdmin = user?.role === 'super_admin';
-  const currentPlan  = typeof window !== 'undefined' ? getUserPlan() : 'free';
-  const photoUrl     = (user as { photoUrl?: string } | null)?.photoUrl;
+  const [currentPlan, setCurrentPlan] = useState<PlanId>(() =>
+    typeof window !== 'undefined' ? getUserPlan() : 'free'
+  );
+  const photoUrl = (user as { photoUrl?: string } | null)?.photoUrl;
+
+  // Fetch fresh plan on every mount so SA changes are reflected immediately
+  useEffect(() => {
+    if (user?.role === 'player' || !user?.role) {
+      refreshVerifiedPlan().then(p => setCurrentPlan(p));
+    }
+  }, [user?.id]); // re-run if user changes (e.g. after login)
 
   const planBadgeLabel: Partial<Record<string, string>> = {
     player_pro:     'Pro', liga_basic: 'Básico', liga_pro: 'Pro',

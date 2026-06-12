@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { getUserPlan, getPlayerLimits, type PlanId } from '@/lib/plan-config';
+import { getUserPlan, refreshVerifiedPlan, getPlayerLimits, type PlanId } from '@/lib/plan-config';
 import { getAllGames } from '@/lib/game-store';
 import { getAllTournaments } from '@/lib/tournament-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -136,7 +136,8 @@ export default function PlanUsageBanner({ role }: Props) {
   const [usage, setUsage] = useState({ games: 0, tournaments: 0 });
 
   useEffect(() => {
-    setPlan(getUserPlan());
+    // Always fetch fresh plan from server so SA changes show immediately
+    refreshVerifiedPlan().then(p => setPlan(p));
 
     if (!user?.id) return;
     const now = new Date();
