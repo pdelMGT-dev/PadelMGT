@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getSAAdminUsers, saveSAAdminUsers, getSAPlayers, getSAClubs, getSATournaments, seedPlayersToSupabase, seedClubsToSupabase, upsertTournamentToSupabase, type SAAdminUser } from '@/lib/superadmin-data';
+import { getSAAdminUsers, saveSAAdminUsers, getSAAdminUsersFromSupabase, upsertSAAdminUserToSupabase, deleteSAAdminUserFromSupabase, getSAPlayers, getSAClubs, getSATournaments, seedPlayersToSupabase, seedClubsToSupabase, upsertTournamentToSupabase, type SAAdminUser } from '@/lib/superadmin-data';
 import { getGlobalRankingConfig, saveRankingConfig } from '@/lib/ranking-config-store';
 import { getAuditLog, clearAuditLog, type AuditEntry } from '@/lib/audit-log-store';
 
@@ -143,6 +143,12 @@ export default function ConfigPage() {
 
   useEffect(() => {
     setAdmins(getSAAdminUsers());
+    getSAAdminUsersFromSupabase().then(sbAdmins => {
+      if (sbAdmins && sbAdmins.length > 0) {
+        saveSAAdminUsers(sbAdmins);
+        setAdmins(sbAdmins);
+      }
+    }).catch(() => {});
     // Load stripe config
     try {
       const raw = localStorage.getItem(STRIPE_KEY);
@@ -249,17 +255,21 @@ export default function ConfigPage() {
   }
 
   // Admin CRUD
-  function handleCreateAdmin(e: React.FormEvent) {
+  async function handleCreateAdmin(e: React.FormEvent) {
     e.preventDefault();
     if (!adminForm.name || !adminForm.email) return;
+    if (!editAdmin && !adminForm.password) { toast('La contraseña es requerida para nuevos admins', false); return; }
     const now = new Date().toISOString().split('T')[0];
     if (editAdmin) {
-      const updated = admins.map(a => a.id === editAdmin.id ? { ...editAdmin, name: adminForm.name, email: adminForm.email, role: adminForm.role } : a);
-      saveAndRefresh(updated);
+      const updated: SAAdminUser = { ...editAdmin, name: adminForm.name, email: adminForm.email, role: adminForm.role, ...(adminForm.password ? { password: adminForm.password } : {}) };
+      const all = admins.map(a => a.id === editAdmin.id ? updated : a);
+      saveAndRefresh(all);
+      await upsertSAAdminUserToSupabase(updated);
       toast('Administrador actualizado');
     } else {
-      const newAdmin: SAAdminUser = { id: uid(), name: adminForm.name, email: adminForm.email, role: adminForm.role, status: 'active', createdAt: now };
+      const newAdmin: SAAdminUser = { id: uid(), name: adminForm.name, email: adminForm.email, password: adminForm.password, role: adminForm.role, status: 'active', createdAt: now };
       saveAndRefresh([...admins, newAdmin]);
+      await upsertSAAdminUserToSupabase(newAdmin);
       toast('Administrador creado correctamente');
     }
     setShowCreateAdmin(false);
@@ -273,9 +283,11 @@ export default function ConfigPage() {
     setShowCreateAdmin(true);
   }
 
-  function toggleAdminStatus(adminId: string) {
+  async function toggleAdminStatus(adminId: string) {
     const updated = admins.map(a => a.id === adminId ? { ...a, status: a.status === 'active' ? 'inactive' as const : 'active' as const } : a);
     saveAndRefresh(updated);
+    const changed = updated.find(a => a.id === adminId);
+    if (changed) await upsertSAAdminUserToSupabase(changed);
     toast('Estado actualizado');
   }
 
@@ -341,10 +353,11 @@ export default function ConfigPage() {
     reader.readAsDataURL(file);
   }
 
-  function handleDeleteFinal() {
+  async function handleDeleteFinal() {
     if (!deleteConfirm) return;
     const updated = admins.filter(a => a.id !== deleteConfirm.adminId);
     saveAndRefresh(updated);
+    await deleteSAAdminUserFromSupabase(deleteConfirm.adminId);
     setDeleteConfirm(null);
     toast('Administrador eliminado');
   }
@@ -1069,8 +1082,8 @@ export default function ConfigPage() {
               <input style={inputStyle} type="email" required value={adminForm.email} onChange={e => setAdminForm(f => ({ ...f, email: e.target.value }))} />
             </Field>
             {!editAdmin && (
-              <Field label="Contrasena temporal">
-                <input style={inputStyle} type="password" value={adminForm.password} onChange={e => setAdminForm(f => ({ ...f, password: e.target.value }))} />
+              <Field label="Contrasena (requerida)">
+                <input style={inputStyle} type="password" required value={adminForm.password} onChange={e => setAdminForm(f => ({ ...f, password: e.target.value }))} placeholder="••••••••" />
               </Field>
             )}
             <Field label="Rol">

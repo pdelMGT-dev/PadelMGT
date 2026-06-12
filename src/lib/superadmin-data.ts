@@ -78,6 +78,7 @@ export interface SAAdminUser {
   id: string;
   name: string;
   email: string;
+  password?: string;
   role: 'score_corrections' | 'player_db' | 'transactions' | 'clubs';
   status: 'active' | 'inactive';
   createdAt: string;
@@ -111,6 +112,15 @@ export interface PlayerRelationship {
 const MOCK_PLAYERS: SAPlayer[] = _MOCK_PLAYERS;
 const MOCK_CLUBS: SAClub[] = _MOCK_CLUBS;
 
+function getPendingScoreCorrections(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = localStorage.getItem('padelmgt_score_corrections') ?? '[]';
+    const items = JSON.parse(raw) as Array<{ status?: string }>;
+    return items.filter(x => x?.status === 'pending').length;
+  } catch { return 0; }
+}
+
 function getThisMonthStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -124,7 +134,7 @@ function getLastMonthStr(): string {
 
 export function getSAStats(): SAStats {
   if (typeof window === 'undefined') {
-    return { totalPlayers: 0, activePlayers: 0, totalClubs: 0, pendingClubRequests: 0, tournamentsThisMonth: 0, tournamentsLastMonth: 0, gamesThisMonth: 0, totalGames: 0, pendingScoreRequests: 3, nps: 72, retentionRate: 84, monthlyRevenue: 0, growthPercent: 12 };
+    return { totalPlayers: 0, activePlayers: 0, totalClubs: 0, pendingClubRequests: 0, tournamentsThisMonth: 0, tournamentsLastMonth: 0, gamesThisMonth: 0, totalGames: 0, pendingScoreRequests: 0, nps: 72, retentionRate: 84, monthlyRevenue: 0, growthPercent: 12 };
   }
 
   const players = getSAPlayers();
@@ -151,7 +161,7 @@ export function getSAStats(): SAStats {
     tournamentsLastMonth,
     gamesThisMonth,
     totalGames: games.length,
-    pendingScoreRequests: 3,
+    pendingScoreRequests: getPendingScoreCorrections(),
     nps: 72,
     retentionRate: 84,
     monthlyRevenue: 0,
@@ -227,6 +237,7 @@ export function saveSAPlayers(players: SAPlayer[]): void {
     customFields: p.customFields,
     status: p.status,
     role: p.role,
+    plan: p.plan,
   }));
   localStorage.setItem('padelmgt_registered_players', JSON.stringify(regPlayers));
 }

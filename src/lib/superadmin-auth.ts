@@ -52,5 +52,6 @@ export async function saLogout(): Promise<void> {
   try {
     await fetch('/api/sa/login', { method: 'DELETE', credentials: 'include' });
   } catch {}
+  document.cookie = 'padelmgt_sa_token=; path=/; max-age=0';
   document.cookie = 'padelmgt_session=; path=/; max-age=0';
 }

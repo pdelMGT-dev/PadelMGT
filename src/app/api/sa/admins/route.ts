@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     status: body.status ?? 'active',
     created_at: body.createdAt || new Date().toISOString(),
   };
-  if (body.password) row.password = body.password;
+  if (body.password) row.password_hash = body.password;
 
   const { error } = await db.from('admin_users').upsert(row);
   if (error) return NextResponse.json({ error: 'DB error' }, { status: 500 });

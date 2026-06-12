@@ -970,7 +970,6 @@ export default function PlayersPage() {
                 <th style={{ ...thStyle, cursor: 'default' }}>Ciudad / Pais</th>
                 <th onClick={() => handleSort('ranking')} style={thStyle}>Ranking Pos. <SortIcon col="ranking" /></th>
                 <th onClick={() => handleSort('rankingPoints')} style={thStyle}>Pts Ranking <SortIcon col="rankingPoints" /></th>
-                <th style={{ ...thStyle, cursor: 'default' }}>Club</th>
                 <th style={{ ...thStyle, cursor: 'default' }}>Rol</th>
                 <th style={{ ...thStyle, cursor: 'default' }}>Plan</th>
                 <th style={{ ...thStyle, cursor: 'default' }}>Estado</th>
@@ -1017,7 +1016,6 @@ export default function PlayersPage() {
                     <td style={{ padding: '10px 14px', color: 'var(--grey-600)', whiteSpace: 'nowrap' }}>{p.city}{p.city && p.country ? ' / ' : ''}{p.country}</td>
                     <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--black)', whiteSpace: 'nowrap' }}>#{p.ranking}</td>
                     <td style={{ padding: '10px 14px', color: 'var(--grey-600)', whiteSpace: 'nowrap' }}>{p.rankingPoints.toLocaleString()} pts</td>
-                    <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.city ?? '—'}</td>
                     <td style={{ padding: '10px 14px' }}><RoleBadge role={p.role} /></td>
                     <td style={{ padding: '10px 14px' }}><PlanBadge plan={p.plan} /></td>
                     <td style={{ padding: '10px 14px' }}><StatusBadge status={p.status} /></td>
