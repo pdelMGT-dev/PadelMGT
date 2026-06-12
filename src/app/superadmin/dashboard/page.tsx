@@ -5,7 +5,7 @@ import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { getSAStats, getSAClubs, saveSAClubs, type SAStats, type SAClub } from '@/lib/superadmin-data';
+import { getSAStats, getSAClubs, saveSAClubs, upsertSAClubToSupabase, type SAStats, type SAClub } from '@/lib/superadmin-data';
 
 const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
 const PLAYER_GROWTH = [42, 58, 71, 89, 104, 127].map((v, i) => ({ mes: MONTHS[i], jugadores: v }));
@@ -69,16 +69,38 @@ function KPICard({
   );
 }
 
+interface StripeSummary {
+  connected: boolean;
+  livemode?: boolean;
+  monthRevenueCents?: number;
+  mrrCents?: number;
+  activeSubscriptions?: number;
+  recentCharges?: Array<{
+    id: string; amount: number; currency: string; status: string;
+    description: string; email: string; created: number; refunded: boolean;
+  }>;
+}
+
+function fmtMoney(cents: number, currency = 'usd'): string {
+  return new Intl.NumberFormat('es', { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100);
+}
+
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState<SAStats | null>(null);
   const [pendingClubs, setPendingClubs] = useState<SAClub[]>([]);
   const [toasts, setToasts] = useState<Array<{ id: number; msg: string }>>([]);
+  const [stripeData, setStripeData] = useState<StripeSummary | null>(null);
+  const [showStripeDetail, setShowStripeDetail] = useState(false);
   const today = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   useEffect(() => {
     setStats(getSAStats());
     const clubs = getSAClubs();
     setPendingClubs(clubs.filter(c => c.status === 'pending'));
+    fetch('/api/superadmin/stripe/summary')
+      .then(r => r.json())
+      .then((d: StripeSummary) => setStripeData(d))
+      .catch(() => setStripeData({ connected: false }));
   }, []);
 
   function toast(msg: string) {
@@ -91,6 +113,8 @@ export default function SuperAdminDashboard() {
     const all = getSAClubs();
     const updated = all.map(c => c.id === clubId ? { ...c, status: action } : c);
     saveSAClubs(updated);
+    const changed = updated.find(c => c.id === clubId);
+    if (changed) upsertSAClubToSupabase(changed);
     setPendingClubs(updated.filter(c => c.status === 'pending'));
     toast(action === 'active' ? 'Club aprobado correctamente' : 'Club rechazado');
   }
@@ -215,7 +239,7 @@ export default function SuperAdminDashboard() {
           </div>
         </div>
 
-        {/* Revenue */}
+        {/* Revenue (live from Stripe) */}
         <div style={{
           background: '#fff',
           border: '1px solid var(--grey-200)',
@@ -227,14 +251,84 @@ export default function SuperAdminDashboard() {
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 10 }}>
             Ingresos Mensuales
           </div>
-          <div style={{ fontSize: 34, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--grey-400)' }}>
-            €{stats.monthlyRevenue}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 6, fontStyle: 'italic' }}>
-            Stripe no conectado
-          </div>
+          {stripeData?.connected ? (
+            <>
+              <div style={{ fontSize: 34, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--black)' }}>
+                {fmtMoney(stripeData.monthRevenueCents ?? 0)}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--grey-500)', marginTop: 6 }}>
+                MRR {fmtMoney(stripeData.mrrCents ?? 0)} · {stripeData.activeSubscriptions ?? 0} suscripciones
+                {stripeData.livemode === false && <span style={{ color: '#b45309' }}> · modo TEST</span>}
+              </div>
+              <button
+                onClick={() => setShowStripeDetail(v => !v)}
+                style={{ marginTop: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--court-blue)', fontWeight: 600, padding: 0 }}
+              >
+                {showStripeDetail ? 'Ocultar detalle ▲' : 'Ver detalle de operaciones ▼'}
+              </button>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 34, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--grey-400)' }}>
+                €{stats.monthlyRevenue}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 6, fontStyle: 'italic' }}>
+                {stripeData === null ? 'Consultando Stripe…' : 'Stripe no conectado (configurá STRIPE_SECRET_KEY)'}
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Stripe operations detail */}
+      {showStripeDetail && stripeData?.connected && (
+        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6, padding: '24px 28px', marginBottom: 32 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', color: 'var(--grey-400)', textTransform: 'uppercase' }}>
+              Últimas operaciones (Stripe)
+            </div>
+            <a
+              href="https://dashboard.stripe.com/payments"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 12, color: 'var(--court-blue)', fontWeight: 600, textDecoration: 'none' }}
+            >
+              Abrir Stripe Dashboard ↗
+            </a>
+          </div>
+          {(stripeData.recentCharges ?? []).length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>Sin operaciones registradas todavía.</div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--grey-200)' }}>
+                  {['Fecha', 'Cliente', 'Monto', 'Estado'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(stripeData.recentCharges ?? []).map(c => (
+                  <tr key={c.id} style={{ borderBottom: '1px solid var(--grey-100)' }}>
+                    <td style={{ padding: '10px', whiteSpace: 'nowrap', color: 'var(--grey-500)' }}>{new Date(c.created).toLocaleString('es')}</td>
+                    <td style={{ padding: '10px' }}>{c.email || c.description || '—'}</td>
+                    <td style={{ padding: '10px', fontWeight: 700 }}>{fmtMoney(c.amount, c.currency)}</td>
+                    <td style={{ padding: '10px' }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+                        background: c.refunded ? '#fef3c7' : c.status === 'succeeded' ? 'rgba(30,170,82,0.12)' : '#fee2e2',
+                        color: c.refunded ? '#92400e' : c.status === 'succeeded' ? 'var(--turf-green)' : '#dc2626',
+                      }}>
+                        {c.refunded ? 'Reembolsado' : c.status === 'succeeded' ? 'Pagado' : c.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* Charts */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 32 }}>

@@ -497,6 +497,19 @@ export async function getSAPlayersFromSupabase(): Promise<SAPlayer[] | null> {
 }
 
 export async function upsertSAPlayerToSupabase(player: SAPlayer): Promise<void> {
+  // Preferred path: server route with the service role. RLS on players only
+  // lets each auth user update their OWN row, so a direct anon-key upsert
+  // from the SA browser fails silently against other users' rows.
+  try {
+    const res = await fetch('/api/superadmin/players', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ player }),
+    });
+    if (res.ok) return;
+    console.error('[SA] upsertPlayer route failed:', res.status);
+  } catch { /* offline / route unavailable — try direct upsert below */ }
+
   if (!supabase) return;
   try {
     const { error } = await supabase.from('players').upsert(playerToRow(player));
@@ -505,6 +518,14 @@ export async function upsertSAPlayerToSupabase(player: SAPlayer): Promise<void> 
 }
 
 export async function deleteSAPlayerFromSupabase(id: string): Promise<void> {
+  try {
+    const res = await fetch('/api/superadmin/players', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    if (res.ok) return;
+  } catch { /* fall through */ }
   if (!supabase) return;
   try { await supabase.from('players').delete().eq('id', id); } catch { /* silent */ }
 }

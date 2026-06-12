@@ -134,8 +134,17 @@ export async function syncUserTournaments(creatorPlayerId: string): Promise<void
   for (const raw of rows) {
     if (!raw || !raw.id) continue;
     if (!localIds.has(raw.id as string)) {
-      // New tournament from Supabase — add to local store
-      saveTournament(raw as unknown as Tournament);
+      // New tournament from Supabase — normalize array fields so pages that
+      // iterate players/standings never crash on a partial row
+      const r = raw as Record<string, unknown>;
+      const normalized = {
+        ...r,
+        players:        Array.isArray(r.players)        ? r.players        : [],
+        invitedPlayers: Array.isArray(r.invitedPlayers) ? r.invitedPlayers : [],
+        standings:      Array.isArray(r.standings)      ? r.standings      : [],
+        rounds:         Array.isArray(r.rounds)         ? r.rounds         : [],
+      };
+      saveTournament(normalized as unknown as Tournament);
     }
     // Already exists locally — local is source of truth (most recent edit wins)
   }
@@ -155,7 +164,15 @@ export async function syncUserGames(creatorPlayerId: string): Promise<void> {
   for (const raw of rows) {
     if (!raw || !raw.id) continue;
     if (!localIds.has(raw.id as string)) {
-      saveGame(raw as unknown as ActiveGame);
+      const r = raw as Record<string, unknown>;
+      const normalized = {
+        ...r,
+        players:        Array.isArray(r.players)        ? r.players        : [],
+        invitedPlayers: Array.isArray(r.invitedPlayers) ? r.invitedPlayers : [],
+        standings:      Array.isArray(r.standings)      ? r.standings      : [],
+        rounds:         Array.isArray(r.rounds)         ? r.rounds         : [],
+      };
+      saveGame(normalized as unknown as ActiveGame);
     }
   }
 }

@@ -118,7 +118,7 @@ export default function PlayerProfilePage() {
   useEffect(() => {
     if (!user) return;
     const all = getAllGames();
-    const mine = all.filter(g => g.players.some(p => p.id === user.id));
+    const mine = all.filter(g => (g.players ?? []).some(p => p.id === user.id));
     setActiveGames(mine.filter(g => g.status !== 'finished'));
     setFinishedGames(mine.filter(g => g.status === 'finished'));
     // init form
@@ -138,10 +138,10 @@ export default function PlayerProfilePage() {
   // ---------------------------------------------------------------------------
 
   const totalGames = finishedGames.length;
-  const wins = finishedGames.filter(g => user && g.standings.findIndex(s => s.playerId === user.id) === 0).length;
+  const wins = finishedGames.filter(g => user && (g.standings ?? []).findIndex(s => s.playerId === user.id) === 0).length;
   const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
   const totalPts = finishedGames.reduce((acc, g) => {
-    const s = user ? g.standings.find(st => st.playerId === user.id) : null;
+    const s = user ? (g.standings ?? []).find(st => st.playerId === user.id) : null;
     return acc + (s?.pts ?? 0);
   }, 0);
 
@@ -549,10 +549,10 @@ export default function PlayerProfilePage() {
                 </thead>
                 <tbody>
                   {finishedGames.map(g => {
-                    const standing = g.standings.find(s => s.playerId === user.id);
-                    const posIdx = g.standings.findIndex(s => s.playerId === user.id);
+                    const standing = (g.standings ?? []).find(s => s.playerId === user.id);
+                    const posIdx = (g.standings ?? []).findIndex(s => s.playerId === user.id);
                     const pos = posIdx >= 0 ? posIdx + 1 : '—';
-                    const total = g.standings.length;
+                    const total = (g.standings ?? []).length;
                     const rankEntry = getRankingHistoryForGame(g.id).find(e => e.playerId === user.id);
                     return (
                       <tr key={g.id} style={{ borderBottom: '1px solid var(--grey-100)' }}>

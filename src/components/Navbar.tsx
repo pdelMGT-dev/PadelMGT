@@ -53,7 +53,7 @@ export default function Navbar() {
                 {l.label}
               </Link>
             ))}
-            <Link href="/login" className="nav-link">Iniciar Sesión</Link>
+            <Link href="/login" className="btn btn-sm btn-neon">Iniciar Sesión</Link>
             <Link href="/signup" className={`btn btn-sm ${isHome ? 'btn-on-dark' : 'btn-primary'}`}>
               Crear Cuenta
             </Link>
@@ -100,7 +100,7 @@ export default function Navbar() {
             ))}
           </nav>
           <div style={{ marginTop: 'auto', display: 'flex', gap: 12, paddingTop: 32 }}>
-            <Link href="/login" className="btn btn-outline-dark" onClick={() => setMobileOpen(false)}>Iniciar Sesión</Link>
+            <Link href="/login" className="btn btn-neon" onClick={() => setMobileOpen(false)}>Iniciar Sesión</Link>
             <Link href="/signup" className="btn btn-on-dark" onClick={() => setMobileOpen(false)}>Crear Cuenta</Link>
           </div>
         </div>

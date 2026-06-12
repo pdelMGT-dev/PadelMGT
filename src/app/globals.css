@@ -113,6 +113,8 @@ html, body {
 .btn-secondary:hover { background: var(--grey-100); }
 .btn-on-dark { background: #fff; color: var(--black); }
 .btn-on-dark:hover { background: var(--grey-200); }
+.btn-neon { background: var(--neon); color: var(--black); font-weight: 700; }
+.btn-neon:hover { background: #c2e800; }
 .btn-outline-dark { background: transparent; color: #fff; border: 1.5px solid #fff; }
 .btn-outline-dark:hover { background: rgba(255,255,255,0.12); }
 .btn-sm { padding: 8px 16px; font-size: 12px; }

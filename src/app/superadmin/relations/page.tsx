@@ -103,6 +103,7 @@ export default function RelationsPage() {
   const [fedFilterFed, setFedFilterFed] = useState('');
 
   // Bulk add panel
+  const [showCreate, setShowCreate] = useState(false);
   const [addMode, setAddMode] = useState<AddMode>('text');
   const [addTarget, setAddTarget] = useState('');
   const [addTextInput, setAddTextInput] = useState('');
@@ -376,13 +377,23 @@ export default function RelationsPage() {
         ))}
       </div>
 
-      {/* ── BULK ADD PANEL ────────────────────────────────────────────────────── */}
+      {/* ── BULK ADD PANEL (collapsible — the list below is the main view) ────── */}
       <div style={{ ...card, borderColor: '#d1d5db' }}>
-        <div style={{ padding: '16px 20px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button
+          onClick={() => setShowCreate(v => !v)}
+          style={{
+            width: '100%', padding: '16px 20px', background: '#f9fafb',
+            borderBottom: showCreate ? '1px solid #e5e7eb' : 'none', border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: 12, cursor: 'pointer',
+          }}
+        >
           <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#374151' }}>
             ＋ Crear relaciones masivas
           </span>
-        </div>
+          <span style={{ fontSize: 12, color: '#6b7280' }}>{showCreate ? '▲ Ocultar' : '▼ Mostrar'}</span>
+        </button>
+        {showCreate && (
         <div style={{ padding: 20 }}>
           {/* Step 1: target entity */}
           <div style={{ marginBottom: 16 }}>
@@ -510,9 +521,13 @@ export default function RelationsPage() {
             )}
           </div>
         </div>
+        )}
       </div>
 
       {/* ── RELATIONSHIPS TABLE ───────────────────────────────────────────────── */}
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#374151', margin: '4px 0 10px' }}>
+        Listado de relaciones
+      </div>
       <div style={card}>
         <div style={{ padding: '14px 20px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>

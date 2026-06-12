@@ -627,6 +627,8 @@ export default function PlayersPage() {
     if (!blockConfirm) return;
     const updated = players.map(p => p.id === blockConfirm.playerId ? { ...p, status: 'blocked' as const } : p);
     saveAndRefresh(updated);
+    const blocked = updated.find(p => p.id === blockConfirm.playerId);
+    if (blocked) upsertSAPlayerToSupabase(blocked);
     if (selectedPlayer?.id === blockConfirm.playerId) setSelectedPlayer(prev => prev ? { ...prev, status: 'blocked' as const } : prev);
     setBlockConfirm(null);
     toast('Jugador bloqueado');
@@ -635,6 +637,8 @@ export default function PlayersPage() {
   function handleUnblockPlayer(playerId: string) {
     const updated = players.map(p => p.id === playerId ? { ...p, status: 'active' as const } : p);
     saveAndRefresh(updated);
+    const unblocked = updated.find(p => p.id === playerId);
+    if (unblocked) upsertSAPlayerToSupabase(unblocked);
     if (selectedPlayer?.id === playerId) setSelectedPlayer(prev => prev ? { ...prev, status: 'active' as const } : prev);
     toast('Jugador desbloqueado');
   }
@@ -672,14 +676,32 @@ export default function PlayersPage() {
   }
 
   // ── reset password inline ──────────────────────────────────────────────────
-  function handleResetPasswordInline() {
+  async function handleResetPasswordInline() {
     if (!selectedPlayer || !resetPwValue.trim()) return;
-    const updated = players.map(p => p.id === selectedPlayer.id ? { ...p, password: resetPwValue.trim() } : p);
+    const newPassword = resetPwValue.trim();
+    // The real credential store is Supabase Auth — the password must be set
+    // server-side via the admin API or login will keep using the old one.
+    try {
+      const res = await fetch('/api/superadmin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: selectedPlayer.id, email: selectedPlayer.email, newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast(data.error ?? 'No se pudo actualizar la contraseña');
+        return;
+      }
+    } catch {
+      toast('Error de conexión al actualizar la contraseña');
+      return;
+    }
+    const updated = players.map(p => p.id === selectedPlayer.id ? { ...p, password: newPassword } : p);
     saveAndRefresh(updated);
-    setSelectedPlayer(prev => prev ? { ...prev, password: resetPwValue.trim() } : prev);
+    setSelectedPlayer(prev => prev ? { ...prev, password: newPassword } : prev);
     setResetPwValue('');
     setShowResetPwField(false);
-    toast('Contrasena actualizada');
+    toast('Contraseña actualizada — el jugador ya puede ingresar con la nueva clave');
   }
 
   // ── bulk ───────────────────────────────────────────────────────────────────
@@ -702,6 +724,7 @@ export default function PlayersPage() {
   function handleBulkBlock() {
     const updated = players.map(p => selectedIds.has(p.id) ? { ...p, status: 'blocked' as const } : p);
     saveAndRefresh(updated);
+    updated.filter(p => selectedIds.has(p.id)).forEach(p => upsertSAPlayerToSupabase(p));
     toast(`${selectedIds.size} jugadores bloqueados`);
     setSelectedIds(new Set());
   }
@@ -729,6 +752,7 @@ export default function PlayersPage() {
       });
     }
     saveAndRefresh(updated);
+    updated.filter(p => selectedIds.has(p.id)).forEach(p => upsertSAPlayerToSupabase(p));
     setBulkAction('');
     setSelectedIds(new Set());
     toast(`Acción aplicada a ${selectedIds.size} jugador(es)`);

@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { clubs as initialClubs, countries, cities } from '@/lib/data';
 import { getSAClubsFromSupabase } from '@/lib/superadmin-data';
 import ClubSuggestionModal from '@/components/ClubSuggestionModal';
+import { syncClubReviews, getRatingsByClub } from '@/lib/club-review-store';
 
 export default function ClubsPage() {
   const [search, setSearch] = useState('');
@@ -16,6 +17,8 @@ export default function ClubsPage() {
     id: string; name: string; country: string; city: string; address: string;
     courts: number; members: number; rating: number; amenities: string[];
   }[]);
+
+  const [ratings, setRatings] = useState<Map<string, { avg: number; count: number }>>(new Map());
 
   useEffect(() => {
     getSAClubsFromSupabase().then(sb => {
@@ -33,6 +36,8 @@ export default function ClubsPage() {
         })));
       }
     });
+    // Real player-vote ratings per club
+    syncClubReviews().then(reviews => setRatings(getRatingsByClub(reviews)));
   }, []);
 
   const available = cities[country] || ['All Cities'];
@@ -127,10 +132,13 @@ export default function ClubsPage() {
                   <div className="card-image" style={{ height: 200, marginBottom: 24, borderRadius: 0 }}>
                     <img src="/assets/court-green.svg" alt={club.name} style={{ opacity: 0.85 }} />
                     <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.7) 100%)' }} />
-                    <div style={{ position: 'absolute', bottom: 16, left: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, color: '#fff' }}>★</span>
-                      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20, color: '#fff' }}>{club.rating}</span>
-                    </div>
+                    {(ratings.get(club.id)?.count ?? 0) > 0 && (
+                      <div style={{ position: 'absolute', bottom: 16, left: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, color: '#fff' }}>★</span>
+                        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20, color: '#fff' }}>{ratings.get(club.id)!.avg.toFixed(1)}</span>
+                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)' }}>({ratings.get(club.id)!.count})</span>
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -185,7 +193,13 @@ export default function ClubsPage() {
                       <td style={{ textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>{club.courts}</td>
                       <td style={{ textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>{club.members}</td>
                       <td style={{ textAlign: 'center' }}>
-                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, color: '#f5a623' }}>★ {club.rating}</span>
+                        {(ratings.get(club.id)?.count ?? 0) > 0 ? (
+                          <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, color: '#f5a623' }}>
+                            ★ {ratings.get(club.id)!.avg.toFixed(1)} <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>({ratings.get(club.id)!.count})</span>
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--grey-300)' }}>—</span>
+                        )}
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>

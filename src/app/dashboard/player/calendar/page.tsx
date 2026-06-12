@@ -270,7 +270,7 @@ export default function PlayerCalendarPage() {
         city:         t.city,
         status:       calStatus,
         format:       FORMAT_LABEL[t.format] ?? t.format,
-        spots:        `${t.players.length}/${t.maxPlayers}`,
+        spots:        `${(t.players ?? []).length}/${t.maxPlayers}`,
         tournamentId: t.id,
         isCreator,
       });

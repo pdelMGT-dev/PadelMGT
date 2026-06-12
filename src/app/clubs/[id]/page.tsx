@@ -8,6 +8,7 @@ import type { Club } from '@/lib/types';
 import { getSAClubsFromSupabase } from '@/lib/superadmin-data';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { joinClub, isClubMember } from '@/lib/club-membership-store';
+import ClubReviews from '@/components/ClubReviews';
 
 const mockTournaments = [
   { name: 'Americano de Mayo', format: 'Americano', date: '2026-05-18', players: 12, maxPlayers: 16, status: 'upcoming' },
@@ -23,6 +24,7 @@ export default function ClubDetailPage() {
   const [club, setClub] = useState<Club | null>(null);
   const [loading, setLoading] = useState(true);
   const [joined, setJoined] = useState(false);
+  const [ratingInfo, setRatingInfo] = useState<{ avg: number; count: number }>({ avg: 0, count: 0 });
 
   // Reflect existing membership once club + user are known
   useEffect(() => {
@@ -60,7 +62,7 @@ export default function ClubDetailPage() {
             address: found.address || found.city || '–',
             courts: found.courts || 0,
             members: found.members || 0,
-            rating: 4.5,
+            rating: 0, // displayed rating comes from player votes (club_reviews)
             amenities: found.amenities?.length ? found.amenities : ['Canchas cubiertas', 'Vestuarios', 'Estacionamiento'],
             phone: found.ownerPhone || undefined,
             email: found.adminEmail || found.ownerEmail || undefined,
@@ -112,7 +114,7 @@ export default function ClubDetailPage() {
             {[
               { label: 'Canchas', value: String(club.courts) },
               { label: 'Miembros', value: String(club.members) },
-              { label: 'Valoración', value: `★ ${club.rating}` },
+              { label: 'Valoración', value: ratingInfo.count > 0 ? `★ ${ratingInfo.avg.toFixed(1)}` : '—' },
               { label: 'Ciudad', value: club.city },
             ].map((s) => (
               <div key={s.label} style={{ background: '#fff', padding: '28px 32px' }}>
@@ -129,9 +131,12 @@ export default function ClubDetailPage() {
               <div className="card-image" style={{ height: 320, marginBottom: 48, borderRadius: 0 }}>
                 <img src="/assets/court-green.svg" alt={club.name} style={{ opacity: 0.9 }} />
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.75) 100%)' }} />
-                <div style={{ position: 'absolute', bottom: 28, left: 32 }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 56, color: '#fff', fontWeight: 600 }}>★ {club.rating}</div>
-                </div>
+                {ratingInfo.count > 0 && (
+                  <div style={{ position: 'absolute', bottom: 28, left: 32 }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 56, color: '#fff', fontWeight: 600 }}>★ {ratingInfo.avg.toFixed(1)}</div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{ratingInfo.count} voto{ratingInfo.count !== 1 ? 's' : ''} de jugadores</div>
+                  </div>
+                )}
               </div>
 
               {/* Amenities */}
@@ -143,6 +148,9 @@ export default function ClubDetailPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Player ratings & comments */}
+              <ClubReviews clubId={club.id} onRatingChange={setRatingInfo} />
 
               {/* Tournaments */}
               <div>
