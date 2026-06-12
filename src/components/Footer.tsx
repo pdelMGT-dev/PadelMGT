@@ -27,6 +27,7 @@ const cols = [
       { href: '/about', label: 'Nosotros' },
       { href: '/pricing', label: 'Planes' },
       { href: '/signup', label: 'Crear Cuenta' },
+      { href: '/app', label: 'Descargar la App' },
     ],
   },
   {

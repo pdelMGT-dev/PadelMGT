@@ -22,6 +22,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://padelmgt.com"),
   title: "PadelMGT — Crea. Juega. Rankea.",
   description: "La plataforma para crear y gestionar torneos, ligas y clubes de pádel. Diseñada para Latinoamérica.",
   manifest: "/manifest.json",
