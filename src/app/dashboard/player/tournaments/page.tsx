@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
-import { getAllTournaments, createTournament, getTournament, saveTournament } from '@/lib/tournament-store';
+import { getAllTournaments, createTournament, getTournament, saveTournament, cloneTournament } from '@/lib/tournament-store';
 import { checkTournamentGate, incrementUsage, getPlayerLimits } from '@/lib/plan-config';
 import type { Tournament } from '@/lib/tournament-store';
 import type { FixedPair } from '@/lib/game-engine';
@@ -13,6 +13,7 @@ import { getSAClubs } from '@/lib/superadmin-data';
 import { useToast } from '@/components/ToastProvider';
 import { SkeletonCard } from '@/components/Skeleton';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import CloneDialog from '@/components/CloneDialog';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -164,6 +165,40 @@ export default function PlayerTournamentsPage() {
   const [historialFilter, setHistorialFilter] = useState<'todos' | 'finalizado' | 'cancelado' | 'organizador' | 'jugador'>('todos');
   const [histPage, setHistPage]     = useState(0);
   const [activeView, setActiveView] = useState<'icons' | 'list'>('icons');
+
+  // ── Clone modal ───────────────────────────────────────────────────────────────
+  const [cloneSource, setCloneSource]   = useState<Tournament | null>(null);
+  const [cloneName, setCloneName]       = useState('');
+  const [cloneDate, setCloneDate]       = useState('');
+  const [cloneTime, setCloneTime]       = useState('');
+  const [cloneRoster, setCloneRoster]   = useState(true);
+  const [cloning, setCloning]           = useState(false);
+
+  function openClone(t: Tournament) {
+    setCloneSource(t);
+    setCloneName(`${t.name} (copia)`);
+    setCloneDate('');
+    setCloneTime(t.time || '');
+    setCloneRoster(true);
+  }
+
+  function handleCloneConfirm() {
+    if (!cloneSource || !currentUser) return;
+    if (!cloneName.trim() || !cloneDate || !cloneTime) return;
+    setCloning(true);
+    const created = cloneTournament(cloneSource, {
+      name: cloneName.trim(),
+      date: cloneDate,
+      time: cloneTime,
+      creatorId: currentUser.id,
+      creatorName: currentUser.name,
+      copyRoster: cloneRoster,
+    });
+    setCloning(false);
+    setCloneSource(null);
+    showToast('¡Torneo clonado!', 'success');
+    window.location.href = `/dashboard/player/tournaments/${created.id}`;
+  }
 
   // ── Success ─────────────────────────────────────────────────────────────────
   const [newTId, setNewTId] = useState('');
@@ -1796,9 +1831,17 @@ export default function PlayerTournamentsPage() {
             ? { ...baseStyle, background: 'var(--turf-green)', color: '#fff' }
             : baseStyle;
           return (
-            <Link href={href} style={btnStyle}>
-              {btnLabel}
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              {isFinishedT && (
+                <button onClick={() => openClone(t)} title="Clonar este torneo"
+                  style={{ ...baseStyle, background: 'transparent', border: '1px solid var(--grey-300)', cursor: 'pointer' }}>
+                  ⧉ Clonar
+                </button>
+              )}
+              <Link href={href} style={btnStyle}>
+                {btnLabel}
+              </Link>
+            </div>
           );
         })()}
       </div>
@@ -1973,6 +2016,22 @@ export default function PlayerTournamentsPage() {
           </div>
         );
       })()}
+
+      {/* ── Clone modal ── */}
+      {cloneSource && (
+        <CloneDialog
+          title="Clonar Torneo"
+          sourceName={cloneSource.name}
+          name={cloneName} setName={setCloneName}
+          date={cloneDate} setDate={setCloneDate}
+          time={cloneTime} setTime={setCloneTime}
+          copyRoster={cloneRoster} setCopyRoster={setCloneRoster}
+          rosterCount={cloneSource.players.length + (cloneSource.invitedPlayers?.length ?? 0)}
+          busy={cloning}
+          onCancel={() => setCloneSource(null)}
+          onConfirm={handleCloneConfirm}
+        />
+      )}
     </div>
   );
 }

@@ -156,6 +156,72 @@ export function createQuickGame(params: {
   return game;
 }
 
+// Clone a finished/past Quick Game with the same configuration. Only
+// name/date/time are supplied fresh; all other params are copied and the
+// live/result state is reset so the clone starts clean.
+export function cloneQuickGame(
+  source: ActiveGame,
+  opts: {
+    name: string;
+    date: string;
+    time: string;
+    creatorId: string;
+    creatorName?: string;
+    copyRoster: boolean;
+  },
+): ActiveGame {
+  let players: GamePlayer[];
+  let invitedPlayers: import('./game-engine').InvitedPlayer[];
+  let fixedPairs = source.fixedPairs;
+
+  if (opts.copyRoster) {
+    players = (source.players ?? []).map(p => ({ ...p, isCreator: p.id === opts.creatorId }));
+    invitedPlayers = (source.invitedPlayers ?? []).map(p => ({
+      ...p,
+      status: 'pending' as const,
+      invitedAt: new Date().toISOString(),
+    }));
+  } else {
+    players = opts.creatorName
+      ? [{ id: opts.creatorId, name: opts.creatorName, ranking: 100, isCreator: true }]
+      : [];
+    invitedPlayers = [];
+    fixedPairs = undefined;
+  }
+
+  const game: ActiveGame = {
+    id: generateId(),
+    code: generateQuickCode(),
+    name: opts.name,
+    format: source.format,
+    status: 'created',
+    createdAt: new Date().toISOString(),
+    date: opts.date,
+    time: opts.time,
+    club: source.club,
+    city: source.city,
+    country: source.country,
+    locationName: source.locationName,
+    pairType: source.pairType,
+    mixto: source.mixto,
+    scoreConfig: source.scoreConfig,
+    maxPlayers: source.maxPlayers,
+    courts: source.courts,
+    players,
+    invitedPlayers,
+    fixedPairs,
+    rounds: [],
+    currentRound: 0,
+    standings: [],
+    levelLabel: source.levelLabel,
+    creatorId: opts.creatorId,
+    leagueId: source.leagueId,
+    seasonId: source.seasonId,
+  };
+  saveGame(game);
+  return game;
+}
+
 export function createTournament(params: {
   name: string;
   date: string;

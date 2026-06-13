@@ -2,6 +2,7 @@
 // Re-uses the ActiveGame shape from game-engine so all engine functions work.
 
 import type { ActiveGame, GameFormat, PairType, ScoreConfig, GamePlayer, InvitedPlayer, KnockoutConfig } from './game-engine';
+export type { GamePlayer, InvitedPlayer } from './game-engine';
 import { upsertTournamentToSupabase } from './superadmin-data';
 import { createLocalStore } from './local-store';
 import { sanitizeGameRecords } from './store-sanitize';
@@ -96,6 +97,86 @@ export function createTournament(params: {
     pjTarget: params.pjTarget,
     knockoutConfig: params.knockoutConfig,
     groupScoreConfig: params.groupScoreConfig,
+    createdAt: new Date().toISOString(),
+  };
+  saveTournament(t);
+  return t;
+}
+
+// ---------------------------------------------------------------------------
+// Clone — re-create a finished/past tournament with the same configuration.
+// Only name/date/time are supplied fresh; everything else (format, scoring,
+// knockout config, courts, level, location…) is copied. All live/result state
+// is reset so the clone starts clean.
+// ---------------------------------------------------------------------------
+export function cloneTournament(
+  source: Tournament,
+  opts: {
+    name: string;
+    date: string;
+    time: string;
+    creatorId: string;
+    creatorName?: string;
+    copyRoster: boolean;
+  },
+): Tournament {
+  // Roster: either copy the original players/invites/pairs, or start with just
+  // the creator. Invitations are reset to 'pending' so each clone re-confirms.
+  let players: GamePlayer[];
+  let invitedPlayers: InvitedPlayer[];
+  let fixedPairs = source.fixedPairs;
+
+  if (opts.copyRoster) {
+    players = (source.players ?? []).map(p => ({ ...p, isCreator: p.id === opts.creatorId }));
+    invitedPlayers = (source.invitedPlayers ?? []).map(p => ({
+      ...p,
+      status: 'pending' as const,
+      invitedAt: new Date().toISOString(),
+    }));
+  } else {
+    players = opts.creatorName
+      ? [{ id: opts.creatorId, name: opts.creatorName, ranking: 100, isCreator: true }]
+      : [];
+    invitedPlayers = [];
+    fixedPairs = undefined;
+  }
+
+  const t: Tournament = {
+    id: generateId(),
+    code: generateCode(),
+    name: opts.name,
+    format: source.format,
+    status: 'created',
+    date: opts.date,
+    time: opts.time,
+    club: source.club,
+    city: source.city,
+    country: source.country,
+    locationName: source.locationName,
+    pairType: source.pairType,
+    mixto: source.mixto,
+    scoreConfig: source.scoreConfig,
+    maxPlayers: source.maxPlayers,
+    courts: source.courts,
+    players,
+    invitedPlayers,
+    fixedPairs,
+    rounds: [],
+    currentRound: 0,
+    standings: [],
+    creatorId: opts.creatorId,
+    coCreatorIds: [],
+    levelLabel: source.levelLabel,
+    pjTarget: source.pjTarget,
+    knockoutConfig: source.knockoutConfig
+      ? {
+          ...source.knockoutConfig,
+          currentPhase: source.knockoutConfig.hasGroups ? 'group_stage' : 'bracket',
+        }
+      : undefined,
+    groupScoreConfig: source.groupScoreConfig,
+    leagueId: source.leagueId,
+    seasonId: source.seasonId,
     createdAt: new Date().toISOString(),
   };
   saveTournament(t);

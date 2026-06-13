@@ -23,6 +23,7 @@ import {
   updateKnockoutBracketMatch,
 } from '@/lib/tournament-engine';
 import KnockoutBracketView from '@/components/KnockoutBracketView';
+import MatchSetResult from '@/components/MatchSetResult';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1296,49 +1297,27 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                   <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 6, paddingBottom: 4, borderBottom: '1px solid var(--grey-100)' }}>
                                     Ronda {rNum}
                                   </div>
-                                  {byRound[rNum].map(({ group, match }) => {
-                                    const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
-                                    const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
-                                    return (
-                                      <div key={`${group.id}-${match.courtNum}`} style={{ marginBottom: 6, padding: '10px 14px', background: 'var(--grey-50)', border: '1px solid var(--grey-100)', fontSize: 12 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                          {groupChip(group.name, true)}
-                                          <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Partido {match.courtNum}</span>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                            <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--turf-green)' : 'var(--black)' }}>{p1won ? '▶ ' : ''}{getGroupPairLabel(match.pair1)}</span>
-                                            <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--turf-green)' : 'var(--grey-500)' }}>{p2won ? '▶ ' : ''}{getGroupPairLabel(match.pair2)}</span>
-                                          </div>
-                                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                                            {match.sets && match.sets.length > 0 ? (
-                                              match.sets.map((s, i) => (
-                                                <div key={i} style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 11 }}>
-                                                  <span style={{ color: 'var(--grey-300)', fontSize: 9 }}>S{i + 1}</span>
-                                                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: s.p1 > s.p2 ? 'var(--turf-green)' : 'var(--grey-400)' }}>{s.p1}</span>
-                                                  <span style={{ color: 'var(--grey-300)' }}>–</span>
-                                                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: s.p2 > s.p1 ? 'var(--turf-green)' : 'var(--grey-400)' }}>{s.p2}</span>
-                                                </div>
-                                              ))
-                                            ) : (
-                                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
-                                            )}
-                                            <button onClick={() => {
-                                              const groups2 = t.groups!.groups.map(g => g.id !== group.id ? g : {
-                                                ...g,
-                                                matches: g.matches.map(m => m.courtNum !== match.courtNum ? m : { ...m, status: 'pending' as const, pair1Score: null, pair2Score: null, sets: undefined }),
-                                                standings: g.standings,
-                                              });
-                                              const upd = { ...t, groups: { groups: groups2 } };
-                                              saveTournament(upd); setTournament(upd);
-                                            }} style={{ fontSize: 9, color: 'var(--grey-400)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-                                              editar
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
+                                  {byRound[rNum].map(({ group, match }) => (
+                                    <MatchSetResult
+                                      key={`${group.id}-${match.courtNum}`}
+                                      style={{ marginBottom: 6 }}
+                                      header={<>{groupChip(group.name, true)}<span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Partido {match.courtNum}</span></>}
+                                      pair1Label={getGroupPairLabel(match.pair1)}
+                                      pair2Label={getGroupPairLabel(match.pair2)}
+                                      sets={match.sets}
+                                      pair1Score={match.pair1Score}
+                                      pair2Score={match.pair2Score}
+                                      onEdit={() => {
+                                        const groups2 = t.groups!.groups.map(g => g.id !== group.id ? g : {
+                                          ...g,
+                                          matches: g.matches.map(m => m.courtNum !== match.courtNum ? m : { ...m, status: 'pending' as const, pair1Score: null, pair2Score: null, sets: undefined }),
+                                          standings: g.standings,
+                                        });
+                                        const upd = { ...t, groups: { groups: groups2 } };
+                                        saveTournament(upd); setTournament(upd);
+                                      }}
+                                    />
+                                  ))}
                                 </div>
                               ))}
                             </div>

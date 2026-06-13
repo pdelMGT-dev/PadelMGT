@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { createQuickGame, getAllGames } from '@/lib/game-store';
+import { createQuickGame, getAllGames, cloneQuickGame } from '@/lib/game-store';
+import CloneDialog from '@/components/CloneDialog';
 import { checkGameGate, incrementUsage, getPlayerLimits } from '@/lib/plan-config';
 import { createInvitation, getPendingInvitationsForPlayer, respondToInvitation, getInvitationsForPlayer } from '@/lib/invitation-store';
 import type { Invitation } from '@/lib/invitation-store';
@@ -187,6 +188,39 @@ export default function QuickGamePage() {
   const [myInvitations, setMyInvitations] = useState<Invitation[]>([]);
   const [invToast, setInvToast]     = useState<string | null>(null);
   const [histPage, setHistPage]     = useState(0);
+
+  // ── Clone modal ───────────────────────────────────────────────────────────────
+  const [cloneSource, setCloneSource] = useState<ActiveGame | null>(null);
+  const [cloneName, setCloneName]     = useState('');
+  const [cloneDate, setCloneDate]     = useState('');
+  const [cloneTime, setCloneTime]     = useState('');
+  const [cloneRoster, setCloneRoster] = useState(true);
+  const [cloning, setCloning]         = useState(false);
+
+  function openClone(g: ActiveGame) {
+    setCloneSource(g);
+    setCloneName(`${g.name} (copia)`);
+    setCloneDate('');
+    setCloneTime(g.time || '');
+    setCloneRoster(true);
+  }
+
+  function handleCloneConfirm() {
+    if (!cloneSource || !currentUser) return;
+    if (!cloneName.trim() || !cloneDate || !cloneTime) return;
+    setCloning(true);
+    const created = cloneQuickGame(cloneSource, {
+      name: cloneName.trim(),
+      date: cloneDate,
+      time: cloneTime,
+      creatorId: currentUser.id,
+      creatorName: currentUser.name,
+      copyRoster: cloneRoster,
+    });
+    setCloning(false);
+    setCloneSource(null);
+    window.location.href = `/dashboard/player/quick-game/${created.id}`;
+  }
 
   const reloadGames = useCallback(() => {
     setGames(getAllGames());
@@ -785,6 +819,10 @@ export default function QuickGamePage() {
                           <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: myRankingEntry.delta > 0 ? '#166534' : myRankingEntry.delta < 0 ? '#ee0005' : '#b45309' }}>pts ranking</span>
                         </div>
                       )}
+                      <button onClick={() => openClone(g)} title="Clonar este Juego Rápido"
+                        style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--grey-300)', color: 'var(--grey-600)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        ⧉ Clonar
+                      </button>
                       <Link href={`/dashboard/player/quick-game/${g.id}`}
                         style={{ padding: '6px 14px', background: 'var(--grey-100)', color: 'var(--grey-500)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', whiteSpace: 'nowrap' }}>
                         {isCreator ? 'Ver' : 'Resultados'}
@@ -811,6 +849,22 @@ export default function QuickGamePage() {
             </div>
           );
         })()}
+
+        {/* ── Clone modal ── */}
+        {cloneSource && (
+          <CloneDialog
+            title="Clonar Juego Rápido"
+            sourceName={cloneSource.name}
+            name={cloneName} setName={setCloneName}
+            date={cloneDate} setDate={setCloneDate}
+            time={cloneTime} setTime={setCloneTime}
+            copyRoster={cloneRoster} setCopyRoster={setCloneRoster}
+            rosterCount={cloneSource.players.length + (cloneSource.invitedPlayers?.length ?? 0)}
+            busy={cloning}
+            onCancel={() => setCloneSource(null)}
+            onConfirm={handleCloneConfirm}
+          />
+        )}
 
       </div>
     );
