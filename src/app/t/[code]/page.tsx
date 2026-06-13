@@ -8,6 +8,7 @@ import type { Tournament } from '@/lib/tournament-store';
 import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import KnockoutBracketView from '@/components/KnockoutBracketView';
+import MatchSetResult from '@/components/MatchSetResult';
 import { fetchTournamentByCode } from '@/lib/supabase';
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
@@ -255,31 +256,17 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                                             const fp2 = pairs.find(p => p.player1Id === match.pair2[0]);
                                             const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : match.pair1[0];
                                             const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : match.pair2[0];
-                                            const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
-                                            const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
                                             return (
-                                              <div key={match.courtNum} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 13 }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                                    <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.8)' }}>{p1won ? '▶ ' : ''}{n1}</span>
-                                                    <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.6)' }}>{p2won ? '▶ ' : ''}{n2}</span>
-                                                  </div>
-                                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 72 }}>
-                                                    {match.sets && match.sets.length > 0 ? (
-                                                      match.sets.map((s, si) => (
-                                                        <div key={si} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Set {si + 1}</span>
-                                                          <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: s.p1 > s.p2 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.45)' }}>{s.p1}</span>
-                                                          <span style={{ color: 'rgba(255,255,255,0.2)' }}>–</span>
-                                                          <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: s.p2 > s.p1 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.45)' }}>{s.p2}</span>
-                                                        </div>
-                                                      ))
-                                                    ) : (
-                                                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
-                                                    )}
-                                                  </div>
-                                                </div>
-                                              </div>
+                                              <MatchSetResult
+                                                key={match.courtNum}
+                                                header={`Cancha ${match.courtNum}`}
+                                                pair1Label={n1}
+                                                pair2Label={n2}
+                                                sets={match.sets}
+                                                pair1Score={match.pair1Score}
+                                                pair2Score={match.pair2Score}
+                                                style={{ marginBottom: 4 }}
+                                              />
                                             );
                                           })}
                                         </div>
@@ -335,31 +322,18 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                                     const fp2 = dispPairs.find(p => p.player1Id === match.pair2![0]);
                                     const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : (match.pair1[0] ?? '?');
                                     const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : (match.pair2[0] ?? '?');
-                                    const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
-                                    const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
                                     return (
-                                      <div key={match.id} style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.07)', fontSize: 14 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                            <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.85)' }}>{p1won ? '▶ ' : ''}{n1}</span>
-                                            <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.6)' }}>{p2won ? '▶ ' : ''}{n2}</span>
-                                          </div>
-                                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, minWidth: 88 }}>
-                                            {match.sets && match.sets.length > 0 ? (
-                                              match.sets.map((s, si) => (
-                                                <div key={si} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>Set {si + 1}</span>
-                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: s.p1 > s.p2 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.45)' }}>{s.p1}</span>
-                                                  <span style={{ color: 'rgba(255,255,255,0.2)' }}>–</span>
-                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: s.p2 > s.p1 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.45)' }}>{s.p2}</span>
-                                                </div>
-                                              ))
-                                            ) : (
-                                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
+                                      <MatchSetResult
+                                        key={match.id}
+                                        header={round.name}
+                                        pair1Label={n1}
+                                        pair2Label={n2}
+                                        sets={match.sets}
+                                        pair1Score={match.pair1Score}
+                                        pair2Score={match.pair2Score}
+                                        size="md"
+                                        style={{ marginBottom: 4 }}
+                                      />
                                     );
                                   })}
                                 </div>
@@ -540,35 +514,21 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                                             {isOpen && (
                                               <div style={{ padding: '4px 10px 8px' }}>
                                                 {rMatches.map(match => {
-                                                  const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
-                                                  const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
                                                   const fp1 = pairs.find(p => p.player1Id === match.pair1[0]);
                                                   const fp2 = pairs.find(p => p.player1Id === match.pair2[0]);
                                                   const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : match.pair1[0];
                                                   const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : match.pair2[0];
                                                   return (
-                                                    <div key={match.courtNum} style={{ padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: 11 }}>
-                                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                                          <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.8)' }}>{p1won ? '▶ ' : ''}{n1}</span>
-                                                          <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.6)' }}>{p2won ? '▶ ' : ''}{n2}</span>
-                                                        </div>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 60 }}>
-                                                          {match.sets && match.sets.length > 0 ? (
-                                                            match.sets.map((s, si) => (
-                                                              <div key={si} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                                                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', minWidth: 28, textAlign: 'right' }}>Set {si + 1}</span>
-                                                                <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: s.p1 > s.p2 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p1}</span>
-                                                                <span style={{ color: 'rgba(255,255,255,0.25)' }}>–</span>
-                                                                <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: s.p2 > s.p1 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p2}</span>
-                                                              </div>
-                                                            ))
-                                                          ) : (
-                                                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
-                                                          )}
-                                                        </div>
-                                                      </div>
-                                                    </div>
+                                                    <MatchSetResult
+                                                      key={match.courtNum}
+                                                      header={`Cancha ${match.courtNum}`}
+                                                      pair1Label={n1}
+                                                      pair2Label={n2}
+                                                      sets={match.sets}
+                                                      pair1Score={match.pair1Score}
+                                                      pair2Score={match.pair2Score}
+                                                      style={{ marginBottom: 4 }}
+                                                    />
                                                   );
                                                 })}
                                               </div>
@@ -612,31 +572,17 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                                     const fp2 = pairs.find(p => p.player1Id === match.pair2![0]);
                                     const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : (match.pair1[0] ?? '?');
                                     const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : (match.pair2[0] ?? '?');
-                                    const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
-                                    const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
                                     return (
-                                      <div key={match.id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 12 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                            <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.85)' }}>{p1won ? '▶ ' : ''}{n1}</span>
-                                            <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.6)' }}>{p2won ? '▶ ' : ''}{n2}</span>
-                                          </div>
-                                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, minWidth: 72 }}>
-                                            {match.sets && match.sets.length > 0 ? (
-                                              match.sets.map((s, si) => (
-                                                <div key={si} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                                  <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', minWidth: 28, textAlign: 'right' }}>Set {si + 1}</span>
-                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: s.p1 > s.p2 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p1}</span>
-                                                  <span style={{ color: 'rgba(255,255,255,0.25)' }}>–</span>
-                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: s.p2 > s.p1 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p2}</span>
-                                                </div>
-                                              ))
-                                            ) : (
-                                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
+                                      <MatchSetResult
+                                        key={match.id}
+                                        header={round.name}
+                                        pair1Label={n1}
+                                        pair2Label={n2}
+                                        sets={match.sets}
+                                        pair1Score={match.pair1Score}
+                                        pair2Score={match.pair2Score}
+                                        style={{ marginBottom: 4 }}
+                                      />
                                     );
                                   })}
                                 </div>
@@ -689,31 +635,17 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                                     const fp2 = pairs.find(p => p.player1Id === match.pair2![0]);
                                     const n1 = fp1 ? (fp1.name?.trim() || `${fp1.player1Name} / ${fp1.player2Name}`) : (match.pair1[0] ?? '?');
                                     const n2 = fp2 ? (fp2.name?.trim() || `${fp2.player1Name} / ${fp2.player2Name}`) : (match.pair2[0] ?? '?');
-                                    const p1won = (match.pair1Score ?? 0) > (match.pair2Score ?? 0);
-                                    const p2won = (match.pair2Score ?? 0) > (match.pair1Score ?? 0);
                                     return (
-                                      <div key={match.id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 12 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                            <span style={{ fontWeight: p1won ? 700 : 400, color: p1won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.85)' }}>{p1won ? '▶ ' : ''}{n1}</span>
-                                            <span style={{ fontWeight: p2won ? 700 : 400, color: p2won ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.6)' }}>{p2won ? '▶ ' : ''}{n2}</span>
-                                          </div>
-                                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, minWidth: 72 }}>
-                                            {match.sets && match.sets.length > 0 ? (
-                                              match.sets.map((s, si) => (
-                                                <div key={si} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                                  <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', minWidth: 28, textAlign: 'right' }}>Set {si + 1}</span>
-                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: s.p1 > s.p2 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p1}</span>
-                                                  <span style={{ color: 'rgba(255,255,255,0.25)' }}>–</span>
-                                                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: s.p2 > s.p1 ? 'var(--neon, #d9ff4f)' : 'rgba(255,255,255,0.5)' }}>{s.p2}</span>
-                                                </div>
-                                              ))
-                                            ) : (
-                                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>{match.pair1Score} – {match.pair2Score}</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
+                                      <MatchSetResult
+                                        key={match.id}
+                                        header={round.name}
+                                        pair1Label={n1}
+                                        pair2Label={n2}
+                                        sets={match.sets}
+                                        pair1Score={match.pair1Score}
+                                        pair2Score={match.pair2Score}
+                                        style={{ marginBottom: 4 }}
+                                      />
                                     );
                                   })}
                                 </div>

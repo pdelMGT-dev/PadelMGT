@@ -26,6 +26,7 @@ import { applyGameRankingResults, getRankingHistoryForGame } from '@/lib/ranking
 import type { RankingEntry } from '@/lib/ranking-store';
 import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, syncJoinRequestsFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import MatchSetResult from '@/components/MatchSetResult';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1951,21 +1952,18 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                     </div>
                     {open && (
                       <div style={{ padding: '8px 14px 12px' }}>
-                        {r.courts.map(court => {
-                          const p1Winner = (court.pair1Score ?? 0) > (court.pair2Score ?? 0);
-                          const p2Winner = (court.pair2Score ?? 0) > (court.pair1Score ?? 0);
-                          const scoreDisplay = court.sets && court.sets.length > 0
-                            ? court.sets.map(s => `${s.p1}-${s.p2}`).join('  ')
-                            : `${court.pair1Score} – ${court.pair2Score}`;
-                          return (
-                            <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--grey-50)', fontSize: 12 }}>
-                              <span style={{ fontSize: 9, color: 'var(--grey-400)', width: 52, flexShrink: 0, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>C{court.courtNum}</span>
-                              <span style={{ fontWeight: p1Winner ? 700 : 400, flex: 1, color: p1Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair1)}</span>
-                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, minWidth: 60, textAlign: 'center', letterSpacing: '0.02em' }}>{scoreDisplay}</span>
-                              <span style={{ fontWeight: p2Winner ? 700 : 400, flex: 1, textAlign: 'right', color: p2Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair2)}</span>
-                            </div>
-                          );
-                        })}
+                        {r.courts.map(court => (
+                          <MatchSetResult
+                            key={court.courtNum}
+                            header={`Cancha ${court.courtNum}`}
+                            pair1Label={getPairNames(court.pair1)}
+                            pair2Label={getPairNames(court.pair2)}
+                            sets={court.sets}
+                            pair1Score={court.pair1Score}
+                            pair2Score={court.pair2Score}
+                            style={{ marginBottom: 8 }}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>
@@ -2173,21 +2171,18 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                   </div>
                   {open && (
                     <div style={{ padding: '8px 14px 12px' }}>
-                      {r.courts.map(court => {
-                        const p1Winner = (court.pair1Score ?? 0) > (court.pair2Score ?? 0);
-                        const p2Winner = (court.pair2Score ?? 0) > (court.pair1Score ?? 0);
-                        const scoreDisplay = court.sets && court.sets.length > 0
-                          ? court.sets.map(s => `${s.p1}-${s.p2}`).join('  ')
-                          : `${court.pair1Score} – ${court.pair2Score}`;
-                        return (
-                          <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--grey-50)', fontSize: 12 }}>
-                            <span style={{ fontSize: 9, color: 'var(--grey-400)', width: 52, flexShrink: 0, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>C{court.courtNum}</span>
-                            <span style={{ fontWeight: p1Winner ? 700 : 400, flex: 1, color: p1Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair1)}</span>
-                            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, minWidth: 60, textAlign: 'center', letterSpacing: '0.02em' }}>{scoreDisplay}</span>
-                            <span style={{ fontWeight: p2Winner ? 700 : 400, flex: 1, textAlign: 'right', color: p2Winner ? 'var(--black)' : 'var(--grey-500)' }}>{getPairNames(court.pair2)}</span>
-                          </div>
-                        );
-                      })}
+                      {r.courts.map(court => (
+                        <MatchSetResult
+                          key={court.courtNum}
+                          header={`Cancha ${court.courtNum}`}
+                          pair1Label={getPairNames(court.pair1)}
+                          pair2Label={getPairNames(court.pair2)}
+                          sets={court.sets}
+                          pair1Score={court.pair1Score}
+                          pair2Score={court.pair2Score}
+                          style={{ marginBottom: 8 }}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>

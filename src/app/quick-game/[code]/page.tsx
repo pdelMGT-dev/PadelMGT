@@ -8,6 +8,7 @@ import type { ActiveGame, ScoreConfig, FixedPair } from '@/lib/game-engine';
 import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { getRankingHistoryForGame, type RankingEntry } from '@/lib/ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import MatchSetResult from '@/components/MatchSetResult';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -486,17 +487,16 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
                       <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>{isOpen ? '▲' : '▼'}</span>
                     </button>
                     {isOpen && round.courts.map(court => (
-                      <div key={court.courtNum} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 90px', alignItems: 'center', background: '#fafafa', borderLeft: '1px solid #e8e8e8', borderRight: '1px solid #e8e8e8', borderBottom: '1px solid #e8e8e8' }}>
-                        <div style={{ padding: '12px 16px', fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.08em' }}>COURT {court.courtNum}</div>
-                        <div style={{ padding: '12px 0', display: 'flex', gap: 16, alignItems: 'center' }}>
-                          <div>{court.pair1.map(pid => <div key={pid} style={{ fontSize: 12, fontWeight: 600 }}>{getName(pid)}</div>)}</div>
-                          {court.pair1Score !== null && (
-                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700 }}>{court.pair1Score} – {court.pair2Score}</span>
-                          )}
-                          <div>{court.pair2.map(pid => <div key={pid} style={{ fontSize: 12, fontWeight: 600 }}>{getName(pid)}</div>)}</div>
-                        </div>
-                        <div style={{ padding: '12px 16px', textAlign: 'right', fontSize: 9, fontWeight: 700, color: 'var(--grey-400)', textTransform: 'uppercase' }}>Finalizado</div>
-                      </div>
+                      <MatchSetResult
+                        key={court.courtNum}
+                        header={`Cancha ${court.courtNum}`}
+                        pair1Label={court.pair1.map(pid => getName(pid)).join(' / ')}
+                        pair2Label={court.pair2.map(pid => getName(pid)).join(' / ')}
+                        sets={court.sets}
+                        pair1Score={court.pair1Score}
+                        pair2Score={court.pair2Score}
+                        style={{ marginBottom: 2 }}
+                      />
                     ))}
                   </div>
                 );
