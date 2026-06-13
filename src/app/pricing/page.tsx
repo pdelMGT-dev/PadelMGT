@@ -330,6 +330,10 @@ function SectionHeader({ emoji, title, sub }: { emoji: string; title: string; su
   );
 }
 
+// ── Visibility flags (set to true when ready to launch) ──────────────────────
+const SHOW_CLUB_PLANS = false;
+const SHOW_FED_PLANS  = false;
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PricingPage() {
@@ -447,6 +451,7 @@ export default function PricingPage() {
           </div>
 
           {/* ── CLUBES ───────────────────────────────────────────────────────── */}
+          {SHOW_CLUB_PLANS && (
           <div>
             <SectionHeader emoji="🏢" title="Clubes" sub="Fee mensual fijo. Sin comisiones, sin sorpresas. Sabés exactamente cuánto pagás." />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 2, background: 'var(--grey-200)' }}>
@@ -476,8 +481,10 @@ export default function PricingPage() {
               ¿Tenés pocos miembros? También disponible a <strong>$8/cancha/mes</strong> (mín. $24). Contactanos.
             </p>
           </div>
+          )}
 
           {/* ── FEDERACIONES ─────────────────────────────────────────────────── */}
+          {SHOW_FED_PLANS && (
           <div>
             <SectionHeader emoji="🏛️" title="Federaciones" sub="Para federaciones nacionales o regionales que necesitan ranking oficial, multi-club y control total." />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 2, background: 'var(--grey-200)' }}>
@@ -503,6 +510,7 @@ export default function PricingPage() {
               />
             </div>
           </div>
+          )}
 
           {/* ── Comparison table ──────────────────────────────────────────────── */}
           <div>
@@ -517,22 +525,20 @@ export default function PricingPage() {
                     <th style={{ textAlign: 'center' }}>Jugador Free</th>
                     <th style={{ textAlign: 'center', background: 'var(--black)', color: 'var(--neon)' }}>Jugador Pro</th>
                     <th style={{ textAlign: 'center' }}>Liga Pro</th>
-                    <th style={{ textAlign: 'center' }}>Club Pro</th>
-                    <th style={{ textAlign: 'center' }}>Federación</th>
                   </tr>
                 </thead>
                 <tbody>
                   {[
-                    { f: 'Juegos Rápidos',         vs: ['3/mes', '∞', '∞', '∞', '∞'] },
-                    { f: 'Jug. por JR',             vs: ['8', '32', '∞', '∞', '∞'] },
-                    { f: 'Torneos/mes',             vs: ['1', '∞', '∞', '∞', '∞'] },
-                    { f: 'Jug. por torneo',         vs: ['16', '64', '∞', '∞', '∞'] },
-                    { f: 'Ranking personal',        vs: ['✓', '✓', '✓', '✓', '✓'] },
-                    { f: 'Ranking independiente',   vs: ['–', '–', '✓', '✓', '✓'] },
-                    { f: 'Gestión de miembros',     vs: ['–', '–', '500', '∞', '∞'] },
-                    { f: 'Multi-categoría',         vs: ['–', '–', '✓', '✓', '✓'] },
-                    { f: 'White-label',             vs: ['–', '–', '–', '–', '✓'] },
-                    { f: 'API access',              vs: ['–', '–', 'read', 'read', '✓'] },
+                    { f: 'Juegos Rápidos',         vs: ['3/mes', '∞', '∞'] },
+                    { f: 'Jug. por JR',             vs: ['8', '32', '∞'] },
+                    { f: 'Torneos/mes',             vs: ['1', '∞', '∞'] },
+                    { f: 'Jug. por torneo',         vs: ['16', '64', '∞'] },
+                    { f: 'Ranking personal',        vs: ['✓', '✓', '✓'] },
+                    { f: 'Ranking independiente',   vs: ['–', '–', '✓'] },
+                    { f: 'Gestión de miembros',     vs: ['–', '–', '500'] },
+                    { f: 'Multi-categoría',         vs: ['–', '–', '✓'] },
+                    { f: 'White-label',             vs: ['–', '–', '–'] },
+                    { f: 'API access',              vs: ['–', '–', 'read'] },
                   ].map(row => (
                     <tr key={row.f}>
                       <td style={{ paddingLeft: 24, fontWeight: 500, color: 'var(--black)', fontSize: 13 }}>{row.f}</td>
@@ -558,7 +564,7 @@ export default function PricingPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
               {[
                 { q: '¿Puedo cambiar de plan?', a: 'Sí, en cualquier momento desde tu dashboard. Los cambios se aplican al próximo ciclo.' },
-                { q: '¿Cómo funciona la prueba gratis?', a: 'Clubes y Ligas tienen 14 días sin tarjeta de crédito. Si no continuás, el plan vuelve a Free automáticamente.' },
+                { q: '¿Cómo funciona la prueba gratis?', a: 'Las Ligas tienen 14 días sin tarjeta de crédito. Si no continuás, el plan vuelve a Free automáticamente.' },
                 { q: '¿Cobran comisión por torneos o inscripciones?', a: 'No. PadelMGT nunca cobra comisión sobre tus ingresos. El precio es fijo y predecible.' },
                 { q: '¿Qué métodos de pago aceptan?', a: 'Tarjeta de crédito/débito via Stripe. Mercado Pago próximamente para LATAM.' },
                 { q: '¿Los precios incluyen impuestos?', a: 'Los precios mostrados no incluyen IVA/VAT local, que puede variar según tu país.' },
