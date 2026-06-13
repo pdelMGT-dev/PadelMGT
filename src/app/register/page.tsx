@@ -34,6 +34,7 @@ export default function RegisterPage() {
   const [name,     setName]     = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
+  const [showPw,   setShowPw]   = useState(false);
   const [country,  setCountry]  = useState('');
   const [sex,      setSex]      = useState<PlayerSex | ''>('');
   const [promoCode,    setPromoCode]    = useState('');
@@ -68,7 +69,9 @@ export default function RegisterPage() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!name.trim())                   { setError('Ingresá tu nombre completo.'); return; }
     if (!emailRegex.test(email.trim())) { setError('Ingresá un email válido (ej: nombre@dominio.com).'); return; }
-    if (password.length < 6)            { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
+    if (password.length < 8)            { setError('La contraseña debe tener al menos 8 caracteres.'); return; }
+    if (!/[a-zA-Z]/.test(password))     { setError('La contraseña debe contener al menos una letra.'); return; }
+    if (!/[0-9]/.test(password))        { setError('La contraseña debe contener al menos un número.'); return; }
     if (!country)                       { setError('Seleccioná tu país.'); return; }
     if (!sex)                           { setError('Seleccioná tu sexo.'); return; }
 
@@ -81,8 +84,9 @@ export default function RegisterPage() {
       const msg = authError.message?.toLowerCase() ?? '';
       if (msg.includes('already registered') || msg.includes('already been registered') || msg.includes('already exists')) {
         setError('Ya existe una cuenta con ese email. Intentá iniciar sesión.');
+      } else if (msg.includes('rate limit') || msg.includes('rate_limit') || msg.includes('too many')) {
+        setError('Límite de emails alcanzado. Esperá unos minutos e intentá nuevamente.');
       } else if (msg.includes('supabase no configurado') || msg.includes('not configured')) {
-        // Supabase not available — proceed with localStorage-only registration
         authUserId = undefined;
       } else {
         setError(authError.message ?? 'Error al crear la cuenta.');
@@ -179,8 +183,52 @@ export default function RegisterPage() {
 
             <div style={{ marginBottom: 20 }}>
               <label htmlFor="reg-password" style={labelStyle}>Contraseña</label>
-              <input id="reg-password" type="password" autoComplete="new-password" placeholder="Mínimo 6 caracteres"
-                value={password} onChange={e => setPassword(e.target.value)} required style={inputStyle} />
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="reg-password"
+                  type={showPw ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Mínimo 8 caracteres con letras y números"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  style={{ ...inputStyle, paddingRight: 48 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw(v => !v)}
+                  style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--grey-400)', fontWeight: 600, padding: '4px 6px' }}
+                >
+                  {showPw ? 'Ocultar' : 'Ver'}
+                </button>
+              </div>
+              {password.length > 0 && (() => {
+                const hasLen = password.length >= 8;
+                const hasLetter = /[a-zA-Z]/.test(password);
+                const hasNum = /[0-9]/.test(password);
+                const score = [hasLen, hasLetter, hasNum].filter(Boolean).length;
+                const barColor = score === 3 ? '#16a34a' : score === 2 ? '#d97706' : '#dc2626';
+                return (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                      {[1,2,3].map(i => (
+                        <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: score >= i ? barColor : 'var(--grey-200)', transition: 'background 0.2s' }} />
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                      {[
+                        { ok: hasLen,    label: '8+ caracteres' },
+                        { ok: hasLetter, label: 'Una letra' },
+                        { ok: hasNum,    label: 'Un número' },
+                      ].map(({ ok, label }) => (
+                        <span key={label} style={{ fontSize: 11, color: ok ? '#16a34a' : 'var(--grey-400)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <span style={{ fontWeight: 700 }}>{ok ? '✓' : '○'}</span> {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div style={{ marginBottom: 20 }}>

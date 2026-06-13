@@ -47,10 +47,12 @@ function SignupForm() {
   const [name,     setName]     = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
+  const [showPw,   setShowPw]   = useState(false);
   const [country,  setCountry]  = useState('');
   const [sex,      setSex]      = useState<PlayerSex | ''>('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,11 +60,13 @@ function SignupForm() {
 
     const cleanName = sanitizeText(name, 100);
     const cleanEmail = email.trim().toLowerCase().slice(0, 200);
-    if (!cleanName)          { setError('Ingresá tu nombre completo.'); return; }
-    if (!isValidEmail(cleanEmail)) { setError('Ingresá un email válido.'); return; }
-    if (password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
-    if (!country)            { setError('Seleccioná tu país.'); return; }
-    if (!sex)                { setError('Seleccioná tu sexo.'); return; }
+    if (!cleanName)                 { setError('Ingresá tu nombre completo.'); return; }
+    if (!isValidEmail(cleanEmail))  { setError('Ingresá un email válido.'); return; }
+    if (password.length < 8)        { setError('La contraseña debe tener al menos 8 caracteres.'); return; }
+    if (!/[a-zA-Z]/.test(password)) { setError('La contraseña debe contener al menos una letra.'); return; }
+    if (!/[0-9]/.test(password))    { setError('La contraseña debe contener al menos un número.'); return; }
+    if (!country)                   { setError('Seleccioná tu país.'); return; }
+    if (!sex)                       { setError('Seleccioná tu sexo.'); return; }
 
     setLoading(true);
 
@@ -76,6 +80,8 @@ function SignupForm() {
       const msg = authError.message?.toLowerCase() ?? '';
       if (msg.includes('already registered') || msg.includes('already been registered')) {
         setError('Ya existe una cuenta con ese email.');
+      } else if (msg.includes('rate limit') || msg.includes('rate_limit') || msg.includes('too many')) {
+        setError('Límite de emails alcanzado. Esperá unos minutos e intentá nuevamente.');
       } else {
         setError(authError.message ?? 'Error al crear la cuenta.');
       }
@@ -89,6 +95,13 @@ function SignupForm() {
     if (!player) {
       setError('Ya existe una cuenta con ese email.');
       setLoading(false);
+      return;
+    }
+
+    // If Supabase returned no session, email confirmation is required
+    if (!authData?.session) {
+      setLoading(false);
+      setEmailSent(true);
       return;
     }
 
@@ -107,17 +120,46 @@ function SignupForm() {
     router.push(roleInfo.dashboard);
   }
 
+  const topBar = (
+    <div style={{ background: 'var(--black)', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Link href="/" style={{ textDecoration: 'none' }}>
+        <BrandLogo variant="white" height={32} />
+      </Link>
+      <Link href="/login" style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>
+        ¿Ya tenés cuenta? Iniciar sesión →
+      </Link>
+    </div>
+  );
+
+  if (emailSent) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--grey-50)', display: 'flex', flexDirection: 'column' }}>
+        {topBar}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
+          <div style={{ background: '#fff', width: '100%', maxWidth: 480, padding: '48px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', textAlign: 'center' }}>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(214,255,0,0.12)', border: '2px solid var(--neon)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: 24 }}>✓</div>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 28, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 12px', color: 'var(--black)' }}>
+              ¡Cuenta creada!
+            </h1>
+            <p style={{ fontSize: 14, color: 'var(--grey-500)', margin: '0 0 8px', lineHeight: 1.6 }}>
+              Revisá tu bandeja de entrada en <strong>{email}</strong> para confirmar tu cuenta.
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--grey-400)', margin: '0 0 32px' }}>
+              Una vez confirmado el email, podés iniciar sesión.
+            </p>
+            <Link href="/login" className="btn btn-primary" style={{ display: 'inline-block', padding: '14px 32px', fontSize: 14, textDecoration: 'none', borderRadius: 0 }}>
+              Ir a iniciar sesión →
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--grey-50)', display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
-      <div style={{ background: 'var(--black)', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Link href="/" style={{ textDecoration: 'none' }}>
-          <BrandLogo variant="white" height={32} />
-        </Link>
-        <Link href="/login" style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}>
-          ¿Ya tenés cuenta? Iniciar sesión →
-        </Link>
-      </div>
+      {topBar}
 
       {/* Card */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
@@ -144,8 +186,52 @@ function SignupForm() {
 
             <div style={{ marginBottom: 20 }}>
               <label htmlFor="su-password" style={labelStyle}>Contraseña</label>
-              <input id="su-password" type="password" autoComplete="new-password" placeholder="Mínimo 6 caracteres"
-                value={password} onChange={e => setPassword(e.target.value)} required style={inputStyle} />
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="su-password"
+                  type={showPw ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  placeholder="Mínimo 8 caracteres con letras y números"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  style={{ ...inputStyle, paddingRight: 48 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw(v => !v)}
+                  style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--grey-400)', fontWeight: 600, padding: '4px 6px' }}
+                >
+                  {showPw ? 'Ocultar' : 'Ver'}
+                </button>
+              </div>
+              {password.length > 0 && (() => {
+                const hasLen = password.length >= 8;
+                const hasLetter = /[a-zA-Z]/.test(password);
+                const hasNum = /[0-9]/.test(password);
+                const score = [hasLen, hasLetter, hasNum].filter(Boolean).length;
+                const barColor = score === 3 ? '#16a34a' : score === 2 ? '#d97706' : '#dc2626';
+                return (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                      {[1,2,3].map(i => (
+                        <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: score >= i ? barColor : 'var(--grey-200)', transition: 'background 0.2s' }} />
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                      {[
+                        { ok: hasLen,    label: '8+ caracteres' },
+                        { ok: hasLetter, label: 'Una letra' },
+                        { ok: hasNum,    label: 'Un número' },
+                      ].map(({ ok, label }) => (
+                        <span key={label} style={{ fontSize: 11, color: ok ? '#16a34a' : 'var(--grey-400)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <span style={{ fontWeight: 700 }}>{ok ? '✓' : '○'}</span> {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div style={{ marginBottom: 20 }}>
