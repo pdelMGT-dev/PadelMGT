@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getPendingCount } from '@/lib/friend-request-store';
 import { getAdminPendingRequestsCount } from '@/lib/player-league-store';
 import { syncAllFromSupabase } from '@/lib/supabase-sync';
@@ -75,6 +75,14 @@ export default function DashboardSidebar() {
   const [friendBadge,  setFriendBadge]  = useState(0);
   const [leagueBadge,  setLeagueBadge]  = useState(0);
   const [mobileOpen,   setMobileOpen]   = useState(false);
+  const [collapsed, setCollapsed] = useState(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('padelmgt_sidebar_collapsed') === 'true' : false
+  );
+
+  useEffect(() => {
+    document.body.classList.toggle('sidebar-collapsed', collapsed);
+    localStorage.setItem('padelmgt_sidebar_collapsed', String(collapsed));
+  }, [collapsed]);
 
   useEffect(() => {
     if (user?.role === 'player') {
@@ -137,12 +145,16 @@ export default function DashboardSidebar() {
   const sidebarContent = (
     <>
       {/* Logo */}
-      <Link href="/" style={{ display: 'flex', alignItems: 'center', padding: '20px 20px 18px', textDecoration: 'none' }}>
-        <BrandLogo variant="white" height={28} />
+      <Link href="/" style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', padding: '20px 20px 18px', textDecoration: 'none', overflow: 'hidden' }}>
+        {collapsed ? (
+          <span style={{ fontSize: 18, color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--font-display)' }}>◈</span>
+        ) : (
+          <BrandLogo variant="white" height={28} />
+        )}
       </Link>
 
-      {/* Super-admin role switcher */}
-      {isSuperAdmin && (
+      {/* Super-admin role switcher — hidden when collapsed */}
+      {isSuperAdmin && !collapsed && (
         <div style={{ padding: '0 12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#d97706', fontWeight: 700, marginBottom: 6, paddingLeft: 4 }}>★ Super Admin</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
@@ -161,30 +173,60 @@ export default function DashboardSidebar() {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
-        <div style={{ padding: '8px 20px 6px', fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.25)', fontWeight: 700 }}>
-          {roleLabels[activeRole]}
-        </div>
+        {/* Role label — hidden when collapsed */}
+        {!collapsed && (
+          <div style={{ padding: '8px 20px 6px', fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.25)', fontWeight: 700 }}>
+            {roleLabels[activeRole]}
+          </div>
+        )}
         {nav.map((item) => {
           const rootHref = `/dashboard/${activeRole === 'super_admin' ? 'super-admin' : activeRole}`;
           const isActive = item.href === rootHref ? pathname === rootHref : pathname.startsWith(item.href);
+          const hasFriendBadge = item.href === '/dashboard/player/friends' && friendBadge > 0;
+          const hasLeagueBadge = item.href === '/dashboard/player/leagues' && leagueBadge > 0;
+          const hasBadge = hasFriendBadge || hasLeagueBadge;
+          const badgeCount = hasFriendBadge ? friendBadge : hasLeagueBadge ? leagueBadge : 0;
           return (
-            <Link key={item.href} href={item.href} style={{
-              display: 'flex', alignItems: 'center', gap: 12, padding: '11px 20px',
-              textDecoration: 'none',
-              color: isActive ? 'var(--neon)' : 'rgba(255,255,255,0.6)',
-              fontWeight: isActive ? 600 : 400, fontSize: 13,
-              borderLeft: `3px solid ${isActive ? 'var(--neon)' : 'transparent'}`,
-              background: isActive ? 'rgba(214,255,0,0.05)' : 'transparent',
-              transition: 'all 0.12s', position: 'relative',
-            }}>
-              <span style={{ fontSize: 12, opacity: isActive ? 1 : 0.5 }}>{item.icon}</span>
-              {item.label}
-              {item.href === '/dashboard/player/friends' && friendBadge > 0 && (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={item.label}
+              style={{
+                display: 'flex', alignItems: 'center',
+                gap: collapsed ? 0 : 12,
+                padding: collapsed ? '13px 0' : '11px 20px',
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                textDecoration: 'none',
+                color: isActive ? 'var(--neon)' : 'rgba(255,255,255,0.6)',
+                fontWeight: isActive ? 600 : 400, fontSize: 13,
+                borderLeft: `3px solid ${isActive ? 'var(--neon)' : 'transparent'}`,
+                background: isActive ? 'rgba(214,255,0,0.05)' : 'transparent',
+                transition: 'all 0.12s', position: 'relative',
+              }}
+            >
+              <span style={{ fontSize: 12, opacity: isActive ? 1 : 0.5, position: 'relative', flexShrink: 0 }}>
+                {item.icon}
+                {/* Small badge dot on icon when collapsed */}
+                {collapsed && hasBadge && (
+                  <span style={{
+                    position: 'absolute', top: -4, right: -6,
+                    minWidth: 14, height: 14, borderRadius: 7,
+                    background: '#ee0005', color: '#fff',
+                    fontSize: 9, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '0 2px',
+                  }}>
+                    {badgeCount}
+                  </span>
+                )}
+              </span>
+              {!collapsed && item.label}
+              {!collapsed && hasFriendBadge && (
                 <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: '#ee0005', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
                   {friendBadge}
                 </span>
               )}
-              {item.href === '/dashboard/player/leagues' && leagueBadge > 0 && (
+              {!collapsed && hasLeagueBadge && (
                 <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: '#ee0005', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
                   {leagueBadge}
                 </span>
@@ -193,8 +235,8 @@ export default function DashboardSidebar() {
           );
         })}
 
-        {/* Upgrade CTA for free players */}
-        {activeRole === 'player' && currentPlan === 'free' && (
+        {/* Upgrade CTA for free players — hidden when collapsed */}
+        {activeRole === 'player' && currentPlan === 'free' && !collapsed && (
           <div style={{ margin: '12px 12px 0' }}>
             <Link href="/pricing" style={{
               display: 'block', textDecoration: 'none', padding: '10px 14px',
@@ -209,45 +251,84 @@ export default function DashboardSidebar() {
           </div>
         )}
 
-        <div style={{ margin: '16px 20px 0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
-          <div style={{ fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.25)', fontWeight: 700, marginBottom: 6 }}>Plataforma</div>
-          {[
-            { href: '/tournaments', label: 'Torneos' },
-            { href: '/live-scores', label: 'En Vivo' },
-            { href: '/ranking',     label: 'Ranking' },
-          ].map((l) => (
-            <Link key={l.href} href={l.href} style={{ display: 'block', padding: '8px 0', fontSize: 12, color: 'rgba(255,255,255,0.35)', textDecoration: 'none' }}>
-              {l.label}
-            </Link>
-          ))}
-        </div>
+        {/* Plataforma section — hidden when collapsed */}
+        {!collapsed && (
+          <div style={{ margin: '16px 20px 0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+            <div style={{ fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.25)', fontWeight: 700, marginBottom: 6 }}>Plataforma</div>
+            {[
+              { href: '/tournaments', label: 'Torneos' },
+              { href: '/live-scores', label: 'En Vivo' },
+              { href: '/ranking',     label: 'Ranking' },
+            ].map((l) => (
+              <Link key={l.href} href={l.href} style={{ display: 'block', padding: '8px 0', fontSize: 12, color: 'rgba(255,255,255,0.35)', textDecoration: 'none' }}>
+                {l.label}
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* Collapse toggle button — desktop only */}
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="sidebar-collapse-btn"
+          style={{
+            width: '100%', padding: '10px 0', background: 'transparent', border: 'none',
+            borderTop: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer',
+            color: 'rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center',
+            justifyContent: collapsed ? 'center' : 'flex-end', paddingRight: collapsed ? 0 : 20,
+            marginTop: 12,
+          }}
+          title={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
       </nav>
 
       {/* User */}
-      <div style={{ padding: '14px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <Link href={activeRole === 'player' ? '/dashboard/player/profile' : '#'} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, textDecoration: 'none' }}>
-          {photoUrl ? (
-            <img src={photoUrl} alt="avatar" style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', objectFit: 'cover' }} />
-          ) : (
-            <div style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', background: isSuperAdmin ? '#d97706' : 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: '#fff' }}>
-              {initials}
-            </div>
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{displaySub}</div>
-              {planBadge && (
-                <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: currentPlan === 'infinity' ? '#a855f7' : 'var(--neon)', background: currentPlan === 'infinity' ? 'rgba(168,85,247,0.15)' : 'rgba(214,255,0,0.12)', padding: '2px 6px', border: `1px solid ${currentPlan === 'infinity' ? 'rgba(168,85,247,0.35)' : 'rgba(214,255,0,0.25)'}` }}>
-                  {planBadge}
-                </span>
+      <div style={{ padding: collapsed ? '14px 8px' : '14px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        {collapsed ? (
+          /* Collapsed: show only avatar centered */
+          <Link
+            href={activeRole === 'player' ? '/dashboard/player/profile' : '#'}
+            style={{ display: 'flex', justifyContent: 'center', textDecoration: 'none' }}
+            title={displayName}
+          >
+            {photoUrl ? (
+              <img src={photoUrl} alt="avatar" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />
+            ) : (
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: isSuperAdmin ? '#d97706' : 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: '#fff' }}>
+                {initials}
+              </div>
+            )}
+          </Link>
+        ) : (
+          /* Expanded: full user info */
+          <>
+            <Link href={activeRole === 'player' ? '/dashboard/player/profile' : '#'} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, textDecoration: 'none' }}>
+              {photoUrl ? (
+                <img src={photoUrl} alt="avatar" style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ width: 36, height: 36, flexShrink: 0, borderRadius: '50%', background: isSuperAdmin ? '#d97706' : 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: '#fff' }}>
+                  {initials}
+                </div>
               )}
-            </div>
-          </div>
-        </Link>
-        <button onClick={handleLogout} style={{ display: 'block', width: '100%', textAlign: 'center', padding: '7px', fontSize: 11, color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.08)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, background: 'transparent', cursor: 'pointer' }}>
-          Cerrar Sesión
-        </button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{displaySub}</div>
+                  {planBadge && (
+                    <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: currentPlan === 'infinity' ? '#a855f7' : 'var(--neon)', background: currentPlan === 'infinity' ? 'rgba(168,85,247,0.15)' : 'rgba(214,255,0,0.12)', padding: '2px 6px', border: `1px solid ${currentPlan === 'infinity' ? 'rgba(168,85,247,0.35)' : 'rgba(214,255,0,0.25)'}` }}>
+                      {planBadge}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Link>
+            <button onClick={handleLogout} style={{ display: 'block', width: '100%', textAlign: 'center', padding: '7px', fontSize: 11, color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.08)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, background: 'transparent', cursor: 'pointer' }}>
+              Cerrar Sesión
+            </button>
+          </>
+        )}
       </div>
     </>
   );

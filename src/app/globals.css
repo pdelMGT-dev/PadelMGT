@@ -425,6 +425,23 @@ html, body {
 }
 .dash-sidebar-close { display: none !important; }
 
+/* Collapsed sidebar — desktop only, managed via body class */
+body.sidebar-collapsed .dashboard-sidebar {
+  width: 64px;
+}
+body.sidebar-collapsed .dashboard-main {
+  margin-left: 64px;
+}
+/* On mobile/tablet, collapsed state has no effect */
+@media (max-width: 1024px) {
+  body.sidebar-collapsed .dashboard-sidebar { width: 256px; }
+  body.sidebar-collapsed .dashboard-main { margin-left: 0; }
+}
+
+/* Sidebar collapse toggle button */
+.sidebar-collapse-btn { display: flex; }
+@media (max-width: 1024px) { .sidebar-collapse-btn { display: none !important; } }
+
 /* ── TABLET (≤ 1024px) ── */
 @media (max-width: 1024px) {
   /* Navbar */

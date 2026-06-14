@@ -1936,11 +1936,22 @@ export default function PlayerTournamentsPage() {
           <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Mi historial</div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS TORNEOS</h1>
         </div>
-        <button
-          onClick={() => { resetWizard(); setView('wizard'); setStep(1); }}
-          style={{ padding: '13px 28px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
-          + Crear Torneo
-        </button>
+        <div style={{ display: 'flex', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
+          <Link href="/dashboard/player/tournaments/personalizado" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '11px 20px',
+            background: 'rgba(214,255,0,0.08)', border: '1px solid rgba(214,255,0,0.25)',
+            color: 'var(--black)', textDecoration: 'none',
+            fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
+          }}>
+            ⊞ PERSONALIZADO
+          </Link>
+          <button
+            onClick={() => { resetWizard(); setView('wizard'); setStep(1); }}
+            style={{ padding: '13px 28px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            + Crear Torneo
+          </button>
+        </div>
       </div>
 
       {/* Torneos Activos */}
