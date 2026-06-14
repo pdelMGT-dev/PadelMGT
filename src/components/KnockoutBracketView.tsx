@@ -33,7 +33,7 @@ interface Props {
   fixedPairs?: FixedPair[];
   players?: GamePlayer[];
   scoreConfig?: ScoreConfig;
-  onScoreEntry?: (roundIdx: number, matchIdx: number, s1: number, s2: number, sets?: Array<{p1: number; p2: number}>) => void;
+  onScoreEntry?: (roundIdx: number, matchIdx: number, s1: number, s2: number, sets?: Array<{p1: number; p2: number}>, walkover?: boolean) => void;
   isEditable?: boolean;
 }
 
@@ -188,7 +188,7 @@ export default function KnockoutBracketView({ bracket, fixedPairs, players, scor
                         </div>
                         {isComp && !p1Bye && match.pair1 && (
                           <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: p1Win ? 'var(--turf-green)' : 'var(--grey-400)', flexShrink: 0 }}>
-                            {match.pair1Score}
+                            {match.walkover && !p1Win ? 'W/O' : match.pair1Score}
                           </span>
                         )}
                       </div>
@@ -222,7 +222,7 @@ export default function KnockoutBracketView({ bracket, fixedPairs, players, scor
                         </div>
                         {isComp && !p2Bye && match.pair2 && (
                           <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: p2Win ? 'var(--turf-green)' : 'var(--grey-400)', flexShrink: 0 }}>
-                            {match.pair2Score}
+                            {match.walkover && !p2Win ? 'W/O' : match.pair2Score}
                           </span>
                         )}
                       </div>
@@ -278,8 +278,8 @@ export default function KnockoutBracketView({ bracket, fixedPairs, players, scor
           pair1Name={editPair1Name}
           pair2Name={editPair2Name}
           scoreConfig={scoreConfig}
-          onConfirm={(s1, s2, sets) => {
-            onScoreEntry(editTarget.roundIdx, editTarget.matchIdx, s1, s2, sets);
+          onConfirm={(s1, s2, sets, walkover) => {
+            onScoreEntry(editTarget.roundIdx, editTarget.matchIdx, s1, s2, sets, walkover);
             setEditTarget(null);
           }}
           onCancel={() => setEditTarget(null)}

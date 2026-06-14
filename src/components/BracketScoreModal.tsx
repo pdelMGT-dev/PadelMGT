@@ -11,13 +11,15 @@ export interface BracketScoreModalProps {
   pair1Name: string;
   pair2Name: string;
   scoreConfig?: ScoreConfig;
-  onConfirm: (s1: number, s2: number, sets?: Array<{ p1: number; p2: number }>) => void;
+  onConfirm: (s1: number, s2: number, sets?: Array<{ p1: number; p2: number }>, walkover?: boolean) => void;
   onCancel: () => void;
 }
 
 export default function BracketScoreModal({ pair1Name, pair2Name, scoreConfig, onConfirm, onCancel }: BracketScoreModalProps) {
   const isTraditional = scoreConfig?.type === 'traditional';
   const baseSets = scoreConfig?.setsPerMatch ?? 3;
+  // Walkover: a team retires (injury) and the rival advances without a played score.
+  const [woMode, setWoMode] = useState(false);
 
   const [setInputs, setSetInputs] = useState<Array<{ p1: string; p2: string }>>(
     Array.from({ length: baseSets }, () => ({ p1: '', p2: '' })),
@@ -87,7 +89,33 @@ export default function BracketScoreModal({ pair1Name, pair2Name, scoreConfig, o
           Resultado del partido
         </div>
 
-        {isTraditional ? (
+        {/* Walkover toggle */}
+        <button onClick={() => setWoMode(v => !v)}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px', border: 'none', borderBottom: '1px solid var(--grey-100)', background: woMode ? '#fff7ed' : '#fafafa', cursor: 'pointer', textAlign: 'left' }}>
+          <span style={{ width: 34, height: 20, borderRadius: 10, background: woMode ? '#ea580c' : 'var(--grey-300)', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}>
+            <span style={{ position: 'absolute', top: 2, left: woMode ? 16 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.2s' }} />
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: woMode ? '#9a3412' : 'var(--grey-500)' }}>
+            🚑 Retiro por lesión (walkover)
+          </span>
+        </button>
+
+        {woMode ? (
+          <div style={{ padding: '16px 20px' }}>
+            <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 14, lineHeight: 1.5 }}>
+              Elegí la pareja que <strong>se retira</strong>. Su rival avanza automáticamente.
+            </div>
+            {[{ name: pair1Name, retires: 'A', s1: 0, s2: 1 }, { name: pair2Name, retires: 'B', s1: 1, s2: 0 }].map(opt => (
+              <button key={opt.retires} onClick={() => onConfirm(opt.s1, opt.s2, undefined, true)}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 14px', marginBottom: 8, border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ fontSize: 13, color: 'var(--black)' }}>
+                  Se retira <strong>{opt.name}</strong>
+                </span>
+                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9a3412', background: '#ffedd5', padding: '3px 8px', flexShrink: 0 }}>W/O</span>
+              </button>
+            ))}
+          </div>
+        ) : isTraditional ? (
           <div style={{ padding: '0 0 16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', padding: '12px 20px 8px', gap: 12 }}>
               <div style={{ flex: 1 }} />
@@ -162,10 +190,12 @@ export default function BracketScoreModal({ pair1Name, pair2Name, scoreConfig, o
         )}
 
         <div style={{ display: 'flex', gap: 10, padding: '12px 20px', borderTop: '1px solid var(--grey-100)' }}>
-          <button onClick={handleConfirm} disabled={!valid}
-            style={{ flex: 1, padding: '11px', background: valid ? 'var(--black)' : 'var(--grey-200)', color: valid ? 'var(--neon)' : 'var(--grey-400)', border: 'none', cursor: valid ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Confirmar
-          </button>
+          {!woMode && (
+            <button onClick={handleConfirm} disabled={!valid}
+              style={{ flex: 1, padding: '11px', background: valid ? 'var(--black)' : 'var(--grey-200)', color: valid ? 'var(--neon)' : 'var(--grey-400)', border: 'none', cursor: valid ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Confirmar
+            </button>
+          )}
           <button onClick={onCancel}
             style={{ padding: '11px 18px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-500)' }}>
             Cancelar

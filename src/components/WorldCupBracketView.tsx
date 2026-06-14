@@ -37,7 +37,7 @@ interface Props {
   fixedPairs?: FixedPair[];
   players?: GamePlayer[];
   scoreConfig?: ScoreConfig;
-  onScoreEntry?: (roundIdx: number, matchIdx: number, s1: number, s2: number, sets?: Array<{ p1: number; p2: number }>) => void;
+  onScoreEntry?: (roundIdx: number, matchIdx: number, s1: number, s2: number, sets?: Array<{ p1: number; p2: number }>, walkover?: boolean) => void;
   isEditable?: boolean;
 }
 
@@ -97,7 +97,7 @@ export default function WorldCupBracketView({ bracket, fixedPairs, players, scor
     const p1Win = isComp && match.winner && match.pair1 && match.winner[0] === match.pair1[0];
     const p2Win = isComp && match.winner && match.pair2 && match.winner[0] === match.pair2[0];
 
-    const row = (name: string, bye: boolean, present: boolean, win: boolean | null | undefined, score: number | null, origin: string | undefined, border: boolean) => (
+    const row = (name: string, bye: boolean, present: boolean, win: boolean | null | undefined, score: React.ReactNode, origin: string | undefined, border: boolean) => (
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: CARD_H / 2, padding: '0 9px 0 11px', background: win ? 'rgba(22,163,74,0.07)' : 'transparent', borderBottom: border ? '1px solid var(--grey-100)' : undefined }}>
         {win && <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: 'var(--turf-green)' }} />}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', flex: 1 }}>
@@ -123,8 +123,8 @@ export default function WorldCupBracketView({ bracket, fixedPairs, players, scor
         onClick={() => canEdit && setEditTarget({ roundIdx, matchIdx })}
         style={{ position: 'absolute', top, left: 8, right: 8, height: CARD_H, border: `1.5px solid ${isComp ? 'var(--grey-200)' : canEdit ? 'var(--grey-300)' : 'var(--grey-100)'}`, background: isComp || canEdit ? '#fff' : '#fafafa', cursor: canEdit ? 'pointer' : 'default', overflow: 'hidden' }}
       >
-        {row(p1Name, p1Bye, !!match.pair1, p1Win, match.pair1Score, fp1?.groupOrigin, true)}
-        {row(p2Name, p2Bye, !!match.pair2, p2Win, match.pair2Score, fp2?.groupOrigin, false)}
+        {row(p1Name, p1Bye, !!match.pair1, p1Win, match.walkover && !p1Win ? 'W/O' : match.pair1Score, fp1?.groupOrigin, true)}
+        {row(p2Name, p2Bye, !!match.pair2, p2Win, match.walkover && !p2Win ? 'W/O' : match.pair2Score, fp2?.groupOrigin, false)}
         {canEdit && (
           <div style={{ position: 'absolute', bottom: 0, right: 0, background: 'var(--black)', color: 'var(--neon)', fontSize: 7, fontWeight: 800, padding: '2px 5px', letterSpacing: '0.07em', textTransform: 'uppercase' }}>+ resultado</div>
         )}
@@ -232,12 +232,12 @@ export default function WorldCupBracketView({ bracket, fixedPairs, players, scor
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 11px', background: f1Win ? 'rgba(22,163,74,0.07)' : 'transparent', borderBottom: '1px solid var(--grey-100)' }}>
             {f1Win && <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: 'var(--turf-green)' }} />}
             <span style={{ fontSize: 12, fontWeight: f1Win ? 700 : 400, color: finalMatch?.pair1 ? (f1Win ? '#15803d' : 'var(--black)') : 'var(--grey-300)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{finalMatch?.pair1 ? fp1Name : '–'}</span>
-            {finalMatch?.status === 'completed' && finalMatch.pair1 && <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: f1Win ? 'var(--turf-green)' : 'var(--grey-400)' }}>{finalMatch.pair1Score}</span>}
+            {finalMatch?.status === 'completed' && finalMatch.pair1 && <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: f1Win ? 'var(--turf-green)' : 'var(--grey-400)' }}>{finalMatch.walkover && !f1Win ? 'W/O' : finalMatch.pair1Score}</span>}
           </div>
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 11px', background: f2Win ? 'rgba(22,163,74,0.07)' : 'transparent' }}>
             {f2Win && <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: 'var(--turf-green)' }} />}
             <span style={{ fontSize: 12, fontWeight: f2Win ? 700 : 400, color: finalMatch?.pair2 ? (f2Win ? '#15803d' : 'var(--black)') : 'var(--grey-300)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{finalMatch?.pair2 ? fp2Name : '–'}</span>
-            {finalMatch?.status === 'completed' && finalMatch.pair2 && <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: f2Win ? 'var(--turf-green)' : 'var(--grey-400)' }}>{finalMatch.pair2Score}</span>}
+            {finalMatch?.status === 'completed' && finalMatch.pair2 && <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: f2Win ? 'var(--turf-green)' : 'var(--grey-400)' }}>{finalMatch.walkover && !f2Win ? 'W/O' : finalMatch.pair2Score}</span>}
           </div>
           {finalEditable && (
             <div style={{ position: 'absolute', bottom: 0, right: 0, background: 'var(--black)', color: 'var(--neon)', fontSize: 7, fontWeight: 800, padding: '2px 5px', letterSpacing: '0.07em', textTransform: 'uppercase' }}>+ resultado</div>
@@ -265,8 +265,8 @@ export default function WorldCupBracketView({ bracket, fixedPairs, players, scor
           pair1Name={editPair1Name}
           pair2Name={editPair2Name}
           scoreConfig={scoreConfig}
-          onConfirm={(s1, s2, sets) => {
-            onScoreEntry(editTarget.roundIdx, editTarget.matchIdx, s1, s2, sets);
+          onConfirm={(s1, s2, sets, walkover) => {
+            onScoreEntry(editTarget.roundIdx, editTarget.matchIdx, s1, s2, sets, walkover);
             setEditTarget(null);
           }}
           onCancel={() => setEditTarget(null)}

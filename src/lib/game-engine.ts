@@ -121,6 +121,7 @@ export interface KnockoutMatch {
   sets?: Array<{ p1: number; p2: number }>;
   winner: string[] | null; // winning pair player ids
   status: 'pending' | 'completed';
+  walkover?: boolean;      // true if decided by retirement/injury (rival advances)
 }
 
 export interface ActiveGame {

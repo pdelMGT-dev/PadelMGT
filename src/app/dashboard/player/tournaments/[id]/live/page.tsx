@@ -1366,8 +1366,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                 <span style={{ fontSize: 14, color: 'var(--grey-400)', transform: koBracketPhaseOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
               </div>
               {koBracketPhaseOpen && (() => {
-                const onScore = (roundIdx: number, matchIdx: number, s1: number, s2: number, sets?: Array<{ p1: number; p2: number }>) => {
-                  const updated = updateKnockoutBracketMatch(t, roundIdx, matchIdx, s1, s2, sets);
+                const onScore = (roundIdx: number, matchIdx: number, s1: number, s2: number, sets?: Array<{ p1: number; p2: number }>, walkover?: boolean) => {
+                  const updated = updateKnockoutBracketMatch(t, roundIdx, matchIdx, s1, s2, sets, walkover);
                   saveTournament(updated);
                   setTournament(updated);
                   if (updated.status === 'finished') {

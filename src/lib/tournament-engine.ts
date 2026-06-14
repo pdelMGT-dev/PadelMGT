@@ -465,6 +465,7 @@ export function updateKnockoutBracketMatch(
   s1: number,
   s2: number,
   sets?: Array<{ p1: number; p2: number }>,
+  walkover?: boolean,
 ): Tournament {
   if (!tournament.bracket) return tournament;
 
@@ -473,7 +474,7 @@ export function updateKnockoutBracketMatch(
     const matches = round.matches.map((m, mi) => {
       if (mi !== matchIdx) return m;
       const winner = s1 > s2 ? m.pair1 : m.pair2;
-      return { ...m, pair1Score: s1, pair2Score: s2, winner, status: 'completed' as const, ...(sets ? { sets } : {}) };
+      return { ...m, pair1Score: s1, pair2Score: s2, winner, status: 'completed' as const, walkover: walkover ?? false, ...(sets ? { sets } : {}) };
     });
     return { ...round, matches };
   });
