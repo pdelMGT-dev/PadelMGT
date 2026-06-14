@@ -12,6 +12,7 @@ import { getFriendsForPlayer, searchPlayers, addFriendship } from '@/lib/player-
 import { getGame, saveGame } from '@/lib/game-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import type { ActiveGame, GamePlayer as EnginePlayer, InvitedPlayer, ScoreConfig } from '@/lib/game-engine';
+import { matchDurationMinutes, estimateEventDuration, formatDurationRange } from '@/lib/duration-estimate';
 import { getRankingHistoryForGame } from '@/lib/ranking-store';
 import type { RankingEntry } from '@/lib/ranking-store';
 import { getPlayerClubs } from '@/lib/club-membership-store';
@@ -1469,6 +1470,37 @@ export default function QuickGamePage() {
             </div>
           )}
         </div>
+
+        {/* Duration estimate */}
+        {(() => {
+          const sc: ScoreConfig = scoreType === 'points'
+            ? { type: 'points', target: pointTarget }
+            : { type: 'traditional', setsPerMatch, gamesPerSet, tiebreak, deuce: deuceRule === 'traditional' ? 'ventaja' : 'oro' };
+          const matchDur = matchDurationMinutes(sc, level ? LEVEL_LABEL[level] : undefined);
+          const est = estimateEventDuration({
+            format: 'americano',
+            scoreConfig: sc,
+            maxPlayers,
+            courts,
+            pjTarget: 3,
+            levelLabel: level ? LEVEL_LABEL[level] : undefined,
+          });
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', marginBottom: 16 }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>⏱</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#166534', marginBottom: 3 }}>Duración estimada</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#15803d', fontFamily: 'var(--font-display)' }}>
+                  Partido: {formatDurationRange(matchDur.min, matchDur.max)}
+                  {est && ` · Evento (~3 rondas): ${formatDurationRange(est.min, est.max)}`}
+                </div>
+                <div style={{ fontSize: 10, color: '#4ade80', marginTop: 2 }}>
+                  Basado en {level ? LEVEL_LABEL[level].toLowerCase() : 'nivel intermedio'} · {courts} cancha{courts > 1 ? 's' : ''} · {maxPlayers} jugadores
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Plan gate error */}
         {planError && (

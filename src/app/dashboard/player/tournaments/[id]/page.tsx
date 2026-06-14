@@ -13,6 +13,7 @@ import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, syncJoinReques
 import { createScoreCorrection, getScoreCorrectionsByEntity, type ScoreCorrectionRequest } from '@/lib/score-correction-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { QRCodeSVG } from 'qrcode.react';
+import { estimateEventDuration, formatDurationRange } from '@/lib/duration-estimate';
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -913,7 +914,21 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                     { label: 'Jugadores',  value: `${t.maxPlayers}` },
                     { label: 'Canchas',    value: String(t.courts) },
                     { label: 'Puntuación', value: t.scoreConfig.type === 'points' ? `Por puntos (objetivo: ${t.scoreConfig.target ?? '–'})` : `Tradicional (${t.scoreConfig.setsPerMatch ?? 1} sets)` },
-                  ].map(row => (
+                    (() => {
+                      const est = estimateEventDuration({
+                        format: t.format,
+                        scoreConfig: t.scoreConfig,
+                        maxPlayers: t.maxPlayers,
+                        courts: t.courts,
+                        pjTarget: t.pjTarget,
+                        knockoutConfig: t.knockoutConfig,
+                        levelLabel: t.levelLabel,
+                      });
+                      return est
+                        ? { label: 'Duración est.', value: formatDurationRange(est.min, est.max) }
+                        : null;
+                    })(),
+                  ].filter((r): r is { label: string; value: string } => r !== null).map(row => (
                     <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--grey-100)' }}>
                       <span style={{ fontSize: 11, color: 'var(--grey-400)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.08em' }}>{row.label}</span>
                       <span style={{ fontSize: 13, fontWeight: 600 }}>{row.value}</span>

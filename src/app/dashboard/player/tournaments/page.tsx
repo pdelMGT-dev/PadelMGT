@@ -14,6 +14,7 @@ import { useToast } from '@/components/ToastProvider';
 import { SkeletonCard } from '@/components/Skeleton';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import CloneDialog from '@/components/CloneDialog';
+import { estimateEventDuration, matchDurationMinutes, formatDurationRange } from '@/lib/duration-estimate';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1177,6 +1178,43 @@ export default function PlayerTournamentsPage() {
               </div>
             </div>
           )}
+
+          {/* Duration estimate — shown whenever format + courts + players are set */}
+          {tFormat && (() => {
+            const sc: import('@/lib/game-engine').ScoreConfig = tScoreType === 'points'
+              ? { type: 'points', target: tPtTarget }
+              : { type: 'traditional', setsPerMatch: tSets, gamesPerSet: tGames, tiebreak: tTiebreak, deuce: tDeuce };
+            const kc: import('@/lib/game-engine').KnockoutConfig | undefined =
+              (tFormat === 'knockout' || tFormat === 'world_cup') && tKOHasGroups
+                ? { hasGroups: true, numGroups: tKONumGroups, teamsAdvancing: tKOTeamsAdvancing, currentPhase: 'group_stage' }
+                : tFormat === 'world_cup'
+                  ? { hasGroups: true, numGroups: tKONumGroups, teamsAdvancing: 2, currentPhase: 'group_stage' }
+                  : undefined;
+            const est = estimateEventDuration({
+              format: tFormat,
+              scoreConfig: sc,
+              maxPlayers: tMaxPlayers,
+              courts: tCourts,
+              pjTarget: tPjTarget,
+              knockoutConfig: kc,
+            });
+            if (!est) return null;
+            const matchDur = matchDurationMinutes(sc);
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', marginBottom: 16 }}>
+                <span style={{ fontSize: 20, flexShrink: 0 }}>⏱</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#166534', marginBottom: 3 }}>Duración estimada del torneo</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#15803d', fontFamily: 'var(--font-display)' }}>
+                    {formatDurationRange(est.min, est.max)}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#4ade80', marginTop: 2 }}>
+                    {est.clockRounds} rondas · partido: {formatDurationRange(matchDur.min, matchDur.max)} · nivel intermedio
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Card 3b: PJ selector — only for Round Robin */}
           {tFormat === 'round_robin' && (
