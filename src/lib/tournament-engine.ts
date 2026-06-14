@@ -223,7 +223,7 @@ export function startTournament(tournament: Tournament): Tournament {
 
   let rounds: GameRound[] = [];
 
-  if (format === 'knockout') {
+  if (format === 'knockout' || format === 'world_cup') {
     const pairs = fixedPairs ?? [];
     if (pairs.length < 2) return tournament;
     const cfg = tournament.knockoutConfig ?? { hasGroups: false, numGroups: 2, teamsAdvancing: 1, currentPhase: 'bracket' as const };

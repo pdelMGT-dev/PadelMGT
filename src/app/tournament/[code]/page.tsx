@@ -9,6 +9,7 @@ import { submitJoinRequest, getMyJoinRequest, type JoinRequest } from '@/lib/joi
 import { QRCodeSVG } from 'qrcode.react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import KnockoutBracketView from '@/components/KnockoutBracketView';
+import WorldCupBracketView from '@/components/WorldCupBracketView';
 import MatchSetResult from '@/components/MatchSetResult';
 import { fetchTournamentByCode } from '@/lib/supabase';
 
@@ -489,7 +490,9 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                     Fase II — Cuadro
                   </h2>
                   <div style={{ background: '#fff', border: '1px solid #e8e8e8', padding: 16, overflowX: 'auto', marginBottom: 16 }}>
-                    <KnockoutBracketView bracket={tournament.bracket} fixedPairs={pairs} players={tournament.players} isEditable={false} />
+                    {tournament.format === 'world_cup'
+                      ? <WorldCupBracketView bracket={tournament.bracket} fixedPairs={pairs} players={tournament.players} isEditable={false} />
+                      : <KnockoutBracketView bracket={tournament.bracket} fixedPairs={pairs} players={tournament.players} isEditable={false} />}
                   </div>
                   {/* Collapsible bracket round results */}
                   {[...tournament.bracket.rounds].reverse().map(round => {
@@ -538,7 +541,9 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
             <div style={{ marginBottom: 32 }}>
               <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', margin: '0 0 16px' }}>CUADRO</h2>
               <div style={{ background: '#fff', border: '1px solid #e8e8e8', padding: 16, overflowX: 'auto', marginBottom: 12 }}>
-                <KnockoutBracketView bracket={tournament.bracket} fixedPairs={pairs} players={tournament.players} isEditable={false} />
+                {tournament.format === 'world_cup'
+                  ? <WorldCupBracketView bracket={tournament.bracket} fixedPairs={pairs} players={tournament.players} isEditable={false} />
+                  : <KnockoutBracketView bracket={tournament.bracket} fixedPairs={pairs} players={tournament.players} isEditable={false} />}
               </div>
               {[...tournament.bracket.rounds].reverse().map(round => {
                 const completedMatches = round.matches.filter(m => m.status === 'completed');

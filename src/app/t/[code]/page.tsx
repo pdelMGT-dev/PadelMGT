@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import { getTournamentByCode, saveTournament } from '@/lib/tournament-store';
@@ -8,8 +8,15 @@ import type { Tournament } from '@/lib/tournament-store';
 import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import KnockoutBracketView from '@/components/KnockoutBracketView';
+import WorldCupBracketView from '@/components/WorldCupBracketView';
 import MatchSetResult from '@/components/MatchSetResult';
 import { fetchTournamentByCode } from '@/lib/supabase';
+
+// Choose the bracket renderer: World Cup uses the FIFA-style mirrored view.
+function BracketView(props: React.ComponentProps<typeof KnockoutBracketView> & { format?: string }) {
+  const { format, ...rest } = props;
+  return format === 'world_cup' ? <WorldCupBracketView {...rest} /> : <KnockoutBracketView {...rest} />;
+}
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
   created:       { label: 'Inscripciones abiertas', color: '#a78bfa' },
@@ -295,7 +302,8 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                       )}
                       {/* White container for bracket (component uses light colors) */}
                       <div style={{ background: '#fff', padding: 24, overflow: 'auto' }}>
-                        <KnockoutBracketView
+                        <BracketView
+                          format={t.format}
                           bracket={t.bracket}
                           fixedPairs={dispPairs}
                           players={t.players}
@@ -598,7 +606,8 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                           {t.knockoutConfig?.hasGroups ? 'Fase II — Cuadro' : 'Cuadro de Eliminatorias'}
                         </div>
                         <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', padding: 16 }}>
-                          <KnockoutBracketView
+                          <BracketView
+                            format={t.format}
                             bracket={t.bracket}
                             fixedPairs={pairs}
                             players={t.players}
@@ -661,7 +670,8 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                           Cuadro de Eliminatorias
                         </div>
                         <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', padding: 16 }}>
-                          <KnockoutBracketView
+                          <BracketView
+                            format={t.format}
                             bracket={t.bracket}
                             fixedPairs={pairs}
                             players={t.players}

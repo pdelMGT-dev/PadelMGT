@@ -14,6 +14,15 @@ export type GameFormat =
 
 export type GameStatus = 'created' | 'starting_soon' | 'live' | 'finished';
 
+/**
+ * Knockout and World Cup share the same engine path (parejas, optional/mandatory
+ * group stage → single-elimination bracket). World Cup is a knockout with a
+ * mandatory group stage and a FIFA-style mirrored bracket presentation.
+ */
+export function isKnockoutFormat(format: GameFormat): boolean {
+  return format === 'knockout' || format === 'world_cup';
+}
+
 export type PairType = 'individual' | 'parejas';
 
 export type ScoreConfigType = 'points' | 'traditional';

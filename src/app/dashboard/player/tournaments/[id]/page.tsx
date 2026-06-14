@@ -217,7 +217,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
 
   // ── Initialize pairSlots for americano parejas / knockout ────────────────
   useEffect(() => {
-    if (!tournament || !((tournament.format === 'americano' && tournament.pairType === 'parejas') || tournament.format === 'knockout')) return;
+    if (!tournament || !((tournament.format === 'americano' && tournament.pairType === 'parejas') || tournament.format === 'knockout' || tournament.format === 'world_cup')) return;
     // If fixedPairs already set, restore them
     if (tournament.fixedPairs?.length) {
       setPairSlots(tournament.fixedPairs.map(fp => ({
@@ -480,7 +480,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   const allFilled = confirmedPlayers.length >= t.maxPlayers;
   const noPending = pendingInvited.length === 0;
   const isAmericanoParejas = t.format === 'americano' && t.pairType === 'parejas';
-  const isKnockout = t.format === 'knockout';
+  const isKnockout = t.format === 'knockout' || t.format === 'world_cup';
   const needsPairSetup = isAmericanoParejas || isKnockout;
   const completePairs = pairSlots.filter(s => s.player1Id && s.player2Id);
   const canStartParejas = needsPairSetup ? completePairs.length >= 2 && noPending : false;

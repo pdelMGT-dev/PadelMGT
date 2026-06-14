@@ -23,6 +23,7 @@ import {
   updateKnockoutBracketMatch,
 } from '@/lib/tournament-engine';
 import KnockoutBracketView from '@/components/KnockoutBracketView';
+import WorldCupBracketView from '@/components/WorldCupBracketView';
 import MatchSetResult from '@/components/MatchSetResult';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -230,7 +231,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   // ── Sync accordion states based on current knockout phase ─────────────────
   useEffect(() => {
     if (!tournament) return;
-    if (tournament.format !== 'knockout') return;
+    if (tournament.format !== 'knockout' && tournament.format !== 'world_cup') return;
     const isInBracket = tournament.knockoutConfig?.currentPhase === 'bracket';
     setKoGroupPhaseOpen(!isInBracket); // groups closed when in bracket phase
     setKoBracketPhaseOpen(isInBracket);
@@ -267,6 +268,10 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   }
 
   const t = tournament;
+  // Knockout and World Cup share the same group→bracket engine flow. World Cup
+  // renders the bracket with the FIFA-style mirrored view.
+  const isKO = t.format === 'knockout' || t.format === 'world_cup';
+  const isWC = t.format === 'world_cup';
 
   // ── Access control ────────────────────────────────────────────────────────
   const canManage = currentUser != null && (
@@ -472,7 +477,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   const standingsPanelContent = (
     <div>
       {/* Panel header with tabs (shown when knockout phase has both groups and bracket) */}
-      {t.format === 'knockout' && t.groups && t.bracket && (
+      {isKO && t.groups && t.bracket && (
         <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '2px solid var(--grey-100)' }}>
           {(['groups', 'bracket'] as const).map(tab => (
             <button key={tab} onClick={() => setStandingsTab(tab)} style={{
@@ -554,18 +559,28 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
               Fase II — Bracket
             </div>
           )}
-          <KnockoutBracketView
-            bracket={t.bracket}
-            fixedPairs={t.fixedPairs}
-            players={t.players}
-            scoreConfig={t.scoreConfig}
-            isEditable={false}
-          />
+          {isWC ? (
+            <WorldCupBracketView
+              bracket={t.bracket}
+              fixedPairs={t.fixedPairs}
+              players={t.players}
+              scoreConfig={t.scoreConfig}
+              isEditable={false}
+            />
+          ) : (
+            <KnockoutBracketView
+              bracket={t.bracket}
+              fixedPairs={t.fixedPairs}
+              players={t.players}
+              scoreConfig={t.scoreConfig}
+              isEditable={false}
+            />
+          )}
         </div>
       )}
 
       {/* Americano/Mexicano/Round Robin standings */}
-      {t.format !== 'knockout' && t.standings && t.standings.length > 0 && (
+      {!isKO && t.standings && t.standings.length > 0 && (
         <div>
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>
             Clasificación
@@ -595,7 +610,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {!t.groups && !t.bracket && t.format !== 'knockout' && t.standings.length === 0 && (
+      {!t.groups && !t.bracket && !isKO && t.standings.length === 0 && (
         <div style={{ color: 'var(--grey-400)', fontSize: 12, textAlign: 'center', padding: '24px 0' }}>
           Las clasificaciones aparecerán aquí al registrar los primeros resultados.
         </div>
@@ -857,7 +872,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
             {t.name}
           </div>
           <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 2 }}>
-            {t.format === 'knockout'
+            {isKO
               ? (t.knockoutConfig?.currentPhase === 'group_stage' ? 'Fase I: Grupos' : 'Fase II: Cuadro')
               : `Ronda ${currentRoundNum} / ${expectedTotalRounds}`}
           </div>
@@ -940,7 +955,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                   <InfoRow label="Hora" value={t.time} />
                   {t.club && <InfoRow label="Club" value={t.club} />}
                   {t.city && <InfoRow label="Ciudad" value={t.city} />}
-                  {t.format === 'knockout' && t.knockoutConfig && (
+                  {isKO && t.knockoutConfig && (
                     <>
                       <InfoRow label="Grupos" value={t.knockoutConfig.hasGroups ? `${t.knockoutConfig.numGroups} grupos` : 'Sin grupos'} />
                       {t.knockoutConfig.hasGroups && (
@@ -1069,7 +1084,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
         )}
 
         {/* ── KNOCKOUT: Group Stage accordion ── */}
-        {t.format === 'knockout' && t.groups && (() => {
+        {isKO && t.groups && (() => {
           const groupPhaseActive = t.knockoutConfig?.currentPhase === 'group_stage';
           const groupPhaseComplete = t.knockoutConfig?.currentPhase === 'bracket';
           const allMatches = t.groups.groups.flatMap(g => g.matches);
@@ -1335,7 +1350,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
         })()}
 
         {/* ── KNOCKOUT: Bracket accordion ── */}
-        {t.format === 'knockout' && t.bracket && (() => {
+        {isKO && t.bracket && (() => {
           const bracketActive = t.knockoutConfig?.currentPhase === 'bracket';
           const pairs = t.fixedPairs ?? [];
           return (
@@ -1350,15 +1365,8 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                 </div>
                 <span style={{ fontSize: 14, color: 'var(--grey-400)', transform: koBracketPhaseOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
               </div>
-              {koBracketPhaseOpen && (
-              <div style={{ marginBottom: 0 }}>
-              <KnockoutBracketView
-                bracket={t.bracket}
-                fixedPairs={pairs}
-                players={t.players}
-                scoreConfig={t.scoreConfig}
-                isEditable={!isFinished}
-                onScoreEntry={(roundIdx, matchIdx, s1, s2, sets) => {
+              {koBracketPhaseOpen && (() => {
+                const onScore = (roundIdx: number, matchIdx: number, s1: number, s2: number, sets?: Array<{ p1: number; p2: number }>) => {
                   const updated = updateKnockoutBracketMatch(t, roundIdx, matchIdx, s1, s2, sets);
                   saveTournament(updated);
                   setTournament(updated);
@@ -1366,16 +1374,37 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                     applyTournamentRankingResults(updated);
                     showToast('¡Torneo finalizado! Resultados guardados.', 'success');
                   }
-                }}
-              />
-              </div>
-              )}
+                };
+                return (
+                <div style={{ marginBottom: 0 }}>
+                {isWC ? (
+                  <WorldCupBracketView
+                    bracket={t.bracket}
+                    fixedPairs={pairs}
+                    players={t.players}
+                    scoreConfig={t.scoreConfig}
+                    isEditable={!isFinished}
+                    onScoreEntry={onScore}
+                  />
+                ) : (
+                  <KnockoutBracketView
+                    bracket={t.bracket}
+                    fixedPairs={pairs}
+                    players={t.players}
+                    scoreConfig={t.scoreConfig}
+                    isEditable={!isFinished}
+                    onScoreEntry={onScore}
+                  />
+                )}
+                </div>
+                );
+              })()}
             </div>
           );
         })()}
 
         {/* ── KNOCKOUT: Classification tabs (integrated, below accordions) ── */}
-        {t.format === 'knockout' && (t.groups || t.bracket) && (
+        {isKO && (t.groups || t.bracket) && (
           <div style={{ marginBottom: 32, marginTop: 24 }}>
             <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)', marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
               Clasificación
@@ -1385,7 +1414,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
         )}
 
         {/* ── RONDAS ── */}
-        {t.format !== 'knockout' && <div style={{ marginBottom: 32 }}>
+        {!isKO && <div style={{ marginBottom: 32 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
             Rondas

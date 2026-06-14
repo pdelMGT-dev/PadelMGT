@@ -32,7 +32,7 @@ const FORMAT_INFO: Record<FormatKey, { label: string; desc: string; functional: 
   round_robin: { label: 'Round Robin', desc: 'Todos contra todos. Puntuación tradicional (sets/games). Parejas rotan.',  functional: true  },
   team_league: { label: 'Team League', desc: 'Liga por equipos con jornadas semanales.',                               functional: false },
   knockout:    { label: 'Knockout',    desc: 'Eliminación directa por parejas. Fase de grupos opcional + cuadro.',     functional: true  },
-  world_cup:   { label: 'World Cup',   desc: 'Fase de grupos seguida de eliminatorias directas.',                      functional: false },
+  world_cup:   { label: 'World Cup',   desc: 'Estilo Mundial: 4 u 8 grupos de 4 equipos, clasifican 2 → cuadro FIFA.',  functional: true  },
 };
 const FORMAT_LABEL: Record<string, string> = {
   americano: 'Americano', mexicano: 'Mexicano', round_robin: 'Round Robin',
@@ -283,9 +283,20 @@ export default function PlayerTournamentsPage() {
     setTournamentsLoading(false);
   }, [currentUser]);
 
-  // Auto-derive maxPlayers for knockout with groups
+  // World Cup is a knockout with a mandatory group stage and FIFA presets:
+  // groups of 4 teams, top 2 advance. The creator only picks 4 or 8 groups.
   useEffect(() => {
-    if (tFormat === 'knockout' && tKOHasGroups) {
+    if (tFormat === 'world_cup') {
+      setTKOHasGroups(true);
+      setTKOTeamsPerGroup(4);
+      setTKOTeamsAdvancing(2);
+      setTKONumGroups(g => (g === 4 || g === 8 ? g : 4));
+    }
+  }, [tFormat]);
+
+  // Auto-derive maxPlayers for knockout/world_cup with groups
+  useEffect(() => {
+    if ((tFormat === 'knockout' || tFormat === 'world_cup') && tKOHasGroups) {
       setTMaxPlayers(tKONumGroups * tKOTeamsPerGroup * 2);
     }
   }, [tFormat, tKOHasGroups, tKONumGroups, tKOTeamsPerGroup]);
@@ -375,6 +386,9 @@ export default function PlayerTournamentsPage() {
   const step2Valid = useMemo(() => {
     if (!tFormat) return false;
     if (!FORMAT_INFO[tFormat].functional) return false;
+    if (tFormat === 'world_cup') {
+      if (tKONumGroups !== 4 && tKONumGroups !== 8) return false;
+    }
     if (tFormat === 'knockout' && tKOHasGroups) {
       if (tKOTeamsPerGroup < 2) return false;
       if (tKOTeamsAdvancing < 1 || tKOTeamsAdvancing >= tKOTeamsPerGroup) return false;
@@ -425,8 +439,8 @@ export default function PlayerTournamentsPage() {
           ...(tFormat === 'round_robin' ? { allowTies: tAllowTies } : {}),
         };
 
-    // Knockout with groups: separate score config for group stage phase
-    const groupScoreConfig = (tFormat === 'knockout' && tKOHasGroups)
+    // Knockout/World Cup with groups: separate score config for group stage phase
+    const groupScoreConfig = ((tFormat === 'knockout' || tFormat === 'world_cup') && tKOHasGroups)
       ? (tScoreType === 'points'
           ? { type: 'points' as const, target: tGrpTarget }
           : { type: 'traditional' as const, setsPerMatch: tGrpSets, gamesPerSet: tGrpGames, tiebreak: tGrpTiebreak, deuce: tGrpDeuce })
@@ -462,7 +476,7 @@ export default function PlayerTournamentsPage() {
       ...registeredInvites,
     ];
 
-    const isKnockout = tFormat === 'knockout';
+    const isKnockout = tFormat === 'knockout' || tFormat === 'world_cup';
     const tournament = createTournament({
       name: tName.trim() || `Torneo ${FORMAT_LABEL[tFormat ?? 'americano']}`,
       date: tDate,
@@ -832,8 +846,9 @@ export default function PlayerTournamentsPage() {
             </div>
           </div>
 
-          {/* Knockout config — shown when format = knockout */}
-          {tFormat === 'knockout' && (() => {
+          {/* Knockout / World Cup config — shown when format = knockout or world_cup */}
+          {(tFormat === 'knockout' || tFormat === 'world_cup') && (() => {
+            const isWC = tFormat === 'world_cup';
             const koPlayers = tKONumGroups * tKOTeamsPerGroup * 2;
             const totalQual  = tKONumGroups * tKOTeamsAdvancing;
             let bracketSize = 2; while (bracketSize < totalQual) bracketSize *= 2;
@@ -928,25 +943,51 @@ export default function PlayerTournamentsPage() {
             return (
               <>
                 <div style={{ padding: '12px 16px', background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.3)', marginBottom: 8, fontSize: 12, color: 'var(--black)' }}>
-                  Knockout siempre es por <strong>Parejas</strong>. Los jugadores se organizan en parejas antes de iniciar.
+                  {isWC
+                    ? <>El <strong>World Cup</strong> es por <strong>Parejas</strong>: fase de grupos (todos contra todos) seguida de un cuadro de eliminatorias estilo Mundial. Los jugadores se organizan en parejas antes de iniciar.</>
+                    : <>Knockout siempre es por <strong>Parejas</strong>. Los jugadores se organizan en parejas antes de iniciar.</>}
                 </div>
 
                 {/* PHASE I: Groups */}
                 <div style={card}>
-                  <div style={secTitle}>Fase I — Grupos (opcional)</div>
-                  <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 12 }}>
-                    ¿Deseas una fase de grupos clasificatoria antes del cuadro de eliminatorias?
-                  </div>
-                  <div style={{ display: 'flex', gap: 10, marginBottom: tKOHasGroups ? 20 : 0 }}>
-                    {([{ label: 'Sin grupos', val: false }, { label: 'Con grupos', val: true }] as const).map(o => (
-                      <button key={String(o.val)} onClick={() => setTKOHasGroups(o.val)}
-                        style={{ flex: 1, padding: '12px', border: `2px solid ${tKOHasGroups === o.val ? 'var(--black)' : 'var(--grey-200)'}`, background: tKOHasGroups === o.val ? 'var(--black)' : '#fff', color: tKOHasGroups === o.val ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>
-                        {o.label}
-                      </button>
-                    ))}
-                  </div>
+                  <div style={secTitle}>{isWC ? 'Fase I — Grupos' : 'Fase I — Grupos (opcional)'}</div>
+                  {isWC ? (
+                    <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 16 }}>
+                      Formato Mundial: grupos de <strong>4 equipos</strong>, clasifican los <strong>2 primeros</strong> de cada grupo. Elegí cuántos grupos.
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 12 }}>
+                        ¿Deseas una fase de grupos clasificatoria antes del cuadro de eliminatorias?
+                      </div>
+                      <div style={{ display: 'flex', gap: 10, marginBottom: tKOHasGroups ? 20 : 0 }}>
+                        {([{ label: 'Sin grupos', val: false }, { label: 'Con grupos', val: true }] as const).map(o => (
+                          <button key={String(o.val)} onClick={() => setTKOHasGroups(o.val)}
+                            style={{ flex: 1, padding: '12px', border: `2px solid ${tKOHasGroups === o.val ? 'var(--black)' : 'var(--grey-200)'}`, background: tKOHasGroups === o.val ? 'var(--black)' : '#fff', color: tKOHasGroups === o.val ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                   {tKOHasGroups && (
                     <>
+                      {isWC ? (
+                        <div style={{ marginBottom: 16 }}>
+                          <label style={lbl}>Número de grupos</label>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            {[4, 8].map(n => (
+                              <button key={n} onClick={() => setTKONumGroups(n)}
+                                style={{ flex: 1, padding: '14px 8px', fontFamily: 'var(--font-display)', fontWeight: 700, cursor: 'pointer', border: `2px solid ${tKONumGroups === n ? 'var(--black)' : 'var(--grey-200)'}`, background: tKONumGroups === n ? 'var(--black)' : '#fff', color: tKONumGroups === n ? '#fff' : 'var(--black)', textAlign: 'center' }}>
+                                <div style={{ fontSize: 24, lineHeight: 1 }}>{n}</div>
+                                <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4, color: tKONumGroups === n ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>
+                                  grupos · {n * 4} equipos · {n * 8} jugadores
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
                         <div>
                           <label style={lbl}>Número de grupos</label>
@@ -982,6 +1023,7 @@ export default function PlayerTournamentsPage() {
                           </div>
                         </div>
                       </div>
+                      )}
 
                       {/* Auto-calculated summary */}
                       <div style={{ background: 'var(--black)', color: '#fff', padding: '16px 20px', marginBottom: needsBestOf ? 8 : 0 }}>
@@ -1026,7 +1068,7 @@ export default function PlayerTournamentsPage() {
                           : pointsParam(tGrpTarget, setTGrpTarget)}
                       </div>
                       <div style={{ paddingLeft: 4 }}>
-                        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--grey-100)' }}>Fase II — Knockout</div>
+                        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--grey-100)' }}>{isWC ? 'Fase II — Cuadro' : 'Fase II — Knockout'}</div>
                         {tScoreType === 'traditional'
                           ? traditionalParams(tSets, setTSets, tGames, setTGames, tTiebreak, setTTiebreak, tDeuce, setTDeuce)
                           : pointsParam(tPtTarget, setTPtTarget)}
@@ -1042,8 +1084,8 @@ export default function PlayerTournamentsPage() {
             );
           })()}
 
-          {/* Card 2: Modalidad (only if format is functional and not knockout) */}
-          {tFormat && fmtFunctional && tFormat !== 'knockout' && (
+          {/* Card 2: Modalidad (only if format is functional and not knockout/world_cup) */}
+          {tFormat && fmtFunctional && tFormat !== 'knockout' && tFormat !== 'world_cup' && (
             <div style={card}>
               <div style={secTitle}>Modalidad</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1077,8 +1119,8 @@ export default function PlayerTournamentsPage() {
           {tFormat && (
             <div style={card}>
               <div style={secTitle}>Jugadores y canchas</div>
-              {tFormat === 'knockout' && tKOHasGroups ? (
-                /* Knockout with groups: player count is auto-calculated */
+              {(tFormat === 'knockout' || tFormat === 'world_cup') && tKOHasGroups ? (
+                /* Knockout/World Cup with groups: player count is auto-calculated */
                 <div style={{ marginBottom: 16 }}>
                   <label style={lbl}>Jugadores (calculado automáticamente)</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)' }}>
@@ -1156,7 +1198,7 @@ export default function PlayerTournamentsPage() {
           )}
 
           {/* Card 4: Puntuación */}
-          {tFormat && tFormat !== 'knockout' && (
+          {tFormat && tFormat !== 'knockout' && tFormat !== 'world_cup' && (
             <div style={card}>
               <div style={secTitle}>Puntuación</div>
 
