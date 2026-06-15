@@ -1936,15 +1936,27 @@ export default function PlayerTournamentsPage() {
           <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Mi historial</div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS TORNEOS</h1>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <Link href="/dashboard/player/tournaments/personalizado" style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '11px 20px',
-            background: 'rgba(214,255,0,0.08)', border: '1px solid rgba(214,255,0,0.25)',
+            position: 'relative',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            padding: '13px 28px',
+            background: 'var(--neon)', border: 'none',
             color: 'var(--black)', textDecoration: 'none',
-            fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em',
+            fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700,
+            textTransform: 'uppercase', letterSpacing: '0.04em',
           }}>
-            ⊞ PERSONALIZADO
+            + Torneo Personalizado
+            <span style={{
+              position: 'absolute', top: -10, right: -8,
+              background: 'var(--black)', color: 'var(--neon)',
+              fontFamily: 'var(--font-sans, inherit)',
+              fontSize: 9, fontWeight: 800, letterSpacing: '0.08em',
+              padding: '3px 7px', whiteSpace: 'nowrap',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+            }}>
+              DESDE $9
+            </span>
           </Link>
           <button
             onClick={() => { resetWizard(); setView('wizard'); setStep(1); }}
