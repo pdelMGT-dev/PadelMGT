@@ -422,8 +422,10 @@ export interface RegisterInput {
   categoryId: string;
   player1Name: string;
   player1Email?: string;
+  player1Id?: string;
   player2Name?: string;
   player2Email?: string;
+  player2Id?: string;
 }
 
 /**
@@ -473,8 +475,10 @@ export function addTeamToPersonalizadoLocal(code: string, team: RegisterInput): 
     categoryId: team.categoryId,
     player1Name: team.player1Name,
     player1Email: team.player1Email,
+    player1Id: team.player1Id,
     player2Name: team.player2Name,
     player2Email: team.player2Email,
+    player2Id: team.player2Id,
     registeredAt: new Date().toISOString(),
     status: waitlisted ? 'waitlisted' : 'pending',
     paymentStatus: 'free',
@@ -801,6 +805,109 @@ export function calculateGroupStandings(
     if (b.diff !== a.diff) return b.diff - a.diff;
     return b.jf - a.jf;
   });
+}
+
+// ── Partner invitation helpers ────────────────────────────────────────────────
+
+export interface PendingInvitation {
+  team: PersonalizadoTeam;
+  tournament: PersonalizadoTournament;
+}
+
+/** Return all teams where the player has been invited as partner (player2) but hasn't accepted yet. */
+export function getPendingInvitationsForPlayer(email: string): PendingInvitation[] {
+  const emailLower = email.toLowerCase();
+  const results: PendingInvitation[] = [];
+  for (const t of _store.load()) {
+    for (const tm of t.teams) {
+      if (
+        tm.player2Email?.toLowerCase() === emailLower &&
+        tm.player1Id &&
+        !tm.player2Id
+      ) {
+        results.push({ team: tm, tournament: t });
+      }
+    }
+  }
+  return results;
+}
+
+export async function acceptTeamInvitation(
+  tournamentId: string,
+  teamId: string,
+  playerId: string,
+  playerName: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (isSupabaseConfigured) {
+    try {
+      const res = await fetch('/api/personalizado/accept-invitation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId, teamId, playerId, playerName, action: 'accept' }),
+      });
+      if (res.ok) return { ok: true };
+      if (res.status < 500) {
+        const json = await res.json().catch(() => ({})) as { error?: string };
+        return { ok: false, error: json.error ?? 'No se pudo aceptar la invitación' };
+      }
+    } catch { /* fall through */ }
+  }
+  return acceptTeamInvitationLocal(tournamentId, teamId, playerId, playerName);
+}
+
+export function acceptTeamInvitationLocal(
+  tournamentId: string,
+  teamId: string,
+  playerId: string,
+  playerName: string,
+): { ok: boolean; error?: string } {
+  const all = _store.load();
+  const tIdx = all.findIndex(t => t.id === tournamentId);
+  if (tIdx < 0) return { ok: false, error: 'Torneo no encontrado' };
+  const t = { ...all[tIdx], teams: [...all[tIdx].teams] };
+  const tmIdx = t.teams.findIndex(tm => tm.id === teamId);
+  if (tmIdx < 0) return { ok: false, error: 'Inscripción no encontrada' };
+  t.teams[tmIdx] = { ...t.teams[tmIdx], player2Id: playerId, player2Name: playerName };
+  all[tIdx] = t;
+  _store.persist(all);
+  return { ok: true };
+}
+
+export async function rejectTeamInvitation(
+  tournamentId: string,
+  teamId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (isSupabaseConfigured) {
+    try {
+      const res = await fetch('/api/personalizado/accept-invitation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId, teamId, action: 'reject' }),
+      });
+      if (res.ok) return { ok: true };
+      if (res.status < 500) {
+        const json = await res.json().catch(() => ({})) as { error?: string };
+        return { ok: false, error: json.error ?? 'No se pudo rechazar la invitación' };
+      }
+    } catch { /* fall through */ }
+  }
+  return rejectTeamInvitationLocal(tournamentId, teamId);
+}
+
+export function rejectTeamInvitationLocal(
+  tournamentId: string,
+  teamId: string,
+): { ok: boolean; error?: string } {
+  const all = _store.load();
+  const tIdx = all.findIndex(t => t.id === tournamentId);
+  if (tIdx < 0) return { ok: false, error: 'Torneo no encontrado' };
+  const t = { ...all[tIdx], teams: [...all[tIdx].teams] };
+  const tmIdx = t.teams.findIndex(tm => tm.id === teamId);
+  if (tmIdx < 0) return { ok: false, error: 'Inscripción no encontrada' };
+  t.teams[tmIdx] = { ...t.teams[tmIdx], status: 'rejected', player2Email: undefined, player2Name: undefined };
+  all[tIdx] = t;
+  _store.persist(all);
+  return { ok: true };
 }
 
 /** Synchronous localStorage status change with waitlist auto-promotion. */

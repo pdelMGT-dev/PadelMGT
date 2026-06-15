@@ -91,3 +91,10 @@ export async function sendPersonalizadoStatusEmail(p: {
 }): Promise<void> {
   return send({ type: 'personalizado_status', ...p });
 }
+
+export async function sendPartnerInvitationEmail(p: {
+  to: string; toName: string; fromName: string;
+  tournamentName: string; categoryName: string; dashboardUrl: string;
+}): Promise<void> {
+  return send({ type: 'partner_invitation', ...p });
+}

@@ -6,7 +6,14 @@ import { getAllTournaments, createTournament, getTournament, saveTournament, clo
 import { checkTournamentGate, incrementUsage, getPlayerLimits } from '@/lib/plan-config';
 import type { Tournament } from '@/lib/tournament-store';
 import type { FixedPair } from '@/lib/game-engine';
-import { getAllPersonalizado, type PersonalizadoTournament } from '@/lib/personalizado-store';
+import {
+  getAllPersonalizado,
+  getPendingInvitationsForPlayer,
+  acceptTeamInvitation,
+  rejectTeamInvitation,
+  type PersonalizadoTournament,
+  type PendingInvitation,
+} from '@/lib/personalizado-store';
 import { getFriendsForPlayer, searchPlayers } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { getPlayerClubs } from '@/lib/club-membership-store';
@@ -293,6 +300,13 @@ export default function PlayerTournamentsPage() {
         (t.status === 'registration_open' || t.status === 'configured' || t.status === 'live')
     );
     setActivePersonalizados(active);
+  }, [currentUser]);
+
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
+  const [invitationLoading, setInvitationLoading] = useState<string | null>(null);
+  useEffect(() => {
+    if (!currentUser?.email) return;
+    setPendingInvitations(getPendingInvitationsForPlayer(currentUser.email));
   }, [currentUser]);
 
   // World Cup is a knockout with a mandatory group stage and FIFA presets:
@@ -1976,6 +1990,91 @@ export default function PlayerTournamentsPage() {
           </button>
         </div>
       </div>
+
+      {/* Invitaciones Pendientes */}
+      {pendingInvitations.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <div style={secTitle}>Invitaciones Pendientes ({pendingInvitations.length})</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {pendingInvitations.map(({ team, tournament }) => {
+              const cat = tournament.categories.find(c => c.id === team.categoryId);
+              const isLoading = invitationLoading === team.id;
+              return (
+                <div key={team.id} style={{
+                  background: '#fff', border: '1px solid rgba(59,130,246,0.3)',
+                  padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#1d4ed8', marginBottom: 3 }}>
+                        Invitación de {team.player1Name}
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--black)' }}>
+                        {tournament.name}
+                      </div>
+                      {cat && (
+                        <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 3 }}>
+                          {cat.name} · {tournament.date}{tournament.time ? ` · ${tournament.time}` : ''}
+                          {tournament.locationName ? ` · ${tournament.locationName}` : ''}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      disabled={isLoading}
+                      onClick={async () => {
+                        if (!currentUser) return;
+                        setInvitationLoading(team.id);
+                        const res = await acceptTeamInvitation(tournament.id, team.id, currentUser.id, currentUser.name);
+                        setInvitationLoading(null);
+                        if (res.ok) {
+                          setPendingInvitations(prev => prev.filter(inv => inv.team.id !== team.id));
+                          setActivePersonalizados(prev => {
+                            const existing = prev.find(t => t.id === tournament.id);
+                            if (existing) {
+                              return prev.map(t => t.id === tournament.id
+                                ? { ...t, teams: t.teams.map(tm => tm.id === team.id ? { ...tm, player2Id: currentUser.id, player2Name: currentUser.name } : tm) }
+                                : t
+                              );
+                            }
+                            return [...prev, { ...tournament, status: tournament.status, teams: tournament.teams }];
+                          });
+                        }
+                      }}
+                      style={{
+                        padding: '8px 20px', background: 'var(--turf-green)', color: '#fff',
+                        border: 'none', cursor: isLoading ? 'wait' : 'pointer',
+                        fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700,
+                        textTransform: 'uppercase', letterSpacing: '0.06em', opacity: isLoading ? 0.6 : 1,
+                      }}
+                    >
+                      {isLoading ? '…' : 'ACEPTAR'}
+                    </button>
+                    <button
+                      disabled={isLoading}
+                      onClick={async () => {
+                        setInvitationLoading(team.id);
+                        const res = await rejectTeamInvitation(tournament.id, team.id);
+                        setInvitationLoading(null);
+                        if (res.ok) setPendingInvitations(prev => prev.filter(inv => inv.team.id !== team.id));
+                      }}
+                      style={{
+                        padding: '8px 20px', background: 'transparent', color: 'var(--grey-500)',
+                        border: '1px solid var(--grey-200)', cursor: isLoading ? 'wait' : 'pointer',
+                        fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700,
+                        textTransform: 'uppercase', letterSpacing: '0.06em', opacity: isLoading ? 0.6 : 1,
+                      }}
+                    >
+                      RECHAZAR
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Torneos Activos */}
       <div style={{ marginBottom: 40 }}>
