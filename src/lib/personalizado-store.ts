@@ -52,6 +52,17 @@ export interface PersonalizadoSchedule {
   matchDurationMin: number; // estimated minutes per match (for end-time calc)
 }
 
+export interface SetScore {
+  a: number;
+  b: number;
+}
+
+export interface MatchResult {
+  sets: SetScore[];
+  winnerId: string;   // teamAId or teamBId
+  walkover: boolean;  // true → forfeit rules applied; sets[] may be empty
+}
+
 export interface PersonalizadoMatch {
   id: string;
   categoryId: string;
@@ -64,6 +75,19 @@ export interface PersonalizadoMatch {
   teamAId: string;
   teamBId: string;
   status: 'scheduled' | 'playing' | 'done';
+  result?: MatchResult;     // filled once an organizer enters the score
+}
+
+export interface TeamStanding {
+  teamId: string;
+  pj: number;    // played
+  pg: number;    // wins
+  pe: number;    // draws
+  pp: number;    // losses
+  jf: number;    // games in favour
+  jc: number;    // games against
+  diff: number;  // +/−
+  pts: number;   // standing points
 }
 
 export interface ControlPanelConfig {
@@ -299,13 +323,29 @@ export async function loadPersonalizadoById(id: string): Promise<PersonalizadoTo
         .maybeSingle();
       if (error) console.warn('[Personalizado] loadById:', error.message);
       if (trow) {
-        const { data: teamRows } = await supabase
-          .from('personalizado_teams')
-          .select('*')
-          .eq('tournament_id', id)
-          .order('registered_at', { ascending: true });
+        const [{ data: teamRows }, { data: resultRows }] = await Promise.all([
+          supabase.from('personalizado_teams').select('*').eq('tournament_id', id).order('registered_at', { ascending: true }),
+          supabase.from('personalizado_matches').select('*').eq('tournament_id', id),
+        ]);
         const teams = (teamRows ?? []).map(r => rowToTeam(r as Record<string, unknown>));
-        return rowToTournament(trow as Record<string, unknown>, teams);
+        const t = rowToTournament(trow as Record<string, unknown>, teams);
+        // Merge results into config.matches
+        if (resultRows && resultRows.length > 0 && t.config?.matches) {
+          const resultMap = new Map<string, MatchResult>();
+          for (const r of resultRows as Array<Record<string, unknown>>) {
+            if (r.winner_id) {
+              resultMap.set(r.id as string, {
+                sets: (r.result_sets as SetScore[]) ?? [],
+                winnerId: r.winner_id as string,
+                walkover: Boolean(r.walkover),
+              });
+            }
+          }
+          t.config.matches = t.config.matches.map(m =>
+            resultMap.has(m.id) ? { ...m, result: resultMap.get(m.id), status: 'done' as const } : m
+          );
+        }
+        return t;
       }
     } catch (e) {
       console.warn('[Personalizado] loadById threw:', e);
@@ -399,11 +439,11 @@ export async function registerTeam(code: string, team: RegisterInput): Promise<R
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, ...team }),
       });
-      const json = await res.json();
-      if (!res.ok) return { ok: false, error: json.error ?? 'No se pudo completar la inscripción' };
-      return json as RegisterResult;
+      if (res.ok) return (await res.json()) as RegisterResult;
+      const json = await res.json().catch(() => ({})) as { error?: string };
+      if (res.status < 500) return { ok: false, error: json.error ?? 'No se pudo completar la inscripción' };
     } catch {
-      return { ok: false, error: 'Error de conexión. Intenta de nuevo.' };
+      // network error — fall through to localStorage
     }
   }
   return addTeamToPersonalizadoLocal(code, team);
@@ -467,11 +507,11 @@ export async function changeTeamStatus(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tournamentId, teamId, status }),
       });
-      const json = await res.json();
-      if (!res.ok) return { ok: false, error: json.error ?? 'No se pudo actualizar' };
-      return json as StatusChangeResult;
+      if (res.ok) return (await res.json()) as StatusChangeResult;
+      const json = await res.json().catch(() => ({})) as { error?: string };
+      if (res.status < 500) return { ok: false, error: json.error ?? 'No se pudo actualizar' };
     } catch {
-      return { ok: false, error: 'Error de conexión. Intenta de nuevo.' };
+      // network error — fall through to localStorage
     }
   }
   return setTeamStatusLocal(tournamentId, teamId, status);
@@ -615,11 +655,12 @@ export async function saveControlPanel(input: SaveControlPanelInput): Promise<Sa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
       });
-      const json = await res.json();
-      if (!res.ok) return { ok: false, error: json.error ?? 'No se pudo guardar' };
-      return json as SaveControlPanelResult;
+      if (res.ok) return (await res.json()) as SaveControlPanelResult;
+      const json = await res.json().catch(() => ({})) as { error?: string };
+      // 4xx = input problem, surface the error; 5xx = connectivity, fall back
+      if (res.status < 500) return { ok: false, error: json.error ?? 'No se pudo guardar' };
     } catch {
-      return { ok: false, error: 'Error de conexión. Intenta de nuevo.' };
+      // network error — fall through to localStorage
     }
   }
   return saveControlPanelLocal(input);
@@ -658,6 +699,108 @@ export function saveControlPanelLocal(input: SaveControlPanelInput): SaveControl
     teams,
   });
   return { ok: true, teams };
+}
+
+// ── Match result save (atomic via API route, localStorage fallback) ───────────
+
+export interface SaveMatchResultInput {
+  tournamentId: string;
+  matchId: string;
+  result: MatchResult;
+}
+
+export async function saveMatchResult(input: SaveMatchResultInput): Promise<{ ok: boolean; error?: string }> {
+  if (isSupabaseConfigured) {
+    try {
+      const res = await fetch('/api/personalizado/match-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (res.ok) return { ok: true };
+      // Fall through to localStorage on any API failure (tournament may not exist
+      // in Supabase yet when working in local/dev mode)
+    } catch {
+      // network error — fall through to localStorage
+    }
+  }
+  return saveMatchResultLocal(input);
+}
+
+export function saveMatchResultLocal(input: SaveMatchResultInput): { ok: boolean; error?: string } {
+  const t = getPersonalizado(input.tournamentId);
+  if (!t || !t.config?.matches) return { ok: false, error: 'Torneo no encontrado' };
+  const matches = t.config.matches.map(m =>
+    m.id === input.matchId ? { ...m, result: input.result, status: 'done' as const } : m
+  );
+  savePersonalizado({ ...t, config: { ...t.config, matches } });
+  return { ok: true };
+}
+
+// ── Standings calculation ─────────────────────────────────────────────────────
+
+/**
+ * Compute standings for one group within one category.
+ * Tiebreaker order: Pts → +/− → JF (games in favour).
+ */
+export function calculateGroupStandings(
+  tournament: PersonalizadoTournament,
+  categoryId: string,
+  groupId: string,
+): TeamStanding[] {
+  const cfg = tournament.config;
+  const sp = cfg?.standingsPoints ?? { win: 3, draw: 1, loss: 0 };
+  const ff = cfg?.forfeit ?? { winnerPoints: 3, winnerGamesFor: 0 };
+
+  const groupTeams = tournament.teams.filter(
+    tm => tm.categoryId === categoryId && tm.groupId === groupId &&
+          (tm.status === 'pending' || tm.status === 'confirmed')
+  );
+  const standings = new Map<string, TeamStanding>();
+  for (const tm of groupTeams) {
+    standings.set(tm.id, { teamId: tm.id, pj: 0, pg: 0, pe: 0, pp: 0, jf: 0, jc: 0, diff: 0, pts: 0 });
+  }
+
+  const matches = (cfg?.matches ?? []).filter(
+    m => m.categoryId === categoryId && m.groupId === groupId && m.result
+  );
+
+  for (const match of matches) {
+    const res = match.result!;
+    const rowA = standings.get(match.teamAId);
+    const rowB = standings.get(match.teamBId);
+    if (!rowA || !rowB) continue;
+
+    rowA.pj++; rowB.pj++;
+
+    if (res.walkover) {
+      const winner = res.winnerId === match.teamAId ? rowA : rowB;
+      const loser  = res.winnerId === match.teamAId ? rowB : rowA;
+      winner.pg++; winner.pts += ff.winnerPoints; winner.jf += ff.winnerGamesFor;
+      loser.pp++;
+    } else {
+      let sA = 0, sB = 0, gA = 0, gB = 0;
+      for (const s of res.sets) {
+        gA += s.a; gB += s.b;
+        if (s.a > s.b) sA++; else if (s.b > s.a) sB++;
+      }
+      rowA.jf += gA; rowA.jc += gB; rowA.diff = rowA.jf - rowA.jc;
+      rowB.jf += gB; rowB.jc += gA; rowB.diff = rowB.jf - rowB.jc;
+      if (sA > sB) {
+        rowA.pg++; rowA.pts += sp.win; rowB.pp++; rowB.pts += sp.loss;
+      } else if (sB > sA) {
+        rowB.pg++; rowB.pts += sp.win; rowA.pp++; rowA.pts += sp.loss;
+      } else {
+        rowA.pe++; rowA.pts += sp.draw; rowB.pe++; rowB.pts += sp.draw;
+      }
+    }
+  }
+
+  return [...standings.values()].sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    if (b.diff !== a.diff) return b.diff - a.diff;
+    return b.jf - a.jf;
+  });
 }
 
 /** Synchronous localStorage status change with waitlist auto-promotion. */
