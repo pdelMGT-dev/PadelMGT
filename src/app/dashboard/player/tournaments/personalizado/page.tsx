@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createPersonalizado, type PersonalizadoCategory } from '@/lib/personalizado-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { getPlayerClubs } from '@/lib/club-membership-store';
+import { getSAClubs } from '@/lib/superadmin-data';
 
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
@@ -137,6 +139,21 @@ export default function PersonalizadoWizardPage() {
   const [country, setCountry] = useState('');
   const [courts, setCourts] = useState(2);
 
+  // Mis Clubes — loaded from localStorage on mount
+  type MyClub = { id: string; name: string; city: string; country: string; courts: number };
+  const [myClubs, setMyClubs] = useState<MyClub[]>([]);
+  useEffect(() => {
+    if (!user) return;
+    const memberships = getPlayerClubs(user.id);
+    if (!memberships.length) return;
+    const allClubs = getSAClubs();
+    const clubMap = new Map(allClubs.map(c => [c.id, c]));
+    setMyClubs(memberships.map(m => {
+      const saClub = clubMap.get(m.clubId);
+      return { id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: saClub?.courts ?? 2 };
+    }));
+  }, [user]);
+
   // Step 2 fields
   const [categories, setCategories] = useState<PersonalizadoCategory[]>([makeCategory({ name: 'Categoría A' })]);
 
@@ -236,6 +253,38 @@ export default function PersonalizadoWizardPage() {
 
         <div style={card}>
           <div style={secTitle}>Ubicación</div>
+
+          {/* Mis Clubes quick-fill */}
+          {myClubs.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>
+                Mis Clubes
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {myClubs.map(club => {
+                  const selected = locationName === club.name && city === club.city;
+                  return (
+                    <button
+                      key={club.id}
+                      type="button"
+                      onClick={() => { setLocationName(club.name); setCity(club.city); setCountry(club.country); setCourts(club.courts || 2); }}
+                      style={{
+                        padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        border: `1px solid ${selected ? 'var(--black)' : 'var(--grey-200)'}`,
+                        background: selected ? 'var(--black)' : 'transparent',
+                        color: selected ? 'var(--neon)' : 'var(--grey-600)',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      {club.name}
+                      {club.city ? <span style={{ fontWeight: 400, color: selected ? 'rgba(214,255,0,0.7)' : 'var(--grey-400)', marginLeft: 5 }}>{club.city}</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14, marginBottom: 14 }}>
             <div>
               <label style={lbl}>Lugar / Club</label>
