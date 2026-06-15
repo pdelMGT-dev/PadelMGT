@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import {
   getPersonalizadoByCode,
@@ -56,8 +56,8 @@ function BrandHeader() {
   );
 }
 
-export default function InscripcionPage({ params }: { params: { code: string } }) {
-  const { code } = params;
+export default function InscripcionPage({ params }: { params: Promise<{ code: string }> }) {
+  const { code } = use(params);
   const [tournament, setTournament] = useState<PersonalizadoTournament | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);

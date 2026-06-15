@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
@@ -57,9 +57,9 @@ const GENDER_LABELS: Record<string, string> = {
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
-export default function PersonalizadoDetailPage({ params }: { params: { id: string } }) {
+export default function PersonalizadoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
-  const { id } = params;
+  const { id } = use(params);
   const [tournament, setTournament] = useState<PersonalizadoTournament | null>(null);
   const [origin, setOrigin] = useState('');
   const [loading, setLoading] = useState(true);
