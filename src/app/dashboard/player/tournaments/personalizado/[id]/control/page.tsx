@@ -218,7 +218,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   if (loading) return <div style={{ padding: 40, color: 'var(--grey-400)', fontSize: 14 }}>Cargando…</div>;
   if (!tournament) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 1000, margin: '0 auto' }}>
+      <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 1000, margin: '0 auto' }}>
         <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--grey-500)' }}>Torneo no encontrado.</div>
       </div>
     );
@@ -253,7 +253,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   );
 
   return (
-    <div style={{ padding: '40px 40px 120px', maxWidth: 1000, margin: '0 auto' }}>
+    <div style={{ padding: '40px clamp(16px, 4vw, 40px) 120px', maxWidth: 1000, margin: '0 auto' }}>
       <Link
         href={`/dashboard/player/tournaments/personalizado/${id}`}
         style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20 }}
@@ -265,7 +265,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>
           Panel de Control
         </div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(24px, 5vw, 34px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
           {tournament.name}
         </h1>
       </div>
@@ -533,7 +533,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
       ), 'J')}
 
       {/* Save bar */}
-      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24 }}>
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24, flexWrap: 'wrap' }}>
         <button type="button" onClick={() => handleSave(false)} disabled={saving}
           style={{ padding: '12px 24px', border: '1px solid var(--grey-300)', background: '#fff', color: 'var(--black)', cursor: saving ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           {saving ? 'Guardando…' : 'Guardar configuración'}

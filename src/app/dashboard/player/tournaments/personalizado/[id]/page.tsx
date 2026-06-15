@@ -191,7 +191,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 
   if (!tournament) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
+      <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
         <Link
           href="/dashboard/player/tournaments"
           style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}
@@ -207,7 +207,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const openPrice = calcOpeningPrice(tournament);
 
   return (
-    <div style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
+    <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
       {/* Back link */}
       <Link
         href="/dashboard/player/tournaments"
@@ -219,7 +219,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(26px, 5vw, 36px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
             {tournament.name}
           </h1>
           <span style={{
@@ -263,6 +263,18 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               }}
             >
               ⚙ Panel de Control
+            </Link>
+          )}
+          {(tournament.status === 'configured' || tournament.status === 'live') && (
+            <Link
+              href={`/dashboard/player/tournaments/personalizado/${tournament.id}/schedule`}
+              style={{
+                padding: '9px 18px', background: '#fff', color: 'var(--black)',
+                border: '1px solid var(--grey-200)', cursor: 'pointer', textDecoration: 'none',
+                fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+              }}
+            >
+              🗓 Calendario
             </Link>
           )}
         </div>

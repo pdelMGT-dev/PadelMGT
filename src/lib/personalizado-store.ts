@@ -52,6 +52,20 @@ export interface PersonalizadoSchedule {
   matchDurationMin: number; // estimated minutes per match (for end-time calc)
 }
 
+export interface PersonalizadoMatch {
+  id: string;
+  categoryId: string;
+  groupId: string;
+  groupLabel: string;       // "A", "B"…
+  phase: 'group';
+  slot: number;             // ordinal time slot (0-based)
+  time: string;             // "09:00"
+  courtName: string;
+  teamAId: string;
+  teamBId: string;
+  status: 'scheduled' | 'playing' | 'done';
+}
+
 export interface ControlPanelConfig {
   substitutionEnabled: boolean;
   scoreType: 'traditional' | 'points';
@@ -68,6 +82,8 @@ export interface ControlPanelConfig {
   // court names (length is the effective court count; editable during play)
   courtNames: string[];
   schedule: PersonalizadoSchedule;
+  // generated group-stage schedule (filled by generateGroupSchedule)
+  matches?: PersonalizadoMatch[];
 }
 
 export const DEFAULT_CONTROL_CONFIG: ControlPanelConfig = {
@@ -459,6 +475,115 @@ export async function changeTeamStatus(
     }
   }
   return setTeamStatusLocal(tournamentId, teamId, status);
+}
+
+// ── Calendar generation (group-stage schedule) ───────────────────────────────
+
+const GROUP_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+function fmtMinutes(total: number): string {
+  const capped = Math.min(total, 23 * 60 + 59);
+  const h = Math.floor(capped / 60), m = capped % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function parseMinutes(hhmm: string): number {
+  const [h, m] = (hhmm || '0:0').split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/** Round-robin pairings (circle method). Returns rounds of [a, b] pairs. */
+function roundRobinRounds(ids: string[]): [string, string][][] {
+  const teams = [...ids];
+  if (teams.length < 2) return [];
+  if (teams.length % 2 === 1) teams.push('__BYE__');
+  const n = teams.length;
+  const rounds: [string, string][][] = [];
+  for (let r = 0; r < n - 1; r++) {
+    const round: [string, string][] = [];
+    for (let i = 0; i < n / 2; i++) {
+      const a = teams[i], b = teams[n - 1 - i];
+      if (a !== '__BYE__' && b !== '__BYE__') round.push([a, b]);
+    }
+    rounds.push(round);
+    // rotate, keeping the first team fixed
+    teams.splice(1, 0, teams.pop()!);
+  }
+  return rounds;
+}
+
+/**
+ * Generate the group-stage match schedule from the control-panel config and the
+ * teams' group assignments. Round-robin within each group, then list-scheduled
+ * across courts and time slots, honoring the lunch break. A team never plays two
+ * matches in the same time slot.
+ */
+export function generateGroupSchedule(t: PersonalizadoTournament): PersonalizadoMatch[] {
+  const cfg = t.config;
+  if (!cfg) return [];
+  const courts = (cfg.courtNames && cfg.courtNames.length > 0)
+    ? cfg.courtNames
+    : Array.from({ length: Math.max(1, t.courts || 1) }, (_, i) => `Cancha ${i + 1}`);
+
+  const assignable = t.teams.filter(tm => tm.status === 'pending' || tm.status === 'confirmed');
+
+  // Collect all group matches (unscheduled).
+  type Pending = { categoryId: string; groupId: string; groupLabel: string; a: string; b: string };
+  const pending: Pending[] = [];
+  for (const cat of t.categories) {
+    const byGroup = new Map<string, string[]>();
+    for (const tm of assignable) {
+      if (tm.categoryId !== cat.id || !tm.groupId) continue;
+      const arr = byGroup.get(tm.groupId) ?? [];
+      arr.push(tm.id);
+      byGroup.set(tm.groupId, arr);
+    }
+    for (const [gid, ids] of byGroup) {
+      const n = parseInt(gid.split('-G')[1] ?? '1', 10);
+      const label = GROUP_LETTERS[(n - 1) % GROUP_LETTERS.length] ?? String(n);
+      for (const round of roundRobinRounds(ids)) {
+        for (const [a, b] of round) pending.push({ categoryId: cat.id, groupId: gid, groupLabel: label, a, b });
+      }
+    }
+  }
+
+  // List-schedule into slots × courts.
+  const matchDur = Math.max(10, cfg.schedule.matchDurationMin || 50);
+  const lunchEnabled = cfg.schedule.lunchEnabled;
+  const lunchStart = parseMinutes(cfg.schedule.lunchStart ?? '13:00');
+  const lunchDur = cfg.schedule.lunchDurationMin ?? 0;
+
+  let slotTime = parseMinutes(cfg.schedule.startTime || '09:00');
+  let lunchTaken = !lunchEnabled;
+  let slotIndex = 0;
+  const out: PersonalizadoMatch[] = [];
+  const remaining = [...pending];
+
+  while (remaining.length > 0) {
+    if (!lunchTaken && slotTime >= lunchStart) { slotTime += lunchDur; lunchTaken = true; }
+    const busy = new Set<string>();
+    let courtsUsed = 0;
+    for (let i = 0; i < remaining.length && courtsUsed < courts.length; ) {
+      const m = remaining[i];
+      if (!busy.has(m.a) && !busy.has(m.b)) {
+        out.push({
+          id: `m-${m.groupId}-${m.a}-${m.b}`,
+          categoryId: m.categoryId, groupId: m.groupId, groupLabel: m.groupLabel, phase: 'group',
+          slot: slotIndex, time: fmtMinutes(slotTime), courtName: courts[courtsUsed],
+          teamAId: m.a, teamBId: m.b, status: 'scheduled',
+        });
+        busy.add(m.a); busy.add(m.b);
+        courtsUsed++;
+        remaining.splice(i, 1);
+      } else {
+        i++;
+      }
+    }
+    slotTime += matchDur;
+    slotIndex++;
+    if (slotIndex > 2000) break; // safety
+  }
+  return out;
 }
 
 // ── Control panel save (config + maxTeams + group assignments) ────────────────

@@ -192,7 +192,7 @@ export default function PersonalizadoWizardPage() {
       <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>
         Nuevo Torneo Personalizado
       </div>
-      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0, marginBottom: 6 }}>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(26px, 5vw, 36px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0, marginBottom: 6 }}>
         TORNEO PERSONALIZADO
       </h1>
       <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>
@@ -204,7 +204,7 @@ export default function PersonalizadoWizardPage() {
   // ── STEP 1: Info Básica ────────────────────────────────────────────────────
   if (step === 1) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
+      <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
         {pageHeader}
         <WizardSteps current={1} />
 
@@ -222,7 +222,7 @@ export default function PersonalizadoWizardPage() {
 
         <div style={card}>
           <div style={secTitle}>Fecha y hora</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14 }}>
             <div>
               <label style={lbl}>Fecha *</label>
               <input type="date" value={date} min={today()} onChange={e => setDate(e.target.value)} style={inp} />
@@ -236,7 +236,7 @@ export default function PersonalizadoWizardPage() {
 
         <div style={card}>
           <div style={secTitle}>Ubicación</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14, marginBottom: 14 }}>
             <div>
               <label style={lbl}>Lugar / Club</label>
               <input type="text" value={locationName} onChange={e => setLocationName(e.target.value)} placeholder="Ej: Club Padel Norte" style={inp} />
@@ -246,7 +246,7 @@ export default function PersonalizadoWizardPage() {
               <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="Ej: Buenos Aires" style={inp} />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14, marginBottom: 14 }}>
             <div>
               <label style={lbl}>País</label>
               <input type="text" value={country} onChange={e => setCountry(e.target.value)} placeholder="Ej: Argentina" style={inp} />
@@ -270,7 +270,7 @@ export default function PersonalizadoWizardPage() {
   // ── STEP 2: Categorías ─────────────────────────────────────────────────────
   if (step === 2) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
+      <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
         {pageHeader}
         <WizardSteps current={2} />
 
@@ -360,14 +360,14 @@ export default function PersonalizadoWizardPage() {
 
   // ── STEP 3: Resumen ────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
+    <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
       {pageHeader}
       <WizardSteps current={3} />
 
       {/* Tournament info */}
       <div style={card}>
         <div style={secTitle}>Información del torneo</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 2 }}>Nombre</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--black)' }}>{name}</div>
