@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const body = await req.json() as {
     tournamentId: string;
     teamId: string;
-    action: 'accept' | 'reject';
+    action: 'accept' | 'reject' | 'clear_partner';
     playerId?: string;
     playerName?: string;
   };
@@ -42,6 +42,15 @@ export async function POST(req: Request) {
     const { error: updErr } = await sb
       .from('personalizado_teams')
       .update({ player2_id: playerId, player2_name: playerName })
+      .eq('id', teamId);
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === 'clear_partner') {
+    const { error: updErr } = await sb
+      .from('personalizado_teams')
+      .update({ player2_id: null, player2_name: null, player2_email: null, status: 'pending' })
       .eq('id', teamId);
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
     return NextResponse.json({ ok: true });

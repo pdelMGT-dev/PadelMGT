@@ -150,6 +150,12 @@ export default function PlayerHomePage() {
         <h1 className="player-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', lineHeight: 0.95, margin: 0 }}>
           HOLA,<br /><span style={{ color: 'var(--court-blue)' }}>{currentUser ? currentUser.name.split(' ')[0].toUpperCase() : 'JUGADOR'}.</span>
         </h1>
+        {currentUser?.shortId && (
+          <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 12px', background: 'rgba(0,0,0,0.06)', border: '1px solid var(--grey-200)' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Tu ID</span>
+            <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: 'var(--black)', letterSpacing: '0.04em' }}>{currentUser.shortId}</span>
+          </div>
+        )}
       </div>
 
       {/* Profile completion reminder (first login) */}

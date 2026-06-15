@@ -10,6 +10,7 @@ import {
   savePersonalizado,
   calcOpeningPrice,
   changeTeamStatus,
+  clearTeamPartner,
   registerTeam,
   enrolledCount,
   waitlistCount,
@@ -129,8 +130,9 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const [opening, setOpening] = useState(false);
 
   // ── Rejection modal ──────────────────────────────────────────────────────────
-  const [rejectModal, setRejectModal] = useState<{ teamId: string; teamName: string; catName: string } | null>(null);
+  const [rejectModal, setRejectModal] = useState<{ teamId: string; teamName: string; catName: string; hasPartner: boolean; p1Name: string; p2Name?: string; p1Email?: string; p2Email?: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [rejectTarget, setRejectTarget] = useState<'team' | 'partner'>('team');
   const [rejecting, setRejecting] = useState(false);
 
   // ── Collapsed rejected sections per category ─────────────────────────────────
@@ -215,35 +217,69 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 
   function openRejectModal(team: PersonalizadoTeam, catName: string) {
     const teamName = team.player2Name ? `${team.player1Name} / ${team.player2Name}` : team.player1Name;
-    setRejectModal({ teamId: team.id, teamName, catName });
+    const hasPartner = !!team.player2Name;
+    setRejectModal({ teamId: team.id, teamName, catName, hasPartner, p1Name: team.player1Name, p2Name: team.player2Name, p1Email: team.player1Email, p2Email: team.player2Email });
     setRejectReason('');
+    setRejectTarget('team');
   }
 
   async function handleConfirmReject() {
     if (!rejectModal || !tournament) return;
     setRejecting(true);
-    const result = await changeTeamStatus(id, rejectModal.teamId, 'rejected');
-    setRejecting(false);
-    if (!result.ok) { showToast(result.error ?? 'No se pudo rechazar', 'error'); return; }
-    const updated = await loadPersonalizadoById(id);
-    setTournament(updated);
-    if (!updated) return;
-    const team = updated.teams.find(t => t.id === rejectModal.teamId);
-    if (team?.player1Email) {
-      void sendPersonalizadoStatusEmail({
-        to: team.player1Email, toName: team.player1Name,
-        tournamentName: updated.name, categoryName: rejectModal.catName,
-        statusMessage: rejectReason.trim()
-          ? `Tu inscripción fue rechazada. Motivo: ${rejectReason.trim()}`
-          : 'Tu inscripción fue rechazada por el organizador.',
-      });
-    }
-    if (result.promoted) {
-      const promoted = updated.teams.find(t => t.id === result.promoted!.id) ?? result.promoted;
-      if (promoted.player1Email) {
-        void sendPersonalizadoStatusEmail({ to: promoted.player1Email, toName: promoted.player1Name, tournamentName: updated.name, categoryName: rejectModal.catName, statusMessage: '¡Se liberó un lugar y pasaste de la lista de espera! El organizador confirmará tu inscripción.' });
+
+    if (rejectTarget === 'partner') {
+      // Only reject player 2 — keep player 1 in the tournament as "needs partner"
+      const result = await clearTeamPartner(id, rejectModal.teamId);
+      setRejecting(false);
+      if (!result.ok) { showToast(result.error ?? 'No se pudo rechazar al compañero', 'error'); return; }
+      const updated = await loadPersonalizadoById(id);
+      setTournament(updated);
+      // Email to player 1
+      if (rejectModal.p1Email) {
+        void sendPersonalizadoStatusEmail({
+          to: rejectModal.p1Email, toName: rejectModal.p1Name,
+          tournamentName: tournament.name, categoryName: rejectModal.catName,
+          statusMessage: rejectReason.trim()
+            ? `Tu compañero/a fue rechazado/a. Motivo: ${rejectReason.trim()}. Puedes inscribir un nuevo compañero/a usando el link del torneo.`
+            : 'Tu compañero/a no cumplió los requisitos de la categoría. Puedes inscribir un nuevo compañero/a usando el link del torneo.',
+        });
       }
-      showToast('Equipo promovido de la lista de espera', 'success');
+      // Email to player 2
+      if (rejectModal.p2Email && rejectModal.p2Name) {
+        void sendPersonalizadoStatusEmail({
+          to: rejectModal.p2Email, toName: rejectModal.p2Name,
+          tournamentName: tournament.name, categoryName: rejectModal.catName,
+          statusMessage: rejectReason.trim()
+            ? `Tu inscripción fue rechazada. Motivo: ${rejectReason.trim()}`
+            : 'Tu inscripción fue rechazada por el organizador.',
+        });
+      }
+      showToast('Compañero/a rechazado — el Jugador 1 puede buscar un nuevo compañero', 'success');
+    } else {
+      // Reject entire team
+      const result = await changeTeamStatus(id, rejectModal.teamId, 'rejected');
+      setRejecting(false);
+      if (!result.ok) { showToast(result.error ?? 'No se pudo rechazar', 'error'); return; }
+      const updated = await loadPersonalizadoById(id);
+      setTournament(updated);
+      if (!updated) return;
+      const team = updated.teams.find(t => t.id === rejectModal.teamId);
+      if (team?.player1Email) {
+        void sendPersonalizadoStatusEmail({
+          to: team.player1Email, toName: team.player1Name,
+          tournamentName: updated.name, categoryName: rejectModal.catName,
+          statusMessage: rejectReason.trim()
+            ? `Tu inscripción fue rechazada. Motivo: ${rejectReason.trim()}`
+            : 'Tu inscripción fue rechazada por el organizador.',
+        });
+      }
+      if (result.promoted) {
+        const promoted = updated.teams.find(t => t.id === result.promoted!.id) ?? result.promoted;
+        if (promoted.player1Email) {
+          void sendPersonalizadoStatusEmail({ to: promoted.player1Email, toName: promoted.player1Name, tournamentName: updated.name, categoryName: rejectModal.catName, statusMessage: '¡Se liberó un lugar y pasaste de la lista de espera!' });
+        }
+        showToast('Equipo promovido de la lista de espera', 'success');
+      }
     }
     setRejectModal(null);
     setRejectReason('');
@@ -298,7 +334,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 
   if (!tournament) {
     return (
-      <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
+      <div style={{ padding: '40px clamp(16px, 4vw, 48px) 80px' }}>
         <Link href="/dashboard/player/tournaments" style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Mis Torneos</Link>
         <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--grey-500)' }}>Torneo no encontrado.</div>
       </div>
@@ -309,7 +345,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const openPrice = calcOpeningPrice(tournament);
 
   return (
-    <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
+    <div style={{ padding: '40px clamp(16px, 4vw, 48px) 80px' }}>
       {/* Back */}
       <Link href="/dashboard/player/tournaments" style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Mis Torneos</Link>
 
@@ -532,6 +568,27 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
             <div style={{ fontSize: 14, color: 'var(--grey-500)', marginBottom: 6 }}>{rejectModal.teamName}</div>
             <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 20 }}>Categoría: {rejectModal.catName}</div>
 
+            {/* Radio: who to reject — only shown when there are 2 players */}
+            {rejectModal.hasPartner && (
+              <div style={{ marginBottom: 18 }}>
+                <span style={lbl}>¿A quién rechazar?</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {([
+                    { value: 'team' as const, label: 'Rechazar el equipo completo', desc: `${rejectModal.p1Name} y ${rejectModal.p2Name} quedan fuera.` },
+                    { value: 'partner' as const, label: `Rechazar solo al compañero/a (${rejectModal.p2Name})`, desc: `${rejectModal.p1Name} permanece inscrito/a y puede buscar un nuevo compañero/a.` },
+                  ] as const).map(opt => (
+                    <label key={opt.value} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', border: `1px solid ${rejectTarget === opt.value ? 'var(--black)' : 'var(--grey-200)'}`, background: rejectTarget === opt.value ? 'rgba(0,0,0,0.03)' : '#fff', cursor: 'pointer' }}>
+                      <input type="radio" name="rejectTarget" value={opt.value} checked={rejectTarget === opt.value} onChange={() => setRejectTarget(opt.value)} style={{ marginTop: 2, flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>{opt.label}</div>
+                        <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 2 }}>{opt.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <label style={lbl}>Motivo (opcional)</label>
             <textarea
               value={rejectReason}
@@ -541,7 +598,9 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: '1px solid var(--grey-200)', resize: 'vertical', marginBottom: 10, boxSizing: 'border-box', fontFamily: 'var(--font-body)' }}
             />
             <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 22 }}>
-              El equipo recibirá un email de notificación{rejectReason.trim() ? ' con el motivo indicado' : ''}.
+              {rejectTarget === 'partner'
+                ? `${rejectModal.p2Name ?? 'El compañero/a'} recibirá un email de rechazo${rejectReason.trim() ? ' con el motivo indicado' : ''}. ${rejectModal.p1Name} será notificado/a para buscar un nuevo compañero/a.`
+                : `El equipo recibirá un email de notificación${rejectReason.trim() ? ' con el motivo indicado' : ''}.`}
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
@@ -556,7 +615,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                 disabled={rejecting}
                 style={{ padding: '9px 22px', background: '#b91c1c', color: '#fff', border: 'none', cursor: rejecting ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: rejecting ? 0.6 : 1 }}
               >
-                {rejecting ? 'Rechazando…' : 'Confirmar Rechazo'}
+                {rejecting ? 'Rechazando…' : rejectTarget === 'partner' ? 'Rechazar Compañero/a' : 'Rechazar Equipo'}
               </button>
             </div>
           </div>

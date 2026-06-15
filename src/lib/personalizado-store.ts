@@ -814,6 +814,42 @@ export interface PendingInvitation {
   tournament: PersonalizadoTournament;
 }
 
+/** Remove a team's partner (player2) so player1 can find a new one. */
+export async function clearTeamPartner(tournamentId: string, teamId: string): Promise<{ ok: boolean; error?: string }> {
+  if (isSupabaseConfigured) {
+    try {
+      const res = await fetch('/api/personalizado/accept-invitation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId, teamId, action: 'clear_partner' }),
+      });
+      if (res.ok) return { ok: true };
+      if (res.status < 500) {
+        const json = await res.json().catch(() => ({})) as { error?: string };
+        return { ok: false, error: json.error ?? 'Error al limpiar compañero' };
+      }
+    } catch { /* fall through */ }
+  }
+  return clearTeamPartnerLocal(tournamentId, teamId);
+}
+
+export function clearTeamPartnerLocal(tournamentId: string, teamId: string): { ok: boolean; error?: string } {
+  const all = _store.load();
+  const tIdx = all.findIndex(t => t.id === tournamentId);
+  if (tIdx < 0) return { ok: false, error: 'Torneo no encontrado' };
+  const t = { ...all[tIdx], teams: [...all[tIdx].teams] };
+  const tmIdx = t.teams.findIndex(tm => tm.id === teamId);
+  if (tmIdx < 0) return { ok: false, error: 'Inscripción no encontrada' };
+  t.teams[tmIdx] = {
+    ...t.teams[tmIdx],
+    player2Name: undefined, player2Email: undefined, player2Id: undefined,
+    status: 'pending' as const,
+  };
+  all[tIdx] = t;
+  _store.persist(all);
+  return { ok: true };
+}
+
 /** Return all teams where the player has been invited as partner (player2) but hasn't accepted yet. */
 export function getPendingInvitationsForPlayer(email: string): PendingInvitation[] {
   const emailLower = email.toLowerCase();
