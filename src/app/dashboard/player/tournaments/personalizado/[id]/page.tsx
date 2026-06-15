@@ -240,18 +240,32 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
           )}
           <span>Código: <strong style={{ color: 'var(--black)' }}>{tournament.code}</strong></span>
         </div>
-        {tournament.teams.length > 0 && (
-          <button
-            onClick={exportCSV}
-            style={{
-              marginTop: 14, padding: '9px 18px', background: '#fff', color: 'var(--black)',
-              border: '1px solid var(--grey-200)', cursor: 'pointer',
-              fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
-            }}
-          >
-            ⬇ Exportar inscritos (CSV)
-          </button>
-        )}
+        <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {tournament.teams.length > 0 && (
+            <button
+              onClick={exportCSV}
+              style={{
+                padding: '9px 18px', background: '#fff', color: 'var(--black)',
+                border: '1px solid var(--grey-200)', cursor: 'pointer',
+                fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+              }}
+            >
+              ⬇ Exportar inscritos (CSV)
+            </button>
+          )}
+          {(tournament.status === 'registration_open' || tournament.status === 'configured') && (
+            <Link
+              href={`/dashboard/player/tournaments/personalizado/${tournament.id}/control`}
+              style={{
+                padding: '9px 18px', background: 'var(--black)', color: 'var(--neon)',
+                border: 'none', cursor: 'pointer', textDecoration: 'none',
+                fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+              }}
+            >
+              ⚙ Panel de Control
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Categories */}

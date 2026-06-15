@@ -461,6 +461,80 @@ export async function changeTeamStatus(
   return setTeamStatusLocal(tournamentId, teamId, status);
 }
 
+// ── Control panel save (config + maxTeams + group assignments) ────────────────
+
+export interface SaveControlPanelInput {
+  id: string;
+  categories: PersonalizadoCategory[];
+  config: ControlPanelConfig;
+  status?: PersonalizadoTournament['status'];
+  groupAssignments?: Record<string, string | null>;
+}
+
+export interface SaveControlPanelResult {
+  ok: boolean;
+  error?: string;
+  teams?: PersonalizadoTeam[];
+}
+
+/**
+ * Persist control-panel state. Prefers the API route (so the waitlist is
+ * reconciled server-side when maxTeams changes). Falls back to a synchronous
+ * localStorage write when Supabase isn't configured.
+ */
+export async function saveControlPanel(input: SaveControlPanelInput): Promise<SaveControlPanelResult> {
+  if (isSupabaseConfigured) {
+    try {
+      const res = await fetch('/api/personalizado/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      const json = await res.json();
+      if (!res.ok) return { ok: false, error: json.error ?? 'No se pudo guardar' };
+      return json as SaveControlPanelResult;
+    } catch {
+      return { ok: false, error: 'Error de conexión. Intenta de nuevo.' };
+    }
+  }
+  return saveControlPanelLocal(input);
+}
+
+/** Synchronous localStorage control-panel save with waitlist reconciliation. */
+export function saveControlPanelLocal(input: SaveControlPanelInput): SaveControlPanelResult {
+  const t = getPersonalizado(input.id);
+  if (!t) return { ok: false, error: 'Torneo no encontrado' };
+
+  let teams = t.teams.map(tm =>
+    input.groupAssignments && tm.id in input.groupAssignments
+      ? { ...tm, groupId: input.groupAssignments[tm.id] ?? undefined }
+      : tm
+  );
+
+  // Reconcile waitlist per category against (possibly new) maxTeams.
+  for (const cat of input.categories) {
+    let enrolled = teams.filter(tm => tm.categoryId === cat.id && (tm.status === 'pending' || tm.status === 'confirmed')).length;
+    if (enrolled >= cat.maxTeams) continue;
+    const waiting = teams
+      .filter(tm => tm.categoryId === cat.id && tm.status === 'waitlisted')
+      .sort((a, b) => a.registeredAt.localeCompare(b.registeredAt));
+    for (const w of waiting) {
+      if (enrolled >= cat.maxTeams) break;
+      teams = teams.map(tm => tm.id === w.id ? { ...tm, status: 'pending' as const } : tm);
+      enrolled++;
+    }
+  }
+
+  savePersonalizado({
+    ...t,
+    categories: input.categories,
+    config: input.config,
+    status: input.status ?? t.status,
+    teams,
+  });
+  return { ok: true, teams };
+}
+
 /** Synchronous localStorage status change with waitlist auto-promotion. */
 export function setTeamStatusLocal(
   tournamentId: string,
