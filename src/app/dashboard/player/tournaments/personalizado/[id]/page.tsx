@@ -8,6 +8,8 @@ import {
   getPersonalizado,
   savePersonalizado,
   calcOpeningPrice,
+  setTeamStatus,
+  enrolledCount,
   type PersonalizadoTournament,
 } from '@/lib/personalizado-store';
 
@@ -61,6 +63,7 @@ export default function PersonalizadoDetailPage({ params }: { params: { id: stri
   const [tournament, setTournament] = useState<PersonalizadoTournament | null>(null);
   const [origin, setOrigin] = useState('');
   const [loading, setLoading] = useState(true);
+  const [opening, setOpening] = useState(false);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -69,13 +72,47 @@ export default function PersonalizadoDetailPage({ params }: { params: { id: stri
     setLoading(false);
   }, [id]);
 
-  function handleOpenRegistration() {
+  // Post-payment return: flip status to registration_open (simulates webhook for dev/MVP).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get('registration') === 'opened') {
+      const t = getPersonalizado(id);
+      if (t && t.status === 'draft') {
+        savePersonalizado({ ...t, status: 'registration_open', openedAt: new Date().toISOString() });
+        setTournament(getPersonalizado(id));
+        window.history.replaceState({}, '', `/dashboard/player/tournaments/personalizado/${id}`);
+      }
+    }
+  }, [id]);
+
+  async function handleOpenRegistration() {
     const t = getPersonalizado(id);
     if (!t) return;
-    // In production this would go through Stripe. For now, open directly.
-    const updated = { ...t, status: 'registration_open' as const, openedAt: new Date().toISOString() };
-    savePersonalizado(updated);
-    setTournament(updated);
+    setOpening(true);
+    try {
+      const price = calcOpeningPrice(t);
+      const res = await fetch('/api/stripe/open-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId: t.id, tournamentCode: t.code, price, userEmail: undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        alert(data.error || 'No se pudo iniciar el pago');
+        setOpening(false);
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      setOpening(false);
+      alert('Error de red al iniciar el pago');
+    }
+  }
+
+  function handleSetTeamStatus(teamId: string, status: 'confirmed' | 'rejected') {
+    setTeamStatus(id, teamId, status);
+    setTournament(getPersonalizado(id));
   }
 
   if (loading) {
@@ -151,7 +188,7 @@ export default function PersonalizadoDetailPage({ params }: { params: { id: stri
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)' }}>
-                  {categoryTeams.length} / {cat.maxTeams} equipos inscritos
+                  {enrolledCount(tournament, cat.id)} / {cat.maxTeams} equipos inscritos
                 </div>
                 {cat.registrationFee > 0 && (
                   <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 2 }}>Cuota: ${cat.registrationFee}</div>
@@ -184,11 +221,33 @@ export default function PersonalizadoDetailPage({ params }: { params: { id: stri
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span style={{
                         fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 6px',
-                        background: team.status === 'confirmed' ? 'rgba(34,197,94,0.1)' : 'rgba(0,0,0,0.05)',
-                        color: team.status === 'confirmed' ? '#15803d' : 'var(--grey-500)',
+                        background: team.status === 'confirmed' ? 'rgba(34,197,94,0.1)' : team.status === 'rejected' ? 'rgba(220,38,38,0.08)' : 'rgba(0,0,0,0.05)',
+                        color: team.status === 'confirmed' ? '#15803d' : team.status === 'rejected' ? '#b91c1c' : 'var(--grey-500)',
                       }}>
                         {team.status === 'confirmed' ? 'Confirmado' : team.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
                       </span>
+                      {tournament.status === 'registration_open' && team.status === 'pending' && (
+                        <>
+                          <button
+                            onClick={() => handleSetTeamStatus(team.id, 'confirmed')}
+                            style={{
+                              fontSize: 11, fontWeight: 700, padding: '3px 8px', cursor: 'pointer',
+                              background: 'rgba(34,197,94,0.1)', color: '#15803d', border: '1px solid rgba(34,197,94,0.3)',
+                            }}
+                          >
+                            ✓ Confirmar
+                          </button>
+                          <button
+                            onClick={() => handleSetTeamStatus(team.id, 'rejected')}
+                            style={{
+                              fontSize: 11, fontWeight: 700, padding: '3px 8px', cursor: 'pointer',
+                              background: 'rgba(220,38,38,0.06)', color: '#b91c1c', border: '1px solid rgba(220,38,38,0.25)',
+                            }}
+                          >
+                            ✕ Rechazar
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -219,14 +278,15 @@ export default function PersonalizadoDetailPage({ params }: { params: { id: stri
             </div>
             <button
               onClick={handleOpenRegistration}
+              disabled={opening}
               style={{
                 padding: '13px 28px', background: 'var(--black)', color: 'var(--neon)',
-                border: 'none', cursor: 'pointer',
+                border: 'none', cursor: opening ? 'wait' : 'pointer', opacity: opening ? 0.6 : 1,
                 fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700,
                 textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0,
               }}
             >
-              Abrir Inscripción — ${openPrice}
+              {opening ? 'Redirigiendo…' : `Abrir Inscripción — $${openPrice}`}
             </button>
           </div>
           <div style={{ padding: '10px 14px', background: 'rgba(0,0,0,0.03)', border: '1px solid var(--grey-100)', fontSize: 12, color: 'var(--grey-400)' }}>

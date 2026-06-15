@@ -120,3 +120,46 @@ export function calcOpeningPrice(tournament: PersonalizadoTournament): number {
   if (totalSlots <= 64) return 29;
   return 49;
 }
+
+export function addTeamToPersonalizado(code: string, team: {
+  categoryId: string;
+  player1Name: string;
+  player1Email?: string;
+  player2Name?: string;
+  player2Email?: string;
+}): { ok: boolean; error?: string } {
+  const t = getPersonalizadoByCode(code);
+  if (!t) return { ok: false, error: 'Torneo no encontrado' };
+  if (t.status !== 'registration_open') return { ok: false, error: 'La inscripción no está abierta' };
+  const cat = t.categories.find(c => c.id === team.categoryId);
+  if (!cat) return { ok: false, error: 'Categoría no encontrada' };
+  const enrolled = t.teams.filter(tm => tm.categoryId === team.categoryId && tm.status !== 'rejected').length;
+  if (enrolled >= cat.maxTeams) return { ok: false, error: 'Categoría llena' };
+
+  const newTeam = {
+    id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `tm-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    categoryId: team.categoryId,
+    player1Name: team.player1Name,
+    player1Email: team.player1Email,
+    player2Name: team.player2Name,
+    player2Email: team.player2Email,
+    registeredAt: new Date().toISOString(),
+    status: 'pending' as const,
+    paymentStatus: (cat.registrationFee > 0 ? 'unpaid' : 'free') as 'unpaid' | 'free',
+  };
+  savePersonalizado({ ...t, teams: [...t.teams, newTeam] });
+  return { ok: true };
+}
+
+export function setTeamStatus(tournamentId: string, teamId: string, status: 'pending' | 'confirmed' | 'rejected'): void {
+  const t = getPersonalizado(tournamentId);
+  if (!t) return;
+  savePersonalizado({
+    ...t,
+    teams: t.teams.map(tm => tm.id === teamId ? { ...tm, status } : tm),
+  });
+}
+
+export function enrolledCount(t: PersonalizadoTournament, categoryId: string): number {
+  return t.teams.filter(tm => tm.categoryId === categoryId && tm.status !== 'rejected').length;
+}
