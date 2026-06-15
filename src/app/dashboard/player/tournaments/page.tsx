@@ -6,6 +6,7 @@ import { getAllTournaments, createTournament, getTournament, saveTournament, clo
 import { checkTournamentGate, incrementUsage, getPlayerLimits } from '@/lib/plan-config';
 import type { Tournament } from '@/lib/tournament-store';
 import type { FixedPair } from '@/lib/game-engine';
+import { getAllPersonalizado, type PersonalizadoTournament } from '@/lib/personalizado-store';
 import { getFriendsForPlayer, searchPlayers } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { getPlayerClubs } from '@/lib/club-membership-store';
@@ -282,6 +283,16 @@ export default function PlayerTournamentsPage() {
       (t.invitedPlayers ?? []).some(p => p.id === currentUser.id)
     ));
     setTournamentsLoading(false);
+  }, [currentUser]);
+
+  const [activePersonalizados, setActivePersonalizados] = useState<PersonalizadoTournament[]>([]);
+  useEffect(() => {
+    if (!currentUser) return;
+    const active = getAllPersonalizado().filter(
+      t => t.creatorId === currentUser.id &&
+        (t.status === 'registration_open' || t.status === 'configured' || t.status === 'live')
+    );
+    setActivePersonalizados(active);
   }, [currentUser]);
 
   // World Cup is a knockout with a mandatory group stage and FIFA presets:
@@ -1969,7 +1980,7 @@ export default function PlayerTournamentsPage() {
       {/* Torneos Activos */}
       <div style={{ marginBottom: 40 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div style={secTitle}>Torneos Activos ({tournamentsLoading ? '...' : activeTournaments.length})</div>
+          <div style={secTitle}>Torneos Activos ({tournamentsLoading ? '...' : activeTournaments.length + activePersonalizados.length})</div>
           {activeTournaments.length > 0 && (
             <div style={{ display: 'flex', gap: 2 }}>
               {(['icons', 'list'] as const).map(mode => (
@@ -1986,7 +1997,7 @@ export default function PlayerTournamentsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 16 }}>
             {[1, 2, 3].map(i => <SkeletonCard key={i} rows={3} />)}
           </div>
-        ) : activeTournaments.length === 0 ? (
+        ) : activeTournaments.length === 0 && activePersonalizados.length === 0 ? (
           <div style={{ padding: '32px', background: '#fff', border: '1px solid var(--grey-200)', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>
             No tenés torneos activos. ¡Creá uno!
           </div>
@@ -2026,10 +2037,74 @@ export default function PlayerTournamentsPage() {
                 </div>
               );
             })}
+            {activePersonalizados.map(pt => {
+              const enrolled = pt.teams.filter(tm => tm.status !== 'rejected').length;
+              const totalSlots = pt.categories.reduce((s, c) => s + c.maxTeams, 0);
+              const si = {
+                registration_open: { label: 'Inscripciones abiertas', color: '#7c3aed' },
+                configured: { label: 'Configurado', color: '#f5a623' },
+                live: { label: 'En Vivo', color: 'var(--turf-green)' },
+              }[pt.status] ?? { label: pt.status, color: 'var(--grey-400)' };
+              return (
+                <div key={pt.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 3 }}>Personalizado</div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', lineHeight: 1.2 }}>{pt.name}</div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: si.color, flexShrink: 0, marginLeft: 8 }}>{si.label}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)', lineHeight: 1.7 }}>
+                    {pt.date}{pt.time ? ` · ${pt.time}` : ''}<br />
+                    {pt.locationName}{pt.city ? `, ${pt.city}` : ''}<br />
+                    {pt.categories.length} categoría{pt.categories.length !== 1 ? 's' : ''} · Parejas
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                    <div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, lineHeight: 1 }}>
+                        {enrolled}<span style={{ fontSize: 13, color: 'var(--grey-400)', fontFamily: 'var(--font-body)', fontWeight: 400 }}>/{totalSlots}</span>
+                      </div>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', fontWeight: 600 }}>equipos</div>
+                    </div>
+                    <Link href={`/dashboard/player/tournaments/personalizado/${pt.id}`}
+                      style={{ padding: '7px 16px', background: pt.status === 'live' ? 'var(--turf-green)' : 'var(--black)', color: pt.status === 'live' ? '#fff' : 'var(--neon)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}>
+                      {pt.status === 'live' ? 'EN VIVO →' : 'GESTIONAR'}
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
             {activeTournaments.map(t => <TournamentCard key={t.id} t={t} />)}
+            {activePersonalizados.map(pt => {
+              const enrolled = pt.teams.filter(tm => tm.status !== 'rejected').length;
+              const totalSlots = pt.categories.reduce((s, c) => s + c.maxTeams, 0);
+              const si = {
+                registration_open: 'Inscripciones abiertas',
+                configured: 'Configurado',
+                live: 'En Vivo',
+              }[pt.status] ?? pt.status;
+              return (
+                <div key={pt.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--grey-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 2 }}>Personalizado</div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{pt.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 2 }}>
+                      {pt.date}{pt.locationName ? ` · ${pt.locationName}` : ''} · {enrolled}/{totalSlots} equipos
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: pt.status === 'live' ? 'var(--turf-green)' : pt.status === 'configured' ? '#f5a623' : '#7c3aed' }}>{si}</span>
+                    <Link href={`/dashboard/player/tournaments/personalizado/${pt.id}`}
+                      style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--neon)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none' }}>
+                      GESTIONAR
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
