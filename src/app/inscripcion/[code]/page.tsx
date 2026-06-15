@@ -3,8 +3,8 @@
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import {
-  getPersonalizadoByCode,
-  addTeamToPersonalizado,
+  loadPersonalizadoByCode,
+  registerTeam,
   enrolledCount,
   waitlistCount,
   type PersonalizadoTournament,
@@ -17,9 +17,6 @@ import {
 
 const GENDER_LABELS: Record<string, string> = {
   libre: 'Libre', masculino: 'Masculino', femenino: 'Femenino', mixto: 'Mixto',
-};
-const FORMAT_LABELS: Record<string, string> = {
-  americano: 'Americano', mexicano: 'Mexicano', round_robin: 'Round Robin', knockout: 'Knockout',
 };
 
 // ── Shared styles ──────────────────────────────────────────────────────────────
@@ -78,32 +75,37 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
   }>(null);
 
   useEffect(() => {
-    setTournament(getPersonalizadoByCode(code));
-    setLoading(false);
+    let active = true;
+    loadPersonalizadoByCode(code).then(t => {
+      if (!active) return;
+      setTournament(t);
+      setLoading(false);
+    });
+    return () => { active = false; };
   }, [code]);
 
   const selectedCat: PersonalizadoCategory | undefined =
     tournament?.categories.find(c => c.id === selectedCatId);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!tournament || !selectedCat) return;
     setError(null);
     setSubmitting(true);
     const player1Name = p1Name.trim();
     const player1Email = p1Email.trim() || undefined;
-    const res = addTeamToPersonalizado(code, {
+    const res = await registerTeam(code, {
       categoryId: selectedCat.id,
       player1Name,
       player1Email,
-      player2Name: selectedCat.modalidad === 'parejas' ? p2Name.trim() : undefined,
-      player2Email: selectedCat.modalidad === 'parejas' ? (p2Email.trim() || undefined) : undefined,
+      player2Name: p2Name.trim(),
+      player2Email: p2Email.trim() || undefined,
     });
     setSubmitting(false);
     if (!res.ok) {
       setError(res.error ?? 'No se pudo completar la inscripción');
       // refresh to reflect possibly-changed counts
-      setTournament(getPersonalizadoByCode(code));
+      setTournament(await loadPersonalizadoByCode(code));
       return;
     }
     const waitlisted = !!res.waitlisted;
@@ -125,10 +127,10 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
     setDone({
       catName: selectedCat.name,
       p1Name: player1Name,
-      p2Name: selectedCat.modalidad === 'parejas' ? p2Name.trim() : undefined,
+      p2Name: p2Name.trim() || undefined,
       waitlisted,
     });
-    setTournament(getPersonalizadoByCode(code));
+    setTournament(await loadPersonalizadoByCode(code));
   }
 
   // ── States ────────────────────────────────────────────────────────────────────
@@ -258,7 +260,7 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
                     )}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
-                    {GENDER_LABELS[cat.gender]} · {FORMAT_LABELS[cat.format]} · {cat.modalidad === 'individual' ? 'Individual' : 'Parejas'}
+                    {GENDER_LABELS[cat.gender]} · Parejas
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 3 }}>
                     {count} / {cat.maxTeams} inscritos{waiting > 0 ? ` · ${waiting} en espera` : ''}
@@ -268,9 +270,6 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
                       Al inscribirte entrarás en la lista de espera.
                     </div>
                   )}
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: cat.registrationFee > 0 ? 'var(--black)' : 'var(--turf-green)', flexShrink: 0 }}>
-                  {cat.registrationFee > 0 ? `$${cat.registrationFee}` : 'Gratis'}
                 </div>
               </button>
             );
@@ -289,21 +288,11 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
           <label style={label} htmlFor="p1email">Jugador 1 — Email (opcional)</label>
           <input id="p1email" type="email" style={input} value={p1Email} onChange={e => setP1Email(e.target.value)} placeholder="tucorreo@ejemplo.com" />
 
-          {selectedCat.modalidad === 'parejas' && (
-            <>
-              <label style={label} htmlFor="p2name">Jugador 2 — Nombre *</label>
-              <input id="p2name" style={input} value={p2Name} onChange={e => setP2Name(e.target.value)} required placeholder="Nombre completo" />
+          <label style={label} htmlFor="p2name">Jugador 2 — Nombre *</label>
+          <input id="p2name" style={input} value={p2Name} onChange={e => setP2Name(e.target.value)} required placeholder="Nombre completo" />
 
-              <label style={label} htmlFor="p2email">Jugador 2 — Email (opcional)</label>
-              <input id="p2email" type="email" style={input} value={p2Email} onChange={e => setP2Email(e.target.value)} placeholder="correo@ejemplo.com" />
-            </>
-          )}
-
-          {selectedCat.registrationFee > 0 && (
-            <div style={{ padding: '10px 14px', background: 'rgba(0,0,0,0.03)', border: '1px solid var(--grey-100)', fontSize: 12, color: 'var(--grey-500)', marginBottom: 14, lineHeight: 1.5 }}>
-              💵 Cuota de inscripción: ${selectedCat.registrationFee} — se coordinará el pago con el organizador.
-            </div>
-          )}
+          <label style={label} htmlFor="p2email">Jugador 2 — Email (opcional)</label>
+          <input id="p2email" type="email" style={input} value={p2Email} onChange={e => setP2Email(e.target.value)} placeholder="correo@ejemplo.com" />
 
           {error && (
             <div style={{ padding: '10px 14px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', fontSize: 13, color: '#b91c1c', marginBottom: 14 }}>

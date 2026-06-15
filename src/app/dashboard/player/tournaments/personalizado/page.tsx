@@ -108,10 +108,7 @@ function makeCategory(overrides: Partial<PersonalizadoCategory> = {}): Personali
     id: `cat-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     name: '',
     gender: 'libre',
-    format: 'americano',
-    modalidad: 'parejas',
     maxTeams: 8,
-    registrationFee: 0,
     ...overrides,
   };
 }
@@ -119,13 +116,6 @@ function makeCategory(overrides: Partial<PersonalizadoCategory> = {}): Personali
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
-
-const FORMAT_LABELS: Record<string, string> = {
-  americano: 'Americano',
-  mexicano: 'Mexicano',
-  round_robin: 'Round Robin',
-  knockout: 'Knockout',
-};
 
 const GENDER_LABELS: Record<string, string> = {
   libre: 'Libre', masculino: 'Masculino', femenino: 'Femenino', mixto: 'Mixto',
@@ -311,60 +301,29 @@ export default function PersonalizadoWizardPage() {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-              <div>
-                <label style={lbl}>Género</label>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {(['libre', 'masculino', 'femenino', 'mixto'] as const).map(g => (
-                    <button
-                      key={g}
-                      onClick={() => updateCategory(idx, { gender: g })}
-                      style={{
-                        padding: '6px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                        border: '1px solid',
-                        borderColor: cat.gender === g ? 'var(--black)' : 'var(--grey-200)',
-                        background: cat.gender === g ? 'var(--black)' : '#fff',
-                        color: cat.gender === g ? '#fff' : 'var(--grey-500)',
-                        textTransform: 'uppercase', letterSpacing: '0.06em',
-                      }}
-                    >
-                      {GENDER_LABELS[g]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label style={lbl}>Modalidad</label>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {(['individual', 'parejas'] as const).map(m => (
-                    <button
-                      key={m}
-                      onClick={() => updateCategory(idx, { modalidad: m })}
-                      style={{
-                        padding: '6px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                        border: '1px solid',
-                        borderColor: cat.modalidad === m ? 'var(--black)' : 'var(--grey-200)',
-                        background: cat.modalidad === m ? 'var(--black)' : '#fff',
-                        color: cat.modalidad === m ? '#fff' : 'var(--grey-500)',
-                        textTransform: 'uppercase', letterSpacing: '0.06em',
-                      }}
-                    >
-                      {m === 'individual' ? 'Individual' : 'Parejas'}
-                    </button>
-                  ))}
-                </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={lbl}>Género</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {(['libre', 'masculino', 'femenino', 'mixto'] as const).map(g => (
+                  <button
+                    key={g}
+                    onClick={() => updateCategory(idx, { gender: g })}
+                    style={{
+                      padding: '6px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                      border: '1px solid',
+                      borderColor: cat.gender === g ? 'var(--black)' : 'var(--grey-200)',
+                      background: cat.gender === g ? 'var(--black)' : '#fff',
+                      color: cat.gender === g ? '#fff' : 'var(--grey-500)',
+                      textTransform: 'uppercase', letterSpacing: '0.06em',
+                    }}
+                  >
+                    {GENDER_LABELS[g]}
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-              <div>
-                <label style={lbl}>Formato</label>
-                <select value={cat.format} onChange={e => updateCategory(idx, { format: e.target.value as PersonalizadoCategory['format'] })} style={sel}>
-                  {Object.entries(FORMAT_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 14, alignItems: 'end' }}>
               <div>
                 <label style={lbl}>Máx. equipos</label>
                 <select value={cat.maxTeams} onChange={e => updateCategory(idx, { maxTeams: Number(e.target.value) })} style={sel}>
@@ -373,15 +332,8 @@ export default function PersonalizadoWizardPage() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label style={lbl}>Cuota inscripción ($)</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={cat.registrationFee}
-                  onChange={e => updateCategory(idx, { registrationFee: Number(e.target.value) })}
-                  style={inp}
-                />
+              <div style={{ fontSize: 11, color: 'var(--grey-400)', lineHeight: 1.5, paddingBottom: 10 }}>
+                Podrás ajustar este número en el Panel de Control antes de comenzar el torneo. Define los cupos y el precio de apertura.
               </div>
             </div>
           </div>
@@ -453,14 +405,11 @@ export default function PersonalizadoWizardPage() {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', marginBottom: 4 }}>{cat.name}</div>
                   <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>
-                    {GENDER_LABELS[cat.gender]} · {FORMAT_LABELS[cat.format]} · {cat.modalidad === 'individual' ? 'Individual' : 'Parejas'}
+                    {GENDER_LABELS[cat.gender]} · Parejas
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)' }}>{cat.maxTeams} cupos</div>
-                  {cat.registrationFee > 0 && (
-                    <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>${cat.registrationFee} inscripción</div>
-                  )}
                 </div>
               </div>
             </div>

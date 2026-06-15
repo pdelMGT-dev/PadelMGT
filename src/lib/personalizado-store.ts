@@ -1,15 +1,23 @@
-// Personalizado tournament store — multi-category tournaments with registration flow
+// Personalizado tournament store — multi-category tournaments for organizers.
+//
+// Source of truth is Supabase (so registration slot counts are correct across
+// devices). localStorage is kept as a synchronous cache/fallback for the
+// creator's own views and for dev environments where Supabase isn't configured.
+//
+// Reads use the browser anon client; the registration write and team-status
+// changes go through service-role API routes (atomic COUNT-then-INSERT), so two
+// players on different devices can't both claim the last slot.
 
 import { createLocalStore } from './local-store';
+import { supabase, isSupabaseConfigured } from './supabase';
+
+// ── Types ────────────────────────────────────────────────────────────────────
 
 export interface PersonalizadoCategory {
   id: string;
   name: string;
   gender: 'masculino' | 'femenino' | 'mixto' | 'libre';
-  format: 'americano' | 'mexicano' | 'round_robin' | 'knockout';
-  modalidad: 'individual' | 'parejas';
-  maxTeams: number;
-  registrationFee: number; // in USD, 0 = free
+  maxTeams: number; // editable in the control panel before the tournament starts
 }
 
 export interface PersonalizadoTeam {
@@ -21,10 +29,62 @@ export interface PersonalizadoTeam {
   player2Name?: string;
   player2Email?: string;
   player2Id?: string;
+  groupId?: string; // assigned via control-panel drag & drop
   registeredAt: string;
   status: 'pending' | 'confirmed' | 'rejected' | 'waitlisted';
   paymentStatus: 'unpaid' | 'paid' | 'free';
 }
+
+// ── Control-panel configuration ──────────────────────────────────────────────
+
+export interface CategoryGroupConfig {
+  categoryId: string;
+  teamsPerGroup: number;   // teams that play in each group
+  qualifyPerGroup: number; // teams that advance from each group to the bracket
+}
+
+export interface PersonalizadoSchedule {
+  startTime: string;        // "09:00" — first match of the day
+  lunchEnabled: boolean;
+  lunchStart?: string;      // "13:00"
+  lunchDurationMin?: number;
+  expectedEndTime?: string; // computed, stored for reference
+  matchDurationMin: number; // estimated minutes per match (for end-time calc)
+}
+
+export interface ControlPanelConfig {
+  substitutionEnabled: boolean;
+  scoreType: 'traditional' | 'points';
+  // when scoreType === 'points'
+  pointsPerSet?: number;
+  sets?: number;
+  thirdSetPoints?: number; // 0/undefined = no third set
+  // standings points for group stage
+  standingsPoints: { win: number; draw: number; loss: number };
+  // forfeit / injury withdrawal: points + games credited to the surviving team
+  forfeit: { winnerPoints: number; winnerGamesFor: number };
+  // per-category group structure
+  groups: CategoryGroupConfig[];
+  // court names (length is the effective court count; editable during play)
+  courtNames: string[];
+  schedule: PersonalizadoSchedule;
+}
+
+export const DEFAULT_CONTROL_CONFIG: ControlPanelConfig = {
+  substitutionEnabled: false,
+  scoreType: 'traditional',
+  standingsPoints: { win: 3, draw: 1, loss: 0 },
+  forfeit: { winnerPoints: 3, winnerGamesFor: 0 },
+  groups: [],
+  courtNames: [],
+  schedule: {
+    startTime: '09:00',
+    lunchEnabled: false,
+    lunchStart: '13:00',
+    lunchDurationMin: 60,
+    matchDurationMin: 50,
+  },
+};
 
 export interface PersonalizadoTournament {
   id: string;
@@ -38,12 +98,15 @@ export interface PersonalizadoTournament {
   courts: number;
   categories: PersonalizadoCategory[];
   teams: PersonalizadoTeam[];
-  status: 'draft' | 'registration_open' | 'live' | 'finished';
+  config?: ControlPanelConfig;
+  status: 'draft' | 'registration_open' | 'configured' | 'live' | 'finished';
   creatorId: string;
   creatorName: string;
   createdAt: string;
   openedAt?: string;
 }
+
+// ── ID / code helpers ────────────────────────────────────────────────────────
 
 function generateId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -59,6 +122,92 @@ function generateCode(): string {
   return code;
 }
 
+// ── Supabase row mappers (pure — safe to import server-side) ──────────────────
+
+export function teamToRow(tournamentId: string, t: PersonalizadoTeam): Record<string, unknown> {
+  return {
+    id: t.id,
+    tournament_id: tournamentId,
+    category_id: t.categoryId,
+    player1_name: t.player1Name,
+    player1_email: t.player1Email ?? null,
+    player1_id: t.player1Id ?? null,
+    player2_name: t.player2Name ?? null,
+    player2_email: t.player2Email ?? null,
+    player2_id: t.player2Id ?? null,
+    group_id: t.groupId ?? null,
+    status: t.status,
+    payment_status: t.paymentStatus,
+    registered_at: t.registeredAt,
+  };
+}
+
+export function rowToTeam(r: Record<string, unknown>): PersonalizadoTeam {
+  return {
+    id: r.id as string,
+    categoryId: r.category_id as string,
+    player1Name: r.player1_name as string,
+    player1Email: (r.player1_email as string) ?? undefined,
+    player1Id: (r.player1_id as string) ?? undefined,
+    player2Name: (r.player2_name as string) ?? undefined,
+    player2Email: (r.player2_email as string) ?? undefined,
+    player2Id: (r.player2_id as string) ?? undefined,
+    groupId: (r.group_id as string) ?? undefined,
+    registeredAt: (r.registered_at as string) ?? new Date().toISOString(),
+    status: r.status as PersonalizadoTeam['status'],
+    paymentStatus: r.payment_status as PersonalizadoTeam['paymentStatus'],
+  };
+}
+
+export function tournamentToRow(t: PersonalizadoTournament): Record<string, unknown> {
+  return {
+    id: t.id,
+    code: t.code,
+    name: t.name,
+    date: t.date ?? null,
+    time: t.time ?? null,
+    location_name: t.locationName ?? null,
+    city: t.city ?? null,
+    country: t.country ?? 'ES',
+    courts: t.courts ?? 2,
+    categories: t.categories,
+    config: t.config ?? {},
+    status: t.status,
+    creator_player_id: t.creatorId ?? null,
+    creator_name: t.creatorName ?? '',
+    created_at: t.createdAt,
+    opened_at: t.openedAt ?? null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export function rowToTournament(
+  r: Record<string, unknown>,
+  teams: PersonalizadoTeam[] = [],
+): PersonalizadoTournament {
+  return {
+    id: r.id as string,
+    code: r.code as string,
+    name: r.name as string,
+    date: (r.date as string) ?? '',
+    time: (r.time as string) ?? '',
+    locationName: (r.location_name as string) ?? '',
+    city: (r.city as string) ?? '',
+    country: (r.country as string) ?? 'ES',
+    courts: (r.courts as number) ?? 2,
+    categories: (r.categories as PersonalizadoCategory[]) ?? [],
+    teams,
+    config: (r.config as ControlPanelConfig) ?? undefined,
+    status: r.status as PersonalizadoTournament['status'],
+    creatorId: (r.creator_player_id as string) ?? '',
+    creatorName: (r.creator_name as string) ?? '',
+    createdAt: (r.created_at as string) ?? new Date().toISOString(),
+    openedAt: (r.opened_at as string) ?? undefined,
+  };
+}
+
+// ── localStorage cache (synchronous fallback) ─────────────────────────────────
+
 const _store = createLocalStore<PersonalizadoTournament[]>('padelmgt_personalizado', [], { seedOnFirstLoad: false });
 
 export function getAllPersonalizado(): PersonalizadoTournament[] {
@@ -73,12 +222,83 @@ export function getPersonalizadoByCode(code: string): PersonalizadoTournament | 
   return _store.load().find(t => t.code === code) ?? null;
 }
 
+/** Write to the localStorage cache and fire-and-forget sync to Supabase. */
 export function savePersonalizado(tournament: PersonalizadoTournament): void {
   const all = _store.load();
   const idx = all.findIndex(t => t.id === tournament.id);
   if (idx >= 0) { all[idx] = tournament; } else { all.push(tournament); }
   _store.persist(all);
+  void syncTournamentToSupabase(tournament);
 }
+
+/** Upsert the tournament metadata + config to Supabase (no team rows here). */
+export async function syncTournamentToSupabase(tournament: PersonalizadoTournament): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  try {
+    const { error } = await supabase
+      .from('personalizado_tournaments')
+      .upsert(tournamentToRow(tournament), { onConflict: 'id' });
+    if (error) console.warn('[Personalizado] syncTournament:', error.message);
+  } catch (e) {
+    console.warn('[Personalizado] syncTournament threw:', e);
+  }
+}
+
+// ── Async reads (Supabase source of truth, localStorage fallback) ─────────────
+
+/** Load a tournament + its teams by code, preferring Supabase. */
+export async function loadPersonalizadoByCode(code: string): Promise<PersonalizadoTournament | null> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: trow, error } = await supabase
+        .from('personalizado_tournaments')
+        .select('*')
+        .eq('code', code)
+        .maybeSingle();
+      if (error) console.warn('[Personalizado] loadByCode:', error.message);
+      if (trow) {
+        const { data: teamRows } = await supabase
+          .from('personalizado_teams')
+          .select('*')
+          .eq('tournament_id', (trow as Record<string, unknown>).id as string)
+          .order('registered_at', { ascending: true });
+        const teams = (teamRows ?? []).map(r => rowToTeam(r as Record<string, unknown>));
+        return rowToTournament(trow as Record<string, unknown>, teams);
+      }
+    } catch (e) {
+      console.warn('[Personalizado] loadByCode threw:', e);
+    }
+  }
+  return getPersonalizadoByCode(code);
+}
+
+/** Load a tournament + its teams by id, preferring Supabase. */
+export async function loadPersonalizadoById(id: string): Promise<PersonalizadoTournament | null> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: trow, error } = await supabase
+        .from('personalizado_tournaments')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      if (error) console.warn('[Personalizado] loadById:', error.message);
+      if (trow) {
+        const { data: teamRows } = await supabase
+          .from('personalizado_teams')
+          .select('*')
+          .eq('tournament_id', id)
+          .order('registered_at', { ascending: true });
+        const teams = (teamRows ?? []).map(r => rowToTeam(r as Record<string, unknown>));
+        return rowToTournament(trow as Record<string, unknown>, teams);
+      }
+    } catch (e) {
+      console.warn('[Personalizado] loadById threw:', e);
+    }
+  }
+  return getPersonalizado(id);
+}
+
+// ── Create ───────────────────────────────────────────────────────────────────
 
 export function createPersonalizado(params: {
   name: string;
@@ -104,6 +324,7 @@ export function createPersonalizado(params: {
     courts: params.courts,
     categories: params.categories,
     teams: [],
+    config: { ...DEFAULT_CONTROL_CONFIG },
     status: 'draft',
     creatorId: params.creatorId,
     creatorName: params.creatorName,
@@ -113,6 +334,7 @@ export function createPersonalizado(params: {
   return tournament;
 }
 
+/** Organizer pricing tiers based on total category capacity. */
 export function calcOpeningPrice(tournament: PersonalizadoTournament): number {
   const totalSlots = tournament.categories.reduce((s, c) => s + c.maxTeams, 0);
   if (totalSlots <= 16) return 9;
@@ -121,20 +343,64 @@ export function calcOpeningPrice(tournament: PersonalizadoTournament): number {
   return 49;
 }
 
-export function addTeamToPersonalizado(code: string, team: {
+// ── Slot counting ─────────────────────────────────────────────────────────────
+
+export function enrolledCount(t: PersonalizadoTournament, categoryId: string): number {
+  return t.teams.filter(tm => tm.categoryId === categoryId && (tm.status === 'pending' || tm.status === 'confirmed')).length;
+}
+
+export function waitlistCount(t: PersonalizadoTournament, categoryId: string): number {
+  return t.teams.filter(tm => tm.categoryId === categoryId && tm.status === 'waitlisted').length;
+}
+
+// ── Registration (atomic via API route, localStorage fallback) ────────────────
+
+export interface RegisterResult {
+  ok: boolean;
+  error?: string;
+  waitlisted?: boolean;
+  team?: PersonalizadoTeam;
+}
+
+export interface RegisterInput {
   categoryId: string;
   player1Name: string;
   player1Email?: string;
   player2Name?: string;
   player2Email?: string;
-}): { ok: boolean; error?: string; waitlisted?: boolean; team?: PersonalizadoTeam } {
+}
+
+/**
+ * Register a team. Prefers the atomic service-role API route so concurrent
+ * registrations on different devices can't both grab the last slot. Falls back
+ * to a synchronous localStorage write when Supabase isn't configured.
+ */
+export async function registerTeam(code: string, team: RegisterInput): Promise<RegisterResult> {
+  if (isSupabaseConfigured) {
+    try {
+      const res = await fetch('/api/personalizado/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, ...team }),
+      });
+      const json = await res.json();
+      if (!res.ok) return { ok: false, error: json.error ?? 'No se pudo completar la inscripción' };
+      return json as RegisterResult;
+    } catch {
+      return { ok: false, error: 'Error de conexión. Intenta de nuevo.' };
+    }
+  }
+  return addTeamToPersonalizadoLocal(code, team);
+}
+
+/** Synchronous localStorage registration (dev fallback / offline). */
+export function addTeamToPersonalizadoLocal(code: string, team: RegisterInput): RegisterResult {
   const t = getPersonalizadoByCode(code);
   if (!t) return { ok: false, error: 'Torneo no encontrado' };
   if (t.status !== 'registration_open') return { ok: false, error: 'La inscripción no está abierta' };
   const cat = t.categories.find(c => c.id === team.categoryId);
   if (!cat) return { ok: false, error: 'Categoría no encontrada' };
 
-  // Duplicate check: same category, non-rejected team already using this email
   if (team.player1Email) {
     const email = team.player1Email.trim().toLowerCase();
     const dup = t.teams.some(tm =>
@@ -145,11 +411,9 @@ export function addTeamToPersonalizado(code: string, team: {
     if (dup) return { ok: false, error: 'Ese correo ya está inscrito en esta categoría' };
   }
 
-  const enrolled = enrolledCount(t, team.categoryId);
-  const waitlisted = enrolled >= cat.maxTeams;
-
+  const waitlisted = enrolledCount(t, team.categoryId) >= cat.maxTeams;
   const newTeam: PersonalizadoTeam = {
-    id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `tm-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    id: generateId(),
     categoryId: team.categoryId,
     player1Name: team.player1Name,
     player1Email: team.player1Email,
@@ -157,24 +421,58 @@ export function addTeamToPersonalizado(code: string, team: {
     player2Email: team.player2Email,
     registeredAt: new Date().toISOString(),
     status: waitlisted ? 'waitlisted' : 'pending',
-    paymentStatus: cat.registrationFee > 0 ? 'unpaid' : 'free',
+    paymentStatus: 'free',
   };
   savePersonalizado({ ...t, teams: [...t.teams, newTeam] });
   return { ok: true, waitlisted, team: newTeam };
 }
 
-export function setTeamStatus(
+// ── Team status change (atomic via API route, localStorage fallback) ──────────
+
+export interface StatusChangeResult {
+  ok: boolean;
+  error?: string;
+  promoted?: PersonalizadoTeam;
+}
+
+/**
+ * Change a team's status (confirm / reject). On rejection the oldest waitlisted
+ * team in the same category is auto-promoted. Prefers the API route.
+ */
+export async function changeTeamStatus(
   tournamentId: string,
   teamId: string,
-  status: 'pending' | 'confirmed' | 'rejected' | 'waitlisted',
-): { promoted?: PersonalizadoTeam } {
+  status: PersonalizadoTeam['status'],
+): Promise<StatusChangeResult> {
+  if (isSupabaseConfigured) {
+    try {
+      const res = await fetch('/api/personalizado/team-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId, teamId, status }),
+      });
+      const json = await res.json();
+      if (!res.ok) return { ok: false, error: json.error ?? 'No se pudo actualizar' };
+      return json as StatusChangeResult;
+    } catch {
+      return { ok: false, error: 'Error de conexión. Intenta de nuevo.' };
+    }
+  }
+  return setTeamStatusLocal(tournamentId, teamId, status);
+}
+
+/** Synchronous localStorage status change with waitlist auto-promotion. */
+export function setTeamStatusLocal(
+  tournamentId: string,
+  teamId: string,
+  status: PersonalizadoTeam['status'],
+): StatusChangeResult {
   const t = getPersonalizado(tournamentId);
-  if (!t) return {};
+  if (!t) return { ok: false, error: 'Torneo no encontrado' };
 
   let teams = t.teams.map(tm => tm.id === teamId ? { ...tm, status } : tm);
   let promoted: PersonalizadoTeam | undefined;
 
-  // Auto-promote oldest waitlisted team when a slot may have freed (rejection)
   if (status === 'rejected') {
     const changed = teams.find(tm => tm.id === teamId);
     if (changed) {
@@ -194,13 +492,5 @@ export function setTeamStatus(
   }
 
   savePersonalizado({ ...t, teams });
-  return { promoted };
-}
-
-export function enrolledCount(t: PersonalizadoTournament, categoryId: string): number {
-  return t.teams.filter(tm => tm.categoryId === categoryId && (tm.status === 'pending' || tm.status === 'confirmed')).length;
-}
-
-export function waitlistCount(t: PersonalizadoTournament, categoryId: string): number {
-  return t.teams.filter(tm => tm.categoryId === categoryId && tm.status === 'waitlisted').length;
+  return { ok: true, promoted };
 }

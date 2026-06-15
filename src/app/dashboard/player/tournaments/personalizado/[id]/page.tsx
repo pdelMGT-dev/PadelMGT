@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   getPersonalizado,
+  loadPersonalizadoById,
   savePersonalizado,
   calcOpeningPrice,
-  setTeamStatus,
+  changeTeamStatus,
   enrolledCount,
   waitlistCount,
   type PersonalizadoTournament,
@@ -29,6 +30,7 @@ const secTitle: React.CSSProperties = {
 const STATUS_LABELS: Record<PersonalizadoTournament['status'], string> = {
   draft: 'BORRADOR',
   registration_open: 'INSCRIPCIÓN ABIERTA',
+  configured: 'CONFIGURADO',
   live: 'EN VIVO',
   finished: 'FINALIZADO',
 };
@@ -36,6 +38,7 @@ const STATUS_LABELS: Record<PersonalizadoTournament['status'], string> = {
 const STATUS_COLORS: Record<PersonalizadoTournament['status'], string> = {
   draft: 'rgba(0,0,0,0.12)',
   registration_open: 'rgba(214,255,0,0.15)',
+  configured: 'rgba(59,130,246,0.15)',
   live: 'rgba(34,197,94,0.15)',
   finished: 'rgba(156,163,175,0.15)',
 };
@@ -43,15 +46,9 @@ const STATUS_COLORS: Record<PersonalizadoTournament['status'], string> = {
 const STATUS_TEXT_COLORS: Record<PersonalizadoTournament['status'], string> = {
   draft: 'var(--grey-500)',
   registration_open: '#6b7a00',
+  configured: '#1d4ed8',
   live: '#15803d',
   finished: 'var(--grey-400)',
-};
-
-const FORMAT_LABELS: Record<string, string> = {
-  americano: 'Americano',
-  mexicano: 'Mexicano',
-  round_robin: 'Round Robin',
-  knockout: 'Knockout',
 };
 
 const GENDER_LABELS: Record<string, string> = {
@@ -70,28 +67,26 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const [opening, setOpening] = useState(false);
 
   useEffect(() => {
+    let active = true;
     setOrigin(window.location.origin);
-    const t = getPersonalizado(id);
-    setTournament(t);
-    setLoading(false);
-  }, [id]);
-
-  // Post-payment return: flip status to registration_open (simulates webhook for dev/MVP).
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const sp = new URLSearchParams(window.location.search);
-    if (sp.get('registration') === 'opened') {
-      const t = getPersonalizado(id);
-      if (t && t.status === 'draft') {
-        savePersonalizado({ ...t, status: 'registration_open', openedAt: new Date().toISOString() });
-        setTournament(getPersonalizado(id));
+    (async () => {
+      let t = await loadPersonalizadoById(id);
+      // Post-payment return: flip status to registration_open (simulates webhook for dev/MVP).
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get('registration') === 'opened' && t && t.status === 'draft') {
+        t = { ...t, status: 'registration_open', openedAt: new Date().toISOString() };
+        savePersonalizado(t);
         window.history.replaceState({}, '', `/dashboard/player/tournaments/personalizado/${id}`);
       }
-    }
+      if (!active) return;
+      setTournament(t);
+      setLoading(false);
+    })();
+    return () => { active = false; };
   }, [id]);
 
   async function handleOpenRegistration() {
-    const t = getPersonalizado(id);
+    const t = tournament ?? getPersonalizado(id);
     if (!t) return;
     setOpening(true);
     try {
@@ -114,9 +109,10 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     }
   }
 
-  function handleSetTeamStatus(teamId: string, status: 'confirmed' | 'rejected') {
-    const result = setTeamStatus(id, teamId, status);
-    const updated = getPersonalizado(id);
+  async function handleSetTeamStatus(teamId: string, status: 'confirmed' | 'rejected') {
+    const result = await changeTeamStatus(id, teamId, status);
+    if (!result.ok) { showToast(result.error ?? 'No se pudo actualizar', 'error'); return; }
+    const updated = await loadPersonalizadoById(id);
     setTournament(updated);
     if (!updated) return;
 
@@ -269,16 +265,13 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--black)', marginBottom: 4 }}>{cat.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
-                  {GENDER_LABELS[cat.gender]} · {FORMAT_LABELS[cat.format]} · {cat.modalidad === 'individual' ? 'Individual' : 'Parejas'}
+                  {GENDER_LABELS[cat.gender]} · Parejas
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)' }}>
                   {enrolledCount(tournament, cat.id)} / {cat.maxTeams} equipos inscritos{waiting > 0 ? ` · ${waiting} en espera` : ''}
                 </div>
-                {cat.registrationFee > 0 && (
-                  <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 2 }}>Cuota: ${cat.registrationFee}</div>
-                )}
               </div>
             </div>
 
