@@ -10,8 +10,11 @@ import {
   calcOpeningPrice,
   setTeamStatus,
   enrolledCount,
+  waitlistCount,
   type PersonalizadoTournament,
 } from '@/lib/personalizado-store';
+import { sendPersonalizadoStatusEmail } from '@/lib/email';
+import { useToast } from '@/components/ToastProvider';
 
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
@@ -59,6 +62,7 @@ const GENDER_LABELS: Record<string, string> = {
 
 export default function PersonalizadoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const { id } = use(params);
   const [tournament, setTournament] = useState<PersonalizadoTournament | null>(null);
   const [origin, setOrigin] = useState('');
@@ -111,8 +115,76 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   }
 
   function handleSetTeamStatus(teamId: string, status: 'confirmed' | 'rejected') {
-    setTeamStatus(id, teamId, status);
-    setTournament(getPersonalizado(id));
+    const result = setTeamStatus(id, teamId, status);
+    const updated = getPersonalizado(id);
+    setTournament(updated);
+    if (!updated) return;
+
+    const catName = (catId: string) => updated.categories.find(c => c.id === catId)?.name ?? '';
+
+    // Notify the affected team
+    const team = updated.teams.find(t => t.id === teamId);
+    if (team?.player1Email) {
+      if (status === 'confirmed') {
+        void sendPersonalizadoStatusEmail({
+          to: team.player1Email, toName: team.player1Name,
+          tournamentName: updated.name, categoryName: catName(team.categoryId),
+          statusMessage: '¡Tu lugar fue confirmado!',
+        });
+      } else if (status === 'rejected') {
+        void sendPersonalizadoStatusEmail({
+          to: team.player1Email, toName: team.player1Name,
+          tournamentName: updated.name, categoryName: catName(team.categoryId),
+          statusMessage: 'Tu inscripción fue rechazada por el organizador.',
+        });
+      }
+    }
+
+    // Notify a team auto-promoted from the waitlist
+    if (result.promoted) {
+      const promoted = updated.teams.find(t => t.id === result.promoted!.id) ?? result.promoted;
+      if (promoted.player1Email) {
+        void sendPersonalizadoStatusEmail({
+          to: promoted.player1Email, toName: promoted.player1Name,
+          tournamentName: updated.name, categoryName: catName(promoted.categoryId),
+          statusMessage: '¡Se liberó un lugar y pasaste de la lista de espera! El organizador confirmará tu inscripción.',
+        });
+      }
+      showToast('Equipo promovido de la lista de espera', 'success');
+    }
+  }
+
+  const STATUS_CSV: Record<string, string> = {
+    pending: 'Pendiente', confirmed: 'Confirmado', rejected: 'Rechazado', waitlisted: 'Lista de espera',
+  };
+  const PAYMENT_CSV: Record<string, string> = {
+    unpaid: 'Pendiente', paid: 'Pagado', free: 'Gratis',
+  };
+
+  function exportCSV() {
+    const t = tournament;
+    if (!t || t.teams.length === 0) return;
+    const headers = ['Categoría', 'Jugador 1', 'Email 1', 'Jugador 2', 'Email 2', 'Estado', 'Pago', 'Inscrito'];
+    const escField = (val: unknown) => {
+      const s = String(val ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = t.teams.map(team => {
+      const cat = t.categories.find(c => c.id === team.categoryId)?.name ?? '';
+      return [
+        cat, team.player1Name, team.player1Email ?? '',
+        team.player2Name ?? '', team.player2Email ?? '',
+        STATUS_CSV[team.status] ?? team.status,
+        PAYMENT_CSV[team.paymentStatus] ?? team.paymentStatus,
+        team.registeredAt,
+      ].map(escField).join(',');
+    });
+    const csv = [headers.map(escField).join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `inscriptos_${t.code}.csv`; a.click();
+    URL.revokeObjectURL(url);
   }
 
   if (loading) {
@@ -172,11 +244,25 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
           )}
           <span>Código: <strong style={{ color: 'var(--black)' }}>{tournament.code}</strong></span>
         </div>
+        {tournament.teams.length > 0 && (
+          <button
+            onClick={exportCSV}
+            style={{
+              marginTop: 14, padding: '9px 18px', background: '#fff', color: 'var(--black)',
+              border: '1px solid var(--grey-200)', cursor: 'pointer',
+              fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+            }}
+          >
+            ⬇ Exportar inscritos (CSV)
+          </button>
+        )}
       </div>
 
       {/* Categories */}
       {tournament.categories.map((cat) => {
-        const categoryTeams = tournament.teams.filter(t => t.categoryId === cat.id);
+        const categoryTeams = tournament.teams.filter(t => t.categoryId === cat.id && t.status !== 'waitlisted');
+        const waitlistedTeams = tournament.teams.filter(t => t.categoryId === cat.id && t.status === 'waitlisted');
+        const waiting = waitlistCount(tournament, cat.id);
         return (
           <div key={cat.id} style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -188,7 +274,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)' }}>
-                  {enrolledCount(tournament, cat.id)} / {cat.maxTeams} equipos inscritos
+                  {enrolledCount(tournament, cat.id)} / {cat.maxTeams} equipos inscritos{waiting > 0 ? ` · ${waiting} en espera` : ''}
                 </div>
                 {cat.registrationFee > 0 && (
                   <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 2 }}>Cuota: ${cat.registrationFee}</div>
@@ -254,7 +340,30 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               </div>
             )}
 
-            {categoryTeams.length === 0 && tournament.status !== 'draft' && (
+            {/* Waitlist sub-section */}
+            {waitlistedTeams.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#b45309', marginBottom: 8 }}>
+                  Lista de espera ({waitlistedTeams.length})
+                </div>
+                {waitlistedTeams.map((team) => (
+                  <div key={team.id} style={{ padding: '8px 12px', border: '1px solid rgba(245,158,11,0.25)', background: 'rgba(245,158,11,0.04)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+                    <div>
+                      <span style={{ fontWeight: 600 }}>{team.player1Name}</span>
+                      {team.player2Name && <span style={{ color: 'var(--grey-400)' }}> / {team.player2Name}</span>}
+                    </div>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 6px',
+                      background: 'rgba(245,158,11,0.14)', color: '#b45309',
+                    }}>
+                      Lista de espera
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {categoryTeams.length === 0 && waitlistedTeams.length === 0 && tournament.status !== 'draft' && (
               <div style={{ marginTop: 12, fontSize: 12, color: 'var(--grey-300)', fontStyle: 'italic' }}>
                 Aún no hay inscriptos en esta categoría.
               </div>

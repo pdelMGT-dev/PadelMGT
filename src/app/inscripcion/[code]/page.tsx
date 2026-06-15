@@ -6,9 +6,14 @@ import {
   getPersonalizadoByCode,
   addTeamToPersonalizado,
   enrolledCount,
+  waitlistCount,
   type PersonalizadoTournament,
   type PersonalizadoCategory,
 } from '@/lib/personalizado-store';
+import {
+  sendPersonalizadoRegistrationEmail,
+  sendPersonalizadoWaitlistedEmail,
+} from '@/lib/email';
 
 const GENDER_LABELS: Record<string, string> = {
   libre: 'Libre', masculino: 'Masculino', femenino: 'Femenino', mixto: 'Mixto',
@@ -69,7 +74,7 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<null | {
-    catName: string; p1Name: string; p2Name?: string;
+    catName: string; p1Name: string; p2Name?: string; waitlisted: boolean;
   }>(null);
 
   useEffect(() => {
@@ -85,10 +90,12 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
     if (!tournament || !selectedCat) return;
     setError(null);
     setSubmitting(true);
+    const player1Name = p1Name.trim();
+    const player1Email = p1Email.trim() || undefined;
     const res = addTeamToPersonalizado(code, {
       categoryId: selectedCat.id,
-      player1Name: p1Name.trim(),
-      player1Email: p1Email.trim() || undefined,
+      player1Name,
+      player1Email,
       player2Name: selectedCat.modalidad === 'parejas' ? p2Name.trim() : undefined,
       player2Email: selectedCat.modalidad === 'parejas' ? (p2Email.trim() || undefined) : undefined,
     });
@@ -99,10 +106,27 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
       setTournament(getPersonalizadoByCode(code));
       return;
     }
+    const waitlisted = !!res.waitlisted;
+    // Fire-and-forget confirmation email (never blocks/throws)
+    if (player1Email) {
+      if (waitlisted) {
+        void sendPersonalizadoWaitlistedEmail({
+          to: player1Email, toName: player1Name,
+          tournamentName: tournament.name, categoryName: selectedCat.name,
+        });
+      } else {
+        void sendPersonalizadoRegistrationEmail({
+          to: player1Email, toName: player1Name,
+          tournamentName: tournament.name, categoryName: selectedCat.name,
+          date: tournament.date, locationName: tournament.locationName,
+        });
+      }
+    }
     setDone({
       catName: selectedCat.name,
-      p1Name: p1Name.trim(),
+      p1Name: player1Name,
       p2Name: selectedCat.modalidad === 'parejas' ? p2Name.trim() : undefined,
+      waitlisted,
     });
     setTournament(getPersonalizadoByCode(code));
   }
@@ -154,13 +178,18 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
         <BrandHeader />
         <div style={{ ...card, textAlign: 'center' }}>
           <div style={{
-            width: 56, height: 56, borderRadius: '50%', background: 'rgba(34,197,94,0.12)',
-            color: '#15803d', fontSize: 28, fontWeight: 700,
+            width: 56, height: 56, borderRadius: '50%',
+            background: done.waitlisted ? 'rgba(245,158,11,0.14)' : 'rgba(34,197,94,0.12)',
+            color: done.waitlisted ? '#b45309' : '#15803d', fontSize: 28, fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
-          }}>✓</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--black)', marginBottom: 8 }}>¡Inscripción registrada!</div>
+          }}>{done.waitlisted ? '⏳' : '✓'}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--black)', marginBottom: 8 }}>
+            {done.waitlisted ? 'Estás en lista de espera' : '¡Inscripción registrada!'}
+          </div>
           <div style={{ fontSize: 14, color: 'var(--grey-500)', lineHeight: 1.6, marginBottom: 20 }}>
-            El organizador confirmará tu lugar.
+            {done.waitlisted
+              ? 'La categoría está llena. Te avisaremos por correo si se libera un lugar.'
+              : 'El organizador confirmará tu lugar.'}
           </div>
           <div style={{ textAlign: 'left', border: '1px solid var(--grey-100)', padding: '14px 16px', background: 'var(--grey-50, #fafafa)' }}>
             <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 4 }}>Torneo</div>
@@ -203,19 +232,18 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {tournament.categories.map((cat) => {
             const count = enrolledCount(tournament, cat.id);
+            const waiting = waitlistCount(tournament, cat.id);
             const full = count >= cat.maxTeams;
             const selected = selectedCatId === cat.id;
             return (
               <button
                 key={cat.id}
                 type="button"
-                disabled={full}
                 onClick={() => { setSelectedCatId(cat.id); setError(null); }}
                 style={{
-                  textAlign: 'left', padding: '14px 16px', cursor: full ? 'not-allowed' : 'pointer',
+                  textAlign: 'left', padding: '14px 16px', cursor: 'pointer',
                   background: selected ? 'rgba(214,255,0,0.10)' : '#fff',
                   border: selected ? '2px solid var(--black)' : '1px solid var(--grey-200)',
-                  opacity: full ? 0.55 : 1,
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
                 }}
               >
@@ -225,16 +253,21 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
                     {full && (
                       <span style={{
                         fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', padding: '2px 6px',
-                        background: 'rgba(0,0,0,0.06)', color: 'var(--grey-500)',
-                      }}>COMPLETO</span>
+                        background: 'rgba(245,158,11,0.14)', color: '#b45309',
+                      }}>LISTA DE ESPERA</span>
                     )}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
                     {GENDER_LABELS[cat.gender]} · {FORMAT_LABELS[cat.format]} · {cat.modalidad === 'individual' ? 'Individual' : 'Parejas'}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 3 }}>
-                    {count} / {cat.maxTeams} inscritos
+                    {count} / {cat.maxTeams} inscritos{waiting > 0 ? ` · ${waiting} en espera` : ''}
                   </div>
+                  {full && (
+                    <div style={{ fontSize: 12, color: '#b45309', marginTop: 3 }}>
+                      Al inscribirte entrarás en la lista de espera.
+                    </div>
+                  )}
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: cat.registrationFee > 0 ? 'var(--black)' : 'var(--turf-green)', flexShrink: 0 }}>
                   {cat.registrationFee > 0 ? `$${cat.registrationFee}` : 'Gratis'}

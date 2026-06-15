@@ -221,6 +221,58 @@ ${btn('Ver perfil', '{{profileUrl}}')}
 <p style="margin:0;font-size:13px;color:#9ca3af;">Si no conoces a {{fromName}}, podés ignorar este email.</p>
 </td></tr>`),
   },
+
+  // 11 ─ Personalizado registration (got a slot)
+  {
+    type: 'personalizado_registration',
+    name: 'Inscripción Personalizada Recibida',
+    description: 'Se envía al participante cuando se inscribe y obtiene un lugar (pendiente de confirmación).',
+    subject: 'Inscripción recibida — {{tournamentName}}',
+    variables: ['toName', 'tournamentName', 'categoryName', 'date', 'locationName', 'appUrl', 'currentYear'],
+    is_active: true,
+    html_body: base(`
+<tr><td style="padding:48px 40px 32px;">
+<p style="margin:0 0 8px;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#9ca3af;">Inscripción recibida</p>
+<h1 style="margin:0 0 16px;font-size:28px;font-weight:700;color:#111;letter-spacing:-.02em;">¡Gracias, {{toName}}!</h1>
+<p style="margin:0 0 28px;font-size:15px;color:#6b7280;line-height:1.6;">Tu inscripción en la categoría <strong>{{categoryName}}</strong> para <strong>{{tournamentName}}</strong> fue registrada.</p>
+${detail([['Torneo', '{{tournamentName}}'], ['Categoría', '{{categoryName}}'], ['Fecha', '{{date}}'], ['Lugar', '{{locationName}}']])}
+<p style="margin:0;font-size:13px;color:#9ca3af;">El organizador confirmará tu lugar próximamente.</p>
+</td></tr>`),
+  },
+
+  // 12 ─ Personalizado waitlisted
+  {
+    type: 'personalizado_waitlisted',
+    name: 'Inscripción Personalizada en Lista de Espera',
+    description: 'Se envía cuando la categoría está llena y el participante pasa a la lista de espera.',
+    subject: 'Estás en lista de espera — {{tournamentName}}',
+    variables: ['toName', 'tournamentName', 'categoryName', 'appUrl', 'currentYear'],
+    is_active: true,
+    html_body: base(`
+<tr><td style="padding:48px 40px 32px;">
+<p style="margin:0 0 8px;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#b45309;">Lista de espera</p>
+<h1 style="margin:0 0 16px;font-size:28px;font-weight:700;color:#111;letter-spacing:-.02em;">Estás en lista de espera</h1>
+<p style="margin:0 0 28px;font-size:15px;color:#6b7280;line-height:1.6;">Hola {{toName}}, la categoría <strong>{{categoryName}}</strong> de <strong>{{tournamentName}}</strong> está llena, así que quedaste en la lista de espera.</p>
+<p style="margin:0;font-size:14px;color:#6b7280;line-height:1.6;">Te avisaremos por correo si se libera un lugar.</p>
+</td></tr>`),
+  },
+
+  // 13 ─ Personalizado status update (confirmed / rejected / promoted)
+  {
+    type: 'personalizado_status',
+    name: 'Actualización de Inscripción Personalizada',
+    description: 'Se envía cuando el organizador confirma o rechaza, o cuando el equipo es promovido desde la lista de espera.',
+    subject: 'Actualización de tu inscripción — {{tournamentName}}',
+    variables: ['toName', 'tournamentName', 'categoryName', 'statusMessage', 'appUrl', 'currentYear'],
+    is_active: true,
+    html_body: base(`
+<tr><td style="padding:48px 40px 32px;">
+<p style="margin:0 0 8px;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#9ca3af;">Actualización de inscripción</p>
+<h1 style="margin:0 0 16px;font-size:28px;font-weight:700;color:#111;letter-spacing:-.02em;">Hola {{toName}}</h1>
+<p style="margin:0 0 28px;font-size:15px;color:#6b7280;line-height:1.6;"><strong>{{statusMessage}}</strong></p>
+${detail([['Torneo', '{{tournamentName}}'], ['Categoría', '{{categoryName}}']])}
+</td></tr>`),
+  },
 ];
 
 // Convenience map: type → default template
@@ -240,6 +292,9 @@ export const PREVIEW_VARS: Record<string, string> = {
   gameName:         'Americano del Sábado',
   eventName:        'Americano del Sábado',
   tournamentName:   'Copa PadelMGT 2025',
+  categoryName:     'Masculino A',
+  locationName:     'Club de Pádel Central',
+  statusMessage:    '¡Tu lugar fue confirmado!',
   gameDate:         'Sábado 14 de junio, 10:00',
   date:             'Sábado 14 de junio, 10:00',
   gameCity:         'Buenos Aires',

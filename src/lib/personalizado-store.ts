@@ -22,7 +22,7 @@ export interface PersonalizadoTeam {
   player2Email?: string;
   player2Id?: string;
   registeredAt: string;
-  status: 'pending' | 'confirmed' | 'rejected';
+  status: 'pending' | 'confirmed' | 'rejected' | 'waitlisted';
   paymentStatus: 'unpaid' | 'paid' | 'free';
 }
 
@@ -127,16 +127,28 @@ export function addTeamToPersonalizado(code: string, team: {
   player1Email?: string;
   player2Name?: string;
   player2Email?: string;
-}): { ok: boolean; error?: string } {
+}): { ok: boolean; error?: string; waitlisted?: boolean; team?: PersonalizadoTeam } {
   const t = getPersonalizadoByCode(code);
   if (!t) return { ok: false, error: 'Torneo no encontrado' };
   if (t.status !== 'registration_open') return { ok: false, error: 'La inscripción no está abierta' };
   const cat = t.categories.find(c => c.id === team.categoryId);
   if (!cat) return { ok: false, error: 'Categoría no encontrada' };
-  const enrolled = t.teams.filter(tm => tm.categoryId === team.categoryId && tm.status !== 'rejected').length;
-  if (enrolled >= cat.maxTeams) return { ok: false, error: 'Categoría llena' };
 
-  const newTeam = {
+  // Duplicate check: same category, non-rejected team already using this email
+  if (team.player1Email) {
+    const email = team.player1Email.trim().toLowerCase();
+    const dup = t.teams.some(tm =>
+      tm.categoryId === team.categoryId &&
+      tm.status !== 'rejected' &&
+      (tm.player1Email?.trim().toLowerCase() === email || tm.player2Email?.trim().toLowerCase() === email)
+    );
+    if (dup) return { ok: false, error: 'Ese correo ya está inscrito en esta categoría' };
+  }
+
+  const enrolled = enrolledCount(t, team.categoryId);
+  const waitlisted = enrolled >= cat.maxTeams;
+
+  const newTeam: PersonalizadoTeam = {
     id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `tm-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     categoryId: team.categoryId,
     player1Name: team.player1Name,
@@ -144,22 +156,51 @@ export function addTeamToPersonalizado(code: string, team: {
     player2Name: team.player2Name,
     player2Email: team.player2Email,
     registeredAt: new Date().toISOString(),
-    status: 'pending' as const,
-    paymentStatus: (cat.registrationFee > 0 ? 'unpaid' : 'free') as 'unpaid' | 'free',
+    status: waitlisted ? 'waitlisted' : 'pending',
+    paymentStatus: cat.registrationFee > 0 ? 'unpaid' : 'free',
   };
   savePersonalizado({ ...t, teams: [...t.teams, newTeam] });
-  return { ok: true };
+  return { ok: true, waitlisted, team: newTeam };
 }
 
-export function setTeamStatus(tournamentId: string, teamId: string, status: 'pending' | 'confirmed' | 'rejected'): void {
+export function setTeamStatus(
+  tournamentId: string,
+  teamId: string,
+  status: 'pending' | 'confirmed' | 'rejected' | 'waitlisted',
+): { promoted?: PersonalizadoTeam } {
   const t = getPersonalizado(tournamentId);
-  if (!t) return;
-  savePersonalizado({
-    ...t,
-    teams: t.teams.map(tm => tm.id === teamId ? { ...tm, status } : tm),
-  });
+  if (!t) return {};
+
+  let teams = t.teams.map(tm => tm.id === teamId ? { ...tm, status } : tm);
+  let promoted: PersonalizadoTeam | undefined;
+
+  // Auto-promote oldest waitlisted team when a slot may have freed (rejection)
+  if (status === 'rejected') {
+    const changed = teams.find(tm => tm.id === teamId);
+    if (changed) {
+      const catId = changed.categoryId;
+      const cat = t.categories.find(c => c.id === catId);
+      const enrolled = teams.filter(tm => tm.categoryId === catId && (tm.status === 'pending' || tm.status === 'confirmed')).length;
+      if (cat && enrolled < cat.maxTeams) {
+        const candidate = teams
+          .filter(tm => tm.categoryId === catId && tm.status === 'waitlisted')
+          .sort((a, b) => a.registeredAt.localeCompare(b.registeredAt))[0];
+        if (candidate) {
+          teams = teams.map(tm => tm.id === candidate.id ? { ...tm, status: 'pending' as const } : tm);
+          promoted = teams.find(tm => tm.id === candidate.id);
+        }
+      }
+    }
+  }
+
+  savePersonalizado({ ...t, teams });
+  return { promoted };
 }
 
 export function enrolledCount(t: PersonalizadoTournament, categoryId: string): number {
-  return t.teams.filter(tm => tm.categoryId === categoryId && tm.status !== 'rejected').length;
+  return t.teams.filter(tm => tm.categoryId === categoryId && (tm.status === 'pending' || tm.status === 'confirmed')).length;
+}
+
+export function waitlistCount(t: PersonalizadoTournament, categoryId: string): number {
+  return t.teams.filter(tm => tm.categoryId === categoryId && tm.status === 'waitlisted').length;
 }

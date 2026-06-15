@@ -73,3 +73,21 @@ export async function sendFriendRequestEmail(
 ): Promise<void> {
   return send({ type: 'friend_request', to, toName, fromName, profileUrl });
 }
+
+export async function sendPersonalizadoRegistrationEmail(p: {
+  to: string; toName: string; tournamentName: string; categoryName: string; date: string; locationName: string;
+}): Promise<void> {
+  return send({ type: 'personalizado_registration', ...p });
+}
+
+export async function sendPersonalizadoWaitlistedEmail(p: {
+  to: string; toName: string; tournamentName: string; categoryName: string;
+}): Promise<void> {
+  return send({ type: 'personalizado_waitlisted', ...p });
+}
+
+export async function sendPersonalizadoStatusEmail(p: {
+  to: string; toName: string; tournamentName: string; categoryName: string; statusMessage: string;
+}): Promise<void> {
+  return send({ type: 'personalizado_status', ...p });
+}
