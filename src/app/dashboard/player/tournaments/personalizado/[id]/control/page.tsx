@@ -11,12 +11,14 @@ import {
   groupCountFromTeamsPerGroup,
   nextPowerOfTwo,
   DEFAULT_CONTROL_CONFIG,
+  DEFAULT_SCORE_PHASE,
   type PersonalizadoTournament,
   type PersonalizadoTeam,
   type PersonalizadoCategory,
   type ControlPanelConfig,
   type CategoryGroupConfig,
   type ScorePhaseConfig,
+  type DeuceRule,
 } from '@/lib/personalizado-store';
 import { useToast } from '@/components/ToastProvider';
 
@@ -77,42 +79,104 @@ function num(v: string, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-// ── Score-type sub-block (reused for Clasificación and Eliminatoria) ──────────
+// ── Score parameters per phase (Clasificación / Eliminatoria) ─────────────────
+// The score *type* (traditional vs points) is shared; only these params differ per phase.
 
-function ScorePhaseEditor({ value, onChange }: { value: ScorePhaseConfig; onChange: (v: ScorePhaseConfig) => void }) {
-  return (
-    <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        {(['traditional', 'points'] as const).map(s => (
-          <button key={s} type="button" onClick={() => onChange({ ...value, scoreType: s })}
-            style={{
-              padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em',
-              border: '1px solid', borderColor: value.scoreType === s ? 'var(--black)' : 'var(--grey-200)',
-              background: value.scoreType === s ? 'var(--black)' : '#fff', color: value.scoreType === s ? '#fff' : 'var(--grey-500)',
-            }}>
-            {s === 'traditional' ? 'Tradicional (sets/games)' : 'Por puntos'}
-          </button>
-        ))}
-      </div>
-      {value.scoreType === 'points' && (
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div>
-            <label style={lbl}>Puntos por set</label>
-            <input type="number" min={1} value={value.pointsPerSet ?? 16} style={numInp}
-              onChange={e => onChange({ ...value, pointsPerSet: num(e.target.value, 16) })} />
-          </div>
-          <div>
-            <label style={lbl}>N° de sets</label>
-            <input type="number" min={1} value={value.sets ?? 2} style={numInp}
-              onChange={e => onChange({ ...value, sets: num(e.target.value, 2) })} />
-          </div>
-          <div>
-            <label style={lbl}>Puntos 3er set (0 = no)</label>
-            <input type="number" min={0} value={value.thirdSetPoints ?? 0} style={numInp}
-              onChange={e => onChange({ ...value, thirdSetPoints: num(e.target.value, 0) })} />
-          </div>
+const DEUCE_OPTIONS: { v: DeuceRule; label: string; desc: string }[] = [
+  { v: 'ventaja', label: 'Ventaja Tradicional', desc: 'D y AD hasta que un equipo gane 2 puntos consecutivos.' },
+  { v: 'oro',     label: 'Punto de Oro',        desc: 'El siguiente punto en Deuce gana el game.' },
+  { v: 'plata',   label: 'Punto de Plata',      desc: 'Ventaja al primero en puntuar en Deuce. Si la pierde, vuelve a Deuce.' },
+  { v: 'ipf',     label: 'IPF',                 desc: 'Punto de Oro federado. El siguiente punto gana.' },
+];
+
+function pickBtn(active: boolean): React.CSSProperties {
+  return {
+    border: `2px solid ${active ? 'var(--black)' : 'var(--grey-200)'}`,
+    background: active ? 'var(--black)' : '#fff',
+    color: active ? '#fff' : 'var(--black)',
+    cursor: 'pointer',
+  };
+}
+
+function ScorePhaseEditor({ scoreType, value, onChange }: {
+  scoreType: 'traditional' | 'points';
+  value: ScorePhaseConfig;
+  onChange: (v: ScorePhaseConfig) => void;
+}) {
+  if (scoreType === 'points') {
+    return (
+      <div>
+        <label style={lbl}>Puntos objetivo</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[16, 24, 32].map(n => (
+            <button key={n} type="button" onClick={() => onChange({ ...value, target: n })}
+              style={{ width: 58, height: 48, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, ...pickBtn(value.target === n) }}>
+              {n}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <label style={lbl}>Sets por partido</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[1, 2, 3].map(n => (
+            <button key={n} type="button" onClick={() => onChange({ ...value, sets: n })}
+              style={{ flex: 1, padding: '12px 8px', textAlign: 'center', ...pickBtn(value.sets === n) }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{n}</div>
+              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 3, color: value.sets === n ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>
+                {n === 1 ? 'set' : n === 2 ? 'sets (tb)' : 'best of 3'}
+              </div>
+            </button>
+          ))}
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 6 }}>
+          {value.sets === 2 ? 'Si cada equipo gana 1 set, se juega tiebreak para desempatar.' : value.sets === 3 ? 'Gana el primero en ganar 2 sets.' : 'El que gana el set, gana el partido.'}
+        </div>
+      </div>
+      <div>
+        <label style={lbl}>Games por set</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[4, 5, 6].map(n => (
+            <button key={n} type="button" onClick={() => onChange({ ...value, gamesPerSet: n })}
+              style={{ width: 48, height: 42, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, ...pickBtn(value.gamesPerSet === n) }}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label style={lbl}>Tiebreak a</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[7, 10].map(n => (
+            <button key={n} type="button" onClick={() => onChange({ ...value, tiebreak: n })}
+              style={{ width: 52, height: 42, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, ...pickBtn(value.tiebreak === n) }}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label style={lbl}>Regla de Deuce / Ventaja</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {DEUCE_OPTIONS.map(o => {
+            const active = value.deuce === o.v;
+            return (
+              <button key={o.v} type="button" onClick={() => onChange({ ...value, deuce: o.v })}
+                style={{ padding: '10px 14px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, border: `1px solid ${active ? 'var(--black)' : 'var(--grey-200)'}`, background: active ? '#111' : '#fff', color: active ? '#fff' : 'var(--black)' }}>
+                <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${active ? 'var(--neon)' : 'var(--grey-300)'}`, background: active ? 'var(--neon)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{o.label}</div>
+                  <div style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.4 }}>{o.desc}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -146,14 +210,35 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
       const base: ControlPanelConfig = { ...DEFAULT_CONTROL_CONFIG, ...(t.config ?? {}) };
       const groups: CategoryGroupConfig[] = t.categories.map(cat => {
         const existing = (t.config?.groups ?? []).find(g => g.categoryId === cat.id);
-        if (existing) return existing;
+        if (existing) {
+          // Backfill groupCount for rows saved before the field existed (avoids NaN).
+          const groupCount = existing.groupCount && existing.groupCount > 0
+            ? existing.groupCount
+            : groupCountFromTeamsPerGroup(cat.maxTeams, existing.teamsPerGroup || teamsPerGroupFromCount(cat.maxTeams, Math.max(1, Math.round(cat.maxTeams / 4))));
+          return { ...existing, groupCount };
+        }
         const groupCount = Math.max(1, Math.round(cat.maxTeams / 4));
         return { categoryId: cat.id, groupCount, teamsPerGroup: teamsPerGroupFromCount(cat.maxTeams, groupCount), qualifyPerGroup: 2 };
       });
       const courtNames = (base.courtNames && base.courtNames.length > 0)
         ? base.courtNames
         : Array.from({ length: t.courts || 2 }, (_, i) => `Cancha ${i + 1}`);
-      setConfig({ ...base, groups, courtNames });
+      // Normalize per-phase score params (backfill new fields) and derive the shared score type,
+      // honoring any legacy per-phase scoreType that was stored before the model changed.
+      const legacyType = (t.config?.scoreQualification as { scoreType?: 'traditional' | 'points' } | undefined)?.scoreType;
+      const scoreType = base.scoreType ?? legacyType ?? 'traditional';
+      const normPhase = (p?: Partial<ScorePhaseConfig>): ScorePhaseConfig => ({
+        sets: p?.sets ?? DEFAULT_SCORE_PHASE.sets,
+        gamesPerSet: p?.gamesPerSet ?? DEFAULT_SCORE_PHASE.gamesPerSet,
+        tiebreak: p?.tiebreak ?? DEFAULT_SCORE_PHASE.tiebreak,
+        deuce: p?.deuce ?? DEFAULT_SCORE_PHASE.deuce,
+        target: p?.target ?? DEFAULT_SCORE_PHASE.target,
+      });
+      setConfig({
+        ...base, groups, courtNames, scoreType,
+        scoreQualification: normPhase(base.scoreQualification),
+        scoreElimination: normPhase(base.scoreElimination),
+      });
       setLoading(false);
     });
     return () => { active = false; };
@@ -376,16 +461,38 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
 
       {/* 3 — Tipo de Score por Fase */}
       {block('Tipo de Score por Fase', (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 10 }}>Fase de Clasificación</div>
-            <ScorePhaseEditor value={config.scoreQualification} onChange={v => patchConfig({ scoreQualification: v })} />
+        <div>
+          {/* Shared score-type toggle */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            {([{ v: 'points', label: 'Por Puntos' }, { v: 'traditional', label: 'Tradicional (sets)' }] as const).map(o => (
+              <button key={o.v} type="button" onClick={() => patchConfig({ scoreType: o.v })}
+                style={{
+                  padding: '10px 18px', border: `2px solid ${config.scoreType === o.v ? 'var(--black)' : 'var(--grey-200)'}`,
+                  background: config.scoreType === o.v ? 'var(--black)' : '#fff', color: config.scoreType === o.v ? '#fff' : 'var(--black)',
+                  cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                }}>
+                {o.label}
+              </button>
+            ))}
           </div>
-          <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 10 }}>Fase de Eliminatoria</div>
-            <ScorePhaseEditor value={config.scoreElimination} onChange={v => patchConfig({ scoreElimination: v })} />
+
+          {/* Two phases side by side: Clasificación (Grupos) / Eliminatoria (Cuadro) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
+            <div style={{ borderRight: '1px solid var(--grey-100)', paddingRight: 20 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--grey-100)' }}>
+                Fase I — Clasificación (Grupos)
+              </div>
+              <ScorePhaseEditor scoreType={config.scoreType} value={config.scoreQualification} onChange={v => patchConfig({ scoreQualification: v })} />
+            </div>
+            <div style={{ paddingLeft: 4 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--grey-100)' }}>
+                Fase II — Eliminatoria (Cuadro)
+              </div>
+              <ScorePhaseEditor scoreType={config.scoreType} value={config.scoreElimination} onChange={v => patchConfig({ scoreElimination: v })} />
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+
+          <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 14 }}>
             Editable en cualquier momento antes de que comience cada fase.
           </div>
         </div>

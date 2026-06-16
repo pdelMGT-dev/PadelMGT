@@ -120,17 +120,31 @@ export interface TeamStanding {
   pts: number;   // standing points
 }
 
+export type DeuceRule = 'ventaja' | 'oro' | 'plata' | 'ipf';
+
+/**
+ * Per-phase scoring parameters. The score *type* (traditional vs points) is shared across both
+ * phases (ControlPanelConfig.scoreType); only these parameters differ between the classification
+ * phase and the elimination phase — like a World Cup (group stage vs knockout).
+ */
 export interface ScorePhaseConfig {
-  scoreType: 'traditional' | 'points';
-  // when scoreType === 'points'
-  pointsPerSet?: number;
-  sets?: number;
-  thirdSetPoints?: number; // 0/undefined = no third set
+  // traditional (sets) parameters — used when scoreType === 'traditional'
+  sets: number;          // 1 | 2 | 3
+  gamesPerSet: number;   // 4 | 5 | 6
+  tiebreak: number;      // 7 | 10
+  deuce: DeuceRule;
+  // points parameter — used when scoreType === 'points'
+  target: number;        // 16 | 24 | 32
 }
+
+export const DEFAULT_SCORE_PHASE: ScorePhaseConfig = {
+  sets: 1, gamesPerSet: 6, tiebreak: 7, deuce: 'oro', target: 24,
+};
 
 export interface ControlPanelConfig {
   substitutionEnabled: boolean;
-  // score type, configured independently per phase (can be edited any time before that phase starts)
+  // score type, shared across phases; parameters below differ per phase (editable any time before that phase starts)
+  scoreType: 'traditional' | 'points';
   scoreQualification: ScorePhaseConfig;
   scoreElimination: ScorePhaseConfig;
   // standings points for group stage
@@ -150,8 +164,9 @@ export interface ControlPanelConfig {
 
 export const DEFAULT_CONTROL_CONFIG: ControlPanelConfig = {
   substitutionEnabled: false,
-  scoreQualification: { scoreType: 'traditional' },
-  scoreElimination: { scoreType: 'traditional' },
+  scoreType: 'traditional',
+  scoreQualification: { ...DEFAULT_SCORE_PHASE },
+  scoreElimination: { ...DEFAULT_SCORE_PHASE },
   standingsPoints: { win: 3, draw: 1, loss: 0 },
   forfeit: { winnerPoints: 3, winnerGamesFor: 0 },
   groups: [],
