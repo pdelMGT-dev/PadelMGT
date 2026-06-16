@@ -294,3 +294,22 @@ CREATE TABLE family_links (
 
 ALTER TABLE IF EXISTS family_members DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS family_links   DISABLE ROW LEVEL SECURITY;
+
+-- Family approval requests (guardian must approve a minor's participation invited by someone else)
+CREATE TABLE family_approvals (
+  id TEXT PRIMARY KEY,
+  guardian_id TEXT REFERENCES players(id) ON DELETE CASCADE,
+  family_member_id TEXT,
+  family_member_name TEXT,
+  context TEXT CHECK (context IN ('quick_game','tournament','personalizado')),
+  entity_id TEXT,
+  entity_name TEXT,
+  entity_date TEXT,
+  from_player_id TEXT,
+  from_player_name TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  responded_at TIMESTAMPTZ
+);
+
+ALTER TABLE IF EXISTS family_approvals DISABLE ROW LEVEL SECURITY;

@@ -44,6 +44,9 @@ export interface GamePlayer {
   isCreator: boolean;
   email?: string;
   shortId?: string;
+  isFamilyMember?: boolean;   // participant is a guardian-managed family member (minor/dependent)
+  guardianId?: string;        // playerId of the responsible guardian
+  familyMemberId?: string;    // the FM-XXXX id (for history attribution)
 }
 
 export interface InvitedPlayer {
@@ -52,10 +55,13 @@ export interface InvitedPlayer {
   email?: string;
   shortId?: string;
   ranking: number;
-  status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
+  status: 'pending' | 'pending_guardian' | 'accepted' | 'rejected' | 'cancelled';
   invitedAt: string;
   isFriend: boolean;
   isProvisional?: boolean;  // unregistered fill-in player
+  isFamilyMember?: boolean;   // participant is a guardian-managed family member (minor/dependent)
+  guardianId?: string;        // playerId of the responsible guardian
+  familyMemberId?: string;    // the FM-XXXX id (for history attribution)
 }
 
 export interface FixedPair {

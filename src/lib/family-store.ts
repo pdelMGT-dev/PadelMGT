@@ -89,6 +89,48 @@ export function getFamilyMembers(ownerId: string): FamilyMember[] {
   return _membersStore.load().filter(m => m.ownerId === ownerId);
 }
 
+/** Scan the local members store for a member by its ID# (across all owners). */
+export function findFamilyMemberByIdLocal(id: string): FamilyMember | null {
+  return _membersStore.load().find(m => m.id === id) ?? null;
+}
+
+/**
+ * Look up a family member by ID#. When Supabase is configured this hits the
+ * direct-lookup API route (so members of OTHER guardians are reachable);
+ * otherwise it falls back to the local store.
+ */
+export async function lookupFamilyMember(id: string): Promise<FamilyMember | null> {
+  if (!isSupabaseConfigured) {
+    return findFamilyMemberByIdLocal(id);
+  }
+  try {
+    const res = await fetch('/api/family/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ familyMemberId: id }),
+    });
+    const json = await res.json() as {
+      ok: boolean;
+      member?: { id: string; fullName: string; guardianId: string; birthDate: string; sex: string };
+    };
+    if (!json.ok || !json.member) return findFamilyMemberByIdLocal(id);
+    const m = json.member;
+    return {
+      id: m.id,
+      ownerId: m.guardianId,
+      fullName: m.fullName,
+      relationType: 'dependiente',
+      sex: m.sex === 'femenino' ? 'femenino' : 'masculino',
+      birthDate: m.birthDate,
+      invitationStatus: 'none',
+      createdAt: new Date().toISOString(),
+    };
+  } catch (e) {
+    console.warn('[Family] lookupFamilyMember:', e);
+    return findFamilyMemberByIdLocal(id);
+  }
+}
+
 /** Upsert a member in localStorage and fire-and-forget sync to Supabase. */
 export function saveFamilyMember(member: FamilyMember): void {
   const all = _membersStore.load();

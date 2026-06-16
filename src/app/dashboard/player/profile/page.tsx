@@ -13,6 +13,11 @@ import {
   RELATION_LABELS,
   type FamilyMember, type FamilyLink, type RelationType,
 } from '@/lib/family-store';
+import {
+  getPendingApprovalsForGuardian, respondToApproval,
+  type FamilyApprovalRequest,
+} from '@/lib/family-approval-store';
+import { getGame, updateGame } from '@/lib/game-store';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -118,6 +123,7 @@ export default function PlayerProfilePage() {
   // Family tab state
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [familyLinks, setFamilyLinks] = useState<FamilyLink[]>([]);
+  const [approvals, setApprovals] = useState<FamilyApprovalRequest[]>([]);
   const [showFamilyModal, setShowFamilyModal] = useState(false);
   const [editingMember, setEditingMember] = useState<FamilyMember | null>(null);
   const [familySaving, setFamilySaving] = useState(false);
@@ -144,7 +150,26 @@ export default function PlayerProfilePage() {
     if (!user) return;
     setFamilyMembers(getFamilyMembers(user.id));
     setFamilyLinks(getFamilyLinks(user.id));
+    setApprovals(getPendingApprovalsForGuardian(user.id));
   }, [user?.id, tab]);
+
+  // ── Guardian approval handlers ──────────────────────────────────────────────
+  function handleApproval(req: FamilyApprovalRequest, response: 'approved' | 'rejected') {
+    const { ok, request } = respondToApproval(req.id, response);
+    if (ok && request && request.context === 'quick_game') {
+      const game = getGame(request.entityId);
+      if (game) {
+        const newStatus = response === 'approved' ? 'accepted' : 'rejected';
+        const invitedPlayers = (game.invitedPlayers ?? []).map(p =>
+          (p.familyMemberId === request.familyMemberId || p.id === request.familyMemberId)
+            ? { ...p, status: newStatus as typeof p.status }
+            : p
+        );
+        updateGame(game.id, { invitedPlayers });
+      }
+    }
+    if (user) setApprovals(getPendingApprovalsForGuardian(user.id));
+  }
 
   // Load games and init form whenever user changes
   useEffect(() => {
@@ -563,6 +588,49 @@ export default function PlayerProfilePage() {
       {/* ======================== TAB: FAMILIA ============================= */}
       {tab === 'familia' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+          {/* ── Section: Aprobaciones pendientes ────────────────────────── */}
+          {approvals.length > 0 && (
+            <div style={{ background: '#fff', padding: 28, border: '1px solid var(--grey-100)' }}>
+              <div style={{ ...lbl, marginBottom: 16 }}>
+                Aprobaciones pendientes
+                <span style={{ marginLeft: 8, background: '#f59e0b', color: '#fff', borderRadius: '50%', width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+                  {approvals.length}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {approvals.map(req => {
+                  const ctxLabel: Record<FamilyApprovalRequest['context'], string> = {
+                    quick_game: 'Juego Rápido', tournament: 'Torneo', personalizado: 'Torneo Personalizado',
+                  };
+                  return (
+                    <div key={req.id} style={{ border: '1px solid var(--grey-200)', padding: 18 }}>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--black)', lineHeight: 1.5, marginBottom: 14 }}>
+                        <strong>{req.fromPlayerName}</strong> invitó a <strong>{req.familyMemberName}</strong> a <strong>{req.entityName}</strong> ({ctxLabel[req.context]})
+                        {req.entityDate ? ` el ${req.entityDate}` : ''}.
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleApproval(req, 'approved')}
+                          style={{ background: 'var(--turf-green)', color: '#fff', border: 'none', fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, padding: '8px 16px', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                        >
+                          ✓ Aprobar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApproval(req, 'rejected')}
+                          style={{ background: '#fff', color: '#dc2626', border: '1px solid #fecaca', fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, padding: '8px 16px', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                        >
+                          ✕ Rechazar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* ── Section: Mis Familiares ─────────────────────────────────── */}
           <div style={{ background: '#fff', padding: 28, border: '1px solid var(--grey-100)' }}>

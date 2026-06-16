@@ -19,6 +19,8 @@ import { getPlayerClubs } from '@/lib/club-membership-store';
 import { getSAClubs } from '@/lib/superadmin-data';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getMyLeagues, getLeagueSeasons, getActiveSeason, type PlayerLeague, type LeagueSeason } from '@/lib/player-league-store';
+import { getFamilyMembers, lookupFamilyMember, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
+import { createApprovalRequest } from '@/lib/family-approval-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,6 +37,10 @@ type InvitedLocal = {
   shortId?: string;
   ranking: number;
   status: 'pending';
+  isFamilyMember?: boolean;
+  guardianId?: string;
+  familyMemberId?: string;
+  pendingGuardian?: boolean;   // true when added by ID# and guardian is someone else
 };
 
 // ── Mock / static data ────────────────────────────────────────────────────────
@@ -263,10 +269,14 @@ export default function QuickGamePage() {
   // Step III — Jugadores
   const [maxPlayers, setMaxPlayers]     = useState(4);
   const [invitedList, setInvitedList]   = useState<InvitedLocal[]>([]);
-  const [playerTab, setPlayerTab]       = useState<'friends' | 'search'>('friends');
+  const [playerTab, setPlayerTab]       = useState<'friends' | 'search' | 'family'>('friends');
   const [friendList, setFriendList]     = useState<RegisteredPlayer[]>([]);
   const [searchQuery, setSearchQuery]   = useState('');
   const [searchResults, setSearchResults] = useState<RegisteredPlayer[]>([]);
+  const [myFamily, setMyFamily]         = useState<FamilyMember[]>([]);
+  const [familyIdInput, setFamilyIdInput] = useState('');
+  const [familyLookupMsg, setFamilyLookupMsg] = useState('');
+  const [familyLooking, setFamilyLooking] = useState(false);
 
   // Step IV — Tipo de pareja
   const [pairType, setPairType] = useState<PairType | null>(null);
@@ -299,6 +309,7 @@ export default function QuickGamePage() {
   useEffect(() => {
     if (step === 3 && currentUser) {
       setFriendList(getFriendsForPlayer(currentUser.id));
+      setMyFamily(getFamilyMembers(currentUser.id));
     }
   }, [step, currentUser]);
 
@@ -368,6 +379,53 @@ export default function QuickGamePage() {
     return friendList.some(f => f.id === id);
   }
 
+  function addFamilyMemberDirect(m: FamilyMember) {
+    if (isAlreadyInvited(m.id)) return;
+    if (invitedList.length >= maxPlayers - 1) return;
+    setInvitedList(prev => [...prev, {
+      id: m.id, name: m.fullName, shortId: m.id, ranking: 0, status: 'pending',
+      isFamilyMember: true, guardianId: currentUser!.id, familyMemberId: m.id,
+    }]);
+  }
+
+  async function addFamilyMemberById() {
+    if (!currentUser) return;
+    const id = familyIdInput.trim().toUpperCase();
+    if (!id) return;
+    if (invitedList.length >= maxPlayers - 1) {
+      setFamilyLookupMsg('Alcanzaste el máximo de jugadores invitados.');
+      return;
+    }
+    if (isAlreadyInvited(id)) {
+      setFamilyLookupMsg('Ese familiar ya está en la lista.');
+      return;
+    }
+    setFamilyLooking(true);
+    setFamilyLookupMsg('');
+    try {
+      const m = await lookupFamilyMember(id);
+      if (!m) {
+        setFamilyLookupMsg('No se encontró ningún familiar con ese ID#');
+        return;
+      }
+      if (m.ownerId === currentUser.id) {
+        // Own family member — no approval needed
+        addFamilyMemberDirect(m);
+        setFamilyIdInput('');
+        return;
+      }
+      // Different guardian — needs approval
+      setInvitedList(prev => [...prev, {
+        id: m.id, name: m.fullName, shortId: m.id, ranking: 0, status: 'pending',
+        isFamilyMember: true, guardianId: m.ownerId, familyMemberId: m.id,
+        pendingGuardian: true,
+      }]);
+      setFamilyIdInput('');
+    } finally {
+      setFamilyLooking(false);
+    }
+  }
+
   function resetWizard() {
     setStep(1);
     setGameName(''); setDate(''); setTime('');
@@ -376,6 +434,7 @@ export default function QuickGamePage() {
     setLevel(null);
     setMaxPlayers(4); setInvitedList([]); setPlayerTab('friends');
     setSearchQuery(''); setSearchResults([]); setFriendList([]);
+    setMyFamily([]); setFamilyIdInput(''); setFamilyLookupMsg(''); setFamilyLooking(false);
     setPairType(null);
     setCourts(1); setScoreType('traditional'); setSetsPerMatch(1);
     setGamesPerSet(6); setTiebreak(7); setDeuceRule('gold'); setPointTarget(16);
@@ -404,16 +463,29 @@ export default function QuickGamePage() {
       isCreator: true,
     };
 
-    const invitedPlayers: InvitedPlayer[] = invitedList.map(p => ({
-      id: p.id,
-      name: p.name,
-      email: p.email,
-      shortId: p.shortId,
-      ranking: p.ranking,
-      status: 'pending',
-      invitedAt: new Date().toISOString(),
-      isFriend: isFriend(p.id),
-    }));
+    const invitedPlayers: InvitedPlayer[] = invitedList.map(p => {
+      let status: InvitedPlayer['status'] = 'pending';
+      if (p.isFamilyMember) {
+        // Own family member (creator is guardian) → auto-confirmed.
+        // Another guardian's family member → needs guardian approval.
+        status = p.pendingGuardian ? 'pending_guardian' : 'accepted';
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        shortId: p.shortId,
+        ranking: p.ranking,
+        status,
+        invitedAt: new Date().toISOString(),
+        isFriend: isFriend(p.id),
+        ...(p.isFamilyMember ? {
+          isFamilyMember: true,
+          guardianId: p.guardianId,
+          familyMemberId: p.familyMemberId,
+        } : {}),
+      };
+    });
 
     const scoreConfig: ScoreConfig = scoreType === 'points'
       ? { type: 'points', target: pointTarget }
@@ -448,8 +520,9 @@ export default function QuickGamePage() {
 
     incrementUsage('games');
 
-    // Send invitations
-    for (const p of invitedList) {
+    // Send invitations — family members have no platform account, so skip them.
+    const invitablePlayers = invitedList.filter(p => !p.isFamilyMember);
+    for (const p of invitablePlayers) {
       createInvitation({
         gameId: newGame.id,
         gameName: newGame.name,
@@ -465,9 +538,32 @@ export default function QuickGamePage() {
       });
     }
 
-    const msg = invitedList.length > 0
-      ? `¡Juego Rápido creado! Se enviaron ${invitedList.length} invitaciones.`
-      : '¡Juego Rápido creado!';
+    // Guardian approval requests for family members of other responsibles.
+    const pendingGuardianMembers = invitedList.filter(p => p.isFamilyMember && p.pendingGuardian);
+    for (const p of pendingGuardianMembers) {
+      if (!p.guardianId || !p.familyMemberId) continue;
+      createApprovalRequest({
+        guardianId: p.guardianId,
+        familyMemberId: p.familyMemberId,
+        familyMemberName: p.name,
+        context: 'quick_game',
+        entityId: newGame.id,
+        entityName: newGame.name,
+        entityDate: newGame.date,
+        fromPlayerId: currentUser.id,
+        fromPlayerName: currentUser.name,
+      });
+    }
+
+    let msg: string;
+    if (invitablePlayers.length > 0) {
+      msg = `¡Juego Rápido creado! Se enviaron ${invitablePlayers.length} invitaciones.`;
+    } else {
+      msg = '¡Juego Rápido creado!';
+    }
+    if (pendingGuardianMembers.length > 0) {
+      msg += ` ${pendingGuardianMembers.length} familiar(es) pendiente(s) de aprobación del responsable.`;
+    }
     setNotification(msg);
     reloadGames();
     goToDashboard();
@@ -1197,7 +1293,18 @@ export default function QuickGamePage() {
                 <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
                 <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.shortId ?? p.email ?? ''}</div>
               </div>
-              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: 'var(--grey-100)', color: 'var(--grey-500)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Pendiente</span>
+              {p.isFamilyMember ? (
+                <>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: 'rgba(124,58,237,0.1)', color: '#7c3aed', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Familiar</span>
+                  {p.pendingGuardian ? (
+                    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: '#fef3c7', color: '#b45309', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Pend. responsable</span>
+                  ) : (
+                    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: 'var(--turf-green)', color: '#fff', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Confirmado</span>
+                  )}
+                </>
+              ) : (
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: 'var(--grey-100)', color: 'var(--grey-500)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Pendiente</span>
+              )}
               <button onClick={() => removeInvited(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--grey-300)', padding: 0, lineHeight: 1 }}>×</button>
             </div>
           ))}
@@ -1220,8 +1327,8 @@ export default function QuickGamePage() {
 
             {/* Tabs */}
             <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '2px solid var(--grey-200)' }}>
-              {(['friends', 'search'] as const).map(tab => {
-                const labels = { friends: 'Mis Amistades', search: 'Buscar Jugador' };
+              {(['friends', 'search', 'family'] as const).map(tab => {
+                const labels = { friends: 'Mis Amistades', search: 'Buscar Jugador', family: 'Familiares' };
                 return (
                   <button key={tab} onClick={() => { setPlayerTab(tab); setSearchQuery(''); setSearchResults([]); }}
                     style={{ padding: '10px 18px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', border: 'none', borderBottom: `2px solid ${playerTab === tab ? 'var(--black)' : 'transparent'}`, background: 'transparent', color: playerTab === tab ? 'var(--black)' : 'var(--grey-400)', cursor: 'pointer', marginBottom: -2 }}>
@@ -1304,6 +1411,66 @@ export default function QuickGamePage() {
                 {searchQuery.trim().length > 0 && searchQuery.trim().length < 2 && (
                   <div style={{ marginTop: 6, fontSize: 11, color: 'var(--grey-400)' }}>Escribí al menos 2 caracteres para buscar.</div>
                 )}
+              </div>
+            )}
+
+            {/* Family tab */}
+            {playerTab === 'family' && (
+              <div>
+                {/* Part 1 — Mis familiares */}
+                <div style={{ ...secTitle, marginTop: 0 }}>Mis familiares</div>
+                {myFamily.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)', padding: '8px 0 16px' }}>
+                    No tenés familiares registrados. Añadilos en tu{' '}
+                    <Link href="/dashboard/player/profile?tab=familia" style={{ color: 'var(--black)', fontWeight: 700 }}>perfil → pestaña Familia</Link>.
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8, marginBottom: 20 }}>
+                    {myFamily.map(m => {
+                      const already = isAlreadyInvited(m.id);
+                      return (
+                        <button key={m.id} onClick={() => addFamilyMemberDirect(m)} disabled={already || !canAddMore}
+                          style={{ padding: '12px', border: `1px solid ${already ? 'var(--grey-100)' : 'var(--grey-200)'}`, background: already ? 'var(--grey-50)' : '#fff', cursor: already ? 'default' : 'pointer', textAlign: 'left', position: 'relative' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: '50%', background: already ? 'var(--grey-300)' : '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                              {initials(m.fullName)}
+                            </div>
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', background: 'rgba(124,58,237,0.1)', color: '#7c3aed' }}>{RELATION_LABELS[m.relationType]}</span>
+                          </div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: already ? 'var(--grey-400)' : 'var(--black)', lineHeight: 1.3 }}>{m.fullName}</div>
+                          <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 2 }}>{m.id}</div>
+                          {already && (
+                            <div style={{ marginTop: 6, fontSize: 9, fontWeight: 700, color: 'var(--turf-green)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ya invitado</div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Part 2 — Añadir por ID# */}
+                <div style={secTitle}>Añadir por ID# (familiar de otro responsable)</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <input
+                    type="text"
+                    value={familyIdInput}
+                    onChange={e => { setFamilyIdInput(e.target.value); setFamilyLookupMsg(''); }}
+                    placeholder="FM-XXXX-1234"
+                    style={{ ...inp, marginBottom: 0, flex: 1 }}
+                  />
+                  <button
+                    onClick={addFamilyMemberById}
+                    disabled={familyLooking || !familyIdInput.trim() || !canAddMore}
+                    style={{ padding: '10px 18px', background: (familyLooking || !familyIdInput.trim() || !canAddMore) ? 'var(--grey-200)' : 'var(--black)', color: (familyLooking || !familyIdInput.trim() || !canAddMore) ? 'var(--grey-400)' : '#fff', border: 'none', cursor: (familyLooking || !familyIdInput.trim() || !canAddMore) ? 'not-allowed' : 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
+                    {familyLooking ? 'Buscando…' : 'Buscar y añadir'}
+                  </button>
+                </div>
+                {familyLookupMsg && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: '#dc2626', fontWeight: 600 }}>{familyLookupMsg}</div>
+                )}
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--grey-400)', lineHeight: 1.5 }}>
+                  El responsable del menor recibirá una solicitud para aprobar su participación.
+                </div>
               </div>
             )}
           </div>
