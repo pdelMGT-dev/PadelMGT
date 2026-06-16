@@ -261,3 +261,36 @@ ALTER TABLE IF EXISTS player_relationships  DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS tournaments           DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS quick_games           DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS friend_requests       DISABLE ROW LEVEL SECURITY;
+
+-- ── Family members (minors and dependents without platform accounts) ──────────
+
+CREATE TABLE family_members (
+  id TEXT PRIMARY KEY,               -- "FM-XXXX-1234"
+  owner_id TEXT REFERENCES players(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  relation_type TEXT NOT NULL CHECK (relation_type IN ('hijo','hija','esposo','esposa','pareja','dependiente')),
+  sex TEXT NOT NULL CHECK (sex IN ('masculino','femenino')),
+  birth_date DATE NOT NULL,
+  email TEXT,
+  linked_player_id TEXT REFERENCES players(id) ON DELETE SET NULL,
+  invitation_status TEXT DEFAULT 'none' CHECK (invitation_status IN ('none','invited','accepted')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── Family links between two platform users (requires mutual approval) ────────
+
+CREATE TABLE family_links (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  from_player_id TEXT REFERENCES players(id) ON DELETE CASCADE,
+  to_player_id TEXT REFERENCES players(id) ON DELETE CASCADE,
+  to_player_email TEXT,
+  from_player_name TEXT,
+  relation_from_to TEXT NOT NULL,
+  relation_to_from TEXT NOT NULL,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending','accepted','rejected')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(from_player_id, to_player_id)
+);
+
+ALTER TABLE IF EXISTS family_members DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS family_links   DISABLE ROW LEVEL SECURITY;

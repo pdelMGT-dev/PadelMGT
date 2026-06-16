@@ -273,6 +273,44 @@ ${detail([['Torneo', '{{tournamentName}}'], ['Categoría', '{{categoryName}}'], 
 ${detail([['Torneo', '{{tournamentName}}'], ['Categoría', '{{categoryName}}']])}
 </td></tr>`),
   },
+
+  // 14 ─ Family link request
+  {
+    type: 'family_link_request',
+    name: 'Solicitud de Vínculo Familiar',
+    description: 'Se envía a un usuario de la plataforma cuando otro jugador quiere vincularse como familiar.',
+    subject: '{{fromName}} quiere vincularse como tu {{relationLabel}} en PadelMGT',
+    variables: ['toName', 'fromName', 'relationLabel', 'acceptUrl', 'currentYear'],
+    is_active: true,
+    html_body: base(`
+<tr><td style="padding:48px 40px 32px;">
+<p style="margin:0 0 8px;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#9ca3af;">Solicitud de vínculo familiar</p>
+<h1 style="margin:0 0 16px;font-size:28px;font-weight:700;color:#111;letter-spacing:-.02em;">Hola {{toName}}</h1>
+<p style="margin:0 0 28px;font-size:15px;color:#6b7280;line-height:1.6;"><strong>{{fromName}}</strong> quiere vincularse contigo como tu <strong>{{relationLabel}}</strong> en PadelMGT.</p>
+<p style="margin:0 0 32px;font-size:15px;color:#6b7280;line-height:1.6;">Si aceptás, ambos podrán verse como familiares en sus perfiles. Podés rechazar la solicitud si no conocés a esta persona.</p>
+${btn('Aceptar vínculo', '{{acceptUrl}}')}
+<p style="margin:0;font-size:13px;color:#9ca3af;">Si no conocés a {{fromName}}, podés ignorar este email.</p>
+</td></tr>`),
+  },
+
+  // 15 ─ Family platform invite (for non-registered family members)
+  {
+    type: 'family_platform_invite',
+    name: 'Invitación Familiar a la Plataforma',
+    description: 'Se envía a un familiar no registrado para invitarlo a crear una cuenta en PadelMGT.',
+    subject: '¡Tienes una invitación a PadelMGT!',
+    variables: ['toName', 'guardianName', 'inviteUrl', 'currentYear'],
+    is_active: true,
+    html_body: base(`
+<tr><td style="padding:48px 40px 32px;">
+<p style="margin:0 0 8px;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#9ca3af;">Invitación a PadelMGT</p>
+<h1 style="margin:0 0 16px;font-size:28px;font-weight:700;color:#111;letter-spacing:-.02em;">¡Hola {{toName}}!</h1>
+<p style="margin:0 0 28px;font-size:15px;color:#6b7280;line-height:1.6;"><strong>{{guardianName}}</strong> te añadió como familiar en PadelMGT y te invita a unirte a la plataforma.</p>
+<p style="margin:0 0 32px;font-size:15px;color:#6b7280;line-height:1.6;">PadelMGT es la plataforma de gestión de pádel donde podés participar en torneos, llevar tu ranking y conectar con otros jugadores.</p>
+${btn('Crear cuenta', '{{inviteUrl}}')}
+<p style="margin:0;font-size:13px;color:#9ca3af;">Si no conocés a {{guardianName}} o no querés crear una cuenta, podés ignorar este email.</p>
+</td></tr>`),
+  },
 ];
 
 // Convenience map: type → default template
@@ -310,6 +348,10 @@ export const PREVIEW_VARS: Record<string, string> = {
   profileUrl:       'https://padelmgt.com/player/abc123',
   appUrl:           'https://padelmgt.com',
   currentYear:      String(new Date().getFullYear()),
+  relationLabel:    'Pareja',
+  acceptUrl:        'https://padelmgt.com/dashboard/player/profile?tab=familia',
+  guardianName:     'María López',
+  inviteUrl:        'https://padelmgt.com/register?ref=family',
 };
 
 /** Replace {{variable}} placeholders in a string. */

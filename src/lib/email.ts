@@ -98,3 +98,15 @@ export async function sendPartnerInvitationEmail(p: {
 }): Promise<void> {
   return send({ type: 'partner_invitation', ...p });
 }
+
+export async function sendFamilyLinkRequestEmail(p: {
+  to: string; toName: string; fromName: string; relationLabel: string; acceptUrl: string;
+}): Promise<void> {
+  return send({ type: 'family_link_request', ...p });
+}
+
+export async function sendFamilyPlatformInviteEmail(p: {
+  to: string; toName: string; guardianName: string; inviteUrl: string;
+}): Promise<void> {
+  return send({ type: 'family_platform_invite', ...p });
+}

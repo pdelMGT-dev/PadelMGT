@@ -7,12 +7,18 @@ import { updatePlayer } from '@/lib/player-store';
 import { getRankingHistoryForGame } from '@/lib/ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { PLAYER_LEVELS, LEVEL_CONFIG, getLevelInfo, normalizeLegacyLevel, type PlayerLevel } from '@/lib/level-config';
+import {
+  getFamilyMembers, saveFamilyMember, deleteFamilyMember, getFamilyLinks,
+  saveFamilyLink, createFamilyMember, updateFamilyMember, requestFamilyLink,
+  RELATION_LABELS,
+  type FamilyMember, type FamilyLink, type RelationType,
+} from '@/lib/family-store';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Tab = 'perfil' | 'historial' | 'config';
+type Tab = 'perfil' | 'familia' | 'historial' | 'config';
 
 type UserProfile = {
   id: string; name: string; email: string; role: string;
@@ -109,10 +115,36 @@ export default function PlayerProfilePage() {
   const [saveMsg, setSaveMsg] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Family tab state
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [familyLinks, setFamilyLinks] = useState<FamilyLink[]>([]);
+  const [showFamilyModal, setShowFamilyModal] = useState(false);
+  const [editingMember, setEditingMember] = useState<FamilyMember | null>(null);
+  const [familySaving, setFamilySaving] = useState(false);
+  const [familyError, setFamilyError] = useState('');
+  // Modal form fields
+  const [mName, setMName] = useState('');
+  const [mRelation, setMRelation] = useState<RelationType>('hijo');
+  const [mSex, setMSex] = useState<'masculino' | 'femenino'>('masculino');
+  const [mBirth, setMBirth] = useState('');
+  const [mEmail, setMEmail] = useState('');
+  // Link request fields
+  const [mLinkEmail, setMLinkEmail] = useState('');
+  const [mLinkRelation, setMLinkRelation] = useState<RelationType>('pareja');
+  const [linkSaving, setLinkSaving] = useState(false);
+  const [linkMsg, setLinkMsg] = useState('');
+
   // Hydrate local UserProfile state from the session hook
   useEffect(() => {
     if (sessionUser) setUser(sessionUser as unknown as UserProfile);
   }, [sessionUser]);
+
+  // Load family data when user is set or tab switches to familia
+  useEffect(() => {
+    if (!user) return;
+    setFamilyMembers(getFamilyMembers(user.id));
+    setFamilyLinks(getFamilyLinks(user.id));
+  }, [user?.id, tab]);
 
   // Load games and init form whenever user changes
   useEffect(() => {
@@ -403,8 +435,8 @@ export default function PlayerProfilePage() {
       {/* 3. Tabs                                                             */}
       {/* ------------------------------------------------------------------ */}
       <div className="profile-tabs-row" style={{ display: 'flex', borderBottom: '1px solid var(--grey-200)', marginBottom: 28 }}>
-        {(['perfil', 'historial', 'config'] as Tab[]).map(t => {
-          const labels: Record<Tab, string> = { perfil: 'Perfil', historial: 'Historial', config: 'Configuración' };
+        {(['perfil', 'familia', 'historial', 'config'] as Tab[]).map(t => {
+          const labels: Record<Tab, string> = { perfil: 'Perfil', familia: 'Familia', historial: 'Historial', config: 'Configuración' };
           const active = tab === t;
           return (
             <button
@@ -524,6 +556,379 @@ export default function PlayerProfilePage() {
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================== TAB: FAMILIA ============================= */}
+      {tab === 'familia' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+          {/* ── Section: Mis Familiares ─────────────────────────────────── */}
+          <div style={{ background: '#fff', padding: 28, border: '1px solid var(--grey-100)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ ...lbl }}>Mis Familiares</div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingMember(null);
+                  setMName(''); setMRelation('hijo'); setMSex('masculino'); setMBirth(''); setMEmail('');
+                  setFamilyError('');
+                  setShowFamilyModal(true);
+                }}
+                style={{
+                  background: 'var(--black)', color: '#fff', border: 'none',
+                  fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600,
+                  padding: '8px 18px', cursor: 'pointer',
+                }}
+              >
+                + Añadir miembro
+              </button>
+            </div>
+
+            {familyMembers.length === 0 ? (
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--grey-400)', padding: '12px 0' }}>
+                No tenés familiares registrados todavía.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+                {familyMembers.map(m => {
+                  const age = (() => {
+                    try {
+                      const b = new Date(m.birthDate); const n = new Date();
+                      let a = n.getFullYear() - b.getFullYear();
+                      if (n.getMonth() - b.getMonth() < 0 || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--;
+                      return a;
+                    } catch { return null; }
+                  })();
+                  const statusLabel = m.invitationStatus === 'none' ? 'sin cuenta' : m.invitationStatus === 'invited' ? 'invitado' : 'en plataforma ✓';
+                  const statusColor = m.invitationStatus === 'accepted' ? 'var(--turf-green)' : m.invitationStatus === 'invited' ? '#b45309' : 'var(--grey-400)';
+                  return (
+                    <div key={m.id} style={{ border: '1px solid var(--grey-200)', padding: 18 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                        <div>
+                          <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--grey-400)', marginBottom: 2 }}>{m.id}</div>
+                          <div style={{ fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 700, color: 'var(--black)' }}>{m.fullName}</div>
+                        </div>
+                        <span style={{
+                          background: 'var(--grey-100)', color: 'var(--black)',
+                          fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 700,
+                          padding: '3px 8px', textTransform: 'uppercase', letterSpacing: '0.06em',
+                        }}>
+                          {RELATION_LABELS[m.relationType]}
+                        </span>
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--grey-500)', marginBottom: 6 }}>
+                        {age !== null ? `${age} años` : ''}{age !== null && m.sex ? ' · ' : ''}{m.sex === 'masculino' ? 'Masculino' : 'Femenino'}
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: statusColor, fontWeight: 600, marginBottom: 14 }}>
+                        {statusLabel}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingMember(m);
+                            setMName(m.fullName);
+                            setMRelation(m.relationType);
+                            setMSex(m.sex);
+                            setMBirth(m.birthDate);
+                            setMEmail(m.email ?? '');
+                            setFamilyError('');
+                            setShowFamilyModal(true);
+                          }}
+                          style={{
+                            fontFamily: 'var(--font-body)', fontSize: 12, cursor: 'pointer',
+                            background: 'none', border: '1px solid var(--grey-200)',
+                            color: 'var(--black)', padding: '6px 12px',
+                          }}
+                        >
+                          ✎ Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!confirm(`¿Eliminar a ${m.fullName}?`)) return;
+                            deleteFamilyMember(m.id, m.ownerId);
+                            setFamilyMembers(prev => prev.filter(x => x.id !== m.id));
+                          }}
+                          style={{
+                            fontFamily: 'var(--font-body)', fontSize: 12, cursor: 'pointer',
+                            background: 'none', border: '1px solid #fecaca',
+                            color: '#dc2626', padding: '6px 12px',
+                          }}
+                        >
+                          ✕ Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Section: Vincular con usuario de la plataforma ──────────── */}
+          <div style={{ background: '#fff', padding: 28, border: '1px solid var(--grey-100)' }}>
+            <div style={{ ...lbl, marginBottom: 16 }}>Vincular con usuario de la plataforma</div>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--grey-500)', marginBottom: 20, lineHeight: 1.6 }}>
+              Si tu familiar ya tiene cuenta en PadelMGT, podés enviarle una solicitud de vínculo. Recibirá un email para aceptar.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12, alignItems: 'flex-end' }}>
+              <div>
+                <label style={lbl}>Email del familiar</label>
+                <input
+                  style={inp}
+                  type="email"
+                  value={mLinkEmail}
+                  onChange={e => setMLinkEmail(e.target.value)}
+                  placeholder="familiar@email.com"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Relación (cómo lo ves)</label>
+                <select style={sel} value={mLinkRelation} onChange={e => setMLinkRelation(e.target.value as RelationType)}>
+                  {(Object.keys(RELATION_LABELS) as RelationType[]).map(r => (
+                    <option key={r} value={r}>{RELATION_LABELS[r]}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                disabled={linkSaving || !mLinkEmail.trim()}
+                onClick={async () => {
+                  if (!user || !mLinkEmail.trim()) return;
+                  setLinkSaving(true);
+                  setLinkMsg('');
+                  const result = await requestFamilyLink(
+                    { id: user.id, name: user.name, email: user.email },
+                    mLinkEmail.trim(),
+                    mLinkRelation,
+                  );
+                  setLinkSaving(false);
+                  if (result.ok) {
+                    setLinkMsg('Solicitud enviada.');
+                    setMLinkEmail('');
+                    setFamilyLinks(getFamilyLinks(user.id));
+                  } else {
+                    setLinkMsg(result.error ?? 'Error al enviar solicitud.');
+                  }
+                }}
+                style={{
+                  background: 'var(--black)', color: '#fff', border: 'none',
+                  fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600,
+                  padding: '10px 20px', cursor: linkSaving ? 'not-allowed' : 'pointer',
+                  opacity: linkSaving ? 0.6 : 1, whiteSpace: 'nowrap',
+                }}
+              >
+                {linkSaving ? 'Enviando...' : 'Enviar solicitud'}
+              </button>
+            </div>
+            {linkMsg && (
+              <div style={{ marginTop: 10, fontFamily: 'var(--font-body)', fontSize: 13, color: linkMsg.startsWith('Solicitud') ? 'var(--turf-green)' : '#dc2626', fontWeight: 600 }}>
+                {linkMsg}
+              </div>
+            )}
+          </div>
+
+          {/* ── Section: Solicitudes pendientes ─────────────────────────── */}
+          {familyLinks.some(l => l.toPlayerId === user.id && l.status === 'pending') && (
+            <div style={{ background: '#fff', padding: 28, border: '1px solid var(--grey-100)' }}>
+              <div style={{ ...lbl, marginBottom: 16 }}>Solicitudes pendientes</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {familyLinks
+                  .filter(l => l.toPlayerId === user.id && l.status === 'pending')
+                  .map(l => (
+                    <div key={l.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--grey-100)' }}>
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600, color: 'var(--black)' }}>
+                          {l.fromPlayerName}
+                        </div>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--grey-400)', marginTop: 2 }}>
+                          quiere vincularse como tu {RELATION_LABELS[l.relationToFrom] ?? l.relationToFrom}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const res = await fetch('/api/family/link', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'respond', linkId: l.id, response: 'accepted' }),
+                            });
+                            if (res.ok) {
+                              saveFamilyLink({ ...l, status: 'accepted' });
+                              setFamilyLinks(getFamilyLinks(user.id));
+                            }
+                          }}
+                          style={{
+                            background: 'var(--turf-green)', color: '#fff', border: 'none',
+                            fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+                            padding: '6px 14px', cursor: 'pointer',
+                          }}
+                        >
+                          Aceptar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const res = await fetch('/api/family/link', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'respond', linkId: l.id, response: 'rejected' }),
+                            });
+                            if (res.ok) {
+                              saveFamilyLink({ ...l, status: 'rejected' });
+                              setFamilyLinks(getFamilyLinks(user.id));
+                            }
+                          }}
+                          style={{
+                            background: 'none', border: '1px solid #fecaca', color: '#dc2626',
+                            fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+                            padding: '6px 14px', cursor: 'pointer',
+                          }}
+                        >
+                          Rechazar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Family member modal ─────────────────────────────────────────── */}
+      {showFamilyModal && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) setShowFamilyModal(false); }}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: 20,
+          }}
+        >
+          <div style={{ background: '#fff', padding: 32, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{
+              fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700,
+              textTransform: 'uppercase', marginBottom: 24,
+            }}>
+              {editingMember ? 'Editar familiar' : 'Añadir familiar'}
+            </div>
+
+            {familyError && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '10px 14px', fontSize: 13, marginBottom: 16 }}>
+                {familyError}
+              </div>
+            )}
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>Nombre y Apellido</label>
+              <input style={inp} value={mName} onChange={e => setMName(e.target.value)} placeholder="Nombre completo" />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>Tipo de relación</label>
+              <select style={sel} value={mRelation} onChange={e => setMRelation(e.target.value as RelationType)}>
+                {(Object.keys(RELATION_LABELS) as RelationType[]).map(r => (
+                  <option key={r} value={r}>{RELATION_LABELS[r]}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>Sexo</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['masculino', 'femenino'] as const).map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setMSex(s)}
+                    style={{
+                      flex: 1, padding: '10px 0', cursor: 'pointer',
+                      background: mSex === s ? 'var(--black)' : '#fff',
+                      color: mSex === s ? '#fff' : 'var(--grey-600)',
+                      border: mSex === s ? '1px solid var(--black)' : '1px solid var(--grey-200)',
+                      fontFamily: 'var(--font-body)', fontSize: 13, textTransform: 'capitalize',
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>Fecha de nacimiento</label>
+              <input style={inp} type="date" value={mBirth} onChange={e => setMBirth(e.target.value)} />
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={lbl}>Email (opcional)</label>
+              <input style={inp} type="email" value={mEmail} onChange={e => setMEmail(e.target.value)} placeholder="familiar@email.com" />
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                type="button"
+                disabled={familySaving}
+                onClick={async () => {
+                  if (!user) return;
+                  if (!mName.trim() || !mBirth) {
+                    setFamilyError('Nombre y fecha de nacimiento son requeridos.');
+                    return;
+                  }
+                  setFamilySaving(true);
+                  setFamilyError('');
+                  try {
+                    if (editingMember) {
+                      const patch: Partial<FamilyMember> = {
+                        fullName: mName.trim(),
+                        relationType: mRelation,
+                        sex: mSex,
+                        birthDate: mBirth,
+                        email: mEmail.trim() || undefined,
+                      };
+                      await updateFamilyMember(editingMember.id, user.id, patch);
+                    } else {
+                      await createFamilyMember(user.id, {
+                        fullName: mName.trim(),
+                        relationType: mRelation,
+                        sex: mSex,
+                        birthDate: mBirth,
+                        email: mEmail.trim() || undefined,
+                      });
+                    }
+                    setFamilyMembers(getFamilyMembers(user.id));
+                    setShowFamilyModal(false);
+                  } catch {
+                    setFamilyError('Error al guardar. Intenta de nuevo.');
+                  }
+                  setFamilySaving(false);
+                }}
+                style={{
+                  flex: 1, background: 'var(--black)', color: '#fff', border: 'none',
+                  fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: '0.06em',
+                  padding: '14px', cursor: familySaving ? 'not-allowed' : 'pointer',
+                  opacity: familySaving ? 0.6 : 1,
+                }}
+              >
+                {familySaving ? 'Guardando...' : editingMember ? 'Guardar cambios' : 'Añadir familiar'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowFamilyModal(false)}
+                style={{
+                  background: 'none', border: '1px solid var(--grey-200)', color: 'var(--grey-600)',
+                  fontFamily: 'var(--font-body)', fontSize: 13, padding: '14px 20px', cursor: 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}
