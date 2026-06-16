@@ -18,6 +18,7 @@ export interface PersonalizadoCategory {
   name: string;
   gender: 'masculino' | 'femenino' | 'mixto' | 'libre';
   maxTeams: number; // editable in the control panel before the tournament starts
+  level?: number; // skill order for scheduling — lower = more novice, plays earlier in the day
 }
 
 export interface PersonalizadoTeam {
@@ -39,17 +40,20 @@ export interface PersonalizadoTeam {
 
 export interface CategoryGroupConfig {
   categoryId: string;
-  teamsPerGroup: number;   // teams that play in each group
+  groupCount: number;      // number of groups — editable; teamsPerGroup recalculates
+  teamsPerGroup: number;   // teams that play in each group — editable; groupCount recalculates
   qualifyPerGroup: number; // teams that advance from each group to the bracket
 }
 
 export interface PersonalizadoSchedule {
   startTime: string;        // "09:00" — first match of the day
+  endTime?: string;         // "21:00" — daily cutoff, used to compute rounds/days
   lunchEnabled: boolean;
   lunchStart?: string;      // "13:00"
   lunchDurationMin?: number;
   expectedEndTime?: string; // computed, stored for reference
   matchDurationMin: number; // estimated minutes per match (for end-time calc)
+  endDate?: string;         // "YYYY-MM-DD" — estimated/confirmed last day of the tournament
 }
 
 export interface SetScore {
@@ -69,13 +73,39 @@ export interface PersonalizadoMatch {
   groupId: string;
   groupLabel: string;       // "A", "B"…
   phase: 'group';
-  slot: number;             // ordinal time slot (0-based)
+  day: string;              // "YYYY-MM-DD" — calendar day this match is scheduled on
+  slot: number;             // ordinal time slot within the day (0-based)
   time: string;             // "09:00"
   courtName: string;
   teamAId: string;
   teamBId: string;
   status: 'scheduled' | 'playing' | 'done';
   result?: MatchResult;     // filled once an organizer enters the score
+}
+
+export const BRACKET_ROUND_LABELS: Record<number, string> = {
+  32: 'Dieciseisavos de Final',
+  16: 'Octavos de Final',
+  8: 'Cuartos de Final',
+  4: 'Semifinal',
+  2: 'Final',
+};
+
+export interface BracketMatch {
+  id: string;
+  categoryId: string;
+  round: number;             // 0 = first bracket round, increasing toward the final
+  roundLabel: string;        // "Octavos de Final", "Cuartos de Final"… or "3er Puesto"
+  slotIndex: number;         // position within the round (left to right)
+  teamAId?: string;          // known once seeded (round 0) or once the previous round finishes
+  teamBId?: string;
+  wildcardA?: boolean;       // true if teamA filled a balancing slot (not a direct group qualifier)
+  wildcardB?: boolean;
+  day?: string;              // "YYYY-MM-DD" — scheduled day, once placed on the calendar
+  time?: string;
+  courtName?: string;
+  status: 'pending' | 'scheduled' | 'playing' | 'done';
+  result?: MatchResult;
 }
 
 export interface TeamStanding {
@@ -90,13 +120,19 @@ export interface TeamStanding {
   pts: number;   // standing points
 }
 
-export interface ControlPanelConfig {
-  substitutionEnabled: boolean;
+export interface ScorePhaseConfig {
   scoreType: 'traditional' | 'points';
   // when scoreType === 'points'
   pointsPerSet?: number;
   sets?: number;
   thirdSetPoints?: number; // 0/undefined = no third set
+}
+
+export interface ControlPanelConfig {
+  substitutionEnabled: boolean;
+  // score type, configured independently per phase (can be edited any time before that phase starts)
+  scoreQualification: ScorePhaseConfig;
+  scoreElimination: ScorePhaseConfig;
   // standings points for group stage
   standingsPoints: { win: number; draw: number; loss: number };
   // forfeit / injury withdrawal: points + games credited to the surviving team
@@ -108,17 +144,21 @@ export interface ControlPanelConfig {
   schedule: PersonalizadoSchedule;
   // generated group-stage schedule (filled by generateGroupSchedule)
   matches?: PersonalizadoMatch[];
+  // generated elimination bracket, per category (filled by generateBracket)
+  bracketMatches?: BracketMatch[];
 }
 
 export const DEFAULT_CONTROL_CONFIG: ControlPanelConfig = {
   substitutionEnabled: false,
-  scoreType: 'traditional',
+  scoreQualification: { scoreType: 'traditional' },
+  scoreElimination: { scoreType: 'traditional' },
   standingsPoints: { win: 3, draw: 1, loss: 0 },
   forfeit: { winnerPoints: 3, winnerGamesFor: 0 },
   groups: [],
   courtNames: [],
   schedule: {
     startTime: '09:00',
+    endTime: '21:00',
     lunchEnabled: false,
     lunchStart: '13:00',
     lunchDurationMin: 60,
@@ -521,12 +561,12 @@ export async function changeTeamStatus(
   return setTeamStatusLocal(tournamentId, teamId, status);
 }
 
-// ── Calendar generation (group-stage schedule) ───────────────────────────────
+// ── Calendar generation (multi-day group-stage schedule + bracket) ────────────
 
 const GROUP_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 function fmtMinutes(total: number): string {
-  const capped = Math.min(total, 23 * 60 + 59);
+  const capped = Math.min(Math.max(total, 0), 23 * 60 + 59);
   const h = Math.floor(capped / 60), m = capped % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
@@ -534,6 +574,42 @@ function fmtMinutes(total: number): string {
 function parseMinutes(hhmm: string): number {
   const [h, m] = (hhmm || '0:0').split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
+}
+
+function enumerateDates(start: string, end?: string): string[] {
+  const startStr = start || new Date().toISOString().slice(0, 10);
+  const endStr = end || startStr;
+  const s = new Date(`${startStr}T00:00:00`);
+  const e = new Date(`${endStr}T00:00:00`);
+  if (Number.isNaN(s.getTime())) return [startStr];
+  const last = !Number.isNaN(e.getTime()) && e.getTime() >= s.getTime() ? e : s;
+  const out: string[] = [];
+  for (const d = new Date(s); d.getTime() <= last.getTime(); d.setDate(d.getDate() + 1)) {
+    out.push(d.toISOString().slice(0, 10));
+  }
+  return out.length > 0 ? out : [startStr];
+}
+
+/** Smallest power of two ≥ n (so the elimination bracket is always balanced). */
+export function nextPowerOfTwo(n: number): number {
+  if (n <= 1) return n <= 0 ? 0 : 1;
+  return Math.pow(2, Math.ceil(Math.log2(n)));
+}
+
+/** New groupCount → recalculated teamsPerGroup, keeping maxTeams fixed. */
+export function teamsPerGroupFromCount(maxTeams: number, groupCount: number): number {
+  return Math.max(2, Math.ceil(maxTeams / Math.max(1, groupCount)));
+}
+
+/** New teamsPerGroup → recalculated groupCount, keeping maxTeams fixed. */
+export function groupCountFromTeamsPerGroup(maxTeams: number, teamsPerGroup: number): number {
+  return Math.max(1, Math.ceil(maxTeams / Math.max(2, teamsPerGroup)));
+}
+
+function categoryBracketMatchCount(qualifiers: number): number {
+  if (qualifiers < 2) return 0;
+  const size = nextPowerOfTwo(qualifiers);
+  return (size - 1) + (size >= 4 ? 1 : 0); // knockout matches + 3rd-place game
 }
 
 /** Round-robin pairings (circle method). Returns rounds of [a, b] pairs. */
@@ -556,11 +632,57 @@ function roundRobinRounds(ids: string[]): [string, string][][] {
   return rounds;
 }
 
+export interface TournamentDayEstimate {
+  totalMatches: number;
+  matchesPerDay: number;
+  days: number;
+  suggestedEndDate: string;
+}
+
 /**
- * Generate the group-stage match schedule from the control-panel config and the
- * teams' group assignments. Round-robin within each group, then list-scheduled
- * across courts and time slots, honoring the lunch break. A team never plays two
- * matches in the same time slot.
+ * Estimate how many days the tournament needs (group stage + elimination bracket, all
+ * categories) given the current courts/hours/match-duration config, and suggest an end date
+ * starting from the tournament's start date. Purely a planning aid — the organizer can
+ * override `schedule.endDate` freely.
+ */
+export function estimateTournamentDays(
+  tournament: PersonalizadoTournament,
+  config: ControlPanelConfig,
+): TournamentDayEstimate {
+  const courts = Math.max(1, config.courtNames.length || tournament.courts || 1);
+  const start = parseMinutes(config.schedule.startTime || '09:00');
+  const end = parseMinutes(config.schedule.endTime || '21:00');
+  const lunch = config.schedule.lunchEnabled ? (config.schedule.lunchDurationMin ?? 0) : 0;
+  const matchDur = Math.max(10, config.schedule.matchDurationMin || 50);
+  const dailyMinutes = Math.max(0, end - start - lunch);
+  const slotsPerDay = Math.max(1, Math.floor(dailyMinutes / matchDur));
+  const matchesPerDay = slotsPerDay * courts;
+
+  let totalMatches = 0;
+  for (const cat of tournament.categories) {
+    const g = config.groups.find(x => x.categoryId === cat.id);
+    const groups = Math.max(1, g?.groupCount ?? 1);
+    const perGroup = Math.max(2, g?.teamsPerGroup ?? cat.maxTeams);
+    totalMatches += groups * (perGroup * (perGroup - 1)) / 2;
+    totalMatches += categoryBracketMatchCount(groups * (g?.qualifyPerGroup ?? 0));
+  }
+
+  const days = Math.max(1, Math.ceil(totalMatches / matchesPerDay));
+  const startDate = tournament.date || new Date().toISOString().slice(0, 10);
+  const endDateObj = new Date(`${startDate}T00:00:00`);
+  endDateObj.setDate(endDateObj.getDate() + (days - 1));
+  return { totalMatches, matchesPerDay, days, suggestedEndDate: endDateObj.toISOString().slice(0, 10) };
+}
+
+/**
+ * Generate the group-stage match schedule from the control-panel config and the teams' group
+ * assignments, spread across every day of the tournament (start date → schedule.endDate).
+ * Within a category, round-robin rounds across its groups are mapped proportionally onto the
+ * available days — this keeps every category progressing in lockstep day to day (so none
+ * reaches the elimination phase far ahead of another) and leaves the later days free for the
+ * bracket. Within each day, categories are ordered by `level` (novices first); matches are
+ * list-scheduled across courts and time slots honoring the lunch break and the daily cutoff
+ * (schedule.endTime) — anything that doesn't fit spills into the next day.
  */
 export function generateGroupSchedule(t: PersonalizadoTournament): PersonalizadoMatch[] {
   const cfg = t.config;
@@ -570,11 +692,17 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
     : Array.from({ length: Math.max(1, t.courts || 1) }, (_, i) => `Cancha ${i + 1}`);
 
   const assignable = t.teams.filter(tm => tm.status === 'pending' || tm.status === 'confirmed');
+  const days = enumerateDates(t.date, cfg.schedule.endDate || t.date);
+  const categoriesByLevel = [...t.categories].sort((a, b) => (a.level ?? 0) - (b.level ?? 0));
 
-  // Collect all group matches (unscheduled).
-  type Pending = { categoryId: string; groupId: string; groupLabel: string; a: string; b: string };
-  const pending: Pending[] = [];
-  for (const cat of t.categories) {
+  type Pair = { categoryId: string; groupId: string; groupLabel: string; a: string; b: string };
+
+  // Build, per category, the list of "rounds" (each round = all pairs across its groups that
+  // can be played simultaneously), then map round index → day index proportionally.
+  const byDay = new Map<string, Pair[]>();
+  for (const day of days) byDay.set(day, []);
+
+  for (const cat of categoriesByLevel) {
     const byGroup = new Map<string, string[]>();
     for (const tm of assignable) {
       if (tm.categoryId !== cat.id || !tm.groupId) continue;
@@ -582,50 +710,77 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
       arr.push(tm.id);
       byGroup.set(tm.groupId, arr);
     }
+    const perGroupRounds = new Map<string, [string, string][][]>();
+    let maxRounds = 0;
     for (const [gid, ids] of byGroup) {
-      const n = parseInt(gid.split('-G')[1] ?? '1', 10);
-      const label = GROUP_LETTERS[(n - 1) % GROUP_LETTERS.length] ?? String(n);
-      for (const round of roundRobinRounds(ids)) {
-        for (const [a, b] of round) pending.push({ categoryId: cat.id, groupId: gid, groupLabel: label, a, b });
-      }
+      const r = roundRobinRounds(ids);
+      perGroupRounds.set(gid, r);
+      maxRounds = Math.max(maxRounds, r.length);
     }
+    if (maxRounds === 0) continue;
+
+    const catRounds: Pair[][] = [];
+    for (let r = 0; r < maxRounds; r++) {
+      const roundPairs: Pair[] = [];
+      for (const [gid, rounds] of perGroupRounds) {
+        const n = parseInt(gid.split('-G')[1] ?? '1', 10);
+        const label = GROUP_LETTERS[(n - 1) % GROUP_LETTERS.length] ?? String(n);
+        for (const [a, b] of rounds[r] ?? []) roundPairs.push({ categoryId: cat.id, groupId: gid, groupLabel: label, a, b });
+      }
+      if (roundPairs.length > 0) catRounds.push(roundPairs);
+    }
+
+    const R = catRounds.length;
+    catRounds.forEach((pairs, r) => {
+      const dayIdx = Math.min(days.length - 1, Math.floor((r * days.length) / R));
+      byDay.get(days[dayIdx])!.push(...pairs);
+    });
   }
 
-  // List-schedule into slots × courts.
+  // List-schedule each day's pending pairs into slots × courts.
   const matchDur = Math.max(10, cfg.schedule.matchDurationMin || 50);
   const lunchEnabled = cfg.schedule.lunchEnabled;
   const lunchStart = parseMinutes(cfg.schedule.lunchStart ?? '13:00');
   const lunchDur = cfg.schedule.lunchDurationMin ?? 0;
+  const dayEndMinutes = parseMinutes(cfg.schedule.endTime || '23:59');
 
-  let slotTime = parseMinutes(cfg.schedule.startTime || '09:00');
-  let lunchTaken = !lunchEnabled;
-  let slotIndex = 0;
   const out: PersonalizadoMatch[] = [];
-  const remaining = [...pending];
+  let carry: Pair[] = [];
+  let globalSlotIndex = 0;
 
-  while (remaining.length > 0) {
-    if (!lunchTaken && slotTime >= lunchStart) { slotTime += lunchDur; lunchTaken = true; }
-    const busy = new Set<string>();
-    let courtsUsed = 0;
-    for (let i = 0; i < remaining.length && courtsUsed < courts.length; ) {
-      const m = remaining[i];
-      if (!busy.has(m.a) && !busy.has(m.b)) {
-        out.push({
-          id: `m-${m.groupId}-${m.a}-${m.b}`,
-          categoryId: m.categoryId, groupId: m.groupId, groupLabel: m.groupLabel, phase: 'group',
-          slot: slotIndex, time: fmtMinutes(slotTime), courtName: courts[courtsUsed],
-          teamAId: m.a, teamBId: m.b, status: 'scheduled',
-        });
-        busy.add(m.a); busy.add(m.b);
-        courtsUsed++;
-        remaining.splice(i, 1);
-      } else {
-        i++;
+  for (let di = 0; di < days.length; di++) {
+    const day = days[di];
+    const remaining = [...carry, ...(byDay.get(day) ?? [])];
+    carry = [];
+    let slotTime = parseMinutes(cfg.schedule.startTime || '09:00');
+    let lunchTaken = !lunchEnabled;
+    const isLastDay = di === days.length - 1;
+
+    while (remaining.length > 0) {
+      if (!lunchTaken && slotTime >= lunchStart) { slotTime += lunchDur; lunchTaken = true; }
+      if (!isLastDay && slotTime > dayEndMinutes) { carry.push(...remaining.splice(0)); break; }
+      const busy = new Set<string>();
+      let courtsUsed = 0;
+      for (let i = 0; i < remaining.length && courtsUsed < courts.length; ) {
+        const m = remaining[i];
+        if (!busy.has(m.a) && !busy.has(m.b)) {
+          out.push({
+            id: `m-${day}-${m.groupId}-${m.a}-${m.b}`,
+            categoryId: m.categoryId, groupId: m.groupId, groupLabel: m.groupLabel, phase: 'group',
+            day, slot: globalSlotIndex, time: fmtMinutes(slotTime), courtName: courts[courtsUsed],
+            teamAId: m.a, teamBId: m.b, status: 'scheduled',
+          });
+          busy.add(m.a); busy.add(m.b);
+          courtsUsed++;
+          remaining.splice(i, 1);
+        } else {
+          i++;
+        }
       }
+      slotTime += matchDur;
+      globalSlotIndex++;
+      if (globalSlotIndex > 4000) break; // safety
     }
-    slotTime += matchDur;
-    slotIndex++;
-    if (slotIndex > 2000) break; // safety
   }
   return out;
 }
@@ -638,6 +793,8 @@ export interface SaveControlPanelInput {
   config: ControlPanelConfig;
   status?: PersonalizadoTournament['status'];
   groupAssignments?: Record<string, string | null>;
+  date?: string;
+  time?: string;
 }
 
 export interface SaveControlPanelResult {
@@ -700,6 +857,8 @@ export function saveControlPanelLocal(input: SaveControlPanelInput): SaveControl
     categories: input.categories,
     config: input.config,
     status: input.status ?? t.status,
+    date: input.date ?? t.date,
+    time: input.time ?? t.time,
     teams,
   });
   return { ok: true, teams };
@@ -805,6 +964,185 @@ export function calculateGroupStandings(
     if (b.diff !== a.diff) return b.diff - a.diff;
     return b.jf - a.jf;
   });
+}
+
+/** Rank every team in a category across all of its groups (for cross-group wildcard fill). */
+function rankTeamsInCategory(tournament: PersonalizadoTournament, categoryId: string): TeamStanding[] {
+  const groupIds = [...new Set(
+    tournament.teams.filter(tm => tm.categoryId === categoryId && tm.groupId).map(tm => tm.groupId!)
+  )];
+  const all = groupIds.flatMap(gid => calculateGroupStandings(tournament, categoryId, gid));
+  return all.sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    if (b.diff !== a.diff) return b.diff - a.diff;
+    return b.jf - a.jf;
+  });
+}
+
+export interface QualifiedTeam {
+  teamId: string;
+  seed: number;       // 1 = best seed
+  wildcard: boolean;  // filled a balancing slot rather than qualifying directly from its group
+}
+
+/**
+ * Direct qualifiers = top N per group (config.groups[].qualifyPerGroup). If the total isn't a
+ * power of two, the best-ranked non-qualified teams (by overall classification across the
+ * category's groups) fill the remaining slots up to the next power of two, so the bracket is
+ * always balanced (32 → 16 → 8 → 4 → 2).
+ */
+export function computeQualifiers(tournament: PersonalizadoTournament, categoryId: string): QualifiedTeam[] {
+  const g = tournament.config?.groups.find(x => x.categoryId === categoryId);
+  if (!g) return [];
+  const groupIds = [...new Set(
+    tournament.teams.filter(tm => tm.categoryId === categoryId && tm.groupId).map(tm => tm.groupId!)
+  )];
+  if (groupIds.length === 0) return [];
+
+  const direct = new Set<string>();
+  for (const gid of groupIds) {
+    const standings = calculateGroupStandings(tournament, categoryId, gid);
+    for (const s of standings.slice(0, g.qualifyPerGroup)) direct.add(s.teamId);
+  }
+
+  const target = nextPowerOfTwo(direct.size);
+  const ranked = rankTeamsInCategory(tournament, categoryId);
+  const wildcards = ranked.filter(s => !direct.has(s.teamId)).slice(0, Math.max(0, target - direct.size)).map(s => s.teamId);
+  const wildcardSet = new Set(wildcards);
+
+  const ordered = ranked.filter(s => direct.has(s.teamId) || wildcardSet.has(s.teamId)).map(s => s.teamId);
+  return ordered.map((teamId, i) => ({ teamId, seed: i + 1, wildcard: wildcardSet.has(teamId) }));
+}
+
+/**
+ * Build the full single-elimination bracket (+ 3rd-place match) for a category from its
+ * qualified teams. Round 0 is seeded 1 vs N, 2 vs N−1, …; later rounds (including the 3rd-place
+ * match, played alongside the final) are filled in as previous rounds are completed.
+ */
+export function generateBracket(tournament: PersonalizadoTournament, categoryId: string): BracketMatch[] {
+  const qualifiers = computeQualifiers(tournament, categoryId);
+  const size = qualifiers.length;
+  if (size < 2) return [];
+
+  const out: BracketMatch[] = [];
+  let matchesInRound = size / 2;
+  for (let i = 0; i < matchesInRound; i++) {
+    const a = qualifiers[i];
+    const b = qualifiers[size - 1 - i];
+    out.push({
+      id: `b-${categoryId}-r0-${i}`, categoryId, round: 0,
+      roundLabel: BRACKET_ROUND_LABELS[size] ?? `Ronda de ${size}`,
+      slotIndex: i, teamAId: a.teamId, teamBId: b.teamId,
+      wildcardA: a.wildcard, wildcardB: b.wildcard, status: 'pending',
+    });
+  }
+
+  let round = 1;
+  matchesInRound = matchesInRound / 2;
+  let finalRound = 0;
+  while (matchesInRound >= 1) {
+    const roundSize = matchesInRound * 2;
+    const label = roundSize === 2 ? 'Final' : (BRACKET_ROUND_LABELS[roundSize] ?? `Ronda de ${roundSize}`);
+    for (let i = 0; i < matchesInRound; i++) {
+      out.push({ id: `b-${categoryId}-r${round}-${i}`, categoryId, round, roundLabel: label, slotIndex: i, status: 'pending' });
+    }
+    finalRound = round;
+    round++;
+    matchesInRound = matchesInRound / 2;
+  }
+
+  if (size >= 4) {
+    out.push({ id: `b-${categoryId}-3rd`, categoryId, round: finalRound, roundLabel: '3er Puesto', slotIndex: 1, status: 'pending' });
+  }
+  return out;
+}
+
+/**
+ * Place the (already generated) bracket rounds onto the calendar, starting the day after this
+ * category's last group-stage match, biasing later rounds toward later times — so the final and
+ * 3rd-place match land as close as possible to the tournament's closing date/time.
+ */
+export function scheduleBracket(tournament: PersonalizadoTournament, bracketMatches: BracketMatch[]): BracketMatch[] {
+  const cfg = tournament.config;
+  if (!cfg || bracketMatches.length === 0) return bracketMatches;
+  const courts = (cfg.courtNames && cfg.courtNames.length > 0)
+    ? cfg.courtNames
+    : Array.from({ length: Math.max(1, tournament.courts || 1) }, (_, i) => `Cancha ${i + 1}`);
+  const days = enumerateDates(tournament.date, cfg.schedule.endDate || tournament.date);
+  const categoryId = bracketMatches[0].categoryId;
+
+  const ownGroupDayIdxs = (cfg.matches ?? [])
+    .filter(m => m.categoryId === categoryId)
+    .map(m => days.indexOf(m.day))
+    .filter(i => i >= 0);
+  const lastGroupDayIdx = ownGroupDayIdxs.length > 0 ? Math.max(...ownGroupDayIdxs) : -1;
+  const availableDays = days.slice(Math.min(days.length - 1, Math.max(0, lastGroupDayIdx + 1)));
+
+  const totalRounds = Math.max(...bracketMatches.map(m => m.round)) + 1;
+  const matchDur = Math.max(10, cfg.schedule.matchDurationMin || 50);
+  const lunchEnabled = cfg.schedule.lunchEnabled;
+  const lunchStart = parseMinutes(cfg.schedule.lunchStart ?? '13:00');
+  const lunchDur = cfg.schedule.lunchDurationMin ?? 0;
+  const dayStart = parseMinutes(cfg.schedule.startTime || '09:00');
+  const dayEnd = parseMinutes(cfg.schedule.endTime || '21:00');
+
+  return bracketMatches.map(m => {
+    const dayIdx = Math.min(availableDays.length - 1, Math.floor((m.round * availableDays.length) / totalRounds));
+    const day = availableDays[Math.max(0, dayIdx)] ?? days[days.length - 1];
+    const fraction = totalRounds <= 1 ? 0 : m.round / (totalRounds - 1);
+    let minutes = dayStart + Math.round(fraction * Math.max(0, dayEnd - matchDur - dayStart));
+    if (lunchEnabled && minutes >= lunchStart) minutes += lunchDur;
+    return {
+      ...m, day, time: fmtMinutes(minutes), courtName: courts[m.slotIndex % courts.length],
+      status: (m.status === 'pending' ? 'scheduled' : m.status) as BracketMatch['status'],
+    };
+  });
+}
+
+export interface SaveBracketResultInput {
+  tournamentId: string;
+  matchId: string;
+  result: MatchResult;
+}
+
+/** Save a bracket result and propagate the winner (and, for semifinals, the loser into the
+ *  3rd-place match) to the next round. */
+export async function saveBracketResult(input: SaveBracketResultInput): Promise<{ ok: boolean; error?: string }> {
+  return saveBracketResultLocal(input);
+}
+
+export function saveBracketResultLocal(input: SaveBracketResultInput): { ok: boolean; error?: string } {
+  const t = getPersonalizado(input.tournamentId);
+  if (!t || !t.config?.bracketMatches) return { ok: false, error: 'Torneo no encontrado' };
+
+  let bracket = t.config.bracketMatches.map(m =>
+    m.id === input.matchId ? { ...m, result: input.result, status: 'done' as const } : m
+  );
+  const played = bracket.find(m => m.id === input.matchId);
+
+  if (played && played.teamAId && played.teamBId) {
+    const winnerId = input.result.winnerId;
+    const loserId = winnerId === played.teamAId ? played.teamBId : played.teamAId;
+    const catMatches = bracket.filter(m => m.categoryId === played.categoryId);
+    const finalRoundIdx = Math.max(...catMatches.map(m => m.round));
+    const isSemifinal = played.round === finalRoundIdx - 1 && finalRoundIdx >= 1;
+    const nextRound = played.round + 1;
+    const nextSlot = Math.floor(played.slotIndex / 2);
+    const side: 'A' | 'B' = played.slotIndex % 2 === 0 ? 'A' : 'B';
+
+    bracket = bracket.map(m => {
+      if (m.categoryId === played.categoryId && m.round === nextRound && m.slotIndex === nextSlot && m.roundLabel !== '3er Puesto') {
+        return side === 'A' ? { ...m, teamAId: winnerId, wildcardA: false } : { ...m, teamBId: winnerId, wildcardB: false };
+      }
+      if (isSemifinal && m.categoryId === played.categoryId && m.roundLabel === '3er Puesto') {
+        return side === 'A' ? { ...m, teamAId: loserId } : { ...m, teamBId: loserId };
+      }
+      return m;
+    });
+  }
+
+  savePersonalizado({ ...t, config: { ...t.config, bracketMatches: bracket } });
+  return { ok: true };
 }
 
 // ── Partner invitation helpers ────────────────────────────────────────────────

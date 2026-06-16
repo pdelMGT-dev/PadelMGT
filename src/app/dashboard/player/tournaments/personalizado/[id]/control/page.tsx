@@ -6,12 +6,17 @@ import { useRouter } from 'next/navigation';
 import {
   loadPersonalizadoById,
   saveControlPanel,
+  estimateTournamentDays,
+  teamsPerGroupFromCount,
+  groupCountFromTeamsPerGroup,
+  nextPowerOfTwo,
   DEFAULT_CONTROL_CONFIG,
   type PersonalizadoTournament,
   type PersonalizadoTeam,
   type PersonalizadoCategory,
   type ControlPanelConfig,
   type CategoryGroupConfig,
+  type ScorePhaseConfig,
 } from '@/lib/personalizado-store';
 import { useToast } from '@/components/ToastProvider';
 
@@ -36,7 +41,6 @@ const numInp: React.CSSProperties = { ...inp, width: 90 };
 const GENDER_LABELS: Record<string, string> = {
   libre: 'Libre', masculino: 'Masculino', femenino: 'Femenino', mixto: 'Mixto',
 };
-const GROUP_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 // ── Pill toggle ──────────────────────────────────────────────────────────────
 
@@ -73,25 +77,44 @@ function num(v: string, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-// ── Group-count helper ───────────────────────────────────────────────────────
+// ── Score-type sub-block (reused for Clasificación and Eliminatoria) ──────────
 
-function groupCount(teamsInCategory: number, teamsPerGroup: number): number {
-  if (teamsPerGroup <= 0) return 0;
-  return Math.max(1, Math.ceil(teamsInCategory / teamsPerGroup));
-}
-
-// ── Schedule end-time estimate ───────────────────────────────────────────────
-
-function estimateEndTime(cfg: ControlPanelConfig, totalMatches: number, courts: number): string {
-  if (!cfg.schedule.startTime || courts <= 0) return '—';
-  const [h, m] = cfg.schedule.startTime.split(':').map(Number);
-  let minutes = h * 60 + m;
-  const waves = Math.ceil(totalMatches / courts);
-  minutes += waves * (cfg.schedule.matchDurationMin || 50);
-  if (cfg.schedule.lunchEnabled) minutes += cfg.schedule.lunchDurationMin || 0;
-  minutes = Math.min(minutes, 23 * 60 + 59);
-  const eh = Math.floor(minutes / 60), em = minutes % 60;
-  return `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+function ScorePhaseEditor({ value, onChange }: { value: ScorePhaseConfig; onChange: (v: ScorePhaseConfig) => void }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        {(['traditional', 'points'] as const).map(s => (
+          <button key={s} type="button" onClick={() => onChange({ ...value, scoreType: s })}
+            style={{
+              padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em',
+              border: '1px solid', borderColor: value.scoreType === s ? 'var(--black)' : 'var(--grey-200)',
+              background: value.scoreType === s ? 'var(--black)' : '#fff', color: value.scoreType === s ? '#fff' : 'var(--grey-500)',
+            }}>
+            {s === 'traditional' ? 'Tradicional (sets/games)' : 'Por puntos'}
+          </button>
+        ))}
+      </div>
+      {value.scoreType === 'points' && (
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div>
+            <label style={lbl}>Puntos por set</label>
+            <input type="number" min={1} value={value.pointsPerSet ?? 16} style={numInp}
+              onChange={e => onChange({ ...value, pointsPerSet: num(e.target.value, 16) })} />
+          </div>
+          <div>
+            <label style={lbl}>N° de sets</label>
+            <input type="number" min={1} value={value.sets ?? 2} style={numInp}
+              onChange={e => onChange({ ...value, sets: num(e.target.value, 2) })} />
+          </div>
+          <div>
+            <label style={lbl}>Puntos 3er set (0 = no)</label>
+            <input type="number" min={0} value={value.thirdSetPoints ?? 0} style={numInp}
+              onChange={e => onChange({ ...value, thirdSetPoints: num(e.target.value, 0) })} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────────
@@ -106,6 +129,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   const [saving, setSaving] = useState(false);
 
   // Editable state
+  const [date, setDate] = useState('');
   const [categories, setCategories] = useState<PersonalizadoCategory[]>([]);
   const [config, setConfig] = useState<ControlPanelConfig>(DEFAULT_CONTROL_CONFIG);
   const [teams, setTeams] = useState<PersonalizadoTeam[]>([]);
@@ -115,13 +139,16 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
     loadPersonalizadoById(id).then(t => {
       if (!active || !t) { if (active) setLoading(false); return; }
       setTournament(t);
-      setCategories(t.categories);
+      setDate(t.date ?? '');
+      setCategories(t.categories.map((c, i) => ({ ...c, level: c.level ?? i })));
       setTeams(t.teams);
       // Merge stored config with defaults, and ensure a group config row per category.
       const base: ControlPanelConfig = { ...DEFAULT_CONTROL_CONFIG, ...(t.config ?? {}) };
       const groups: CategoryGroupConfig[] = t.categories.map(cat => {
         const existing = (t.config?.groups ?? []).find(g => g.categoryId === cat.id);
-        return existing ?? { categoryId: cat.id, teamsPerGroup: 4, qualifyPerGroup: 2 };
+        if (existing) return existing;
+        const groupCount = Math.max(1, Math.round(cat.maxTeams / 4));
+        return { categoryId: cat.id, groupCount, teamsPerGroup: teamsPerGroupFromCount(cat.maxTeams, groupCount), qualifyPerGroup: 2 };
       });
       const courtNames = (base.courtNames && base.courtNames.length > 0)
         ? base.courtNames
@@ -152,6 +179,18 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   }
   function setCategoryMax(categoryId: string, maxTeams: number) {
     setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, maxTeams } : c));
+    const g = config.groups.find(x => x.categoryId === categoryId);
+    if (g) patchGroup(categoryId, { teamsPerGroup: teamsPerGroupFromCount(maxTeams, g.groupCount) });
+  }
+  function setCategoryLevel(categoryId: string, level: number) {
+    setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, level } : c));
+  }
+  function setGroupCount(cat: PersonalizadoCategory, groupCount: number) {
+    patchGroup(cat.id, { groupCount: Math.max(1, groupCount), teamsPerGroup: teamsPerGroupFromCount(cat.maxTeams, Math.max(1, groupCount)) });
+  }
+  function setTeamsPerGroup(cat: PersonalizadoCategory, teamsPerGroup: number) {
+    const tpg = Math.max(2, teamsPerGroup);
+    patchGroup(cat.id, { teamsPerGroup: tpg, groupCount: groupCountFromTeamsPerGroup(cat.maxTeams, tpg) });
   }
 
   // ── Court name editing ──────────────────────────────────────────────────────
@@ -170,31 +209,6 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
     setConfig(prev => ({ ...prev, courtNames: prev.courtNames.map((c, i) => i === idx ? name : c) }));
   }
 
-  // ── Drag & drop group assignment ────────────────────────────────────────────
-  const [dragTeam, setDragTeam] = useState<string | null>(null);
-
-  function assignTeamToGroup(teamId: string, groupId: string | null) {
-    setTeams(prev => prev.map(t => t.id === teamId ? { ...t, groupId: groupId ?? undefined } : t));
-  }
-
-  function autoDistribute(categoryId: string, groups: string[]) {
-    if (groups.length === 0) return;
-    const catTeams = assignable.filter(t => t.categoryId === categoryId);
-    setTeams(prev => {
-      const next = [...prev];
-      catTeams.forEach((t, i) => {
-        const gid = groups[i % groups.length];
-        const idx = next.findIndex(x => x.id === t.id);
-        if (idx >= 0) next[idx] = { ...next[idx], groupId: gid };
-      });
-      return next;
-    });
-  }
-
-  function clearGroups(categoryId: string) {
-    setTeams(prev => prev.map(t => t.categoryId === categoryId ? { ...t, groupId: undefined } : t));
-  }
-
   // ── Save ────────────────────────────────────────────────────────────────────
   async function handleSave(markConfigured: boolean) {
     if (!tournament) return;
@@ -205,6 +219,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
       id: tournament.id,
       categories,
       config,
+      date,
       status: markConfigured ? 'configured' : undefined,
       groupAssignments,
     });
@@ -224,28 +239,16 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  // Totals for the schedule estimate (group-stage round-robin matches).
-  const totalGroupMatches = config.groups.reduce((sum, g) => {
-    const catTeams = assignable.filter(t => t.categoryId === g.categoryId).length;
-    const groups = groupCount(catTeams, g.teamsPerGroup);
-    const perGroup = Math.ceil(catTeams / Math.max(1, groups));
-    // round-robin matches in a group of `perGroup` teams
-    return sum + groups * (perGroup * (perGroup - 1)) / 2;
-  }, 0);
-  const totalQualifiers = config.groups.reduce((sum, g) => {
-    const catTeams = assignable.filter(t => t.categoryId === g.categoryId).length;
-    const groups = groupCount(catTeams, g.teamsPerGroup);
-    return sum + groups * g.qualifyPerGroup;
-  }, 0);
-  const estimatedEnd = estimateEndTime(config, totalGroupMatches, config.courtNames.length || tournament.courts);
+  const liveTournament: PersonalizadoTournament = { ...tournament, date, categories, teams };
+  const estimate = estimateTournamentDays(liveTournament, config);
 
-  const block = (title: string, body: React.ReactNode, letter: string) => (
+  const block = (title: string, body: React.ReactNode, num: number) => (
     <div style={card}>
       <div style={{ ...secTitle, display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{
           width: 20, height: 20, borderRadius: '50%', background: 'var(--black)', color: '#fff',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700,
-        }}>{letter}</span>
+        }}>{num}</span>
         {title}
       </div>
       {body}
@@ -270,160 +273,180 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
         </h1>
       </div>
 
-      {/* A — Sustitución */}
-      {block('Equipos y Sustitución', (
+      {/* 1 — Horario y Duración */}
+      {block('Horario y Duración', (
         <div>
-          <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 12, lineHeight: 1.6 }}>
-            Los equipos son <strong>fijos</strong>. Activa la sustitución para permitir reemplazar a un jugador
-            lesionado durante el torneo. Si está desactivada, un retiro por lesión elimina al equipo.
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+            <div><label style={lbl}>Fecha de inicio</label>
+              <input type="date" value={date} style={inp} onChange={e => setDate(e.target.value)} /></div>
+            <div><label style={lbl}>Fecha estimada de culminación</label>
+              <input type="date" value={config.schedule.endDate ?? estimate.suggestedEndDate} style={inp}
+                onChange={e => patchSchedule({ endDate: e.target.value })} /></div>
+            <button type="button" onClick={() => patchSchedule({ endDate: estimate.suggestedEndDate })}
+              style={{ padding: '9px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer', color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>
+              Usar sugerencia ({estimate.days} {estimate.days === 1 ? 'día' : 'días'})
+            </button>
           </div>
-          <Toggle
-            on={config.substitutionEnabled}
-            onChange={v => patchConfig({ substitutionEnabled: v })}
-            labelOn="Torneo con sustitución" labelOff="Sin sustitución"
-          />
-        </div>
-      ), 'A')}
 
-      {/* B — Máx equipos por categoría */}
-      {block('Máximo de equipos por categoría', (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 4 }}>
-            Editable hasta que comience el torneo. Aumentarlo promueve equipos desde la lista de espera.
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+            <div><label style={lbl}>Hora de inicio</label>
+              <input type="time" value={config.schedule.startTime} style={inp}
+                onChange={e => patchSchedule({ startTime: e.target.value })} /></div>
+            <div><label style={lbl}>Hora de culminación</label>
+              <input type="time" value={config.schedule.endTime ?? '21:00'} style={inp}
+                onChange={e => patchSchedule({ endTime: e.target.value })} /></div>
+            <div><label style={lbl}>Min. por partido</label>
+              <input type="number" min={10} value={config.schedule.matchDurationMin} style={numInp}
+                onChange={e => patchSchedule({ matchDurationMin: num(e.target.value, 50) })} /></div>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <Toggle on={config.schedule.lunchEnabled} onChange={v => patchSchedule({ lunchEnabled: v })}
+              labelOn="Con receso de almuerzo" labelOff="Sin receso" />
+          </div>
+          {config.schedule.lunchEnabled && (
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+              <div><label style={lbl}>Inicio del receso</label>
+                <input type="time" value={config.schedule.lunchStart ?? '13:00'} style={inp}
+                  onChange={e => patchSchedule({ lunchStart: e.target.value })} /></div>
+              <div><label style={lbl}>Duración (min)</label>
+                <input type="number" min={0} value={config.schedule.lunchDurationMin ?? 60} style={numInp}
+                  onChange={e => patchSchedule({ lunchDurationMin: num(e.target.value, 60) })} /></div>
+            </div>
+          )}
+
+          <div style={{ fontSize: 13, color: 'var(--grey-500)', padding: '12px 14px', background: 'var(--grey-50, #fafafa)', border: '1px solid var(--grey-100)', lineHeight: 1.6 }}>
+            <strong style={{ color: 'var(--black)' }}>{estimate.totalMatches}</strong> partidos estimados (grupos + eliminatoria) ·{' '}
+            <strong style={{ color: 'var(--black)' }}>{estimate.matchesPerDay}</strong> partidos/día con la configuración actual ·{' '}
+            recomendación: <strong style={{ color: 'var(--black)' }}>{estimate.days} {estimate.days === 1 ? 'día' : 'días'}</strong> (hasta {estimate.suggestedEndDate}).
+            <div style={{ marginTop: 6, color: 'var(--grey-400)' }}>
+              El calendario detallado (rondas niveladas entre categorías, novatos primero, finales cerca del cierre) se genera en{' '}
+              <Link href={`/dashboard/player/tournaments/personalizado/${id}/schedule`} style={{ color: 'var(--grey-500)', fontWeight: 700 }}>Calendario</Link>.
+            </div>
+          </div>
+        </div>
+      ), 1)}
+
+      {/* 2 — Equipos y Grupos */}
+      {block('Equipos y Grupos', (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 2 }}>
+            Editable hasta que comience el torneo. &quot;Nivel&quot; ordena las categorías en el calendario (las más principiantes juegan primero en el día).
           </div>
           {categories.map(cat => {
             const enrolled = assignable.filter(t => t.categoryId === cat.id).length;
-            return (
-              <div key={cat.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 12px', border: '1px solid var(--grey-100)' }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>{cat.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{GENDER_LABELS[cat.gender]} · {enrolled} inscritos</div>
-                </div>
-                <input type="number" min={enrolled} value={cat.maxTeams} style={numInp}
-                  onChange={e => setCategoryMax(cat.id, num(e.target.value, cat.maxTeams))} />
-              </div>
-            );
-          })}
-        </div>
-      ), 'B')}
-
-      {/* C — Tipo de Score */}
-      {block('Tipo de Score', (
-        <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            {(['traditional', 'points'] as const).map(s => (
-              <button key={s} type="button" onClick={() => patchConfig({ scoreType: s })}
-                style={{
-                  padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em',
-                  border: '1px solid', borderColor: config.scoreType === s ? 'var(--black)' : 'var(--grey-200)',
-                  background: config.scoreType === s ? 'var(--black)' : '#fff', color: config.scoreType === s ? '#fff' : 'var(--grey-500)',
-                }}>
-                {s === 'traditional' ? 'Tradicional (sets/games)' : 'Por puntos'}
-              </button>
-            ))}
-          </div>
-          {config.scoreType === 'points' && (
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <div>
-                <label style={lbl}>Puntos por set</label>
-                <input type="number" min={1} value={config.pointsPerSet ?? 16} style={numInp}
-                  onChange={e => patchConfig({ pointsPerSet: num(e.target.value, 16) })} />
-              </div>
-              <div>
-                <label style={lbl}>N° de sets</label>
-                <input type="number" min={1} value={config.sets ?? 2} style={numInp}
-                  onChange={e => patchConfig({ sets: num(e.target.value, 2) })} />
-              </div>
-              <div>
-                <label style={lbl}>Puntos 3er set (0 = no)</label>
-                <input type="number" min={0} value={config.thirdSetPoints ?? 0} style={numInp}
-                  onChange={e => patchConfig({ thirdSetPoints: num(e.target.value, 0) })} />
-              </div>
-            </div>
-          )}
-        </div>
-      ), 'C')}
-
-      {/* D — Tabla de puntos */}
-      {block('Tabla de puntos (clasificación de grupos)', (
-        <div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <div><label style={lbl}>Victoria</label>
-              <input type="number" value={config.standingsPoints.win} style={numInp}
-                onChange={e => patchConfig({ standingsPoints: { ...config.standingsPoints, win: num(e.target.value) } })} /></div>
-            <div><label style={lbl}>Empate</label>
-              <input type="number" value={config.standingsPoints.draw} style={numInp}
-                onChange={e => patchConfig({ standingsPoints: { ...config.standingsPoints, draw: num(e.target.value) } })} /></div>
-            <div><label style={lbl}>Derrota</label>
-              <input type="number" value={config.standingsPoints.loss} style={numInp}
-                onChange={e => patchConfig({ standingsPoints: { ...config.standingsPoints, loss: num(e.target.value) } })} /></div>
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 10, lineHeight: 1.5 }}>
-            Los desempates usan la diferencia de juegos/puntos (a favor − en contra) registrada en cada partido.
-          </div>
-        </div>
-      ), 'D')}
-
-      {/* E — Forfeit / Retiro */}
-      {block('Forfeit / Retiro por lesión', (
-        <div>
-          <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 12, lineHeight: 1.6 }}>
-            Define qué recibe el equipo rival cuando el otro no se presenta o se retira. El equipo que abandona
-            recibe 0 puntos.
-          </div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <div><label style={lbl}>Puntos al rival</label>
-              <input type="number" value={config.forfeit.winnerPoints} style={numInp}
-                onChange={e => patchConfig({ forfeit: { ...config.forfeit, winnerPoints: num(e.target.value) } })} /></div>
-            <div><label style={lbl}>Juegos a favor del rival</label>
-              <input type="number" value={config.forfeit.winnerGamesFor} style={numInp}
-                onChange={e => patchConfig({ forfeit: { ...config.forfeit, winnerGamesFor: num(e.target.value) } })} /></div>
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 10, lineHeight: 1.5 }}>
-            Ej: {config.forfeit.winnerPoints} pts y {config.forfeit.winnerGamesFor} juegos a favor
-            {config.forfeit.winnerGamesFor === 0 ? ' (no se jugó ningún set).' : ' (como si hubiese ganado los sets).'}
-          </div>
-        </div>
-      ), 'E')}
-
-      {/* F — Grupos por categoría */}
-      {block('Estructura de grupos', (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {categories.map(cat => {
             const g = config.groups.find(x => x.categoryId === cat.id)!;
-            const catTeams = assignable.filter(t => t.categoryId === cat.id).length;
-            const groups = groupCount(catTeams, g.teamsPerGroup);
+            const totalQualifiers = g.groupCount * g.qualifyPerGroup;
+            const balancedSize = nextPowerOfTwo(totalQualifiers);
             return (
-              <div key={cat.id} style={{ padding: '12px 14px', border: '1px solid var(--grey-100)' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{cat.name} <span style={{ color: 'var(--grey-400)', fontWeight: 400 }}>· {catTeams} equipos</span></div>
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div key={cat.id} style={{ padding: '14px 16px', border: '1px solid var(--grey-100)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+                  {cat.name} <span style={{ color: 'var(--grey-400)', fontWeight: 400 }}>· {GENDER_LABELS[cat.gender]} · {enrolled} inscritos</span>
+                </div>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 10 }}>
+                  <div><label style={lbl}>Máx. equipos</label>
+                    <input type="number" min={enrolled} value={cat.maxTeams} style={numInp}
+                      onChange={e => setCategoryMax(cat.id, num(e.target.value, cat.maxTeams))} /></div>
+                  <div><label style={lbl}>Nivel</label>
+                    <input type="number" value={cat.level ?? 0} style={numInp}
+                      onChange={e => setCategoryLevel(cat.id, num(e.target.value, cat.level ?? 0))} /></div>
+                  <div><label style={lbl}>Cantidad de grupos</label>
+                    <input type="number" min={1} value={g.groupCount} style={numInp}
+                      onChange={e => setGroupCount(cat, num(e.target.value, g.groupCount))} /></div>
                   <div><label style={lbl}>Equipos por grupo</label>
                     <input type="number" min={2} value={g.teamsPerGroup} style={numInp}
-                      onChange={e => patchGroup(cat.id, { teamsPerGroup: num(e.target.value, g.teamsPerGroup) })} /></div>
+                      onChange={e => setTeamsPerGroup(cat, num(e.target.value, g.teamsPerGroup))} /></div>
                   <div><label style={lbl}>Clasifican por grupo</label>
                     <input type="number" min={1} value={g.qualifyPerGroup} style={numInp}
                       onChange={e => patchGroup(cat.id, { qualifyPerGroup: num(e.target.value, g.qualifyPerGroup) })} /></div>
-                  <div style={{ fontSize: 12, color: 'var(--grey-500)', paddingBottom: 9 }}>
-                    → <strong>{groups}</strong> {groups === 1 ? 'grupo' : 'grupos'} · <strong>{groups * g.qualifyPerGroup}</strong> clasificados
-                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--grey-500)' }}>
+                  → <strong>{totalQualifiers}</strong> clasificados directos
+                  {balancedSize > totalQualifiers ? (
+                    <> · el sistema completará con los <strong>{balancedSize - totalQualifiers}</strong> mejores siguientes de la tabla general para balancear el bracket a <strong>{balancedSize}</strong></>
+                  ) : balancedSize > 0 ? (
+                    <> · bracket balanceado de <strong>{balancedSize}</strong></>
+                  ) : null}
                 </div>
               </div>
             );
           })}
         </div>
-      ), 'F')}
+      ), 2)}
 
-      {/* G — Bracket */}
-      {block('Fase final: bracket eliminatorio', (
-        <div style={{ fontSize: 13, color: 'var(--grey-500)', lineHeight: 1.7 }}>
-          Al terminar la fase de grupos, los <strong>{totalQualifiers}</strong> equipos clasificados entran a un
-          bracket de eliminación directa (estilo Copa del Mundo). El cruce se calcula automáticamente
-          (1º de grupo vs 2º de otro grupo) según la cantidad de clasificados. No requiere configuración manual.
+      {/* 3 — Tipo de Score por Fase */}
+      {block('Tipo de Score por Fase', (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 10 }}>Fase de Clasificación</div>
+            <ScorePhaseEditor value={config.scoreQualification} onChange={v => patchConfig({ scoreQualification: v })} />
+          </div>
+          <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 10 }}>Fase de Eliminatoria</div>
+            <ScorePhaseEditor value={config.scoreElimination} onChange={v => patchConfig({ scoreElimination: v })} />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+            Editable en cualquier momento antes de que comience cada fase.
+          </div>
         </div>
-      ), 'G')}
+      ), 3)}
 
-      {/* H — Canchas */}
-      {block('Canchas', (
+      {/* 4 — Reglas Generales del Torneo */}
+      {block('Reglas Generales del Torneo', (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div>
+            <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 12, lineHeight: 1.6 }}>
+              Los equipos son <strong>fijos</strong>. Activa la sustitución para permitir reemplazar a un jugador
+              lesionado durante el torneo. Si está desactivada, un retiro por lesión elimina al equipo.
+            </div>
+            <Toggle
+              on={config.substitutionEnabled}
+              onChange={v => patchConfig({ substitutionEnabled: v })}
+              labelOn="Torneo con sustitución" labelOff="Sin sustitución"
+            />
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 12 }}>Tabla de puntos (clasificación de grupos)</div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <div><label style={lbl}>Victoria</label>
+                <input type="number" value={config.standingsPoints.win} style={numInp}
+                  onChange={e => patchConfig({ standingsPoints: { ...config.standingsPoints, win: num(e.target.value) } })} /></div>
+              <div><label style={lbl}>Empate</label>
+                <input type="number" value={config.standingsPoints.draw} style={numInp}
+                  onChange={e => patchConfig({ standingsPoints: { ...config.standingsPoints, draw: num(e.target.value) } })} /></div>
+              <div><label style={lbl}>Derrota</label>
+                <input type="number" value={config.standingsPoints.loss} style={numInp}
+                  onChange={e => patchConfig({ standingsPoints: { ...config.standingsPoints, loss: num(e.target.value) } })} /></div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 10, lineHeight: 1.5 }}>
+              Los desempates usan la diferencia de juegos/puntos (a favor − en contra) registrada en cada partido.
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 12 }}>Forfeit / Retiro por lesión</div>
+            <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 12, lineHeight: 1.6 }}>
+              Define qué recibe el equipo rival cuando el otro no se presenta o se retira. El equipo que abandona recibe 0 puntos.
+            </div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <div><label style={lbl}>Puntos al rival</label>
+                <input type="number" value={config.forfeit.winnerPoints} style={numInp}
+                  onChange={e => patchConfig({ forfeit: { ...config.forfeit, winnerPoints: num(e.target.value) } })} /></div>
+              <div><label style={lbl}>Juegos a favor del rival</label>
+                <input type="number" value={config.forfeit.winnerGamesFor} style={numInp}
+                  onChange={e => patchConfig({ forfeit: { ...config.forfeit, winnerGamesFor: num(e.target.value) } })} /></div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 10, lineHeight: 1.5 }}>
+              Ej: {config.forfeit.winnerPoints} pts y {config.forfeit.winnerGamesFor} juegos a favor
+              {config.forfeit.winnerGamesFor === 0 ? ' (no se jugó ningún set).' : ' (como si hubiese ganado los sets).'}
+            </div>
+          </div>
+        </div>
+      ), 4)}
+
+      {/* 5 — Canchas */}
+      {block('Canchas Disponibles', (
         <div>
           <div style={{ marginBottom: 12 }}>
             <label style={lbl}>Número de canchas</label>
@@ -442,95 +465,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
             Editable durante el torneo. El sistema reajusta sus recomendaciones de programación.
           </div>
         </div>
-      ), 'H')}
-
-      {/* I — Horario */}
-      {block('Horario', (
-        <div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
-            <div><label style={lbl}>Hora de inicio</label>
-              <input type="time" value={config.schedule.startTime} style={inp}
-                onChange={e => patchSchedule({ startTime: e.target.value })} /></div>
-            <div><label style={lbl}>Min. por partido</label>
-              <input type="number" min={10} value={config.schedule.matchDurationMin} style={numInp}
-                onChange={e => patchSchedule({ matchDurationMin: num(e.target.value, 50) })} /></div>
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <Toggle on={config.schedule.lunchEnabled} onChange={v => patchSchedule({ lunchEnabled: v })}
-              labelOn="Con receso de almuerzo" labelOff="Sin receso" />
-          </div>
-          {config.schedule.lunchEnabled && (
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
-              <div><label style={lbl}>Inicio del receso</label>
-                <input type="time" value={config.schedule.lunchStart ?? '13:00'} style={inp}
-                  onChange={e => patchSchedule({ lunchStart: e.target.value })} /></div>
-              <div><label style={lbl}>Duración (min)</label>
-                <input type="number" min={0} value={config.schedule.lunchDurationMin ?? 60} style={numInp}
-                  onChange={e => patchSchedule({ lunchDurationMin: num(e.target.value, 60) })} /></div>
-            </div>
-          )}
-          <div style={{ fontSize: 13, color: 'var(--grey-500)', padding: '10px 12px', background: 'var(--grey-50, #fafafa)', border: '1px solid var(--grey-100)' }}>
-            Fin estimado del día: <strong style={{ color: 'var(--black)' }}>{estimatedEnd}</strong>
-            <span style={{ color: 'var(--grey-400)' }}> · {totalGroupMatches} partidos de grupos en {config.courtNames.length || tournament.courts} canchas</span>
-          </div>
-        </div>
-      ), 'I')}
-
-      {/* J — Drag & drop grupos */}
-      {block('Organización de grupos (arrastra y suelta)', (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-          {categories.map(cat => {
-            const g = config.groups.find(x => x.categoryId === cat.id)!;
-            const catTeams = assignable.filter(t => t.categoryId === cat.id);
-            const groups = groupCount(catTeams.length, g.teamsPerGroup);
-            const groupIds = Array.from({ length: groups }, (_, i) => `${cat.id}-G${i + 1}`);
-            const unassigned = catTeams.filter(t => !t.groupId || !groupIds.includes(t.groupId));
-            return (
-              <div key={cat.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>{cat.name}</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" onClick={() => autoDistribute(cat.id, groupIds)}
-                      style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Distribuir automáticamente
-                    </button>
-                    <button type="button" onClick={() => clearGroups(cat.id)}
-                      style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Vaciar
-                    </button>
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(180px, 1fr))`, gap: 10 }}>
-                  {/* Unassigned column */}
-                  <DropColumn
-                    title="Sin asignar" accent="var(--grey-300)" count={unassigned.length}
-                    onDrop={() => { if (dragTeam) { assignTeamToGroup(dragTeam, null); setDragTeam(null); } }}
-                  >
-                    {unassigned.map(t => (
-                      <TeamChip key={t.id} team={t} onDragStart={() => setDragTeam(t.id)} />
-                    ))}
-                  </DropColumn>
-                  {/* Group columns */}
-                  {groupIds.map((gid, i) => {
-                    const members = catTeams.filter(t => t.groupId === gid);
-                    return (
-                      <DropColumn
-                        key={gid} title={`Grupo ${GROUP_LETTERS[i]}`} accent="var(--turf-green)"
-                        count={members.length} capacity={g.teamsPerGroup}
-                        onDrop={() => { if (dragTeam) { assignTeamToGroup(dragTeam, gid); setDragTeam(null); } }}
-                      >
-                        {members.map(t => (
-                          <TeamChip key={t.id} team={t} onDragStart={() => setDragTeam(t.id)} />
-                        ))}
-                      </DropColumn>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ), 'J')}
+      ), 5)}
 
       {/* Save bar */}
       <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24, flexWrap: 'wrap' }}>
@@ -543,51 +478,6 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
           {saving ? 'Guardando…' : 'Guardar y marcar configurado'}
         </button>
       </div>
-    </div>
-  );
-}
-
-// ── Drag helpers ─────────────────────────────────────────────────────────────
-
-function DropColumn({ title, accent, count, capacity, onDrop, children }: {
-  title: string; accent: string; count: number; capacity?: number;
-  onDrop: () => void; children: React.ReactNode;
-}) {
-  const [over, setOver] = useState(false);
-  return (
-    <div
-      onDragOver={e => { e.preventDefault(); setOver(true); }}
-      onDragLeave={() => setOver(false)}
-      onDrop={e => { e.preventDefault(); setOver(false); onDrop(); }}
-      style={{
-        border: `1px solid ${over ? accent : 'var(--grey-200)'}`,
-        background: over ? 'rgba(34,197,94,0.04)' : '#fff', padding: 10, minHeight: 90,
-        boxShadow: over ? `inset 0 0 0 1px ${accent}` : 'none',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>{title}</span>
-        <span style={{ fontSize: 10, fontWeight: 700, color: capacity && count > capacity ? '#b91c1c' : 'var(--grey-400)' }}>
-          {count}{capacity ? `/${capacity}` : ''}
-        </span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
-    </div>
-  );
-}
-
-function TeamChip({ team, onDragStart }: { team: PersonalizadoTeam; onDragStart: () => void }) {
-  return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      style={{
-        padding: '7px 9px', border: '1px solid var(--grey-200)', background: 'var(--grey-50, #fafafa)',
-        cursor: 'grab', fontSize: 12, lineHeight: 1.3,
-      }}
-    >
-      <div style={{ fontWeight: 600 }}>{team.player1Name}</div>
-      {team.player2Name && <div style={{ color: 'var(--grey-400)', fontSize: 11 }}>{team.player2Name}</div>}
     </div>
   );
 }

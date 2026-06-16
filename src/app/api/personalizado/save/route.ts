@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
     config?: Record<string, unknown>;
     status?: string;
     groupAssignments?: Record<string, string | null>;
+    date?: string;
+    time?: string;
   };
   try {
     body = await request.json();
@@ -28,7 +30,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Solicitud no válida' }, { status: 400 });
   }
 
-  const { id, categories, config, status, groupAssignments } = body;
+  const { id, categories, config, status, groupAssignments, date, time } = body;
   if (!id) return NextResponse.json({ error: 'Falta el identificador del torneo' }, { status: 400 });
 
   // 1) Update tournament columns the control panel owns.
@@ -36,6 +38,8 @@ export async function POST(request: NextRequest) {
   if (categories) patch.categories = categories;
   if (config) patch.config = config;
   if (status) patch.status = status;
+  if (date) patch.date = date;
+  if (time) patch.time = time;
   const { error: uErr } = await svc.from('personalizado_tournaments').update(patch).eq('id', id);
   if (uErr) return NextResponse.json({ error: 'No se pudo guardar la configuración' }, { status: 500 });
 

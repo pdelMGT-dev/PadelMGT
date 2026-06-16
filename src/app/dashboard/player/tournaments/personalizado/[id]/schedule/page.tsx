@@ -4,16 +4,22 @@ import React, { useState, useEffect, use, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import {
   loadPersonalizadoById,
+  getPersonalizado,
   saveControlPanel,
   saveMatchResult,
   generateGroupSchedule,
   calculateGroupStandings,
+  computeQualifiers,
+  generateBracket,
+  scheduleBracket,
+  saveBracketResult,
   DEFAULT_CONTROL_CONFIG,
   type PersonalizadoTournament,
+  type PersonalizadoTeam,
   type PersonalizadoMatch,
+  type BracketMatch,
   type MatchResult,
   type SetScore,
-  type ControlPanelConfig,
 } from '@/lib/personalizado-store';
 import { useToast } from '@/components/ToastProvider';
 
@@ -26,24 +32,38 @@ const card: React.CSSProperties = {
   marginBottom: 16,
 };
 
-// ── Result form (inline, per match card) ─────────────────────────────────────
+const GROUP_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+function fmtDay(day: string): string {
+  try {
+    const d = new Date(`${day}T00:00:00`);
+    const s = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  } catch {
+    return day;
+  }
+}
+
+// ── Result form (inline, per match/bracket card) ───────────────────────────────
 
 interface ResultFormProps {
-  match: PersonalizadoMatch;
+  matchId: string;
+  teamAId: string;
+  teamBId: string;
+  result?: MatchResult;
   teamName: (id: string) => string;
-  config: ControlPanelConfig;
   saving: boolean;
   onSave: (matchId: string, result: MatchResult) => void;
   onCancel: () => void;
 }
 
-function ResultForm({ match, teamName, config, saving, onSave, onCancel }: ResultFormProps) {
-  const initial = match.result
-    ? match.result.sets.map(s => ({ a: String(s.a), b: String(s.b) }))
+function ResultForm({ matchId, teamAId, teamBId, result, teamName, saving, onSave, onCancel }: ResultFormProps) {
+  const initial = result
+    ? result.sets.map(s => ({ a: String(s.a), b: String(s.b) }))
     : [{ a: '', b: '' }, { a: '', b: '' }];
 
   const [sets, setSets] = useState<{ a: string; b: string }[]>(initial);
-  const [walkover, setWalkover] = useState<string>(match.result?.walkover ? match.result.winnerId : '');
+  const [walkover, setWalkover] = useState<string>(result?.walkover ? result.winnerId : '');
 
   const setVal = (idx: number, side: 'a' | 'b', val: string) => {
     setSets(prev => {
@@ -71,8 +91,8 @@ function ResultForm({ match, teamName, config, saving, onSave, onCancel }: Resul
     for (const s of played) {
       if (parseInt(s.a) > parseInt(s.b)) wA++; else if (parseInt(s.b) > parseInt(s.a)) wB++;
     }
-    if (wA > wB) return match.teamAId;
-    if (wB > wA) return match.teamBId;
+    if (wA > wB) return teamAId;
+    if (wB > wA) return teamBId;
     return null;
   }
 
@@ -82,12 +102,12 @@ function ResultForm({ match, teamName, config, saving, onSave, onCancel }: Resul
   function handleSave() {
     if (!canSave) return;
     if (walkover) {
-      onSave(match.id, { sets: [], winnerId: walkover, walkover: true });
+      onSave(matchId, { sets: [], winnerId: walkover, walkover: true });
     } else {
       const parsedSets: SetScore[] = sets
         .filter(s => s.a !== '' && s.b !== '')
         .map(s => ({ a: parseInt(s.a), b: parseInt(s.b) }));
-      onSave(match.id, { sets: parsedSets, winnerId: winner!, walkover: false });
+      onSave(matchId, { sets: parsedSets, winnerId: winner!, walkover: false });
     }
   }
 
@@ -111,13 +131,13 @@ function ResultForm({ match, teamName, config, saving, onSave, onCancel }: Resul
           Walkover / Retiro
         </div>
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-          <button style={woBtn(match.teamAId)}
-            onClick={() => setWalkover(prev => prev === match.teamAId ? '' : match.teamAId)}>
-            {teamName(match.teamAId)} gana W.O.
+          <button style={woBtn(teamAId)}
+            onClick={() => setWalkover(prev => prev === teamAId ? '' : teamAId)}>
+            {teamName(teamAId)} gana W.O.
           </button>
-          <button style={woBtn(match.teamBId)}
-            onClick={() => setWalkover(prev => prev === match.teamBId ? '' : match.teamBId)}>
-            {teamName(match.teamBId)} gana W.O.
+          <button style={woBtn(teamBId)}
+            onClick={() => setWalkover(prev => prev === teamBId ? '' : teamBId)}>
+            {teamName(teamBId)} gana W.O.
           </button>
         </div>
       </div>
@@ -180,7 +200,6 @@ interface MatchCardProps {
   match: PersonalizadoMatch;
   teamName: (id: string) => string;
   catName: (id: string) => string;
-  config: ControlPanelConfig;
   editingId: string | null;
   savingId: string | null;
   onEdit: (id: string) => void;
@@ -188,7 +207,7 @@ interface MatchCardProps {
   onCancelEdit: () => void;
 }
 
-function MatchCard({ match, teamName, catName, config, editingId, savingId, onEdit, onSave, onCancelEdit }: MatchCardProps) {
+function MatchCard({ match, teamName, catName, editingId, savingId, onEdit, onSave, onCancelEdit }: MatchCardProps) {
   const res = match.result;
   const isEditing = editingId === match.id;
   const isSaving = savingId === match.id;
@@ -250,11 +269,138 @@ function MatchCard({ match, teamName, catName, config, editingId, savingId, onEd
       {/* Inline result form */}
       {isEditing && (
         <ResultForm
-          match={match} teamName={teamName} config={config}
-          saving={isSaving}
+          matchId={match.id} teamAId={match.teamAId} teamBId={match.teamBId} result={match.result}
+          teamName={teamName} saving={isSaving}
           onSave={onSave} onCancel={onCancelEdit}
         />
       )}
+    </div>
+  );
+}
+
+// ── Bracket match card ───────────────────────────────────────────────────────
+
+interface BracketMatchCardProps {
+  match: BracketMatch;
+  teamName: (id: string) => string;
+  editingId: string | null;
+  savingId: string | null;
+  onEdit: (id: string) => void;
+  onSave: (matchId: string, result: MatchResult) => void;
+  onCancelEdit: () => void;
+}
+
+function BracketMatchCard({ match, teamName, editingId, savingId, onEdit, onSave, onCancelEdit }: BracketMatchCardProps) {
+  const isEditing = editingId === match.id;
+  const isSaving = savingId === match.id;
+  const ready = Boolean(match.teamAId && match.teamBId);
+  const res = match.result;
+
+  const setsLabel = res && !res.walkover && res.sets.length > 0
+    ? res.sets.map(s => `${s.a}-${s.b}`).join(' / ')
+    : null;
+
+  return (
+    <div style={{
+      border: `1px solid ${res ? 'var(--grey-200)' : 'var(--grey-100)'}`,
+      padding: '12px 14px',
+      background: res ? '#f9faf9' : 'var(--grey-50, #fafafa)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>
+          {match.courtName ?? '—'}{match.day ? ` · ${match.day}` : ''}{match.time ? ` · ${match.time}` : ''}
+        </span>
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 600, color: match.teamAId ? 'inherit' : 'var(--grey-400)' }}>
+        {match.teamAId ? teamName(match.teamAId) : 'Por definir'}
+        {match.wildcardA && <span style={{ fontSize: 9, color: 'var(--grey-400)', marginLeft: 6 }}>(comodín)</span>}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--grey-400)', margin: '2px 0', fontWeight: 700 }}>vs</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: match.teamBId ? 'inherit' : 'var(--grey-400)' }}>
+        {match.teamBId ? teamName(match.teamBId) : 'Por definir'}
+        {match.wildcardB && <span style={{ fontSize: 9, color: 'var(--grey-400)', marginLeft: 6 }}>(comodín)</span>}
+      </div>
+
+      {res && !isEditing && (
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--grey-100)' }}>
+          {res.walkover ? (
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '2px 6px', background: '#fef3c7', color: '#92400e' }}>
+              W.O. → {teamName(res.winnerId)}
+            </span>
+          ) : (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--grey-600)', letterSpacing: '0.04em' }}>{setsLabel}</div>
+              <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 2 }}>Ganó: <strong>{teamName(res.winnerId)}</strong></div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {ready && !isEditing && (
+        <button onClick={() => onEdit(match.id)}
+          style={{
+            marginTop: 10, fontSize: 10, padding: '4px 10px', cursor: 'pointer',
+            border: '1px solid var(--grey-200)', background: 'transparent',
+            color: 'var(--grey-500)', fontWeight: 700, letterSpacing: '0.06em',
+            textTransform: 'uppercase', width: '100%',
+          }}>
+          {res ? '✎ Editar resultado' : '+ Ingresar resultado'}
+        </button>
+      )}
+
+      {isEditing && match.teamAId && match.teamBId && (
+        <ResultForm
+          matchId={match.id} teamAId={match.teamAId} teamBId={match.teamBId} result={match.result}
+          teamName={teamName} saving={isSaving}
+          onSave={onSave} onCancel={onCancelEdit}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Drag & drop group assignment ───────────────────────────────────────────────
+
+function DropColumn({ title, accent, count, capacity, onDrop, children }: {
+  title: string; accent: string; count: number; capacity?: number;
+  onDrop: () => void; children: React.ReactNode;
+}) {
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={e => { e.preventDefault(); setOver(false); onDrop(); }}
+      style={{
+        border: `1px solid ${over ? accent : 'var(--grey-200)'}`,
+        background: over ? 'rgba(34,197,94,0.04)' : '#fff', padding: 10, minHeight: 90,
+        boxShadow: over ? `inset 0 0 0 1px ${accent}` : 'none',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>{title}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: capacity && count > capacity ? '#b91c1c' : 'var(--grey-400)' }}>
+          {count}{capacity ? `/${capacity}` : ''}
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
+    </div>
+  );
+}
+
+function TeamChip({ team, onDragStart }: { team: PersonalizadoTeam; onDragStart: () => void }) {
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      style={{
+        padding: '7px 9px', border: '1px solid var(--grey-200)', background: 'var(--grey-50, #fafafa)',
+        cursor: 'grab', fontSize: 12, lineHeight: 1.3,
+      }}
+    >
+      <div style={{ fontWeight: 600 }}>{team.player1Name}</div>
+      {team.player2Name && <div style={{ color: 'var(--grey-400)', fontSize: 11 }}>{team.player2Name}</div>}
     </div>
   );
 }
@@ -396,25 +542,35 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const { showToast } = useToast();
   const [tournament, setTournament] = useState<PersonalizadoTournament | null>(null);
+  const [teams, setTeams] = useState<PersonalizadoTeam[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
-  const [tab, setTab] = useState<'schedule' | 'standings'>('schedule');
+  const [savingGroups, setSavingGroups] = useState(false);
+  const [tab, setTab] = useState<'schedule' | 'standings' | 'bracket'>('schedule');
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
   const [savingMatchId, setSavingMatchId] = useState<string | null>(null);
+  const [editingBracketId, setEditingBracketId] = useState<string | null>(null);
+  const [savingBracketId, setSavingBracketId] = useState<string | null>(null);
+  const [generatingBracketCat, setGeneratingBracketCat] = useState<string | null>(null);
+
+  // Drag & drop group assignment
+  const [dragTeam, setDragTeam] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    loadPersonalizadoById(id).then(t => { if (active) { setTournament(t); setLoading(false); } });
+    loadPersonalizadoById(id).then(t => {
+      if (active) { setTournament(t); setTeams(t?.teams ?? []); setLoading(false); }
+    });
     return () => { active = false; };
   }, [id]);
 
   const teamName = useMemo(() => {
     const map = new Map<string, string>();
-    for (const tm of tournament?.teams ?? []) {
+    for (const tm of teams) {
       map.set(tm.id, tm.player2Name ? `${tm.player1Name} / ${tm.player2Name}` : tm.player1Name);
     }
     return (tid: string) => map.get(tid) ?? '—';
-  }, [tournament]);
+  }, [teams]);
 
   const catName = useMemo(() => {
     const map = new Map<string, string>();
@@ -422,14 +578,62 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     return (cid: string) => map.get(cid) ?? '';
   }, [tournament]);
 
+  const assignable = useMemo(
+    () => teams.filter(t => t.status === 'pending' || t.status === 'confirmed'),
+    [teams],
+  );
+
   const matches = tournament?.config?.matches ?? [];
-  const assignedCount = (tournament?.teams ?? []).filter(t => (t.status === 'pending' || t.status === 'confirmed') && t.groupId).length;
+  const bracketMatches = tournament?.config?.bracketMatches ?? [];
+  const assignedCount = assignable.filter(t => t.groupId).length;
   const doneCount = matches.filter(m => m.result).length;
 
+  // ── Group assignment handlers ────────────────────────────────────────────
+  function assignTeamToGroup(teamId: string, groupId: string | null) {
+    setTeams(prev => prev.map(t => t.id === teamId ? { ...t, groupId: groupId ?? undefined } : t));
+  }
+
+  function autoDistribute(categoryId: string, groupIds: string[]) {
+    if (groupIds.length === 0) return;
+    const catTeams = assignable.filter(t => t.categoryId === categoryId);
+    setTeams(prev => {
+      const next = [...prev];
+      catTeams.forEach((t, i) => {
+        const gid = groupIds[i % groupIds.length];
+        const idx = next.findIndex(x => x.id === t.id);
+        if (idx >= 0) next[idx] = { ...next[idx], groupId: gid };
+      });
+      return next;
+    });
+  }
+
+  function clearGroups(categoryId: string) {
+    setTeams(prev => prev.map(t => t.categoryId === categoryId ? { ...t, groupId: undefined } : t));
+  }
+
+  async function handleSaveGroups() {
+    if (!tournament) return;
+    setSavingGroups(true);
+    const groupAssignments: Record<string, string | null> = {};
+    for (const t of teams) groupAssignments[t.id] = t.groupId ?? null;
+    const res = await saveControlPanel({
+      id: tournament.id,
+      categories: tournament.categories,
+      config: tournament.config ?? DEFAULT_CONTROL_CONFIG,
+      groupAssignments,
+    });
+    setSavingGroups(false);
+    if (!res.ok) { showToast(res.error ?? 'No se pudo guardar', 'error'); return; }
+    if (res.teams) setTeams(res.teams);
+    showToast('Grupos guardados', 'success');
+  }
+
+  // ── Calendar generation ──────────────────────────────────────────────────
   async function handleGenerate() {
     if (!tournament) return;
     setWorking(true);
-    const generated = generateGroupSchedule(tournament);
+    const liveTournament = { ...tournament, teams };
+    const generated = generateGroupSchedule(liveTournament);
     const config = { ...DEFAULT_CONTROL_CONFIG, ...(tournament.config ?? {}), matches: generated };
     const res = await saveControlPanel({
       id: tournament.id,
@@ -441,6 +645,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     if (!res.ok) { showToast(res.error ?? 'No se pudo generar', 'error'); return; }
     const refreshed = await loadPersonalizadoById(id);
     setTournament(refreshed);
+    if (refreshed) setTeams(refreshed.teams);
     showToast(`Calendario generado: ${generated.length} partidos`, 'success');
   }
 
@@ -468,6 +673,39 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     showToast('Resultado guardado', 'success');
   }, [tournament, showToast]);
 
+  // ── Bracket ───────────────────────────────────────────────────────────────
+  async function handleGenerateBracket(categoryId: string) {
+    if (!tournament) return;
+    setGeneratingBracketCat(categoryId);
+    const liveTournament = { ...tournament, teams };
+    const built = generateBracket(liveTournament, categoryId);
+    const scheduled = scheduleBracket(liveTournament, built);
+    const newBracketMatches = [
+      ...(tournament.config?.bracketMatches ?? []).filter(m => m.categoryId !== categoryId),
+      ...scheduled,
+    ];
+    const newConfig = { ...(tournament.config ?? DEFAULT_CONTROL_CONFIG), bracketMatches: newBracketMatches };
+    const res = await saveControlPanel({ id: tournament.id, categories: tournament.categories, config: newConfig });
+    setGeneratingBracketCat(null);
+    if (!res.ok) { showToast(res.error ?? 'No se pudo generar el bracket', 'error'); return; }
+    const refreshed = await loadPersonalizadoById(id);
+    setTournament(refreshed);
+    if (refreshed) setTeams(refreshed.teams);
+    showToast(`Bracket generado: ${scheduled.length} partidos`, 'success');
+  }
+
+  const handleSaveBracketResult = useCallback(async (matchId: string, result: MatchResult) => {
+    if (!tournament) return;
+    setSavingBracketId(matchId);
+    const res = await saveBracketResult({ tournamentId: tournament.id, matchId, result });
+    setSavingBracketId(null);
+    if (!res.ok) { showToast(res.error ?? 'Error al guardar', 'error'); return; }
+    const refreshed = getPersonalizado(tournament.id);
+    if (refreshed) { setTournament(refreshed); setTeams(refreshed.teams); }
+    setEditingBracketId(null);
+    showToast('Resultado guardado', 'success');
+  }, [tournament, showToast]);
+
   if (loading) return <div style={{ padding: 40, color: 'var(--grey-400)', fontSize: 14 }}>Cargando…</div>;
   if (!tournament) {
     return (
@@ -477,16 +715,16 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     );
   }
 
-  // Group matches by time slot
-  const bySlot = new Map<number, PersonalizadoMatch[]>();
+  // Group matches by day, then by time slot within each day.
+  const byDay = new Map<string, PersonalizadoMatch[]>();
   for (const m of matches) {
-    const arr = bySlot.get(m.slot) ?? [];
+    const arr = byDay.get(m.day) ?? [];
     arr.push(m);
-    bySlot.set(m.slot, arr);
+    byDay.set(m.day, arr);
   }
-  const slots = [...bySlot.entries()].sort((a, b) => a[0] - b[0]);
+  const days = [...byDay.keys()].sort();
 
-  const tabBtn = (t: 'schedule' | 'standings'): React.CSSProperties => ({
+  const tabBtn = (t: 'schedule' | 'standings' | 'bracket'): React.CSSProperties => ({
     padding: '8px 18px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
     textTransform: 'uppercase', cursor: 'pointer',
     border: tab === t ? 'none' : '1px solid var(--grey-200)',
@@ -507,7 +745,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>
-            Calendario · Posiciones
+            Calendario · Posiciones · Bracket
           </div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(24px, 5vw, 34px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
             {tournament.name}
@@ -526,12 +764,77 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
         </button>
       </div>
 
+      {/* Organización de grupos (arrastra y suelta) */}
+      <div style={card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
+          <span style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
+            Organización de Grupos
+          </span>
+          <button type="button" onClick={handleSaveGroups} disabled={savingGroups}
+            style={{
+              padding: '8px 16px', border: '1px solid var(--grey-300)', background: '#fff', color: 'var(--black)',
+              cursor: savingGroups ? 'wait' : 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+            }}>
+            {savingGroups ? 'Guardando…' : 'Guardar asignación'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          {tournament.categories.map(cat => {
+            const g = tournament.config?.groups.find(x => x.categoryId === cat.id);
+            const groupCount = Math.max(1, g?.groupCount ?? 1);
+            const teamsPerGroup = g?.teamsPerGroup ?? cat.maxTeams;
+            const catTeams = assignable.filter(t => t.categoryId === cat.id);
+            const groupIds = Array.from({ length: groupCount }, (_, i) => `${cat.id}-G${i + 1}`);
+            const unassigned = catTeams.filter(t => !t.groupId || !groupIds.includes(t.groupId));
+            return (
+              <div key={cat.id}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{cat.name} <span style={{ color: 'var(--grey-400)', fontWeight: 400 }}>· {catTeams.length} equipos</span></div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" onClick={() => autoDistribute(cat.id, groupIds)}
+                      style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Distribuir automáticamente
+                    </button>
+                    <button type="button" onClick={() => clearGroups(cat.id)}
+                      style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Vaciar
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+                  <DropColumn
+                    title="Sin asignar" accent="var(--grey-300)" count={unassigned.length}
+                    onDrop={() => { if (dragTeam) { assignTeamToGroup(dragTeam, null); setDragTeam(null); } }}
+                  >
+                    {unassigned.map(t => (
+                      <TeamChip key={t.id} team={t} onDragStart={() => setDragTeam(t.id)} />
+                    ))}
+                  </DropColumn>
+                  {groupIds.map((gid, i) => {
+                    const members = catTeams.filter(t => t.groupId === gid);
+                    return (
+                      <DropColumn
+                        key={gid} title={`Grupo ${GROUP_LETTERS[i % GROUP_LETTERS.length]}`} accent="var(--turf-green)"
+                        count={members.length} capacity={teamsPerGroup}
+                        onDrop={() => { if (dragTeam) { assignTeamToGroup(dragTeam, gid); setDragTeam(null); } }}
+                      >
+                        {members.map(t => (
+                          <TeamChip key={t.id} team={t} onDragStart={() => setDragTeam(t.id)} />
+                        ))}
+                      </DropColumn>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Warning: no groups */}
       {assignedCount < 2 && (
         <div style={{ ...card, background: 'rgba(245,158,11,0.05)', borderColor: 'rgba(245,158,11,0.25)', color: '#92400e', fontSize: 13, lineHeight: 1.6 }}>
-          Primero asigna los equipos a sus grupos en el{' '}
-          <Link href={`/dashboard/player/tournaments/personalizado/${id}/control`} style={{ color: '#92400e', fontWeight: 700 }}>Panel de Control</Link>{' '}
-          (bloque J). Necesitas al menos 2 equipos asignados para generar el calendario.
+          Asigna al menos 2 equipos a sus grupos arriba (y pulsa <strong>Guardar asignación</strong>) para poder generar el calendario.
         </div>
       )}
 
@@ -542,50 +845,130 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
         </div>
       )}
 
-      {/* Stats + tabs */}
-      {matches.length > 0 && (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
-              {matches.length} partidos · {slots.length} franjas · {tournament.config?.courtNames?.length ?? tournament.courts} canchas
+      {/* Tabs */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+        <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
+          {matches.length > 0 && (
+            <>{matches.length} partidos · {days.length} día{days.length === 1 ? '' : 's'} · {tournament.config?.courtNames?.length ?? tournament.courts} canchas
               {doneCount > 0 && <> · <span style={{ color: '#15803d', fontWeight: 700 }}>{doneCount} jugados</span></>}
-            </div>
-            <div style={{ display: 'flex', gap: 1 }}>
-              <button style={tabBtn('schedule')} onClick={() => setTab('schedule')}>Calendario</button>
-              <button style={tabBtn('standings')} onClick={() => setTab('standings')}>Posiciones</button>
-            </div>
-          </div>
-
-          {/* Schedule tab */}
-          {tab === 'schedule' && slots.map(([slot, slotMatches]) => (
-            <div key={slot} style={card}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>{slotMatches[0].time}</span>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Franja {slot + 1}</span>
-                {slotMatches.every(m => m.result) && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d', marginLeft: 'auto' }}>✓ Completada</span>
-                )}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
-                {slotMatches.map(m => (
-                  <MatchCard
-                    key={m.id} match={m} teamName={teamName} catName={catName}
-                    config={tournament.config!}
-                    editingId={editingMatchId} savingId={savingMatchId}
-                    onEdit={setEditingMatchId}
-                    onSave={handleSaveResult}
-                    onCancelEdit={() => setEditingMatchId(null)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {/* Standings tab */}
-          {tab === 'standings' && (
-            <StandingsView tournament={tournament} teamName={teamName} />
+            </>
           )}
-        </>
+        </div>
+        <div style={{ display: 'flex', gap: 1 }}>
+          <button style={tabBtn('schedule')} onClick={() => setTab('schedule')}>Calendario</button>
+          <button style={tabBtn('standings')} onClick={() => setTab('standings')}>Posiciones</button>
+          <button style={tabBtn('bracket')} onClick={() => setTab('bracket')}>Bracket</button>
+        </div>
+      </div>
+
+      {/* Schedule tab */}
+      {tab === 'schedule' && days.map(day => {
+        const dayMatches = byDay.get(day) ?? [];
+        const bySlot = new Map<number, PersonalizadoMatch[]>();
+        for (const m of dayMatches) {
+          const arr = bySlot.get(m.slot) ?? [];
+          arr.push(m);
+          bySlot.set(m.slot, arr);
+        }
+        const slots = [...bySlot.entries()].sort((a, b) => a[0] - b[0]);
+        return (
+          <div key={day} style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-600)', marginBottom: 10 }}>
+              {fmtDay(day)}
+            </div>
+            {slots.map(([slot, slotMatches]) => (
+              <div key={slot} style={card}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>{slotMatches[0].time}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Franja {slot + 1}</span>
+                  {slotMatches.every(m => m.result) && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#15803d', marginLeft: 'auto' }}>✓ Completada</span>
+                  )}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+                  {slotMatches.map(m => (
+                    <MatchCard
+                      key={m.id} match={m} teamName={teamName} catName={catName}
+                      editingId={editingMatchId} savingId={savingMatchId}
+                      onEdit={setEditingMatchId}
+                      onSave={handleSaveResult}
+                      onCancelEdit={() => setEditingMatchId(null)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+
+      {/* Standings tab */}
+      {tab === 'standings' && (
+        <StandingsView tournament={tournament} teamName={teamName} />
+      )}
+
+      {/* Bracket tab */}
+      {tab === 'bracket' && (
+        <div>
+          {tournament.categories.map(cat => {
+            const catBracket = bracketMatches
+              .filter(m => m.categoryId === cat.id)
+              .sort((a, b) => a.round - b.round || a.slotIndex - b.slotIndex);
+            const rounds = [...new Set(catBracket.map(m => m.round))].sort((a, b) => a - b);
+            const liveTournament = { ...tournament, teams };
+            const qualifiers = computeQualifiers(liveTournament, cat.id);
+
+            return (
+              <div key={cat.id} style={card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, textTransform: 'uppercase' }}>{cat.name}</div>
+                  <button type="button" onClick={() => handleGenerateBracket(cat.id)}
+                    disabled={generatingBracketCat === cat.id || qualifiers.length < 2}
+                    style={{
+                      padding: '8px 16px', border: 'none', background: 'var(--black)', color: 'var(--neon)',
+                      cursor: qualifiers.length < 2 ? 'not-allowed' : 'pointer', fontSize: 11, fontWeight: 700,
+                      textTransform: 'uppercase', letterSpacing: '0.06em', opacity: qualifiers.length < 2 ? 0.5 : 1,
+                    }}>
+                    {generatingBracketCat === cat.id ? 'Generando…' : catBracket.length > 0 ? 'Regenerar bracket' : 'Generar bracket'}
+                  </button>
+                </div>
+
+                {qualifiers.length < 2 && (
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
+                    Aún no hay suficientes equipos clasificados en esta categoría.
+                  </div>
+                )}
+                {qualifiers.length >= 2 && catBracket.length === 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
+                    {qualifiers.length} equipos listos para clasificar. Pulsa &ldquo;Generar bracket&rdquo;.
+                  </div>
+                )}
+
+                {rounds.map(r => {
+                  const roundMatches = catBracket.filter(m => m.round === r);
+                  return (
+                    <div key={r} style={{ marginBottom: 18 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>
+                        {roundMatches[0]?.roundLabel}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+                        {roundMatches.map(m => (
+                          <BracketMatchCard
+                            key={m.id} match={m} teamName={teamName}
+                            editingId={editingBracketId} savingId={savingBracketId}
+                            onEdit={setEditingBracketId}
+                            onSave={handleSaveBracketResult}
+                            onCancelEdit={() => setEditingBracketId(null)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
