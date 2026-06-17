@@ -163,6 +163,33 @@ export const tournamentFormats: TournamentFormat[] = [
     ],
     idealFor: 'Club leagues, city leagues, and national competitions spanning a season',
   },
+  {
+    id: '7',
+    name: 'World Cup',
+    slug: 'world-cup',
+    description: 'El formato más emocionante del pádel: grupos de 4 equipos donde los 2 mejores clasifican a un cuadro de eliminación directa estilo FIFA. Alta competencia desde la primera ronda.',
+    maxPlayers: 64,
+    minPlayers: 16,
+    duration: '2–3 jornadas',
+    difficulty: 'Intermediate',
+    type: 'Knockout',
+    icon: '🏅',
+    rules: [
+      'Se forman grupos de 4 equipos',
+      'Todos los equipos del grupo juegan entre sí (round robin interno)',
+      'Los 2 mejores de cada grupo clasifican al cuadro eliminatorio',
+      'El cuadro sigue con octavos, cuartos, semis y final',
+      'Posibilidad de partido por el 3er puesto',
+    ],
+    pros: [
+      'Garantiza al menos 3 partidos por equipo',
+      'El formato más reconocible del mundo del deporte',
+      'Combina round robin con la tensión del cuadro eliminatorio',
+      'Ideal para grandes eventos y torneos de club',
+      'Disponible en 4 u 8 grupos según el número de equipos',
+    ],
+    idealFor: 'Torneos grandes, finales de temporada y eventos especiales de club',
+  },
 ];
 
 export const ongoingTournaments: Tournament[] = [
