@@ -12,6 +12,14 @@ import {
 } from '@/lib/plan-store';
 import { saGetSession } from '@/lib/superadmin-auth';
 import { type PlanLimits } from '@/lib/plan-config';
+import {
+  DEFAULT_PERSONALIZADO_PRICING,
+  describeEffect,
+  tierLabelInList,
+  type PersonalizadoPricingConfig,
+  type PersonalizadoPromo,
+  type PromoEffect,
+} from '@/lib/personalizado-pricing';
 
 const GROUP_LABELS: Record<string, string> = {
   player: 'Jugador',
@@ -100,7 +108,7 @@ const DEFAULT_PLAN_LIMITS: PlanLimits = {
 
 export default function PlansPage() {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
-  const [tab, setTab] = useState<'pricing' | 'promos' | 'history'>('pricing');
+  const [tab, setTab] = useState<'pricing' | 'promos' | 'personalizado' | 'history'>('pricing');
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
   const [editForm, setEditForm] = useState<Partial<SubscriptionPlan>>({});
   const [editFeatures, setEditFeatures] = useState<PlanFeature[]>([]);
@@ -132,6 +140,22 @@ export default function PlansPage() {
     code: '', type: 'feature_unlock', value: 0, description: '', maxUses: 200,
     expiresAt: null, isActive: true, eligibility: 'new_users', unlockPlan: 'player_pro',
     unlockMonths: 3, displayOnPricing: true, displayText: '', displayBadge: 'LANZAMIENTO',
+  });
+
+  // Torneo Personalizado pricing state
+  const [pzConfig, setPzConfig] = useState<PersonalizadoPricingConfig>(DEFAULT_PERSONALIZADO_PRICING);
+  const [pzLoading, setPzLoading] = useState(true);
+  const [pzSaving, setPzSaving] = useState(false);
+  const [pzDirty, setPzDirty] = useState(false);
+  const [editingPzPromo, setEditingPzPromo] = useState<PersonalizadoPromo | null>(null);
+  const [pzPromoForm, setPzPromoForm] = useState<{
+    code: string; effectKind: PromoEffect['kind']; value: number; price: number; tierMaxTeams: string;
+    startDate: string; endDate: string; maxUses: string; isActive: boolean;
+    description: string; displayOnPricing: boolean; displayText: string; displayBadge: string;
+  }>({
+    code: '', effectKind: 'percent', value: 20, price: 0, tierMaxTeams: '',
+    startDate: '', endDate: '', maxUses: '', isActive: true,
+    description: '', displayOnPricing: false, displayText: '', displayBadge: '',
   });
 
   useEffect(() => {
@@ -206,6 +230,145 @@ export default function PlansPage() {
     const id = Date.now();
     setToasts(t => [...t, { id, msg, ok }]);
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
+  }
+
+  // ── Torneo Personalizado pricing ──────────────────────────────────────────
+  useEffect(() => {
+    if (tab !== 'personalizado') return;
+    setPzLoading(true);
+    fetch('/api/sa/personalizado-pricing')
+      .then(r => r.ok ? r.json() : DEFAULT_PERSONALIZADO_PRICING)
+      .then((cfg: PersonalizadoPricingConfig) => {
+        setPzConfig({ ...DEFAULT_PERSONALIZADO_PRICING, ...cfg, promos: cfg.promos ?? [] });
+        setPzDirty(false);
+        setPzLoading(false);
+      })
+      .catch(() => setPzLoading(false));
+  }, [tab]);
+
+  function updatePzTier(id: string, patch: { maxTeams?: number | null; price?: number }) {
+    setPzConfig(c => ({ ...c, tiers: c.tiers.map(t => t.id === id ? { ...t, ...patch } : t) }));
+    setPzDirty(true);
+  }
+
+  function addPzTier() {
+    const finite = pzConfig.tiers.filter(t => t.maxTeams !== null).map(t => t.maxTeams as number);
+    const nextMax = finite.length ? Math.max(...finite) * 2 : 8;
+    const newTier = { id: `tier-${Date.now()}`, maxTeams: nextMax, price: 0 };
+    // Keep the catch-all (null) tier last.
+    setPzConfig(c => {
+      const finiteTiers = c.tiers.filter(t => t.maxTeams !== null);
+      const catchAll = c.tiers.filter(t => t.maxTeams === null);
+      return { ...c, tiers: [...finiteTiers, newTier, ...catchAll] };
+    });
+    setPzDirty(true);
+  }
+
+  function removePzTier(id: string) {
+    setPzConfig(c => {
+      const target = c.tiers.find(t => t.id === id);
+      if (target?.maxTeams === null) { toast('No podés eliminar el tramo "Más de…"', false); return c; }
+      return { ...c, tiers: c.tiers.filter(t => t.id !== id) };
+    });
+    setPzDirty(true);
+  }
+
+  async function savePzConfig() {
+    setPzSaving(true);
+    try {
+      const res = await fetch('/api/sa/personalizado-pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: pzConfig }),
+      });
+      const json = await res.json() as { ok?: boolean; error?: string; config?: PersonalizadoPricingConfig };
+      if (res.ok && json.ok) {
+        if (json.config) setPzConfig(json.config);
+        setPzDirty(false);
+        toast('Precios de Torneo Personalizado publicados ✓');
+      } else {
+        toast(json.error ?? 'Error al guardar', false);
+      }
+    } catch {
+      toast('Error de conexión', false);
+    }
+    setPzSaving(false);
+  }
+
+  function openPzPromoEditor(promo: PersonalizadoPromo | null) {
+    if (promo) {
+      const e = promo.effect;
+      setPzPromoForm({
+        code: promo.code,
+        effectKind: e.kind,
+        value: e.kind === 'percent' || e.kind === 'fixed' ? e.value : 0,
+        price: e.kind === 'flat_price' ? e.price : e.kind === 'tier_override' ? e.price : 0,
+        tierMaxTeams: e.kind === 'tier_override' ? (e.maxTeams === null ? 'null' : String(e.maxTeams)) : '',
+        startDate: promo.startDate ?? '',
+        endDate: promo.endDate ?? '',
+        maxUses: promo.maxUses === null ? '' : String(promo.maxUses),
+        isActive: promo.isActive,
+        description: promo.description,
+        displayOnPricing: promo.displayOnPricing,
+        displayText: promo.displayText,
+        displayBadge: promo.displayBadge,
+      });
+    } else {
+      setPzPromoForm({
+        code: '', effectKind: 'percent', value: 20, price: 0, tierMaxTeams: '',
+        startDate: '', endDate: '', maxUses: '', isActive: true,
+        description: '', displayOnPricing: false, displayText: '', displayBadge: '',
+      });
+    }
+    setEditingPzPromo(promo ?? ({ id: '__new__' } as PersonalizadoPromo));
+  }
+
+  function buildPzEffect(): PromoEffect | null {
+    const f = pzPromoForm;
+    switch (f.effectKind) {
+      case 'percent':    return { kind: 'percent', value: Number(f.value) };
+      case 'fixed':      return { kind: 'fixed', value: Number(f.value) };
+      case 'free':       return { kind: 'free' };
+      case 'flat_price': return { kind: 'flat_price', price: Number(f.price) };
+      case 'tier_override':
+        return { kind: 'tier_override', maxTeams: f.tierMaxTeams === 'null' ? null : Number(f.tierMaxTeams), price: Number(f.price) };
+      default: return null;
+    }
+  }
+
+  function savePzPromo() {
+    const effect = buildPzEffect();
+    if (!effect) { toast('Tipo de promoción no válido', false); return; }
+    if (effect.kind === 'tier_override' && pzPromoForm.tierMaxTeams === '') {
+      toast('Elegí el tramo a sobrescribir', false); return;
+    }
+    const isNew = !editingPzPromo || editingPzPromo.id === '__new__';
+    const promo: PersonalizadoPromo = {
+      id: isNew ? `pzpromo-${Date.now()}` : editingPzPromo!.id,
+      code: pzPromoForm.code.trim().toUpperCase(),
+      effect,
+      startDate: pzPromoForm.startDate || null,
+      endDate: pzPromoForm.endDate || null,
+      maxUses: pzPromoForm.maxUses === '' ? null : Number(pzPromoForm.maxUses),
+      usedCount: isNew ? 0 : (editingPzPromo!.usedCount ?? 0),
+      isActive: pzPromoForm.isActive,
+      description: pzPromoForm.description.trim(),
+      displayOnPricing: pzPromoForm.displayOnPricing,
+      displayText: pzPromoForm.displayText.trim(),
+      displayBadge: pzPromoForm.displayBadge.trim(),
+    };
+    setPzConfig(c => ({
+      ...c,
+      promos: isNew ? [promo, ...c.promos] : c.promos.map(p => p.id === promo.id ? promo : p),
+    }));
+    setPzDirty(true);
+    setEditingPzPromo(null);
+    toast('Promoción lista — recordá Guardar para publicar');
+  }
+
+  function deletePzPromo(id: string) {
+    setPzConfig(c => ({ ...c, promos: c.promos.filter(p => p.id !== id) }));
+    setPzDirty(true);
   }
 
   function openEdit(plan: SubscriptionPlan) {
@@ -544,6 +707,7 @@ export default function PlansPage() {
         {([
           { key: 'pricing', label: 'Tabla de precios' },
           { key: 'promos', label: 'Promociones' },
+          { key: 'personalizado', label: 'Torneo Personalizado' },
           { key: 'history', label: `Historial de cambios (${changes.length})` },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)} style={{
@@ -779,6 +943,220 @@ export default function PlansPage() {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* TORNEO PERSONALIZADO TAB */}
+      {tab === 'personalizado' && (
+        <div>
+          {pzLoading ? (
+            <div style={{ padding: '60px 40px', textAlign: 'center', color: 'var(--grey-400)' }}>Cargando configuración…</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ fontSize: 13, color: 'var(--grey-500)', maxWidth: 620 }}>
+                  Definí cuánto cobra el sistema por abrir la inscripción de un Torneo Personalizado, según la cantidad
+                  total de equipos. Los cambios se publican al instante en la web pública, el panel del jugador y el cobro.
+                </div>
+                <button
+                  onClick={savePzConfig}
+                  disabled={pzSaving || !pzDirty}
+                  style={{ padding: '10px 24px', background: pzDirty ? 'var(--black)' : 'var(--grey-200)', color: pzDirty ? 'var(--neon)' : 'var(--grey-400)', border: 'none', cursor: pzDirty && !pzSaving ? 'pointer' : 'default', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}
+                >
+                  {pzSaving ? 'Guardando…' : pzDirty ? 'Guardar y publicar' : 'Publicado ✓'}
+                </button>
+              </div>
+
+              {/* Tiers */}
+              <div style={{ border: '1px solid var(--grey-200)', marginBottom: 32 }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--grey-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--grey-50)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-600)' }}>Tramos de precio (por equipos)</span>
+                  <button onClick={addPzTier} style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>+ Tramo</button>
+                </div>
+                <div style={{ padding: '8px 20px 16px' }}>
+                  {[...pzConfig.tiers]
+                    .sort((a, b) => a.maxTeams === null ? 1 : b.maxTeams === null ? -1 : a.maxTeams - b.maxTeams)
+                    .map(t => {
+                      const finite = pzConfig.tiers.filter(x => x.maxTeams !== null).map(x => x.maxTeams as number);
+                      const largest = finite.length ? Math.max(...finite) : 0;
+                      return (
+                        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--grey-100)' }}>
+                          {t.maxTeams === null ? (
+                            <div style={{ flex: 2, fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>Más de {largest} equipos</div>
+                          ) : (
+                            <div style={{ flex: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 13, color: 'var(--grey-500)' }}>Hasta</span>
+                              <input
+                                type="number" min={1} value={t.maxTeams}
+                                onChange={e => updatePzTier(t.id, { maxTeams: Math.max(1, Number(e.target.value)) })}
+                                style={{ ...inp, width: 90 }}
+                              />
+                              <span style={{ fontSize: 13, color: 'var(--grey-500)' }}>equipos</span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--grey-500)' }}>$</span>
+                            <input
+                              type="number" min={0} step="0.01" value={t.price}
+                              onChange={e => updatePzTier(t.id, { price: Math.max(0, Number(e.target.value)) })}
+                              style={{ ...inp, width: 100 }}
+                            />
+                          </div>
+                          {t.maxTeams === null ? (
+                            <div style={{ width: 70 }} />
+                          ) : (
+                            <button onClick={() => removePzTier(t.id)} style={{ width: 70, padding: '7px 0', background: '#fff', border: '1px solid var(--grey-200)', color: '#b91c1c', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>Eliminar</button>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Promos */}
+              <div style={{ border: '1px solid var(--grey-200)' }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--grey-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--grey-50)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-600)' }}>Promociones y códigos</span>
+                  <button onClick={() => openPzPromoEditor(null)} style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>+ Promoción</button>
+                </div>
+                {pzConfig.promos.length === 0 ? (
+                  <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>Sin promociones. Creá descuentos, precios por fecha o tramos especiales.</div>
+                ) : (
+                  <div style={{ padding: '8px 20px 16px' }}>
+                    {pzConfig.promos.map(p => (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: '1px solid var(--grey-100)' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
+                            {p.code ? (
+                              <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, background: 'var(--black)', color: 'var(--neon)', padding: '2px 8px' }}>{p.code}</span>
+                            ) : (
+                              <span style={{ fontSize: 10, fontWeight: 700, background: '#fde68a', color: '#92400e', padding: '3px 8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Automática</span>
+                            )}
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>{describeEffect(p.effect)}</span>
+                            {!p.isActive && <span style={{ fontSize: 10, color: '#b91c1c', fontWeight: 700, textTransform: 'uppercase' }}>Inactiva</span>}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+                            {p.description || 'Sin descripción'}
+                            {(p.startDate || p.endDate) && <> · {p.startDate || '…'} → {p.endDate || '…'}</>}
+                            {p.maxUses != null && <> · {p.usedCount}/{p.maxUses} usos</>}
+                            {p.displayOnPricing && <> · 🌐 visible en pricing</>}
+                          </div>
+                        </div>
+                        <button onClick={() => openPzPromoEditor(p)} style={{ padding: '6px 14px', background: '#fff', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--grey-600)' }}>Editar</button>
+                        <button onClick={() => deletePzPromo(p.id)} style={{ padding: '6px 14px', background: '#fff', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: '#b91c1c' }}>Eliminar</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {pzDirty && (
+                <div style={{ marginTop: 16, fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', padding: '10px 16px' }}>
+                  Tenés cambios sin publicar. Tocá <strong>Guardar y publicar</strong> para que se reflejen en todas las páginas.
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Promo editor modal */}
+          {editingPzPromo && (
+            <Modal onClose={() => setEditingPzPromo(null)}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, textTransform: 'uppercase', margin: '0 0 20px' }}>
+                {editingPzPromo.id === '__new__' ? 'Nueva promoción' : 'Editar promoción'}
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={lbl}>Código (vacío = automática)</label>
+                  <input value={pzPromoForm.code} onChange={e => setPzPromoForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="LANZAMIENTO20" style={{ ...inp, fontFamily: 'monospace' }} />
+                </div>
+                <div>
+                  <label style={lbl}>Tipo</label>
+                  <select value={pzPromoForm.effectKind} onChange={e => setPzPromoForm(f => ({ ...f, effectKind: e.target.value as PromoEffect['kind'] }))} style={inp}>
+                    <option value="percent">% de descuento</option>
+                    <option value="fixed">Monto fijo de descuento</option>
+                    <option value="free">Gratis (100% off)</option>
+                    <option value="flat_price">Precio especial (por fecha)</option>
+                    <option value="tier_override">Override de precio por tramo</option>
+                  </select>
+                </div>
+
+                {(pzPromoForm.effectKind === 'percent' || pzPromoForm.effectKind === 'fixed') && (
+                  <div>
+                    <label style={lbl}>{pzPromoForm.effectKind === 'percent' ? 'Porcentaje (%)' : 'Monto a descontar ($)'}</label>
+                    <input type="number" min={0} value={pzPromoForm.value} onChange={e => setPzPromoForm(f => ({ ...f, value: Number(e.target.value) }))} style={inp} />
+                  </div>
+                )}
+                {pzPromoForm.effectKind === 'flat_price' && (
+                  <div>
+                    <label style={lbl}>Precio especial ($)</label>
+                    <input type="number" min={0} step="0.01" value={pzPromoForm.price} onChange={e => setPzPromoForm(f => ({ ...f, price: Number(e.target.value) }))} style={inp} />
+                  </div>
+                )}
+                {pzPromoForm.effectKind === 'tier_override' && (
+                  <>
+                    <div>
+                      <label style={lbl}>Tramo a sobrescribir</label>
+                      <select value={pzPromoForm.tierMaxTeams} onChange={e => setPzPromoForm(f => ({ ...f, tierMaxTeams: e.target.value }))} style={inp}>
+                        <option value="">Elegí un tramo…</option>
+                        {[...pzConfig.tiers].sort((a, b) => a.maxTeams === null ? 1 : b.maxTeams === null ? -1 : a.maxTeams - b.maxTeams).map(t => (
+                          <option key={t.id} value={t.maxTeams === null ? 'null' : String(t.maxTeams)}>{tierLabelInList(t, pzConfig.tiers)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={lbl}>Precio del tramo ($)</label>
+                      <input type="number" min={0} step="0.01" value={pzPromoForm.price} onChange={e => setPzPromoForm(f => ({ ...f, price: Number(e.target.value) }))} style={inp} />
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label style={lbl}>Vigente desde</label>
+                  <input type="date" value={pzPromoForm.startDate} onChange={e => setPzPromoForm(f => ({ ...f, startDate: e.target.value }))} style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>Vigente hasta</label>
+                  <input type="date" value={pzPromoForm.endDate} onChange={e => setPzPromoForm(f => ({ ...f, endDate: e.target.value }))} style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>Usos máximos (vacío = ilimitado)</label>
+                  <input type="number" min={1} value={pzPromoForm.maxUses} onChange={e => setPzPromoForm(f => ({ ...f, maxUses: e.target.value }))} style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>Activa</label>
+                  <select value={pzPromoForm.isActive ? 'yes' : 'no'} onChange={e => setPzPromoForm(f => ({ ...f, isActive: e.target.value === 'yes' }))} style={inp}>
+                    <option value="yes">Sí</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={lbl}>Descripción (interna)</label>
+                  <input value={pzPromoForm.description} onChange={e => setPzPromoForm(f => ({ ...f, description: e.target.value }))} placeholder="Promo de lanzamiento" style={inp} />
+                </div>
+
+                <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
+                  <input type="checkbox" id="pzDisplay" checked={pzPromoForm.displayOnPricing} onChange={e => setPzPromoForm(f => ({ ...f, displayOnPricing: e.target.checked }))} />
+                  <label htmlFor="pzDisplay" style={{ fontSize: 13, color: 'var(--grey-600)' }}>Mostrar en las páginas públicas de precios</label>
+                </div>
+                {pzPromoForm.displayOnPricing && (
+                  <>
+                    <div>
+                      <label style={lbl}>Texto público</label>
+                      <input value={pzPromoForm.displayText} onChange={e => setPzPromoForm(f => ({ ...f, displayText: e.target.value }))} placeholder="20% OFF en tu primer torneo" style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Badge</label>
+                      <input value={pzPromoForm.displayBadge} onChange={e => setPzPromoForm(f => ({ ...f, displayBadge: e.target.value }))} placeholder="LANZAMIENTO" style={inp} />
+                    </div>
+                  </>
+                )}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
+                <button onClick={() => setEditingPzPromo(null)} style={{ padding: '9px 20px', background: '#fff', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Cancelar</button>
+                <button onClick={savePzPromo} style={{ padding: '9px 24px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Listo</button>
+              </div>
+            </Modal>
           )}
         </div>
       )}
