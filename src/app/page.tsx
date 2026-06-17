@@ -6,12 +6,12 @@ import { getSAPlayersFromSupabase, getSATournamentsFromSupabase } from '@/lib/su
 import { fetchPersonalizadoPricing, tierLabelInList, type PricingTier, type PersonalizadoPromo } from '@/lib/personalizado-pricing';
 
 const formats = [
-  { k: 'americano', name: 'Americano', desc: 'Cada pareja juega contra todas. Ideal para una tarde de juego.', when: '1 sesión', teams: '4–32 parejas', img: '/assets/court-card.svg' },
-  { k: 'express', name: 'Express', desc: 'Grupos cortos a 1 set. Termina en una mañana.', when: '3–4 horas', teams: '8–24 parejas', img: '/assets/court-green.svg' },
-  { k: 'champions', name: 'Champions League', desc: 'Fase de grupos + eliminatorias. El formato premium.', when: 'Multi-jornada', teams: '8–32 parejas', img: '/assets/court-dark.svg' },
-  { k: 'liga', name: 'Liga Regular', desc: 'Temporada larga con ascensos y descensos.', when: '8–24 semanas', teams: '6–48 equipos', img: '/assets/court-card.svg' },
-  { k: 'directa', name: 'Eliminatoria Directa', desc: 'Cuadro clásico. Pierdes y vuelas. Con consolación.', when: '1–3 días', teams: '8–128 parejas', img: '/assets/court-green.svg' },
-  { k: 'equipos', name: 'Por Equipos', desc: 'Club contra club. Liguilla por puntos colectivos.', when: 'Multi-jornada', teams: '4–24 clubes', img: '/assets/court-dark.svg' },
+  { k: 'americano',   name: 'Americano',    desc: 'Rotación de parejas cada ronda. Todos juegan con todos. Ideal para tardes sociales.',           when: '2–3 horas',    teams: '8–32 parejas',  img: '/assets/court-card.svg'  },
+  { k: 'mexicano',    name: 'Mexicano',     desc: 'Parejas dinámicas según posición en el ranking. Auto-balanceo competitivo en cada ronda.',       when: '2–4 horas',    teams: '8–32 parejas',  img: '/assets/court-green.svg' },
+  { k: 'round-robin', name: 'Round Robin',  desc: 'Todos contra todos. Puntuación por sets y games. El formato más justo para determinar al mejor.',when: '3–6 horas',    teams: '4–12 parejas',  img: '/assets/court-dark.svg'  },
+  { k: 'knockout',    name: 'Knockout',     desc: 'Cuadro de eliminación directa. Perdés y te vas. Alta adrenalina desde la primera ronda.',        when: '4–8 horas',    teams: '4–16 parejas',  img: '/assets/court-card.svg'  },
+  { k: 'swiss',       name: 'Swiss System', desc: 'Sin eliminación. Nadie se va a casa. Rondas balanceadas por puntos. Clasificación final justa.',  when: '4–6 horas',    teams: '8–32 parejas',  img: '/assets/court-green.svg' },
+  { k: 'team-league', name: 'Team League',  desc: 'Liga por equipos con jornadas semanales. Ascensos, descensos y playoffs al final de temporada.',  when: 'Multi-jornada', teams: '6–48 equipos', img: '/assets/court-dark.svg'  },
 ];
 
 const liveMatches = [
@@ -165,7 +165,7 @@ export default function HomePage() {
               <div className="section-eyebrow">Formatos</div>
               <h2 className="section-title">TODO FORMATO.<br />UN SOLO LUGAR.</h2>
               <p className="section-sub">
-                Desde Americano de una tarde hasta Champions League con grupos y eliminatorias.
+                Desde Americano de una tarde hasta Team League con jornadas semanales.
                 PadelMGT automatiza el cuadro, los puntos y la difusión.
               </p>
             </div>

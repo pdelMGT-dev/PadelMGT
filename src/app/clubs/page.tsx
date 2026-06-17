@@ -147,9 +147,20 @@ export default function ClubsPage() {
 
                   <p style={{ fontSize: 13, color: 'var(--grey-500)', margin: '0 0 16px' }}>{club.address}</p>
 
-                  <div style={{ display: 'flex', gap: 24, fontSize: 13, color: 'var(--grey-500)', marginBottom: 20 }}>
+                  <div style={{ display: 'flex', gap: 24, fontSize: 13, color: 'var(--grey-500)', marginBottom: 12 }}>
                     <span><strong style={{ color: 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 18 }}>{club.courts}</strong> canchas</span>
                     <span><strong style={{ color: 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 18 }}>{club.members}</strong> miembros</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+                    {(ratings.get(club.id)?.count ?? 0) > 0 ? (
+                      <>
+                        <span style={{ color: '#f5a623', fontSize: 14 }}>{'★'.repeat(Math.round(ratings.get(club.id)!.avg))}{'☆'.repeat(5 - Math.round(ratings.get(club.id)!.avg))}</span>
+                        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, color: 'var(--black)' }}>{ratings.get(club.id)!.avg.toFixed(1)}</span>
+                        <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>({ratings.get(club.id)!.count} {ratings.get(club.id)!.count === 1 ? 'voto' : 'votos'})</span>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 11, color: 'var(--grey-300)', letterSpacing: '0.05em' }}>Sin valoraciones aún</span>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 24 }}>

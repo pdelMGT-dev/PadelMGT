@@ -108,6 +108,7 @@ export async function setClubRating(clubId: string, rating: number): Promise<voi
   await post('/api/clubs/rating', { clubId, rating });
 }
 
+
 // ── Personalizado Pricing ────────────────────────────────────────────────────
 
 export type PricingConfig = {
