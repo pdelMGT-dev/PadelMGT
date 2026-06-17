@@ -22,18 +22,46 @@ const COURT_TYPE_LABEL: Record<string, string> = {
 
 const PLAN_LABEL: Record<string, string> = { free: 'Gratis', basic: 'Basic', pro: 'Pro' };
 
+function MiniStars({ value, count }: { value: number | null; count: number }) {
+  if (value === null || count === 0) return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+      {[1, 2, 3, 4, 5].map(s => (
+        <span key={s} style={{ fontSize: 11, color: s <= Math.round(value) ? '#f59e0b' : '#e5e7eb', lineHeight: 1 }}>★</span>
+      ))}
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginLeft: 2 }}>{value.toFixed(1)}</span>
+    </div>
+  );
+}
+
+function MiniStarsLight({ value, count }: { value: number | null; count: number }) {
+  if (value === null || count === 0) return null;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+      {[1, 2, 3, 4, 5].map(s => (
+        <span key={s} style={{ fontSize: 10, color: s <= Math.round(value) ? '#f59e0b' : '#d1d5db', lineHeight: 1 }}>★</span>
+      ))}
+      <span style={{ fontSize: 10, color: 'var(--grey-400)', marginLeft: 2 }}>{value.toFixed(1)}</span>
+    </span>
+  );
+}
+
 function ClubCard({
   club,
   memberId,
   onJoin,
   onLeave,
   badge,
+  ratingAvg,
+  ratingCount,
 }: {
   club: SAClub;
   memberId: string | null;
   onJoin: (club: SAClub) => void;
   onLeave: (clubId: string) => void;
   badge?: string;
+  ratingAvg?: number | null;
+  ratingCount?: number;
 }) {
   const joined = memberId ? isClubMember(memberId, club.id) : false;
 
@@ -61,6 +89,7 @@ function ClubCard({
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
             {club.city}{club.country ? ` · ${club.country}` : ''}
           </div>
+          <MiniStars value={ratingAvg ?? null} count={ratingCount ?? 0} />
         </div>
         {badge && (
           <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', background: 'var(--neon)', color: 'var(--black)', padding: '3px 8px', flexShrink: 0, textTransform: 'uppercase' }}>
@@ -157,12 +186,16 @@ function ClubListRow({
   onJoin,
   onLeave,
   badge,
+  ratingAvg,
+  ratingCount,
 }: {
   club: SAClub;
   memberId: string | null;
   onJoin: (club: SAClub) => void;
   onLeave: (clubId: string) => void;
   badge?: string;
+  ratingAvg?: number | null;
+  ratingCount?: number;
 }) {
   const joined = memberId ? isClubMember(memberId, club.id) : false;
   return (
@@ -194,6 +227,9 @@ function ClubListRow({
             >
               📍 Ver mapa
             </a>
+          )}
+          {ratingAvg !== null && ratingAvg !== undefined && (ratingCount ?? 0) > 0 && (
+            <span style={{ marginLeft: 8 }}><MiniStarsLight value={ratingAvg} count={ratingCount ?? 0} /></span>
           )}
         </div>
       </div>
@@ -245,6 +281,7 @@ export default function PlayerClubsPage() {
     return (localStorage.getItem('padelmgt_clubs_view') as 'cards' | 'list') ?? 'cards';
   });
   const [toast, setToast] = useState<string | null>(null);
+  const [clubRatings, setClubRatings] = useState<Record<string, { average: number | null; count: number }>>({});
 
   useEffect(() => {
     // Load from localStorage first (instant), then fetch Supabase to get all SA-registered clubs
@@ -260,6 +297,14 @@ export default function PlayerClubsPage() {
       const localMap = Object.fromEntries(localActive.map(c => [c.id, c]));
       const merged = active.map(sb => ({ ...sb, ...(localMap[sb.id] ?? {}) } as SAClub));
       setAllClubs(merged);
+      // Fetch bulk ratings
+      const ids = merged.map(c => c.id).join(',');
+      if (ids) {
+        fetch(`/api/clubs/ratings-bulk?clubIds=${encodeURIComponent(ids)}`)
+          .then(r => r.json())
+          .then((d: Record<string, { average: number | null; count: number }>) => setClubRatings(d))
+          .catch(() => {});
+      }
     }).catch(() => { /* keep local fallback */ });
 
     // IP geolocation
@@ -385,13 +430,13 @@ export default function PlayerClubsPage() {
           {viewMode === 'cards' ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
               {myClubDetails.map(club => (
-                <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+                <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} ratingAvg={clubRatings[club.id]?.average} ratingCount={clubRatings[club.id]?.count} />
               ))}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {myClubDetails.map(club => (
-                <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+                <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} ratingAvg={clubRatings[club.id]?.average} ratingCount={clubRatings[club.id]?.count} />
               ))}
             </div>
           )}
@@ -457,13 +502,13 @@ export default function PlayerClubsPage() {
           ) : viewMode === 'cards' ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
               {filtered.map(club => (
-                <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+                <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} ratingAvg={clubRatings[club.id]?.average} ratingCount={clubRatings[club.id]?.count} />
               ))}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {filtered.map(club => (
-                <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+                <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} ratingAvg={clubRatings[club.id]?.average} ratingCount={clubRatings[club.id]?.count} />
               ))}
             </div>
           )}
@@ -492,13 +537,13 @@ export default function PlayerClubsPage() {
               {viewMode === 'cards' ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
                   {recommended.map(club => (
-                    <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} badge="Cerca tuyo" />
+                    <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} badge="Cerca tuyo" ratingAvg={clubRatings[club.id]?.average} ratingCount={clubRatings[club.id]?.count} />
                   ))}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {recommended.map(club => (
-                    <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} badge="Cerca tuyo" />
+                    <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} badge="Cerca tuyo" ratingAvg={clubRatings[club.id]?.average} ratingCount={clubRatings[club.id]?.count} />
                   ))}
                 </div>
               )}
@@ -530,13 +575,13 @@ export default function PlayerClubsPage() {
                 {viewMode === 'cards' ? (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
                     {rest.map(club => (
-                      <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+                      <ClubCard key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} ratingAvg={clubRatings[club.id]?.average} ratingCount={clubRatings[club.id]?.count} />
                     ))}
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {rest.map(club => (
-                      <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} />
+                      <ClubListRow key={club.id} club={club} memberId={user?.id ?? null} onJoin={handleJoin} onLeave={handleLeave} ratingAvg={clubRatings[club.id]?.average} ratingCount={clubRatings[club.id]?.count} />
                     ))}
                   </div>
                 )}

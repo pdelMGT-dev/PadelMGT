@@ -250,6 +250,32 @@ export default function PlayerHomePage() {
         ))}
       </div>
 
+      {/* Torneo Personalizado quick-access */}
+      <div style={{ position: 'relative', overflow: 'hidden', background: '#0a0a0a', padding: '28px 32px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/assets/court-dark.svg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.08 }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,0.92) 100%)' }} />
+        <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.2em', padding: '3px 10px', textTransform: 'uppercase' }}>NUEVO</span>
+            <span style={{ fontSize: 10, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase' }}>Torneo Personalizado</span>
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 3vw, 34px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', color: '#fff', lineHeight: 1 }}>
+            TU TORNEO. <span style={{ color: 'var(--neon)' }}>TUS REGLAS.</span>
+          </div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 8, maxWidth: 480 }}>
+            Formato 100% configurable, inscripción por link e inscripción de menores bajo tu cuenta.
+          </div>
+        </div>
+        <div style={{ position: 'relative', display: 'flex', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
+          <Link href="/dashboard/player/tournaments?format=personalizado" style={{ padding: '11px 24px', background: 'var(--neon)', color: 'var(--black)', fontSize: 13, fontWeight: 800, textDecoration: 'none', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+            Crear torneo →
+          </Link>
+          <Link href="/dashboard/player/tournaments" style={{ padding: '11px 20px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+            Mis torneos
+          </Link>
+        </div>
+      </div>
+
       {/* Mis Juegos Activos */}
       {myActiveEvents.length > 0 && (
         <div style={{ background: '#fff', border: '1px solid var(--grey-200)', marginBottom: 24 }}>
