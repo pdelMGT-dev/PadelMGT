@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react';
 import { Menu, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getPendingCount } from '@/lib/friend-request-store';
 import { getAdminPendingRequestsCount } from '@/lib/player-league-store';
+import { getPendingApprovalsForGuardian } from '@/lib/family-approval-store';
+import { getFamilyLinks } from '@/lib/family-store';
 import { syncAllFromSupabase } from '@/lib/supabase-sync';
 import { authSignOut } from '@/lib/supabase';
 import BrandLogo from './BrandLogo';
@@ -74,6 +76,7 @@ export default function DashboardSidebar() {
   const { user } = useCurrentUser();
   const [friendBadge,  setFriendBadge]  = useState(0);
   const [leagueBadge,  setLeagueBadge]  = useState(0);
+  const [profileBadge, setProfileBadge] = useState(0);
   const [mobileOpen,   setMobileOpen]   = useState(false);
   const [collapsed, setCollapsed] = useState(() =>
     typeof window !== 'undefined' ? localStorage.getItem('padelmgt_sidebar_collapsed') === 'true' : false
@@ -88,6 +91,10 @@ export default function DashboardSidebar() {
     if (user?.role === 'player') {
       setFriendBadge(getPendingCount(user.id));
       setLeagueBadge(getAdminPendingRequestsCount(user.id));
+      // Family: pending guardian approvals + incoming family-link requests
+      const pendingApprovals = getPendingApprovalsForGuardian(user.id).length;
+      const pendingLinks = getFamilyLinks(user.id).filter(l => l.toPlayerId === user.id && l.status === 'pending').length;
+      setProfileBadge(pendingApprovals + pendingLinks);
     }
     // Sync all Supabase tables to localStorage (debounced to 30s)
     syncAllFromSupabase();
@@ -184,8 +191,9 @@ export default function DashboardSidebar() {
           const isActive = item.href === rootHref ? pathname === rootHref : pathname.startsWith(item.href);
           const hasFriendBadge = item.href === '/dashboard/player/friends' && friendBadge > 0;
           const hasLeagueBadge = item.href === '/dashboard/player/leagues' && leagueBadge > 0;
-          const hasBadge = hasFriendBadge || hasLeagueBadge;
-          const badgeCount = hasFriendBadge ? friendBadge : hasLeagueBadge ? leagueBadge : 0;
+          const hasProfileBadge = item.href === '/dashboard/player/profile' && profileBadge > 0;
+          const hasBadge = hasFriendBadge || hasLeagueBadge || hasProfileBadge;
+          const badgeCount = hasFriendBadge ? friendBadge : hasLeagueBadge ? leagueBadge : hasProfileBadge ? profileBadge : 0;
           return (
             <Link
               key={item.href}
@@ -229,6 +237,11 @@ export default function DashboardSidebar() {
               {!collapsed && hasLeagueBadge && (
                 <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: '#ee0005', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
                   {leagueBadge}
+                </span>
+              )}
+              {!collapsed && hasProfileBadge && (
+                <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: '#ee0005', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                  {profileBadge}
                 </span>
               )}
             </Link>

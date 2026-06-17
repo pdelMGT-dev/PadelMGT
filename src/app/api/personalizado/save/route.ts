@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     groupAssignments?: Record<string, string | null>;
     date?: string;
     time?: string;
+    requesterId?: string;
   };
   try {
     body = await request.json();
@@ -30,8 +31,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Solicitud no válida' }, { status: 400 });
   }
 
-  const { id, categories, config, status, groupAssignments, date, time } = body;
+  const { id, categories, config, status, groupAssignments, date, time, requesterId } = body;
   if (!id) return NextResponse.json({ error: 'Falta el identificador del torneo' }, { status: 400 });
+
+  // 0) Authorize: only the creator or a listed co-creator may save the control panel.
+  const { data: ownerRow, error: ownerErr } = await svc
+    .from('personalizado_tournaments')
+    .select('creator_player_id, config')
+    .eq('id', id)
+    .maybeSingle();
+  if (ownerErr) return NextResponse.json({ error: 'Error al verificar permisos' }, { status: 500 });
+  if (!ownerRow) return NextResponse.json({ error: 'Torneo no encontrado' }, { status: 404 });
+  const creatorId = (ownerRow as Record<string, unknown>).creator_player_id as string | null;
+  const existingConfig = ((ownerRow as Record<string, unknown>).config ?? {}) as { coCreatorIds?: string[] };
+  const coCreatorIds = existingConfig.coCreatorIds ?? [];
+  const isManager = !!requesterId && (requesterId === creatorId || coCreatorIds.includes(requesterId));
+  if (!isManager) {
+    return NextResponse.json({ error: 'No tienes permiso para gestionar este torneo' }, { status: 403 });
+  }
+  // Only the creator may change the co-creator list; ignore co-creator edits to it.
+  if (config && requesterId !== creatorId) {
+    (config as { coCreatorIds?: string[] }).coCreatorIds = coCreatorIds;
+  }
 
   // 1) Update tournament columns the control panel owns.
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };

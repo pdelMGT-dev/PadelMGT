@@ -503,6 +503,10 @@ export interface RegisterInput {
   player2Name?: string;
   player2Email?: string;
   player2Id?: string;
+  // child tournaments: birth dates of any minor (family-member) participants, so the
+  // server can re-validate the Jan-1 age rule even if the client form is bypassed
+  player1BirthDate?: string;
+  player2BirthDate?: string;
 }
 
 /**
@@ -832,6 +836,8 @@ export interface SaveControlPanelInput {
   groupAssignments?: Record<string, string | null>;
   date?: string;
   time?: string;
+  // id of the user requesting the save — verified server-side against creator/co-creators
+  requesterId?: string;
 }
 
 export interface SaveControlPanelResult {
@@ -1180,6 +1186,67 @@ export function saveBracketResultLocal(input: SaveBracketResultInput): { ok: boo
 
   savePersonalizado({ ...t, config: { ...t.config, bracketMatches: bracket } });
   return { ok: true };
+}
+
+// ── Family-member history migration ───────────────────────────────────────────
+
+/**
+ * When a family member (FM-XXXX) obtains a real platform account, re-point every
+ * personalizado team registration that referenced their FM-id to the new player id
+ * (and update the displayed name), so their tournament history carries over.
+ * Prefers the service-role API route; falls back to a synchronous localStorage pass.
+ */
+export async function migrateFamilyMemberHistory(
+  familyMemberId: string,
+  newPlayerId: string,
+  newPlayerName?: string,
+): Promise<{ ok: boolean; migrated?: number; error?: string }> {
+  if (isSupabaseConfigured) {
+    try {
+      const res = await fetch('/api/family/migrate-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ familyMemberId, newPlayerId, newPlayerName }),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { ok: boolean; migrated?: number };
+        // Also update the local cache so the guardian's device reflects it immediately.
+        migrateFamilyMemberHistoryLocal(familyMemberId, newPlayerId, newPlayerName);
+        return json;
+      }
+      if (res.status < 500) {
+        const json = await res.json().catch(() => ({})) as { error?: string };
+        return { ok: false, error: json.error ?? 'No se pudo migrar el historial' };
+      }
+    } catch { /* fall through */ }
+  }
+  return migrateFamilyMemberHistoryLocal(familyMemberId, newPlayerId, newPlayerName);
+}
+
+/** Synchronous localStorage history migration (dev fallback / offline). */
+export function migrateFamilyMemberHistoryLocal(
+  familyMemberId: string,
+  newPlayerId: string,
+  newPlayerName?: string,
+): { ok: boolean; migrated: number } {
+  const all = _store.load();
+  let migrated = 0;
+  for (const t of all) {
+    for (const tm of t.teams) {
+      if (tm.player1Id === familyMemberId) {
+        tm.player1Id = newPlayerId;
+        if (newPlayerName) tm.player1Name = newPlayerName;
+        migrated++;
+      }
+      if (tm.player2Id === familyMemberId) {
+        tm.player2Id = newPlayerId;
+        if (newPlayerName) tm.player2Name = newPlayerName;
+        migrated++;
+      }
+    }
+  }
+  if (migrated > 0) _store.persist(all);
+  return { ok: true, migrated };
 }
 
 // ── Partner invitation helpers ────────────────────────────────────────────────

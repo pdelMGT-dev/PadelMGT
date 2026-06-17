@@ -14,12 +14,14 @@ import {
   registerTeam,
   enrolledCount,
   waitlistCount,
+  canManagePersonalizado,
   type PersonalizadoTournament,
   type PersonalizadoTeam,
 } from '@/lib/personalizado-store';
 import { sendPersonalizadoStatusEmail } from '@/lib/email';
 import { searchPlayers, type RegisteredPlayer } from '@/lib/player-store';
 import { useToast } from '@/components/ToastProvider';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
@@ -123,6 +125,7 @@ function PlayerSearchBox({
 export default function PersonalizadoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { showToast } = useToast();
+  const { user: currentUser } = useCurrentUser();
   const { id } = use(params);
   const [tournament, setTournament] = useState<PersonalizadoTournament | null>(null);
   const [origin, setOrigin] = useState('');
@@ -184,6 +187,9 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     })();
     return () => { active = false; };
   }, [id]);
+
+  // Access guard: this is the organizer management view — creator or co-creators only.
+  const accessDenied = !!tournament && !canManagePersonalizado(tournament, currentUser?.id);
 
   async function handleOpenRegistration() {
     const t = tournament ?? getPersonalizado(id);
@@ -331,6 +337,21 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   }
 
   if (loading) return <div style={{ padding: '40px', color: 'var(--grey-400)', fontSize: 14 }}>Cargando…</div>;
+
+  if (tournament && accessDenied) {
+    return (
+      <div style={{ padding: '40px clamp(16px, 4vw, 48px) 80px' }}>
+        <Link href="/dashboard/player/tournaments" style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Mis Torneos</Link>
+        <div style={{ ...card, textAlign: 'center', padding: '48px 24px' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--black)', marginBottom: 8 }}>Acceso restringido</div>
+          <div style={{ fontSize: 14, color: 'var(--grey-500)', lineHeight: 1.6 }}>
+            Solo el creador del torneo o sus co-creadores pueden gestionar este torneo.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!tournament) {
     return (

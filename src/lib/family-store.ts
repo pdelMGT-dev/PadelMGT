@@ -9,6 +9,7 @@
 
 import { createLocalStore } from './local-store';
 import { isSupabaseConfigured } from './supabase';
+import { migrateFamilyMemberHistory } from './personalizado-store';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -208,10 +209,18 @@ export async function updateFamilyMember(
   const all = _membersStore.load();
   const idx = all.findIndex(m => m.id === memberId && m.ownerId === ownerId);
   if (idx < 0) return { ok: false, error: 'Miembro no encontrado' };
-  const updated = { ...all[idx], ...patch, id: memberId, ownerId };
+  const previous = all[idx];
+  const updated = { ...previous, ...patch, id: memberId, ownerId };
   all[idx] = updated;
   _membersStore.persist(all);
   void syncMemberToSupabase(updated);
+
+  // If this member just got linked to a real platform account, carry their
+  // tournament history (registered under their FM-id) over to the new account.
+  if (updated.linkedPlayerId && updated.linkedPlayerId !== previous.linkedPlayerId) {
+    void migrateFamilyMemberHistory(memberId, updated.linkedPlayerId, updated.fullName);
+  }
+
   return { ok: true };
 }
 

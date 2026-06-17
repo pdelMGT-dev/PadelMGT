@@ -13,6 +13,7 @@ import {
   generateBracket,
   scheduleBracket,
   saveBracketResult,
+  canManagePersonalizado,
   DEFAULT_CONTROL_CONFIG,
   type PersonalizadoTournament,
   type PersonalizadoTeam,
@@ -22,6 +23,7 @@ import {
   type SetScore,
 } from '@/lib/personalizado-store';
 import { useToast } from '@/components/ToastProvider';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -541,6 +543,7 @@ function StandingsView({ tournament, teamName }: StandingsViewProps) {
 export default function SchedulePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { showToast } = useToast();
+  const { user: currentUser } = useCurrentUser();
   const [tournament, setTournament] = useState<PersonalizadoTournament | null>(null);
   const [teams, setTeams] = useState<PersonalizadoTeam[]>([]);
   const [loading, setLoading] = useState(true);
@@ -563,6 +566,9 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     });
     return () => { active = false; };
   }, [id]);
+
+  // Access guard: only the creator or a co-creator may open the calendar/management view.
+  const accessDenied = !!tournament && !canManagePersonalizado(tournament, currentUser?.id);
 
   const teamName = useMemo(() => {
     const map = new Map<string, string>();
@@ -621,6 +627,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
       categories: tournament.categories,
       config: tournament.config ?? DEFAULT_CONTROL_CONFIG,
       groupAssignments,
+      requesterId: currentUser?.id,
     });
     setSavingGroups(false);
     if (!res.ok) { showToast(res.error ?? 'No se pudo guardar', 'error'); return; }
@@ -640,6 +647,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
       categories: tournament.categories,
       config,
       status: tournament.status === 'configured' || tournament.status === 'registration_open' ? 'live' : undefined,
+      requesterId: currentUser?.id,
     });
     setWorking(false);
     if (!res.ok) { showToast(res.error ?? 'No se pudo generar', 'error'); return; }
@@ -685,7 +693,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
       ...scheduled,
     ];
     const newConfig = { ...(tournament.config ?? DEFAULT_CONTROL_CONFIG), bracketMatches: newBracketMatches };
-    const res = await saveControlPanel({ id: tournament.id, categories: tournament.categories, config: newConfig });
+    const res = await saveControlPanel({ id: tournament.id, categories: tournament.categories, config: newConfig, requesterId: currentUser?.id });
     setGeneratingBracketCat(null);
     if (!res.ok) { showToast(res.error ?? 'No se pudo generar el bracket', 'error'); return; }
     const refreshed = await loadPersonalizadoById(id);
@@ -707,6 +715,20 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   }, [tournament, showToast]);
 
   if (loading) return <div style={{ padding: 40, color: 'var(--grey-400)', fontSize: 14 }}>Cargando…</div>;
+  if (tournament && accessDenied) {
+    return (
+      <div style={{ padding: '40px clamp(16px,4vw,40px)', maxWidth: 1000, margin: '0 auto' }}>
+        <Link href={`/dashboard/player/tournaments`} style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Mis Torneos</Link>
+        <div style={{ ...card, textAlign: 'center', padding: '48px 24px' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--black)', marginBottom: 8 }}>Acceso restringido</div>
+          <div style={{ fontSize: 14, color: 'var(--grey-500)', lineHeight: 1.6 }}>
+            Solo el creador del torneo o sus co-creadores pueden ver el calendario y la gestión.
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!tournament) {
     return (
       <div style={{ padding: '40px clamp(16px,4vw,40px)', maxWidth: 1000, margin: '0 auto' }}>

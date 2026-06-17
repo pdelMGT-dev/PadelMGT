@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   loadPersonalizadoById,
   saveControlPanel,
+  canManagePersonalizado,
   estimateTournamentDays,
   teamsPerGroupFromCount,
   groupCountFromTeamsPerGroup,
@@ -259,6 +260,11 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
     return () => { active = false; };
   }, [id]);
 
+  // Access guard: only the creator or a co-creator may open the control panel.
+  // currentUser is read synchronously from localStorage on mount, so by the time the
+  // (network) tournament fetch resolves it's already settled.
+  const accessDenied = !!tournament && !canManagePersonalizado(tournament, currentUser?.id);
+
   // Assignable teams = confirmed or pending (not rejected/waitlisted)
   const assignable = useMemo(
     () => teams.filter(t => t.status === 'pending' || t.status === 'confirmed'),
@@ -335,6 +341,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
       date,
       status: markConfigured ? 'configured' : undefined,
       groupAssignments,
+      requesterId: currentUser?.id,
     });
     setSaving(false);
     if (!res.ok) { showToast(res.error ?? 'No se pudo guardar', 'error'); return; }
@@ -344,6 +351,20 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   }
 
   if (loading) return <div style={{ padding: 40, color: 'var(--grey-400)', fontSize: 14 }}>Cargando…</div>;
+  if (tournament && accessDenied) {
+    return (
+      <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 1000, margin: '0 auto' }}>
+        <Link href={`/dashboard/player/tournaments`} style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Mis Torneos</Link>
+        <div style={{ ...card, textAlign: 'center', padding: '48px 24px' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--black)', marginBottom: 8 }}>Acceso restringido</div>
+          <div style={{ fontSize: 14, color: 'var(--grey-500)', lineHeight: 1.6 }}>
+            Solo el creador del torneo o sus co-creadores pueden abrir el Panel de Control.
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!tournament) {
     return (
       <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 1000, margin: '0 auto' }}>
@@ -587,9 +608,16 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
             </div>
             <Toggle
               on={config.isChildTournament ?? false}
-              onChange={v => patchConfig({ isChildTournament: v })}
+              onChange={v => patchConfig(v
+                ? { isChildTournament: true, acceptsFamilyMembers: true }
+                : { isChildTournament: false })}
               labelOn="Torneo infantil" labelOff="Torneo de adultos"
             />
+            {config.isChildTournament && (
+              <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 8 }}>
+                Un torneo infantil acepta participantes familiares (menores) automáticamente.
+              </div>
+            )}
           </div>
 
           {currentUser && tournament.creatorId === currentUser.id && (

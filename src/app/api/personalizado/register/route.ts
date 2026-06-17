@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { serviceClient } from '@/lib/supabase-server';
 import { rowToTeam, type PersonalizadoCategory } from '@/lib/personalizado-store';
+import { isEligibleForMaxAge, ageOnJan1 } from '@/lib/minor-categories-store';
 
 /**
  * Atomic team registration for PERSONALIZADO tournaments.
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
     code?: string; categoryId?: string;
     player1Name?: string; player1Email?: string;
     player2Name?: string; player2Email?: string;
+    player1BirthDate?: string; player2BirthDate?: string;
   };
   try {
     body = await request.json();
@@ -25,15 +27,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Solicitud no válida' }, { status: 400 });
   }
 
-  const { code, categoryId, player1Name, player1Email, player2Name, player2Email } = body;
+  const {
+    code, categoryId, player1Name, player1Email, player2Name, player2Email,
+    player1BirthDate, player2BirthDate,
+  } = body;
   if (!code || !categoryId || !player1Name?.trim()) {
     return NextResponse.json({ error: 'Datos de inscripción incompletos' }, { status: 400 });
   }
 
-  // Load the tournament (status + categories) by code.
+  // Load the tournament (status + categories + config) by code.
   const { data: trow, error: tErr } = await svc
     .from('personalizado_tournaments')
-    .select('id, status, categories')
+    .select('id, status, categories, config, date')
     .eq('code', code)
     .maybeSingle();
   if (tErr) return NextResponse.json({ error: 'Error al leer el torneo' }, { status: 500 });
@@ -44,6 +49,26 @@ export async function POST(request: NextRequest) {
 
   const cat = (trow.categories as PersonalizadoCategory[]).find(c => c.id === categoryId);
   if (!cat) return NextResponse.json({ error: 'Categoría no encontrada' }, { status: 404 });
+
+  // Child tournaments: re-validate the Jan-1 age rule server-side (the client form also
+  // checks it, but the server must not trust a possibly-bypassed frontend).
+  const cfg = (trow.config ?? {}) as { isChildTournament?: boolean };
+  if (cfg.isChildTournament && cat.maxAge !== undefined) {
+    const tournamentDate = (trow.date as string) || new Date().toISOString().slice(0, 10);
+    const tYear = new Date(tournamentDate).getFullYear();
+    const offenders: string[] = [];
+    for (const [name, bd] of [[player1Name, player1BirthDate], [player2Name, player2BirthDate]] as const) {
+      if (bd && !isEligibleForMaxAge(bd, tournamentDate, cat.maxAge)) {
+        offenders.push(`${name} cumple ${ageOnJan1(bd, tournamentDate)} el 1 de enero de ${tYear}`);
+      }
+    }
+    if (offenders.length > 0) {
+      return NextResponse.json(
+        { error: `La categoría ${cat.name} es para menores de ${cat.maxAge} años (al 1 de enero de ${tYear}). ${offenders.join('; ')}.` },
+        { status: 422 },
+      );
+    }
+  }
 
   const tournamentId = trow.id as string;
 

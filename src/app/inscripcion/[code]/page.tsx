@@ -213,6 +213,7 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
     const p2Email = selectedFriend?.email
       ?? (isFamilyPartner ? undefined : (isInvite ? inviteEmail.trim() : undefined));
 
+    const partnerMember = isFamilyPartner ? selectedFamilyPartner! : null;
     const res = await registerTeam(code, {
       categoryId: selectedCat.id,
       player1Name: p1Name,
@@ -221,6 +222,8 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
       player2Name: p2Name,
       player2Email: p2Email,
       player2Id: p2Id,
+      player1BirthDate: player1Member?.birthDate,
+      player2BirthDate: partnerMember?.birthDate,
     });
     setSubmitting(false);
 
@@ -447,8 +450,14 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
                 }}
               >
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--black)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--black)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     {cat.name}
+                    {isChildTournament && cat.maxAge !== undefined && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', padding: '2px 6px',
+                        background: 'rgba(34,197,94,0.12)', color: '#15803d',
+                      }}>MENORES DE {cat.maxAge}</span>
+                    )}
                     {full && (
                       <span style={{
                         fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', padding: '2px 6px',

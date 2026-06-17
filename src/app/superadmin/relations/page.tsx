@@ -14,8 +14,25 @@ import { addFriendship, removeFriendship } from '@/lib/player-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'club' | 'friends' | 'league' | 'federation';
+type Tab = 'club' | 'friends' | 'league' | 'federation' | 'family';
 type AddMode = 'text' | 'csv' | 'table';
+
+interface FamilyMemberRow {
+  id: string;
+  ownerId: string;
+  ownerName: string;
+  fullName: string;
+  relationType: string;
+  birthDate: string;
+  invitationStatus: string;
+}
+interface FamilyLinkRow {
+  id: string;
+  fromName: string;
+  toEmail: string;
+  relation: string;
+  status: string;
+}
 
 interface FriendshipRow {
   key: string;
@@ -102,6 +119,12 @@ export default function RelationsPage() {
   const [fedSelected, setFedSelected] = useState<Set<string>>(new Set());
   const [fedFilterFed, setFedFilterFed] = useState('');
 
+  // Family state (read-only listing of family members + links)
+  const [familyMembers, setFamilyMembers] = useState<FamilyMemberRow[]>([]);
+  const [familyLinks, setFamilyLinks] = useState<FamilyLinkRow[]>([]);
+  const [familyFilter, setFamilyFilter] = useState('');
+  const [familyView, setFamilyView] = useState<'members' | 'links'>('members');
+
   // Bulk add panel
   const [showCreate, setShowCreate] = useState(false);
   const [addMode, setAddMode] = useState<AddMode>('text');
@@ -149,6 +172,33 @@ export default function RelationsPage() {
 
     setLeagueMemberships(getAllLeagueMemberships());
     setFedMemberships(getAllFederationMemberships());
+
+    // Family members + links — read localStorage directly (SA read-only listing)
+    try {
+      const raw = localStorage.getItem('padelmgt_family_members') ?? '[]';
+      const arr = JSON.parse(raw) as Array<Record<string, unknown>>;
+      setFamilyMembers(arr.map(m => ({
+        id: m.id as string,
+        ownerId: m.ownerId as string,
+        ownerName: ps.find(p => p.id === m.ownerId)?.name ?? (m.ownerId as string),
+        fullName: m.fullName as string,
+        relationType: m.relationType as string,
+        birthDate: (m.birthDate as string) ?? '',
+        invitationStatus: (m.invitationStatus as string) ?? 'none',
+      })));
+    } catch { setFamilyMembers([]); }
+
+    try {
+      const raw = localStorage.getItem('padelmgt_family_links') ?? '[]';
+      const arr = JSON.parse(raw) as Array<Record<string, unknown>>;
+      setFamilyLinks(arr.map(l => ({
+        id: l.id as string,
+        fromName: (l.fromPlayerName as string) ?? (l.fromPlayerId as string),
+        toEmail: (l.toPlayerEmail as string) ?? '',
+        relation: (l.relationFromTo as string) ?? '',
+        status: (l.status as string) ?? 'pending',
+      })));
+    } catch { setFamilyLinks([]); }
   }
 
   // ── Bulk add logic ─────────────────────────────────────────────────────────
@@ -319,7 +369,18 @@ export default function RelationsPage() {
     { key: 'friends',    label: 'Amistades',              count: friendships.length },
     { key: 'league',     label: 'Liga — Jugador',         count: leagueMemberships.length },
     { key: 'federation', label: 'Federación — Jugador',   count: fedMemberships.length },
+    { key: 'family',     label: 'Familia',                count: familyMembers.length + familyLinks.length },
   ];
+
+  const filteredFamilyMembers = useMemo(() => {
+    const q = familyFilter.toLowerCase();
+    return familyMembers.filter(m => !q || m.fullName.toLowerCase().includes(q) || m.ownerName.toLowerCase().includes(q) || m.id.toLowerCase().includes(q));
+  }, [familyMembers, familyFilter]);
+
+  const filteredFamilyLinks = useMemo(() => {
+    const q = familyFilter.toLowerCase();
+    return familyLinks.filter(l => !q || l.fromName.toLowerCase().includes(q) || l.toEmail.toLowerCase().includes(q));
+  }, [familyLinks, familyFilter]);
 
   // ── Active selection set and delete label ──────────────────────────────────
 
@@ -378,6 +439,7 @@ export default function RelationsPage() {
       </div>
 
       {/* ── BULK ADD PANEL (collapsible — the list below is the main view) ────── */}
+      {tab !== 'family' && (
       <div style={{ ...card, borderColor: '#d1d5db' }}>
         <button
           onClick={() => setShowCreate(v => !v)}
@@ -523,6 +585,7 @@ export default function RelationsPage() {
         </div>
         )}
       </div>
+      )}
 
       {/* ── RELATIONSHIPS TABLE ───────────────────────────────────────────────── */}
       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#374151', margin: '4px 0 10px' }}>
@@ -554,6 +617,18 @@ export default function RelationsPage() {
                 <option value="">Todas las federaciones</option>
                 {MOCK_FEDERATIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
               </select>
+            )}
+            {tab === 'family' && (
+              <>
+                <div style={{ display: 'flex', gap: 0 }}>
+                  {(['members', 'links'] as const).map(v => (
+                    <button key={v} onClick={() => setFamilyView(v)} style={{ ...btn(familyView === v ? 'primary' : 'ghost'), fontSize: 12 }}>
+                      {v === 'members' ? `Familiares (${familyMembers.length})` : `Vínculos (${familyLinks.length})`}
+                    </button>
+                  ))}
+                </div>
+                <input value={familyFilter} onChange={e => setFamilyFilter(e.target.value)} placeholder="Filtrar…" style={{ ...inp, width: 220 }} />
+              </>
             )}
           </div>
           {activeSelected.size > 0 && (
@@ -703,6 +778,68 @@ export default function RelationsPage() {
               </tbody>
             </table>
           )}
+
+          {/* Family table */}
+          {tab === 'family' && familyView === 'members' && (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={th}>Familiar</th>
+                  <th style={th}>ID#</th>
+                  <th style={th}>Responsable</th>
+                  <th style={th}>Relación</th>
+                  <th style={th}>Nacimiento</th>
+                  <th style={th}>Cuenta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredFamilyMembers.length === 0 ? (
+                  <tr><td colSpan={6} style={{ ...td, textAlign: 'center', color: '#9ca3af', padding: '32px' }}>Sin familiares registrados</td></tr>
+                ) : filteredFamilyMembers.map(m => (
+                  <tr key={m.id}>
+                    <td style={td}><span style={{ fontWeight: 600 }}>{m.fullName}</span></td>
+                    <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 12, color: '#6b7280' }}>{m.id}</span></td>
+                    <td style={td}><span style={{ fontWeight: 600 }}>{m.ownerName}</span><br /><span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{m.ownerId}</span></td>
+                    <td style={td}>{m.relationType}</td>
+                    <td style={td}>{m.birthDate || '—'}</td>
+                    <td style={td}>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: m.invitationStatus === 'accepted' ? '#dcfce7' : m.invitationStatus === 'invited' ? '#fef9c3' : '#f3f4f6', color: m.invitationStatus === 'accepted' ? '#15803d' : m.invitationStatus === 'invited' ? '#b45309' : '#6b7280' }}>
+                        {m.invitationStatus === 'accepted' ? 'En plataforma' : m.invitationStatus === 'invited' ? 'Invitado' : 'Sin cuenta'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {tab === 'family' && familyView === 'links' && (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={th}>De</th>
+                  <th style={th}>Para (email)</th>
+                  <th style={th}>Relación</th>
+                  <th style={th}>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredFamilyLinks.length === 0 ? (
+                  <tr><td colSpan={4} style={{ ...td, textAlign: 'center', color: '#9ca3af', padding: '32px' }}>Sin vínculos entre cuentas</td></tr>
+                ) : filteredFamilyLinks.map(l => (
+                  <tr key={l.id}>
+                    <td style={td}><span style={{ fontWeight: 600 }}>{l.fromName}</span></td>
+                    <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{l.toEmail}</span></td>
+                    <td style={td}>{l.relation}</td>
+                    <td style={td}>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: l.status === 'accepted' ? '#dcfce7' : l.status === 'rejected' ? '#fee2e2' : '#fef9c3', color: l.status === 'accepted' ? '#15803d' : l.status === 'rejected' ? '#b91c1c' : '#b45309' }}>
+                        {l.status === 'accepted' ? 'Aceptado' : l.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
         {/* Row count footer */}
@@ -711,6 +848,7 @@ export default function RelationsPage() {
           {tab === 'friends' && `${filteredFriendships.length} amistades`}
           {tab === 'league' && `${filteredLeagueMems.length} relaciones`}
           {tab === 'federation' && `${filteredFedMems.length} relaciones`}
+          {tab === 'family' && (familyView === 'members' ? `${filteredFamilyMembers.length} familiares` : `${filteredFamilyLinks.length} vínculos`)}
         </div>
       </div>
     </div>
