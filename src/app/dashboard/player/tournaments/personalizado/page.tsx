@@ -138,6 +138,7 @@ export default function PersonalizadoWizardPage() {
   const [city, setCity] = useState('');
   const [country, setCountry] = useState('');
   const [courts, setCourts] = useState(2);
+  const [isChild, setIsChild] = useState(false);
 
   // Mis Clubes — loaded from localStorage on mount
   type MyClub = { id: string; name: string; city: string; country: string; courts: number };
@@ -194,6 +195,7 @@ export default function PersonalizadoWizardPage() {
       categories,
       creatorId: user.id,
       creatorName: user.name,
+      isChildTournament: isChild,
     });
     router.push(`/dashboard/player/tournaments/personalizado/${tournament.id}`);
   }
@@ -248,6 +250,33 @@ export default function PersonalizadoWizardPage() {
               <label style={lbl}>Hora *</label>
               <input type="time" value={time} onChange={e => setTime(e.target.value)} style={inp} />
             </div>
+          </div>
+        </div>
+
+        <div style={card}>
+          <div style={secTitle}>Torneo infantil</div>
+          <label style={lbl}>¿Es un torneo infantil (para menores)?</label>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {([['Sí', true], ['No', false]] as const).map(([label, val]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setIsChild(val)}
+                style={{
+                  padding: '8px 18px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  border: '1px solid',
+                  borderColor: isChild === val ? 'var(--black)' : 'var(--grey-200)',
+                  background: isChild === val ? 'var(--black)' : '#fff',
+                  color: isChild === val ? '#fff' : 'var(--grey-500)',
+                  textTransform: 'uppercase', letterSpacing: '0.06em',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--grey-400)', lineHeight: 1.5, marginTop: 10 }}>
+            Aplica validación de edad por categoría al inscribir.
           </div>
         </div>
 

@@ -11,6 +11,7 @@ import {
   getPendingInvitationsForPlayer,
   acceptTeamInvitation,
   rejectTeamInvitation,
+  canManagePersonalizado,
   type PersonalizadoTournament,
   type PendingInvitation,
 } from '@/lib/personalizado-store';
@@ -297,7 +298,7 @@ export default function PlayerTournamentsPage() {
   useEffect(() => {
     if (!currentUser) return;
     const active = getAllPersonalizado().filter(
-      t => t.creatorId === currentUser.id &&
+      t => canManagePersonalizado(t, currentUser.id) &&
         (t.status === 'registration_open' || t.status === 'configured' || t.status === 'live')
     );
     setActivePersonalizados(active);

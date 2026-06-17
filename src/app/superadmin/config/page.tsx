@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { getSAAdminUsers, saveSAAdminUsers, getSAAdminUsersFromSupabase, upsertSAAdminUserToSupabase, deleteSAAdminUserFromSupabase, getSAPlayers, getSAClubs, getSATournaments, seedPlayersToSupabase, seedClubsToSupabase, upsertTournamentToSupabase, type SAAdminUser } from '@/lib/superadmin-data';
 import { getGlobalRankingConfig, saveRankingConfig } from '@/lib/ranking-config-store';
+import { getMinorCategories, saveMinorCategories, type MinorCategory } from '@/lib/minor-categories-store';
 import { getAuditLog, clearAuditLog, type AuditEntry } from '@/lib/audit-log-store';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -78,7 +79,7 @@ function downloadCSV(filename: string, rows: string[][]) {
 }
 
 export default function ConfigPage() {
-  const [tab, setTab] = useState<'admins' | 'general' | 'database' | 'stripe' | 'ranking' | 'audit' | 'sitio'>('admins');
+  const [tab, setTab] = useState<'admins' | 'general' | 'database' | 'stripe' | 'ranking' | 'menores' | 'audit' | 'sitio'>('admins');
   const [admins, setAdmins] = useState<SAAdminUser[]>([]);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [editAdmin, setEditAdmin] = useState<SAAdminUser | null>(null);
@@ -112,6 +113,9 @@ export default function ConfigPage() {
   const [rankDraw, setRankDraw] = useState(1);
   const [rankLoss, setRankLoss] = useState(-1);
   const [rankSaved, setRankSaved] = useState(false);
+  // Minor (age) categories config
+  const [minorCats, setMinorCats] = useState<MinorCategory[]>([]);
+  const [minorSaved, setMinorSaved] = useState(false);
   // Audit log
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   // Sitio web
@@ -167,6 +171,8 @@ export default function ConfigPage() {
     setRankWin(cfg.pointsWin);
     setRankDraw(cfg.pointsDraw);
     setRankLoss(cfg.pointsLoss);
+    // Load minor (age) categories config
+    setMinorCats(getMinorCategories());
     // Load audit log
     setAuditLog(getAuditLog(200));
     // Load sitio web config
@@ -435,6 +441,7 @@ export default function ConfigPage() {
           { key: 'database', label: 'Base de Datos' },
           { key: 'stripe', label: 'Stripe / Pagos' },
           { key: 'ranking', label: 'Ranking' },
+          { key: 'menores', label: 'Categorías de Menores' },
           { key: 'sitio', label: 'Sitio Web' },
           { key: 'audit', label: `Auditoria (${auditLog.length})` },
         ] as const).map(({ key, label }) => (
@@ -816,6 +823,63 @@ export default function ConfigPage() {
           </div>
           <div style={{ marginTop: 20, padding: '12px 16px', background: '#fffbeb', border: '1px solid #fcd34d', fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
             ⚠ Los cambios aplican solo a juegos futuros. Las partidas ya registradas mantienen los puntos originales.
+          </div>
+        </div>
+      )}
+
+      {/* CATEGORÍAS DE MENORES TAB */}
+      {tab === 'menores' && (
+        <div style={{ maxWidth: 560 }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Categorías de Menores</h2>
+          <p style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 24, lineHeight: 1.6 }}>
+            Edad calculada al 1 de enero del año de la competición. Un jugador puede competir en categorías superiores (mayor edad máxima) pero no inferiores.
+          </p>
+          <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {minorCats.map((cat, i) => (
+              <div key={cat.id} style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 4 }}>Nombre</div>
+                  <input
+                    type="text"
+                    value={cat.name}
+                    onChange={e => setMinorCats(prev => prev.map((c, j) => j === i ? { ...c, name: e.target.value } : c))}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ width: 110 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 4 }}>Edad máx.</div>
+                  <input
+                    type="number"
+                    value={cat.maxAge}
+                    onChange={e => setMinorCats(prev => prev.map((c, j) => j === i ? { ...c, maxAge: Number(e.target.value) } : c))}
+                    style={inputStyle}
+                  />
+                </div>
+                <button
+                  onClick={() => setMinorCats(prev => prev.filter((_, j) => j !== i))}
+                  style={{ padding: '8px 12px', border: '1px solid var(--grey-200)', background: '#fff', color: '#991b1b', fontSize: 11, fontWeight: 600, cursor: 'pointer', borderRadius: 4 }}
+                >
+                  Quitar
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => setMinorCats(prev => [...prev, { id: `cat-${uid()}`, name: '', maxAge: 0 }])}
+              style={{ alignSelf: 'flex-start', padding: '8px 16px', border: '1px dashed var(--grey-300)', background: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: 4 }}
+            >
+              + Añadir categoría
+            </button>
+            <button
+              onClick={() => {
+                saveMinorCategories(minorCats);
+                setMinorSaved(true);
+                toast('Categorías de menores guardadas');
+                setTimeout(() => setMinorSaved(false), 3000);
+              }}
+              style={{ padding: '12px', background: 'var(--black)', color: 'var(--neon)', border: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', alignSelf: 'flex-start', paddingLeft: 32, paddingRight: 32 }}
+            >
+              {minorSaved ? '✓ Guardado' : 'Guardar'}
+            </button>
           </div>
         </div>
       )}

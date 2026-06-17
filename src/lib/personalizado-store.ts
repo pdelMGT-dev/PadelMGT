@@ -19,6 +19,7 @@ export interface PersonalizadoCategory {
   gender: 'masculino' | 'femenino' | 'mixto' | 'libre';
   maxTeams: number; // editable in the control panel before the tournament starts
   level?: number; // skill order for scheduling — lower = more novice, plays earlier in the day
+  maxAge?: number; // child tournaments: "menores de X años" (Jan-1 rule)
 }
 
 export interface PersonalizadoTeam {
@@ -162,11 +163,16 @@ export interface ControlPanelConfig {
   matches?: PersonalizadoMatch[];
   // generated elimination bracket, per category (filled by generateBracket)
   bracketMatches?: BracketMatch[];
+  // child tournament: enables per-category age validation at inscription
+  isChildTournament?: boolean;
+  // player ids that can co-manage the tournament (everything except delete + co-creator mgmt)
+  coCreatorIds?: string[];
 }
 
 export const DEFAULT_CONTROL_CONFIG: ControlPanelConfig = {
   substitutionEnabled: false,
   acceptsFamilyMembers: false,
+  isChildTournament: false,
   scoreType: 'traditional',
   scoreQualification: { ...DEFAULT_SCORE_PHASE },
   scoreElimination: { ...DEFAULT_SCORE_PHASE },
@@ -320,6 +326,18 @@ export function getPersonalizadoByCode(code: string): PersonalizadoTournament | 
   return _store.load().find(t => t.code === code) ?? null;
 }
 
+/**
+ * Whether a user may co-manage a tournament: the creator always can, and any
+ * listed co-creator can. Co-creators have almost-full access (groups, schedule,
+ * results, bracket) but NOT delete and NOT co-creator management — those checks
+ * stay creator-only at the call sites.
+ */
+export function canManagePersonalizado(t: PersonalizadoTournament | null, userId?: string): boolean {
+  if (!t || !userId) return false;
+  if (t.creatorId === userId) return true;
+  return (t.config?.coCreatorIds ?? []).includes(userId);
+}
+
 /** Write to the localStorage cache and fire-and-forget sync to Supabase. */
 export function savePersonalizado(tournament: PersonalizadoTournament): void {
   const all = _store.load();
@@ -425,6 +443,7 @@ export function createPersonalizado(params: {
   categories: PersonalizadoCategory[];
   creatorId: string;
   creatorName: string;
+  isChildTournament?: boolean;
 }): PersonalizadoTournament {
   const tournament: PersonalizadoTournament = {
     id: generateId(),
@@ -438,7 +457,7 @@ export function createPersonalizado(params: {
     courts: params.courts,
     categories: params.categories,
     teams: [],
-    config: { ...DEFAULT_CONTROL_CONFIG },
+    config: { ...DEFAULT_CONTROL_CONFIG, isChildTournament: params.isChildTournament ?? false },
     status: 'draft',
     creatorId: params.creatorId,
     creatorName: params.creatorName,

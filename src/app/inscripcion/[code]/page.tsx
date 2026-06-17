@@ -17,6 +17,7 @@ import {
 } from '@/lib/email';
 import { getFriendsForPlayer, searchPlayers, type RegisteredPlayer } from '@/lib/player-store';
 import { getFamilyMembers, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
+import { isEligibleForMaxAge, ageOnJan1 } from '@/lib/minor-categories-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import BrandLogo from '@/components/BrandLogo';
 
@@ -155,8 +156,28 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
       ? familyMembers.find(m => m.id === player1FamilyId)
       : undefined;
 
+  // Child tournament: validate family-member participants' ages against the category's maxAge
+  // (official Jan-1 rule). Members can play UP into older categories, never down.
+  const isChildTournament = tournament?.config?.isChildTournament === true;
+  function ageIssue(): string | null {
+    if (!isChildTournament || !selectedCat || selectedCat.maxAge === undefined || !tournament) return null;
+    const date = tournament.date;
+    const tYear = new Date(date).getFullYear();
+    const offenders: string[] = [];
+    const partnerMember = partnerTab === 'family' ? selectedFamilyPartner : null;
+    for (const m of [player1Member, partnerMember]) {
+      if (m && m.birthDate && !isEligibleForMaxAge(m.birthDate, date, selectedCat.maxAge)) {
+        offenders.push(`${m.fullName} cumple ${ageOnJan1(m.birthDate, date)} el 1 de enero de ${tYear}`);
+      }
+    }
+    if (offenders.length === 0) return null;
+    return `La categoría ${selectedCat.name} es para menores de ${selectedCat.maxAge} años (al 1 de enero de ${tYear}). ${offenders.join('; ')}.`;
+  }
+  const ageError = ageIssue();
+
   function canSubmit(): boolean {
     if (!selectedCat || !user) return false;
+    if (ageError) return false;
     // Player 1: must pick a family member when "Un familiar" is selected
     if (acceptsFamily && whoPlays === 'family' && !player1Member) return false;
     // Player 2 (partner)
@@ -173,6 +194,7 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!tournament || !selectedCat || !user) return;
+    if (ageError) { setError(ageError); return; }
     setError(null);
     setSubmitting(true);
 
@@ -662,6 +684,12 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
           {error && (
             <div style={{ padding: '10px 14px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', fontSize: 13, color: '#b91c1c', marginBottom: 14 }}>
               {error}
+            </div>
+          )}
+
+          {ageError && !error && (
+            <div style={{ padding: '10px 14px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', fontSize: 13, color: '#92400e', marginBottom: 14, lineHeight: 1.5 }}>
+              {ageError}
             </div>
           )}
 

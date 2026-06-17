@@ -20,6 +20,9 @@ import {
   type ScorePhaseConfig,
   type DeuceRule,
 } from '@/lib/personalizado-store';
+import { getMinorCategories, type MinorCategory } from '@/lib/minor-categories-store';
+import { searchPlayers, getPlayer, type RegisteredPlayer } from '@/lib/player-store';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useToast } from '@/components/ToastProvider';
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
@@ -187,6 +190,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   const { id } = use(params);
   const router = useRouter();
   const { showToast } = useToast();
+  const { user: currentUser } = useCurrentUser();
 
   const [tournament, setTournament] = useState<PersonalizadoTournament | null>(null);
   const [loading, setLoading] = useState(true);
@@ -197,6 +201,17 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   const [categories, setCategories] = useState<PersonalizadoCategory[]>([]);
   const [config, setConfig] = useState<ControlPanelConfig>(DEFAULT_CONTROL_CONFIG);
   const [teams, setTeams] = useState<PersonalizadoTeam[]>([]);
+
+  // SA base age categories (quick-pick for child tournaments)
+  const [baseMinorCats, setBaseMinorCats] = useState<MinorCategory[]>([]);
+  useEffect(() => { setBaseMinorCats(getMinorCategories()); }, []);
+
+  // Co-creator management (creator only)
+  const [coSearch, setCoSearch] = useState('');
+  const [coResults, setCoResults] = useState<RegisteredPlayer[]>([]);
+  useEffect(() => {
+    setCoResults(coSearch.trim().length >= 2 ? searchPlayers(coSearch).slice(0, 6) : []);
+  }, [coSearch]);
 
   useEffect(() => {
     let active = true;
@@ -269,6 +284,19 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   }
   function setCategoryLevel(categoryId: string, level: number) {
     setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, level } : c));
+  }
+  function setCategoryMaxAge(categoryId: string, maxAge: number | undefined) {
+    setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, maxAge } : c));
+  }
+  function addCoCreator(playerId: string) {
+    if (!playerId) return;
+    const current = config.coCreatorIds ?? [];
+    if (current.includes(playerId) || playerId === tournament?.creatorId) return;
+    patchConfig({ coCreatorIds: [...current, playerId] });
+    setCoSearch(''); setCoResults([]);
+  }
+  function removeCoCreator(playerId: string) {
+    patchConfig({ coCreatorIds: (config.coCreatorIds ?? []).filter(pid => pid !== playerId) });
   }
   function setGroupCount(cat: PersonalizadoCategory, groupCount: number) {
     patchGroup(cat.id, { groupCount: Math.max(1, groupCount), teamsPerGroup: teamsPerGroupFromCount(cat.maxTeams, Math.max(1, groupCount)) });
@@ -445,6 +473,33 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
                     <input type="number" min={1} value={g.qualifyPerGroup} style={numInp}
                       onChange={e => patchGroup(cat.id, { qualifyPerGroup: num(e.target.value, g.qualifyPerGroup) })} /></div>
                 </div>
+                {config.isChildTournament && (
+                  <div style={{ marginBottom: 10, padding: '10px 12px', background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                      <div>
+                        <label style={lbl}>Edad máxima (menores de)</label>
+                        <input type="number" min={4} max={18} value={cat.maxAge ?? ''} placeholder="—" style={numInp}
+                          onChange={e => setCategoryMaxAge(cat.id, e.target.value === '' ? undefined : num(e.target.value, 0))} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingBottom: 2 }}>
+                        {baseMinorCats.map(mc => (
+                          <button key={mc.id} type="button" onClick={() => setCategoryMaxAge(cat.id, mc.maxAge)}
+                            style={{
+                              fontSize: 10, fontWeight: 700, padding: '6px 10px', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em',
+                              border: `1px solid ${cat.maxAge === mc.maxAge ? 'var(--turf-green)' : 'var(--grey-200)'}`,
+                              background: cat.maxAge === mc.maxAge ? 'rgba(34,197,94,0.12)' : '#fff',
+                              color: cat.maxAge === mc.maxAge ? '#15803d' : 'var(--grey-500)',
+                            }}>
+                            {mc.name} &lt;{mc.maxAge}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 8, lineHeight: 1.5 }}>
+                      Edad calculada al 1 de enero del año del torneo. Un jugador puede competir en categorías superiores (mayor edad) pero no inferiores.
+                    </div>
+                  </div>
+                )}
                 <div style={{ fontSize: 12, color: 'var(--grey-500)' }}>
                   → <strong>{totalQualifiers}</strong> clasificados directos
                   {balancedSize > totalQualifiers ? (
@@ -524,6 +579,64 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
               labelOn="Acepta participantes familiares (menores)" labelOff="Solo cuentas propias"
             />
           </div>
+
+          <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 12 }}>Torneo infantil (menores)</div>
+            <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 12, lineHeight: 1.6 }}>
+              Al activarlo, define la edad máxima por categoría arriba (Equipos y Grupos) y el sistema valida la edad de cada inscrito al 1 de enero del año del torneo.
+            </div>
+            <Toggle
+              on={config.isChildTournament ?? false}
+              onChange={v => patchConfig({ isChildTournament: v })}
+              labelOn="Torneo infantil" labelOff="Torneo de adultos"
+            />
+          </div>
+
+          {currentUser && tournament.creatorId === currentUser.id && (
+            <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 12 }}>Co-creadores</div>
+              <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 12, lineHeight: 1.6 }}>
+                Los co-creadores pueden ayudarte a gestionar el torneo (grupos, calendario, resultados, bracket). No pueden eliminar el torneo ni gestionar otros co-creadores.
+              </div>
+              {(config.coCreatorIds ?? []).length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                  {(config.coCreatorIds ?? []).map(pid => {
+                    const p = getPlayer(pid);
+                    return (
+                      <div key={pid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 12px', border: '1px solid var(--grey-100)' }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{p?.name ?? pid}</div>
+                          <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p?.shortId ?? p?.email ?? pid}</div>
+                        </div>
+                        <button type="button" onClick={() => removeCoCreator(pid)}
+                          style={{ fontSize: 10, fontWeight: 700, padding: '5px 10px', cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                          Quitar
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <input value={coSearch} onChange={e => setCoSearch(e.target.value)} placeholder="Buscar jugador por nombre, email o #ID…" style={inp} />
+              {coResults.length > 0 && (
+                <div style={{ border: '1px solid var(--grey-200)', borderTop: 'none' }}>
+                  {coResults.map(p => {
+                    const added = (config.coCreatorIds ?? []).includes(p.id) || p.id === tournament.creatorId;
+                    return (
+                      <button key={p.id} type="button" onClick={() => addCoCreator(p.id)} disabled={added}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '9px 12px', textAlign: 'left', background: 'none', border: 'none', borderBottom: '1px solid var(--grey-100)', cursor: added ? 'default' : 'pointer' }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: added ? 'var(--grey-400)' : 'var(--black)' }}>{p.name}</div>
+                          <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.shortId} · #{p.ranking}</div>
+                        </div>
+                        {added && <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--turf-green)', textTransform: 'uppercase' }}>{p.id === tournament.creatorId ? 'Creador' : 'Añadido'}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 18 }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 12 }}>Tabla de puntos (clasificación de grupos)</div>
