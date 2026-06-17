@@ -52,7 +52,7 @@ export default function TournamentsPage() {
         <div className="page-header-content">
           <div className="hero-eyebrow" style={{ color: 'rgba(255,255,255,0.7)' }}>Seis formatos. Un constructor. Cero hojas de cálculo.</div>
           <h1 className="page-title">TORNEOS</h1>
-          <p className="page-sub">Desde Americano de una tarde hasta Champions League con grupos y eliminatorias.</p>
+          <p className="page-sub">Desde Americano de una tarde hasta World Cup con grupos y eliminatorias.</p>
         </div>
       </div>
 
@@ -79,7 +79,7 @@ export default function TournamentsPage() {
                     <span style={{ fontSize: 32 }}>{f.icon}</span>
                   </div>
                   <div style={{ position: 'absolute', top: 20, right: 20 }}>
-                    <span style={{ fontSize: 10, letterSpacing: '0.18em', fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>0{i + 1} / 06</span>
+                    <span style={{ fontSize: 10, letterSpacing: '0.18em', fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>{String(i + 1).padStart(2, '0')} / {String(tournamentFormats.length).padStart(2, '0')}</span>
                   </div>
                   <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24 }}>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', lineHeight: 0.95, letterSpacing: '-0.015em', color: '#fff', marginBottom: 8 }}>{f.name}</div>
