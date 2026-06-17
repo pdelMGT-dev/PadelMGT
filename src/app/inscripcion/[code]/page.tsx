@@ -16,6 +16,7 @@ import {
   sendPartnerInvitationEmail,
 } from '@/lib/email';
 import { getFriendsForPlayer, searchPlayers, type RegisteredPlayer } from '@/lib/player-store';
+import { getFamilyMembers, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import BrandLogo from '@/components/BrandLogo';
 
@@ -59,7 +60,8 @@ function BrandHeader() {
   );
 }
 
-type PartnerTab = 'friends' | 'invite';
+type PartnerTab = 'friends' | 'invite' | 'family';
+type WhoPlays = 'me' | 'family';
 type DoneState = {
   catName: string;
   p1Name: string;
@@ -83,6 +85,12 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
   const [selectedFriend, setSelectedFriend] = useState<RegisteredPlayer | null>(null);
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+
+  // Family-member state (only used when the organizer enabled it)
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [whoPlays, setWhoPlays] = useState<WhoPlays>('me');
+  const [player1FamilyId, setPlayer1FamilyId] = useState<string>('');   // family member playing as player1
+  const [selectedFamilyPartner, setSelectedFamilyPartner] = useState<FamilyMember | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +122,14 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
     setFriends(getFriendsForPlayer(user.id));
   }, [user]);
 
+  // Load the guardian's family members when user is available
+  useEffect(() => {
+    if (!user) { setFamilyMembers([]); return; }
+    setFamilyMembers(getFamilyMembers(user.id));
+  }, [user]);
+
+  const acceptsFamily = tournament?.config?.acceptsFamilyMembers === true;
+
   const filteredFriends = friendSearch.trim()
     ? friends.filter(f =>
         f.name.toLowerCase().includes(friendSearch.toLowerCase()) ||
@@ -134,9 +150,23 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
   const selectedCat: PersonalizadoCategory | undefined =
     tournament?.categories.find(c => c.id === selectedCatId);
 
+  const player1Member: FamilyMember | undefined =
+    acceptsFamily && whoPlays === 'family'
+      ? familyMembers.find(m => m.id === player1FamilyId)
+      : undefined;
+
   function canSubmit(): boolean {
     if (!selectedCat || !user) return false;
+    // Player 1: must pick a family member when "Un familiar" is selected
+    if (acceptsFamily && whoPlays === 'family' && !player1Member) return false;
+    // Player 2 (partner)
     if (partnerTab === 'friends') return selectedFriend !== null;
+    if (partnerTab === 'family') {
+      if (!selectedFamilyPartner) return false;
+      // Can't pick the same family member as both player1 and player2
+      if (player1Member && selectedFamilyPartner.id === player1Member.id) return false;
+      return true;
+    }
     return inviteName.trim().length > 0 && inviteEmail.trim().length > 0;
   }
 
@@ -146,16 +176,26 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
     setError(null);
     setSubmitting(true);
 
-    const isInvite = partnerTab === 'invite' && !selectedFriend;
-    const p2Id    = selectedFriend?.id;
-    const p2Name  = selectedFriend?.name ?? (isInvite ? inviteName.trim() : undefined);
-    const p2Email = selectedFriend?.email ?? (isInvite ? inviteEmail.trim() : undefined);
+    const isFamilyPartner = partnerTab === 'family' && !!selectedFamilyPartner;
+    const isInvite = partnerTab === 'invite' && !selectedFriend && !isFamilyPartner;
+
+    // Player 1: the guardian, or a family member they registered
+    const p1Name  = player1Member ? player1Member.fullName : user.name;
+    const p1Email = player1Member ? undefined : user.email;
+    const p1Id    = player1Member ? player1Member.id : user.id;
+
+    // Player 2: friend / family member / email invite
+    const p2Id    = selectedFriend?.id ?? (isFamilyPartner ? selectedFamilyPartner!.id : undefined);
+    const p2Name  = selectedFriend?.name
+      ?? (isFamilyPartner ? selectedFamilyPartner!.fullName : (isInvite ? inviteName.trim() : undefined));
+    const p2Email = selectedFriend?.email
+      ?? (isFamilyPartner ? undefined : (isInvite ? inviteEmail.trim() : undefined));
 
     const res = await registerTeam(code, {
       categoryId: selectedCat.id,
-      player1Name: user.name,
-      player1Email: user.email,
-      player1Id: user.id,
+      player1Name: p1Name,
+      player1Email: p1Email,
+      player1Id: p1Id,
       player2Name: p2Name,
       player2Email: p2Email,
       player2Id: p2Id,
@@ -194,7 +234,7 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
 
     setDone({
       catName: selectedCat.name,
-      p1Name: user.name,
+      p1Name,
       p2Name,
       waitlisted,
       invited: isInvite && !waitlisted,
@@ -415,9 +455,59 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
       {/* Registration form for selected category */}
       {selectedCat && (
         <form onSubmit={handleSubmit}>
-          {/* Player 1 — auto-filled from session */}
+          {/* ¿Quién juega? — only when the organizer accepts family members */}
+          {acceptsFamily && (
+            <div style={card}>
+              <span style={label}>¿Quién juega?</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {([{ v: 'me', l: 'Yo' }, { v: 'family', l: 'Un familiar' }] as const).map(o => (
+                  <button
+                    key={o.v}
+                    type="button"
+                    onClick={() => { setWhoPlays(o.v); setPlayer1FamilyId(''); }}
+                    style={{
+                      flex: 1, padding: '10px 16px', cursor: 'pointer',
+                      border: `2px solid ${whoPlays === o.v ? 'var(--black)' : 'var(--grey-200)'}`,
+                      background: whoPlays === o.v ? 'var(--black)' : '#fff',
+                      color: whoPlays === o.v ? '#fff' : 'var(--black)',
+                      fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase',
+                    }}
+                  >
+                    {o.l}
+                  </button>
+                ))}
+              </div>
+              {whoPlays === 'family' && (
+                <div style={{ marginTop: 14 }}>
+                  {familyMembers.length === 0 ? (
+                    <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>
+                      No tienes familiares registrados. Añádelos en tu perfil → Familia.
+                    </div>
+                  ) : (
+                    <>
+                      <label style={label}>Familiar que juega</label>
+                      <select
+                        value={player1FamilyId}
+                        onChange={e => setPlayer1FamilyId(e.target.value)}
+                        style={inputStyle}
+                      >
+                        <option value="">Elige un familiar…</option>
+                        {familyMembers.map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.fullName} — {RELATION_LABELS[m.relationType]} ({m.id})
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Player 1 — the guardian, or the selected family member */}
           <div style={card}>
-            <span style={label}>Jugador 1 — Tú</span>
+            <span style={label}>{player1Member ? 'Jugador 1 — Familiar' : 'Jugador 1 — Tú'}</span>
             <div style={{
               padding: '12px 14px', background: 'var(--grey-50, #fafafa)',
               border: '1px solid var(--grey-100)', display: 'flex', alignItems: 'center', gap: 12,
@@ -427,11 +517,13 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
                 color: 'var(--neon)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, flexShrink: 0,
               }}>
-                {user.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                {(player1Member ? player1Member.fullName : user.name).split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
               </div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--black)' }}>{user.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{user.email}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--black)' }}>{player1Member ? player1Member.fullName : user.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
+                  {player1Member ? `${RELATION_LABELS[player1Member.relationType]} · ${player1Member.id}` : user.email}
+                </div>
               </div>
             </div>
           </div>
@@ -442,11 +534,11 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
 
             {/* Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--grey-200)', marginBottom: 16 }}>
-              {(['friends', 'invite'] as PartnerTab[]).map(tab => (
+              {((acceptsFamily ? ['friends', 'invite', 'family'] : ['friends', 'invite']) as PartnerTab[]).map(tab => (
                 <button
                   key={tab}
                   type="button"
-                  onClick={() => { setPartnerTab(tab); setSelectedFriend(null); }}
+                  onClick={() => { setPartnerTab(tab); setSelectedFriend(null); setSelectedFamilyPartner(null); }}
                   style={{
                     padding: '8px 18px', border: 'none', cursor: 'pointer',
                     background: 'transparent',
@@ -457,7 +549,7 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
                     marginBottom: -1,
                   }}
                 >
-                  {tab === 'friends' ? '👥 Mis Amistades' : '✉️ Invitar'}
+                  {tab === 'friends' ? '👥 Mis Amistades' : tab === 'invite' ? '✉️ Invitar' : '👨‍👩‍👧 Familiar'}
                 </button>
               ))}
             </div>
@@ -532,6 +624,37 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
                   required={partnerTab === 'invite'}
                   style={inputStyle}
                 />
+              </div>
+            )}
+
+            {partnerTab === 'family' && (
+              <div>
+                {familyMembers.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--grey-400)', textAlign: 'center', padding: '20px 0' }}>
+                    No tienes familiares registrados. Añádelos en tu perfil → Familia.
+                  </div>
+                ) : (
+                  <>
+                    <label style={label}>Familiar como compañero/a</label>
+                    <select
+                      value={selectedFamilyPartner?.id ?? ''}
+                      onChange={e => setSelectedFamilyPartner(familyMembers.find(m => m.id === e.target.value) ?? null)}
+                      style={inputStyle}
+                    >
+                      <option value="">Elige un familiar…</option>
+                      {familyMembers.map(m => (
+                        <option key={m.id} value={m.id} disabled={player1Member?.id === m.id}>
+                          {m.fullName} — {RELATION_LABELS[m.relationType]} ({m.id})
+                        </option>
+                      ))}
+                    </select>
+                    {selectedFamilyPartner && player1Member?.id === selectedFamilyPartner.id && (
+                      <div style={{ fontSize: 12, color: '#b91c1c' }}>
+                        No puedes elegir al mismo familiar como jugador 1 y jugador 2.
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>

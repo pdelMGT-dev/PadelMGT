@@ -143,6 +143,8 @@ export const DEFAULT_SCORE_PHASE: ScorePhaseConfig = {
 
 export interface ControlPanelConfig {
   substitutionEnabled: boolean;
+  // organizer allows guardians to register a family member (minor, no account) in this tournament
+  acceptsFamilyMembers?: boolean;
   // score type, shared across phases; parameters below differ per phase (editable any time before that phase starts)
   scoreType: 'traditional' | 'points';
   scoreQualification: ScorePhaseConfig;
@@ -164,6 +166,7 @@ export interface ControlPanelConfig {
 
 export const DEFAULT_CONTROL_CONFIG: ControlPanelConfig = {
   substitutionEnabled: false,
+  acceptsFamilyMembers: false,
   scoreType: 'traditional',
   scoreQualification: { ...DEFAULT_SCORE_PHASE },
   scoreElimination: { ...DEFAULT_SCORE_PHASE },

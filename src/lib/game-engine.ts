@@ -168,6 +168,7 @@ export interface ActiveGame {
   reorganizationRequestedAt?: string;
   leagueId?: string;   // player-created league this game belongs to
   seasonId?: string;   // league season this game belongs to
+  acceptsFamilyMembers?: boolean; // organizer allows guardians to register family members (minors)
 }
 
 export interface KnockoutConfig {

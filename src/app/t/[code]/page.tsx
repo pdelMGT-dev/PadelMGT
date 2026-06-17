@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { getTournamentByCode, saveTournament } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
 import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, type JoinRequest } from '@/lib/join-request-store';
+import { getFamilyMembers, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import KnockoutBracketView from '@/components/KnockoutBracketView';
 import WorldCupBracketView from '@/components/WorldCupBracketView';
@@ -51,6 +52,12 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
   const [joinError, setJoinError] = useState('');
   const [shareUrl, setShareUrl] = useState('');
   const [sbLoading, setSbLoading] = useState(false);
+
+  // Family-member inscription (only when the organizer enabled it)
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [selectedFamilyId, setSelectedFamilyId] = useState('');
+  const [familyJoinSent, setFamilyJoinSent] = useState(false);
+  const [familyJoinError, setFamilyJoinError] = useState('');
 
   // New state for tabs, display mode, and last-updated timestamp
   const [activeTab, setActiveTab] = useState<'groups' | 'bracket'>('groups');
@@ -139,6 +146,12 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
     return () => clearInterval(interval);
   }, [code]);
 
+  // Load the guardian's family members when logged in.
+  useEffect(() => {
+    if (currentUser) setFamilyMembers(getFamilyMembers(currentUser.id));
+    else setFamilyMembers([]);
+  }, [currentUser?.id]);
+
   function handleJoin(entityId: string) {
     if (!currentUser) return;
     const name = (joinName.trim() || currentUser.name || '').trim();
@@ -146,6 +159,20 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
     submitJoinRequest(entityId, 'tournament', currentUser.id, name, currentUser.email);
     setJoinSent(true);
     setJoinError('');
+  }
+
+  function handleJoinFamily(entityId: string) {
+    if (!currentUser) return;
+    const member = familyMembers.find(m => m.id === selectedFamilyId);
+    if (!member) { setFamilyJoinError('Elegí un familiar'); return; }
+    submitJoinRequest(entityId, 'tournament', member.id, member.fullName, undefined, {
+      isFamilyMember: true,
+      guardianId: currentUser.id,
+      guardianName: currentUser.name,
+      familyMemberId: member.id,
+    });
+    setFamilyJoinSent(true);
+    setFamilyJoinError('');
   }
 
   const t = tournament;
@@ -713,6 +740,39 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
                       </div>
                     </div>
                   )
+                )}
+                {/* Family-member inscription — only when organizer enabled it and the guardian is logged in */}
+                {canJoin && currentUser && t.acceptsFamilyMembers && (
+                  <div style={{ marginTop: 16, background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.3)', padding: 24 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Inscribir a un familiar</div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 16 }}>Inscribí a un familiar menor sin cuenta propia.</div>
+                    {familyJoinSent ? (
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--neon)' }}>✓ Solicitud del familiar enviada. El organizador la confirmará.</div>
+                    ) : familyMembers.length === 0 ? (
+                      <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
+                        No tenés familiares registrados. Añadilos en tu perfil → Familia.
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <select
+                            value={selectedFamilyId}
+                            onChange={e => setSelectedFamilyId(e.target.value)}
+                            style={{ flex: 1, minWidth: 180, padding: '10px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontSize: 13, outline: 'none' }}
+                          >
+                            <option value="">Elegí un familiar…</option>
+                            {familyMembers.map(m => (
+                              <option key={m.id} value={m.id} style={{ color: '#000' }}>
+                                {m.fullName} — {RELATION_LABELS[m.relationType]} ({m.id})
+                              </option>
+                            ))}
+                          </select>
+                          <button onClick={() => handleJoinFamily(t.id)} style={{ padding: '10px 20px', background: 'var(--neon)', color: '#000', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Solicitar inscripción del familiar</button>
+                        </div>
+                        {familyJoinError && <div style={{ fontSize: 12, color: '#f87171', marginTop: 8 }}>{familyJoinError}</div>}
+                      </>
+                    )}
+                  </div>
                 )}
                 {!canJoin && t.status !== 'created' && (
                   <div style={{ padding: '16px 20px', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>

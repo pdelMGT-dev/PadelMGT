@@ -243,6 +243,7 @@ export default function PlayerTournamentsPage() {
   const [tDeuce, setTDeuce] = useState<'ventaja' | 'oro' | 'plata' | 'ipf'>('oro');
   const [tPjTarget, setTPjTarget] = useState(4);      // round_robin: games per player
   const [tAllowTies, setTAllowTies] = useState(false); // round_robin: allow set tie (6-6)
+  const [tAcceptsFamily, setTAcceptsFamily] = useState(false); // organizer allows family-member inscription
 
   // ── Knockout config ──────────────────────────────────────────────────────────
   const [tKOHasGroups, setTKOHasGroups] = useState(false);
@@ -431,6 +432,7 @@ export default function PlayerTournamentsPage() {
     setTFormat(null); setTModalidad('individual'); setTMixto(false);
     setTMaxPlayers(8); setTCourts(2); setTScoreType('points');
     setTPtTarget(24); setTSets(1); setTGames(6); setTTiebreak(7); setTDeuce('oro');
+    setTAcceptsFamily(false);
     setTPlayers([]); setTInvited([]); setTCreatorInGame(true);
     setTPlayerTab('friends'); setTFriendList([]); setTSearchQ(''); setTSearchResults([]);
     setTProvName(''); setTShowProvInput(false); setTShowAddPanel(false);
@@ -527,6 +529,7 @@ export default function PlayerTournamentsPage() {
         currentPhase: tKOHasGroups ? 'group_stage' : 'bracket',
       } : undefined,
       groupScoreConfig,
+      acceptsFamilyMembers: tAcceptsFamily,
     });
 
     if (tPairsLocked && tPairAssignments.length > 0) {
@@ -1138,6 +1141,23 @@ export default function PlayerTournamentsPage() {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Card 2c: Participantes (familiares) */}
+          {tFormat && (
+            <div style={card}>
+              <div style={secTitle}>Participantes</div>
+              <div style={{ fontSize: 12, color: 'var(--grey-500)', marginBottom: 12 }}>Permite que un responsable inscriba a un familiar menor sin cuenta propia.</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {([{ label: 'No', val: false }, { label: 'Sí', val: true }] as const).map(o => (
+                  <button key={String(o.val)} onClick={() => setTAcceptsFamily(o.val)}
+                    style={{ padding: '10px 20px', border: `2px solid ${tAcceptsFamily === o.val ? 'var(--black)' : 'var(--grey-200)'}`, background: tAcceptsFamily === o.val ? 'var(--black)' : '#fff', color: tAcceptsFamily === o.val ? '#fff' : 'var(--black)', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase' }}>
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 8 }}>Acepta participantes familiares (menores)</div>
             </div>
           )}
 

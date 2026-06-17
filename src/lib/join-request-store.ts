@@ -18,6 +18,11 @@ export type JoinRequest = {
   playerEmail?: string;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
+  // Family-member inscription (Flow A: guardian registers a minor without an account)
+  isFamilyMember?: boolean;
+  guardianId?: string;
+  guardianName?: string;
+  familyMemberId?: string;
 };
 
 const _store = createLocalStore<JoinRequest[]>('padelmgt_join_requests', [], { seedOnFirstLoad: false });
@@ -52,12 +57,14 @@ export function submitJoinRequest(
   playerId: string,
   playerName: string,
   playerEmail?: string,
+  opts?: { isFamilyMember?: boolean; guardianId?: string; guardianName?: string; familyMemberId?: string },
 ): JoinRequest {
   const req: JoinRequest = {
     id: crypto.randomUUID(),
     entityId, entityType, playerId, playerName, playerEmail,
     status: 'pending',
     createdAt: new Date().toISOString(),
+    ...opts,
   };
   _store.persist([..._store.load(), req]);
   // Fire-and-forget to Supabase — creator will see it via syncJoinRequests()

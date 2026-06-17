@@ -514,6 +514,18 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
           </div>
 
           <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 12 }}>Participantes familiares</div>
+            <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 12, lineHeight: 1.6 }}>
+              Permite a un responsable inscribir a un familiar menor (sin cuenta) en este torneo.
+            </div>
+            <Toggle
+              on={config.acceptsFamilyMembers ?? false}
+              onChange={v => patchConfig({ acceptsFamilyMembers: v })}
+              labelOn="Acepta participantes familiares (menores)" labelOff="Solo cuentas propias"
+            />
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--grey-100)', paddingTop: 18 }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 12 }}>Tabla de puntos (clasificación de grupos)</div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               <div><label style={lbl}>Victoria</label>

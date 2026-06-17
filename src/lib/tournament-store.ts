@@ -69,6 +69,7 @@ export function createTournament(params: {
   pjTarget?: number;
   knockoutConfig?: KnockoutConfig;
   groupScoreConfig?: ScoreConfig;
+  acceptsFamilyMembers?: boolean;
 }): Tournament {
   const t: Tournament = {
     id: generateId(),
@@ -97,6 +98,7 @@ export function createTournament(params: {
     pjTarget: params.pjTarget,
     knockoutConfig: params.knockoutConfig,
     groupScoreConfig: params.groupScoreConfig,
+    acceptsFamilyMembers: params.acceptsFamilyMembers,
     createdAt: new Date().toISOString(),
   };
   saveTournament(t);

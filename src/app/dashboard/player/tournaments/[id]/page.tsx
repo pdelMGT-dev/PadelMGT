@@ -1158,7 +1158,14 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                     {req.playerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{req.playerName}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      {req.playerName}
+                      {req.isFamilyMember && (
+                        <span style={{ marginLeft: 8, padding: '2px 8px', background: 'rgba(167,139,250,0.15)', color: '#7c3aed', fontSize: 10, fontWeight: 700, borderRadius: 4 }}>
+                          Familiar de {req.guardianName}
+                        </span>
+                      )}
+                    </div>
                     {req.playerEmail && <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{req.playerEmail}</div>}
                   </div>
                   {t.players.length < t.maxPlayers && (
