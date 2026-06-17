@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import Link from 'next/link';
 import { LayoutGrid, List } from 'lucide-react';
 import { getSAClubs, getSAClubsFromSupabase, type SAClub } from '@/lib/superadmin-data';
 import {
@@ -112,7 +113,12 @@ function ClubCard({
       <div style={{ padding: '12px 20px', borderTop: '1px solid var(--grey-100)' }}>
         {joined ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ flex: 1, fontSize: 12, color: 'var(--turf-green)', fontWeight: 700 }}>✓ Ya sos miembro</span>
+            <Link
+              href={`/dashboard/player/clubs/${club.id}`}
+              style={{ flex: 1, fontSize: 12, color: 'var(--black)', fontWeight: 700, textDecoration: 'none' }}
+            >
+              Ver detalles →
+            </Link>
             <button
               onClick={() => memberId && onLeave(club.id)}
               style={{ fontSize: 11, color: 'var(--grey-400)', background: 'none', border: '1px solid var(--grey-200)', padding: '5px 12px', cursor: 'pointer', fontWeight: 600 }}
@@ -121,16 +127,24 @@ function ClubCard({
             </button>
           </div>
         ) : (
-          <button
-            onClick={() => onJoin(club)}
-            style={{
-              width: '100%', padding: '10px', background: 'var(--black)', color: '#fff',
-              border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-              letterSpacing: '0.04em', textTransform: 'uppercase',
-            }}
-          >
-            Seleccionar Club →
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Link
+              href={`/dashboard/player/clubs/${club.id}`}
+              style={{ flex: 1, padding: '10px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'center', textDecoration: 'none', color: 'var(--grey-700)', letterSpacing: '0.02em' }}
+            >
+              Ver detalles
+            </Link>
+            <button
+              onClick={() => onJoin(club)}
+              style={{
+                flex: 2, padding: '10px', background: 'var(--black)', color: '#fff',
+                border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                letterSpacing: '0.04em', textTransform: 'uppercase',
+              }}
+            >
+              Unirse →
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -183,7 +197,13 @@ function ClubListRow({
           )}
         </div>
       </div>
-      <div style={{ flexShrink: 0 }}>
+      <div style={{ flexShrink: 0, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <Link
+          href={`/dashboard/player/clubs/${club.id}`}
+          style={{ padding: '6px 14px', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, color: 'var(--grey-600)', textDecoration: 'none', whiteSpace: 'nowrap' }}
+        >
+          Ver →
+        </Link>
         {joined ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: 'var(--turf-green)', fontWeight: 700 }}>✓ Miembro</span>

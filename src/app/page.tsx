@@ -190,6 +190,47 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── TORNEO PERSONALIZADO BANNER ── */}
+      <section style={{ position: 'relative', overflow: 'hidden', background: '#0a0a0a', color: '#fff', padding: 'clamp(64px, 8vw, 100px) clamp(20px, 4vw, 48px)' }}>
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/assets/court-dark.svg)', backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.12 }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 55%, rgba(0,0,0,0.9) 100%)' }} />
+        <div style={{ position: 'relative', maxWidth: 1760, margin: '0 auto' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+            <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 10, fontWeight: 800, letterSpacing: '0.2em', padding: '4px 12px', textTransform: 'uppercase' }}>NUEVO</span>
+            <span style={{ fontSize: 11, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.45)', fontWeight: 600, textTransform: 'uppercase' }}>Torneo Personalizado</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'clamp(40px, 6vw, 80px)', alignItems: 'center' }}>
+            <div>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(44px, 6.5vw, 96px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.025em', lineHeight: 0.92, margin: '0 0 28px', color: '#fff' }}>
+                TU TORNEO.<br /><span style={{ color: 'var(--neon)' }}>TUS REGLAS.</span>
+              </h2>
+              <p style={{ fontSize: 'clamp(14px, 1.4vw, 17px)', color: 'rgba(255,255,255,0.68)', maxWidth: 540, lineHeight: 1.7, margin: '0 0 36px' }}>
+                Diseña torneos a medida: define grupos, cuadro eliminatorio y categorías propias. Invita jugadores por link de inscripción. Todo automatizado — sin hojas de cálculo.
+              </p>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <Link href="/signup" className="btn btn-on-dark btn-lg">Crear mi Torneo →</Link>
+                <Link href="/tournaments" className="btn btn-outline-dark btn-lg">Ver formatos</Link>
+              </div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', padding: '32px 40px', minWidth: 280, flexShrink: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', marginBottom: 24 }}>Precio por torneo</div>
+              {[
+                { label: 'Hasta 8 equipos', price: '$9' },
+                { label: 'Hasta 16 equipos', price: '$19' },
+                { label: 'Hasta 32 equipos', price: '$29' },
+                { label: 'Más de 32 equipos', price: '$49' },
+              ].map((tier, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 0', borderBottom: i < 3 ? '1px solid rgba(255,255,255,0.07)' : 'none', gap: 24 }}>
+                  <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.72)', whiteSpace: 'nowrap' }}>{tier.label}</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 600, color: '#fff' }}>{tier.price}</span>
+                </div>
+              ))}
+              <div style={{ marginTop: 22, fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', letterSpacing: '0.06em' }}>Pago único · Sin suscripción</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── LIVE MATCHES ── */}
       <section style={{ background: '#111', color: '#fff', padding: 'clamp(64px, 8vw, 120px) clamp(20px, 4vw, 48px)' }}>
         <div style={{ maxWidth: 1760, margin: '0 auto' }}>
