@@ -8,7 +8,6 @@ import {
   getPersonalizado,
   loadPersonalizadoById,
   savePersonalizado,
-  calcOpeningPrice,
   changeTeamStatus,
   clearTeamPartner,
   registerTeam,
@@ -22,6 +21,13 @@ import { sendPersonalizadoStatusEmail } from '@/lib/email';
 import { searchPlayers, type RegisteredPlayer } from '@/lib/player-store';
 import { useToast } from '@/components/ToastProvider';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import {
+  fetchPersonalizadoPricing,
+  resolvePrice,
+  totalTeamsOf,
+  DEFAULT_PERSONALIZADO_PRICING,
+  type PersonalizadoPricingConfig,
+} from '@/lib/personalizado-pricing';
 
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
@@ -132,6 +138,14 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
 
+  // ── Opening pricing + promo code ────────────────────────────────────────────
+  const [pricingConfig, setPricingConfig] = useState<PersonalizadoPricingConfig>(DEFAULT_PERSONALIZADO_PRICING);
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedCode, setAppliedCode] = useState('');
+  const [codedPrice, setCodedPrice] = useState<number | null>(null);
+  const [promoFeedback, setPromoFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [validatingPromo, setValidatingPromo] = useState(false);
+
   // ── Rejection modal ──────────────────────────────────────────────────────────
   const [rejectModal, setRejectModal] = useState<{ teamId: string; teamName: string; catName: string; hasPartner: boolean; p1Name: string; p2Name?: string; p1Email?: string; p2Email?: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -188,19 +202,69 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     return () => { active = false; };
   }, [id]);
 
+  // Load the live pricing config so the organizer sees the SA-configured price.
+  useEffect(() => {
+    fetchPersonalizadoPricing().then(setPricingConfig).catch(() => {});
+  }, []);
+
   // Access guard: this is the organizer management view — creator or co-creators only.
   const accessDenied = !!tournament && !canManagePersonalizado(tournament, currentUser?.id);
+
+  // Base/auto price from the public config; a validated code overrides via codedPrice.
+  const totalTeams = tournament ? totalTeamsOf(tournament.categories) : 0;
+  const autoPreview = resolvePrice(pricingConfig, totalTeams, null);
+
+  async function applyPromoCode() {
+    const t = tournament ?? getPersonalizado(id);
+    if (!t || !promoInput.trim()) return;
+    setValidatingPromo(true);
+    setPromoFeedback(null);
+    try {
+      const res = await fetch('/api/personalizado-pricing/validate-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId: t.id, code: promoInput.trim() }),
+      });
+      const data = await res.json() as { finalPrice?: number; basePrice?: number; appliedPromo?: { code: string } | null; reason?: string | null };
+      if (data.reason) {
+        setPromoFeedback({ ok: false, msg: data.reason });
+        setAppliedCode('');
+        setCodedPrice(null);
+      } else if (data.appliedPromo && typeof data.finalPrice === 'number') {
+        setAppliedCode(promoInput.trim().toUpperCase());
+        setCodedPrice(data.finalPrice);
+        setPromoFeedback({ ok: true, msg: data.finalPrice === 0 ? 'Código aplicado — ¡torneo gratis!' : `Código aplicado — nuevo precio $${data.finalPrice}` });
+      } else {
+        setPromoFeedback({ ok: false, msg: 'El código no modifica el precio' });
+      }
+    } catch {
+      setPromoFeedback({ ok: false, msg: 'No se pudo validar el código' });
+    }
+    setValidatingPromo(false);
+  }
+
+  function clearPromoCode() {
+    setAppliedCode('');
+    setCodedPrice(null);
+    setPromoInput('');
+    setPromoFeedback(null);
+  }
 
   async function handleOpenRegistration() {
     const t = tournament ?? getPersonalizado(id);
     if (!t) return;
     setOpening(true);
     try {
-      const price = calcOpeningPrice(t);
       const res = await fetch('/api/stripe/open-registration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tournamentId: t.id, tournamentCode: t.code, price, userEmail: undefined }),
+        body: JSON.stringify({
+          tournamentId: t.id,
+          tournamentCode: t.code,
+          price: codedPrice ?? autoPreview.finalPrice,
+          promoCode: appliedCode || undefined,
+          userEmail: currentUser?.email,
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) { alert(data.error || 'No se pudo iniciar el pago'); setOpening(false); return; }
@@ -363,7 +427,10 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   }
 
   const registrationUrl = `${origin}/inscripcion/${tournament.code}`;
-  const openPrice = calcOpeningPrice(tournament);
+  const openBasePrice = autoPreview.basePrice;
+  const openPrice = codedPrice ?? autoPreview.finalPrice;
+  const hasDiscount = openPrice < openBasePrice;
+  const openPromoBadge = appliedCode || autoPreview.appliedPromo?.displayBadge || 'PROMO';
 
   return (
     <div style={{ padding: '40px clamp(16px, 4vw, 48px) 80px' }}>
@@ -563,12 +630,49 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
           <div style={secTitle}>Abrir Inscripción</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--black)', marginBottom: 6 }}>${openPrice}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
+                <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--black)' }}>
+                  {openPrice === 0 ? 'GRATIS' : `$${openPrice}`}
+                </div>
+                {hasDiscount && (
+                  <span style={{ fontSize: 15, color: 'var(--grey-400)', textDecoration: 'line-through' }}>${openBasePrice}</span>
+                )}
+                {hasDiscount && (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--neon)', color: 'var(--black)', padding: '3px 8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    {openPromoBadge}
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize: 13, color: 'var(--grey-400)', lineHeight: 1.6, maxWidth: 480 }}>Al pagar, se activará el registro público. Los participantes podrán inscribirse escaneando el código QR.</div>
             </div>
             <button onClick={handleOpenRegistration} disabled={opening} style={{ padding: '13px 28px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: opening ? 'wait' : 'pointer', opacity: opening ? 0.6 : 1, fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
-              {opening ? 'Redirigiendo…' : `Abrir Inscripción — $${openPrice}`}
+              {opening ? 'Redirigiendo…' : openPrice === 0 ? 'Abrir Inscripción — Gratis' : `Abrir Inscripción — $${openPrice}`}
             </button>
+          </div>
+
+          {/* Promo code */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+            {appliedCode ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                <span style={{ fontFamily: 'monospace', fontWeight: 700, background: 'var(--black)', color: 'var(--neon)', padding: '4px 10px' }}>{appliedCode}</span>
+                <button onClick={clearPromoCode} style={{ background: 'none', border: 'none', color: 'var(--grey-400)', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Quitar</button>
+              </div>
+            ) : (
+              <>
+                <input
+                  value={promoInput}
+                  onChange={e => setPromoInput(e.target.value.toUpperCase())}
+                  placeholder="¿Tenés un código?"
+                  style={{ padding: '9px 12px', border: '1px solid var(--grey-200)', fontSize: 13, fontFamily: 'monospace', outline: 'none', width: 180 }}
+                />
+                <button onClick={applyPromoCode} disabled={validatingPromo || !promoInput.trim()} style={{ padding: '9px 16px', background: '#fff', border: '1px solid var(--grey-300)', cursor: validatingPromo ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {validatingPromo ? '…' : 'Aplicar'}
+                </button>
+              </>
+            )}
+            {promoFeedback && (
+              <span style={{ fontSize: 12, fontWeight: 600, color: promoFeedback.ok ? 'var(--turf-green)' : '#b91c1c' }}>{promoFeedback.msg}</span>
+            )}
           </div>
           <div style={{ padding: '10px 14px', background: 'rgba(0,0,0,0.03)', border: '1px solid var(--grey-100)', fontSize: 12, color: 'var(--grey-400)' }}>
             ℹ️ El torneo está en borrador. Una vez abierto, se generará un QR único para cada categoría que podrás compartir con los participantes.

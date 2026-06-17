@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { tournamentFormats, ongoingTournaments } from '@/lib/data';
 import { getSATournamentsFromSupabase } from '@/lib/superadmin-data';
+import { fetchPersonalizadoPricing, tierLabelInList, type PricingTier, type PersonalizadoPromo } from '@/lib/personalizado-pricing';
 
 const statusLabel: Record<string, string> = { ongoing: 'En Vivo', upcoming: 'Por Empezar', completed: 'Finalizado', active: 'En Vivo', upcoming_sa: 'Por Empezar' };
 
@@ -12,6 +13,15 @@ export default function TournamentsPage() {
     id: string; name: string; format: string; club: string; city: string;
     players: number; maxPlayers: number; level: string; prize?: string; startDate: string; status: string;
   }[]);
+  const [pzTiers, setPzTiers] = useState<PricingTier[]>([]);
+  const [pzPromo, setPzPromo] = useState<PersonalizadoPromo | null>(null);
+
+  useEffect(() => {
+    fetchPersonalizadoPricing().then(cfg => {
+      setPzTiers(cfg.tiers);
+      setPzPromo(cfg.promos.find(p => p.displayOnPricing) ?? null);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     getSATournamentsFromSupabase().then(sb => {
@@ -105,18 +115,24 @@ export default function TournamentsPage() {
               <Link href="/signup" className="btn btn-on-dark btn-lg">Crear mi Torneo →</Link>
             </div>
             <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', padding: '28px 36px', minWidth: 260, flexShrink: 0 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', marginBottom: 20 }}>Precio por torneo</div>
-              {[
-                { label: 'Hasta 8 equipos', price: '$9' },
-                { label: 'Hasta 16 equipos', price: '$19' },
-                { label: 'Hasta 32 equipos', price: '$29' },
-                { label: 'Más de 32 equipos', price: '$49' },
-              ].map((tier, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 0', borderBottom: i < 3 ? '1px solid rgba(255,255,255,0.07)' : 'none', gap: 20 }}>
-                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)', whiteSpace: 'nowrap' }}>{tier.label}</span>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: '#fff' }}>{tier.price}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase' }}>Precio por torneo</div>
+                {pzPromo?.displayBadge && (
+                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', background: 'var(--neon)', color: 'var(--black)', padding: '3px 8px', textTransform: 'uppercase' }}>{pzPromo.displayBadge}</span>
+                )}
+              </div>
+              {(pzTiers.length ? pzTiers : [
+                { id: 'a', maxTeams: 8, price: 9 }, { id: 'b', maxTeams: 16, price: 19 },
+                { id: 'c', maxTeams: 32, price: 29 }, { id: 'd', maxTeams: null, price: 49 },
+              ] as PricingTier[]).map((tier, i, arr) => (
+                <div key={tier.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 0', borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.07)' : 'none', gap: 20 }}>
+                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)', whiteSpace: 'nowrap' }}>{tierLabelInList(tier, arr)}</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: '#fff' }}>${tier.price}</span>
                 </div>
               ))}
+              {pzPromo?.displayText && (
+                <div style={{ marginTop: 12, fontSize: 12, color: 'var(--neon)', textAlign: 'center', fontWeight: 600 }}>{pzPromo.displayText}</div>
+              )}
               <div style={{ marginTop: 18, fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', letterSpacing: '0.06em' }}>Pago único · Sin suscripción</div>
             </div>
           </div>

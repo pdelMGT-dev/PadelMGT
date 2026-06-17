@@ -7,6 +7,12 @@ import { createPersonalizado, type PersonalizadoCategory } from '@/lib/personali
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getPlayerClubs } from '@/lib/club-membership-store';
 import { getSAClubs } from '@/lib/superadmin-data';
+import {
+  fetchPersonalizadoPricing,
+  resolvePrice,
+  DEFAULT_PERSONALIZADO_PRICING,
+  type PersonalizadoPricingConfig,
+} from '@/lib/personalizado-pricing';
 
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
@@ -158,6 +164,12 @@ export default function PersonalizadoWizardPage() {
   // Step 2 fields
   const [categories, setCategories] = useState<PersonalizadoCategory[]>([makeCategory({ name: 'Categoría A' })]);
 
+  // Live pricing config (SA-controlled)
+  const [pricingConfig, setPricingConfig] = useState<PersonalizadoPricingConfig>(DEFAULT_PERSONALIZADO_PRICING);
+  useEffect(() => {
+    fetchPersonalizadoPricing().then(setPricingConfig).catch(() => {});
+  }, []);
+
   function updateCategory(idx: number, patch: Partial<PersonalizadoCategory>) {
     setCategories(prev => prev.map((c, i) => i === idx ? { ...c, ...patch } : c));
   }
@@ -179,8 +191,8 @@ export default function PersonalizadoWizardPage() {
   // Step 3 review
   const totalSlots = categories.reduce((s, c) => s + c.maxTeams, 0);
 
-  // Compute opening price based on total slots
-  const openPrice = totalSlots <= 16 ? 9 : totalSlots <= 32 ? 19 : totalSlots <= 64 ? 29 : 49;
+  // Compute opening price from the SA-configured tiers (auto promos applied).
+  const openPrice = resolvePrice(pricingConfig, totalSlots).finalPrice;
 
   function handleCreate() {
     if (!user) return;

@@ -69,6 +69,21 @@ El flujo completo existe y funciona:
   - Botón Unirse/Salir inline
 - `src/app/api/clubs/rating/route.ts` — GET (promedio + rating del usuario) / POST (upsert)
 
+### Precios y Promociones del Torneo Personalizado — COMPLETO (SA editable)
+
+Fuente única de verdad: `platform_config` key `personalizado_pricing` (tramos + promos).
+
+- `src/lib/personalizado-pricing.ts` — tipos, defaults, `resolvePrice()`, `tierLabelInList()`, `describeEffect()`, cache local + `fetchPersonalizadoPricing()`.
+- `src/app/api/personalizado-pricing/route.ts` — GET público (tramos + solo promos `displayOnPricing`/automáticas; oculta códigos secretos).
+- `src/app/api/personalizado-pricing/validate-code/route.ts` — POST valida un código server-side recomputando equipos desde Supabase.
+- `src/app/api/sa/personalizado-pricing/route.ts` — GET/POST SA (protegido con `requireSARequest`); guarda config completa.
+- `src/app/superadmin/plans/page.tsx` — nuevo tab **"Torneo Personalizado"**: editor de tramos (añadir/eliminar, tramo catch-all "Más de…") + editor de promos (modal con tipos: %, monto fijo, gratis, precio especial por fecha, override por tramo; fechas, usos máx, visibilidad pública).
+- Tipos de promo soportados: `percent`, `fixed`, `free`, `flat_price` (precio especial entre fechas), `tier_override`.
+- Cobro: `/api/stripe/open-registration` **recomputa el precio server-side** desde la config + equipos del torneo + código (ya no confía en el precio del cliente); promos `free` (precio 0) abren sin Stripe; trackeo best-effort de `usedCount`.
+- Display sincronizado en: `src/app/page.tsx`, `src/app/tournaments/page.tsx`, wizard `personalizado/page.tsx` y panel `personalizado/[id]/page.tsx` (con input de código + precio tachado/badge).
+- Unificación: se corrigió la inconsistencia previa (cobro usaba ≤16/≤32/≤64, web mostraba 8/16/32). Default canónico: Hasta 8/16/32 → $9/$19/$29, Más de 32 → $49.
+- Stripe: se mantiene **monto dinámico** (`price_data`), descuentos calculados en nuestro lado. No se crean Productos/Precios/Cupones en Stripe.
+
 ---
 
 ## Archivos clave activos
