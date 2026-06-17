@@ -115,7 +115,8 @@ export async function POST(request: NextRequest) {
       metadata: { tournamentId, tournamentCode, kind: 'personalizado_open_registration', ...(promoCode ? { promoCode } : {}) },
     });
 
-    await bumpRedemption();
+    // Redemption count is updated by the Stripe webhook on checkout.session.completed,
+    // so we don't bump here — this avoids counting abandoned checkout sessions.
     return NextResponse.json({ url: session.url });
   } catch (err) {
     console.error('[Stripe] open-registration error:', err);
