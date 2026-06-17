@@ -1,0 +1,1614 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PadelMGT — Conceptos Diseño Mobile</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --black: #111111;
+    --white: #FFFFFF;
+    --neon: #d6ff00;
+    --court-blue: #1a4ed8;
+    --court-blue-deep: #0a1638;
+    --turf-green: #1eaa52;
+    --text-secondary: #707072;
+    --grey-50: #FAFAFA;
+    --grey-100: #F5F5F5;
+    --grey-200: #E5E5E5;
+    --grey-300: #CACACB;
+    --grey-700: #39393B;
+    --grey-800: #28282A;
+    --grey-900: #1F1F21;
+    --font-display: 'Oswald', 'Helvetica Neue Condensed', Arial, sans-serif;
+    --font-body: 'Inter', Helvetica, Arial, sans-serif;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background: #0d0d12;
+    color: #fff;
+    min-height: 100vh;
+    padding: 40px 20px 80px;
+  }
+
+  /* ── HEADER ─────────────────────────────────────────────── */
+  .page-header {
+    text-align: center;
+    margin-bottom: 60px;
+  }
+  .page-header .logo {
+    font-family: var(--font-display);
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--neon);
+  }
+  .page-header .logo span { color: #fff; }
+  .page-header p {
+    font-size: 16px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    letter-spacing: 0.5px;
+  }
+  .page-header .tag {
+    display: inline-block;
+    background: rgba(214,255,0,0.12);
+    border: 1px solid rgba(214,255,0,0.3);
+    color: var(--neon);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 100px;
+    margin-bottom: 16px;
+  }
+
+  /* ── DESIGN SYSTEM SECTION ──────────────────────────────── */
+  .ds-section {
+    max-width: 1100px;
+    margin: 0 auto 70px;
+    padding: 36px 40px;
+    background: #16161e;
+    border: 1px solid #2a2a35;
+    border-radius: 24px;
+  }
+  .ds-title {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--grey-300);
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .ds-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #2a2a35;
+  }
+
+  /* Palette */
+  .palette { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 36px; }
+  .swatch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .swatch-color {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .swatch-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text-secondary);
+    line-height: 1.3;
+    letter-spacing: 0.3px;
+  }
+  .swatch-hex { color: #fff; font-size: 11px; font-weight: 500; }
+
+  /* Typography row */
+  .typo-row { display: flex; gap: 40px; flex-wrap: wrap; margin-bottom: 36px; }
+  .typo-block { flex: 1; min-width: 200px; }
+  .typo-sample-oswald {
+    font-family: var(--font-display);
+    font-size: 36px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+    letter-spacing: 1px;
+  }
+  .typo-sample-inter {
+    font-family: var(--font-body);
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .typo-tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--grey-700);
+    margin-bottom: 6px;
+  }
+
+  /* Buttons showcase */
+  .btn-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .ds-btn {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 22px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .ds-btn.neon    { background: var(--neon); color: #111; border-radius: 100px; }
+  .ds-btn.blue    { background: var(--court-blue); color: #fff; border-radius: 100px; }
+  .ds-btn.green   { background: var(--turf-green); color: #fff; border-radius: 100px; }
+  .ds-btn.outline { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.25); border-radius: 100px; }
+  .ds-btn.ghost   { background: rgba(255,255,255,0.07); color: #fff; border-radius: 100px; }
+  .ds-btn.dark    { background: var(--grey-900); color: #fff; border-radius: 100px; }
+
+  /* ── CONCEPTS GRID ──────────────────────────────────────── */
+  .concepts-header {
+    text-align: center;
+    margin-bottom: 50px;
+  }
+  .concepts-header h2 {
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #fff;
+  }
+  .concepts-header p { color: var(--text-secondary); margin-top: 8px; font-size: 15px; }
+
+  .concepts-grid {
+    display: flex;
+    justify-content: center;
+    gap: 48px;
+    flex-wrap: wrap;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  /* Phone frame wrapper */
+  .concept-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .concept-label {
+    text-align: center;
+  }
+  .concept-label .num {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--neon);
+    opacity: 0.7;
+  }
+  .concept-label h3 {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #fff;
+    margin-top: 2px;
+  }
+  .concept-label p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    max-width: 280px;
+  }
+
+  .phone-frame {
+    width: 320px;
+    height: 680px;
+    border-radius: 44px;
+    border: 2px solid #3a3a4a;
+    box-shadow:
+      0 0 0 6px #1a1a24,
+      0 40px 80px rgba(0,0,0,0.7),
+      0 0 80px rgba(214,255,0,0.04);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  /* Notch */
+  .phone-frame::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90px;
+    height: 6px;
+    border-radius: 100px;
+    z-index: 100;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     CONCEPT 1 — DARK COURT
+  ═══════════════════════════════════════════════════════════ */
+  .c1-frame {
+    background: linear-gradient(160deg, #0a1638 0%, #111111 100%);
+    font-family: var(--font-body);
+  }
+  .c1-frame::before { background: rgba(255,255,255,0.12); }
+
+  /* Status bar */
+  .c1-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 22px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.6);
+  }
+
+  /* Header */
+  .c1-header {
+    padding: 6px 22px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .c1-greeting {
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .c1-name {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    line-height: 1;
+    margin-top: 1px;
+  }
+  .c1-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 100%;
+    background: linear-gradient(135deg, #1a4ed8, #d6ff00);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: #111;
+  }
+
+  /* Court hero */
+  .c1-court-hero {
+    margin: 0 16px 14px;
+    background: linear-gradient(135deg, #0d2a6e 0%, #0a1638 100%);
+    border-radius: 20px;
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+    height: 130px;
+  }
+  .c1-court-lines {
+    position: absolute;
+    inset: 0;
+    opacity: 0.12;
+  }
+  .c1-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(214,255,0,0.15);
+    border: 1px solid rgba(214,255,0,0.4);
+    color: var(--neon);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 100px;
+    margin-bottom: 8px;
+  }
+  .c1-live-dot {
+    width: 5px;
+    height: 5px;
+    background: var(--neon);
+    border-radius: 100%;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .c1-match-title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+  }
+  .c1-score-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+  }
+  .c1-team { font-size: 12px; color: rgba(255,255,255,0.7); font-weight: 500; }
+  .c1-score {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--neon);
+  }
+  /* Court SVG lines */
+  .court-svg {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 110px;
+    opacity: 0.15;
+  }
+
+  /* Quick stats */
+  .c1-stats {
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    gap: 8px;
+    padding: 0 16px 14px;
+  }
+  .c1-stat {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .c1-stat-icon { font-size: 20px; }
+  .c1-stat-val {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--neon);
+    line-height: 1;
+    margin-top: 2px;
+  }
+  .c1-stat-label { font-size: 9px; color: rgba(255,255,255,0.4); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+  /* Torneos row */
+  .c1-section-title {
+    padding: 0 16px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: rgba(255,255,255,0.35);
+  }
+  .c1-event-card {
+    margin: 0 16px 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .c1-event-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .c1-event-icon.blue { background: rgba(26,78,216,0.25); }
+  .c1-event-icon.green { background: rgba(30,170,82,0.25); }
+  .c1-event-info { flex: 1; }
+  .c1-event-name { font-size: 12px; font-weight: 600; color: #fff; }
+  .c1-event-date { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 1px; }
+  .c1-event-chip {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 100px;
+    letter-spacing: 0.5px;
+  }
+  .c1-event-chip.open { background: rgba(214,255,0,0.15); color: var(--neon); border: 1px solid rgba(214,255,0,0.3); }
+  .c1-event-chip.soon { background: rgba(26,78,216,0.2); color: #6fa3ff; border: 1px solid rgba(26,78,216,0.4); }
+
+  /* Bottom nav */
+  .c1-bottom-nav {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 68px;
+    background: rgba(10,12,20,0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 8px 10px;
+  }
+  .c1-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex: 1;
+    position: relative;
+  }
+  .c1-nav-item.active::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 3px;
+    background: var(--neon);
+    border-radius: 0 0 4px 4px;
+  }
+  .c1-nav-icon { font-size: 20px; opacity: 0.4; }
+  .c1-nav-item.active .c1-nav-icon { opacity: 1; }
+  .c1-nav-label { font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.35); letter-spacing: 0.3px; }
+  .c1-nav-item.active .c1-nav-label { color: var(--neon); }
+
+  /* FAB for concept 1 */
+  .c1-fab {
+    position: absolute;
+    bottom: 82px;
+    right: 18px;
+    width: 46px;
+    height: 46px;
+    background: var(--neon);
+    border-radius: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: #111;
+    font-weight: 700;
+    box-shadow: 0 4px 20px rgba(214,255,0,0.35);
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     CONCEPT 2 — PLAY LIGHT
+  ═══════════════════════════════════════════════════════════ */
+  .c2-frame {
+    background: var(--grey-100);
+    font-family: var(--font-body);
+  }
+  .c2-frame::before { background: rgba(0,0,0,0.2); }
+
+  .c2-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 20px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #555;
+  }
+
+  .c2-header {
+    background: #fff;
+    padding: 8px 20px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 0 var(--grey-200);
+  }
+  .c2-header-left {}
+  .c2-greeting { font-size: 11px; color: var(--text-secondary); font-weight: 500; }
+  .c2-name {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--black);
+    letter-spacing: 0.3px;
+    line-height: 1;
+    margin-top: 2px;
+  }
+  .c2-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 100%;
+    background: var(--court-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 15px;
+    color: #fff;
+    border: 2px solid var(--grey-200);
+  }
+
+  /* Tabs */
+  .c2-tabs {
+    background: #fff;
+    display: flex;
+    padding: 0 20px;
+    gap: 20px;
+    border-bottom: 1px solid var(--grey-200);
+  }
+  .c2-tab {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 10px 0;
+    position: relative;
+  }
+  .c2-tab.active { color: var(--court-blue); }
+  .c2-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 0; right: 0;
+    height: 2px;
+    background: var(--court-blue);
+    border-radius: 2px 2px 0 0;
+  }
+
+  .c2-scroll {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+  }
+
+  /* Banner */
+  .c2-banner {
+    background: linear-gradient(135deg, var(--court-blue) 0%, #0d3399 100%);
+    border-radius: 20px;
+    padding: 16px 18px;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .c2-banner-bg {
+    position: absolute;
+    right: -10px; top: -10px;
+    width: 90px; height: 90px;
+    border-radius: 100%;
+    background: rgba(255,255,255,0.07);
+  }
+  .c2-banner-bg2 {
+    position: absolute;
+    right: 20px; bottom: -20px;
+    width: 60px; height: 60px;
+    border-radius: 100%;
+    background: rgba(255,255,255,0.05);
+  }
+  .c2-banner-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; opacity: 0.65; }
+  .c2-banner-title {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 700;
+    margin-top: 2px;
+    line-height: 1.1;
+  }
+  .c2-banner-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 100px;
+    margin-top: 10px;
+    border: 1px solid rgba(255,255,255,0.25);
+  }
+
+  /* Club cards */
+  .c2-section-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .c2-section-title { font-size: 14px; font-weight: 700; color: var(--black); }
+  .c2-section-link { font-size: 11px; font-weight: 600; color: var(--court-blue); }
+
+  .c2-clubs-scroll {
+    display: flex;
+    gap: 10px;
+    overflow: hidden;
+  }
+  .c2-club-card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 14px 12px;
+    min-width: 120px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    border: 1px solid var(--grey-200);
+  }
+  .c2-club-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--court-blue), #6fa3ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    margin-bottom: 8px;
+  }
+  .c2-club-name { font-size: 12px; font-weight: 700; color: var(--black); line-height: 1.2; }
+  .c2-club-members { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+  .c2-stars { color: #f59e0b; font-size: 11px; margin-top: 4px; }
+
+  /* Torneos */
+  .c2-torneo-card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 14px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border: 1px solid var(--grey-200);
+  }
+  .c2-torneo-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+  .c2-torneo-icon.a { background: #eff6ff; }
+  .c2-torneo-icon.b { background: #f0fdf4; }
+  .c2-torneo-details { flex: 1; }
+  .c2-torneo-name { font-size: 13px; font-weight: 700; color: var(--black); }
+  .c2-torneo-meta { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+  .c2-torneo-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 4px 9px;
+    border-radius: 100px;
+  }
+  .c2-torneo-badge.open { background: #f0fdf4; color: var(--turf-green); border: 1px solid #bbf7d0; }
+  .c2-torneo-badge.reg  { background: #eff6ff; color: var(--court-blue); border: 1px solid #bfdbfe; }
+
+  /* Bottom nav */
+  .c2-bottom-nav {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 66px;
+    background: #fff;
+    border-top: 1px solid var(--grey-200);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 4px 10px;
+  }
+  .c2-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex: 1;
+  }
+  .c2-nav-icon { font-size: 22px; opacity: 0.35; }
+  .c2-nav-item.active .c2-nav-icon { opacity: 1; }
+  .c2-nav-label { font-size: 9px; font-weight: 600; color: var(--text-secondary); }
+  .c2-nav-item.active .c2-nav-label { color: var(--court-blue); }
+  .c2-nav-item.active .c2-nav-icon-wrap {
+    background: #eff6ff;
+    border-radius: 100px;
+    width: 46px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     CONCEPT 3 — NEON SPLIT
+  ═══════════════════════════════════════════════════════════ */
+  .c3-frame {
+    background: #fff;
+    font-family: var(--font-body);
+    overflow: hidden;
+  }
+  .c3-frame::before { background: rgba(255,255,255,0.15); }
+
+  /* Top dark half */
+  .c3-top {
+    background: linear-gradient(160deg, #0a1638 0%, #0f1f4a 100%);
+    height: 270px;
+    position: relative;
+    padding: 24px 20px 0;
+    overflow: hidden;
+  }
+
+  /* Geometric decoration */
+  .c3-geo-circle {
+    position: absolute;
+    border-radius: 100%;
+    border: 1px solid rgba(214,255,0,0.12);
+  }
+  .c3-geo-circle.a { width: 200px; height: 200px; top: -60px; right: -60px; }
+  .c3-geo-circle.b { width: 130px; height: 130px; top: -20px; right: -20px; background: rgba(214,255,0,0.05); }
+
+  .c3-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 14px;
+  }
+
+  .c3-logo-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  .c3-logo {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--neon);
+  }
+  .c3-logo span { color: #fff; }
+  .c3-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 100%;
+    background: var(--neon);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: #111;
+  }
+
+  /* Hero card overlapping */
+  .c3-hero-card {
+    background: rgba(255,255,255,0.07);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 22px;
+    padding: 14px 16px;
+    position: relative;
+  }
+  .c3-hero-title {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255,255,255,0.55);
+  }
+  .c3-hero-name {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    margin-top: 1px;
+  }
+  .c3-hero-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .c3-hero-stat {
+    flex: 1;
+    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+  .c3-hero-stat-val {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--neon);
+    line-height: 1;
+  }
+  .c3-hero-stat-label { font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
+
+  /* Bottom white card sheet */
+  .c3-bottom-sheet {
+    background: #fff;
+    border-radius: 28px 28px 0 0;
+    margin-top: -28px;
+    position: relative;
+    z-index: 2;
+    padding: 20px 16px 72px;
+    height: calc(680px - 242px);
+    overflow: hidden;
+  }
+  .c3-sheet-handle {
+    width: 40px;
+    height: 4px;
+    background: var(--grey-300);
+    border-radius: 100px;
+    margin: 0 auto 16px;
+  }
+
+  /* Pricing card in sheet */
+  .c3-pricing-card {
+    background: linear-gradient(135deg, #0a1638 0%, #1a4ed8 100%);
+    border-radius: 20px;
+    padding: 16px;
+    color: #fff;
+    margin-bottom: 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .c3-pricing-card-glow {
+    position: absolute;
+    top: -20px; right: -20px;
+    width: 80px; height: 80px;
+    background: var(--neon);
+    border-radius: 100%;
+    opacity: 0.12;
+  }
+  .c3-pricing-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--neon);
+    margin-bottom: 4px;
+  }
+  .c3-pricing-title {
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .c3-pricing-tiers {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .c3-tier {
+    flex: 1;
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 7px 6px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .c3-tier.highlight {
+    background: var(--neon);
+    border-color: var(--neon);
+  }
+  .c3-tier-price {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+  }
+  .c3-tier.highlight .c3-tier-price { color: #111; }
+  .c3-tier-label { font-size: 8px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+  .c3-tier.highlight .c3-tier-label { color: rgba(0,0,0,0.6); }
+
+  /* Promo code input */
+  .c3-promo-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .c3-promo-input {
+    flex: 1;
+    background: var(--grey-100);
+    border: 1.5px solid var(--grey-200);
+    border-radius: 100px;
+    padding: 9px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--black);
+    font-family: var(--font-body);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .c3-promo-btn {
+    background: var(--court-blue);
+    color: #fff;
+    border: none;
+    border-radius: 100px;
+    padding: 9px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: var(--font-body);
+  }
+
+  /* Quick actions grid */
+  .c3-actions {
+    display: grid;
+    grid-template-columns: repeat(4,1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .c3-action {
+    background: var(--grey-100);
+    border-radius: 16px;
+    padding: 10px 6px;
+    text-align: center;
+  }
+  .c3-action-icon { font-size: 22px; }
+  .c3-action-label { font-size: 8px; font-weight: 600; color: var(--text-secondary); margin-top: 3px; letter-spacing: 0.3px; }
+
+  /* FAB */
+  .c3-fab {
+    position: absolute;
+    bottom: 76px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 54px;
+    height: 54px;
+    background: var(--neon);
+    border-radius: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    color: #111;
+    font-weight: 700;
+    box-shadow: 0 6px 24px rgba(214,255,0,0.45);
+    z-index: 10;
+  }
+
+  /* Pill nav */
+  .c3-bottom-nav {
+    position: absolute;
+    bottom: 12px;
+    left: 16px;
+    right: 16px;
+    height: 54px;
+    background: #111;
+    border-radius: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 8px;
+    z-index: 5;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  }
+  .c3-nav-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 36px;
+    border-radius: 100px;
+  }
+  .c3-nav-item.active {
+    background: var(--neon);
+  }
+  .c3-nav-icon { font-size: 18px; opacity: 0.5; filter: invert(1); }
+  .c3-nav-item.active .c3-nav-icon { opacity: 1; filter: none; }
+  .c3-nav-spacer { width: 60px; } /* space for FAB */
+
+  /* ── DETAILS SECTION ───────────────────────────────────── */
+  .details-section {
+    max-width: 1100px;
+    margin: 60px auto 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .detail-card {
+    background: #16161e;
+    border: 1px solid #2a2a35;
+    border-radius: 20px;
+    padding: 28px 24px;
+  }
+  .detail-card-num {
+    font-family: var(--font-display);
+    font-size: 48px;
+    font-weight: 700;
+    color: rgba(214,255,0,0.15);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .detail-card-name {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #fff;
+    letter-spacing: 0.5px;
+    margin-bottom: 16px;
+  }
+  .detail-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .detail-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--grey-300);
+    line-height: 1.4;
+  }
+  .detail-list li::before {
+    content: '→';
+    color: var(--neon);
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .detail-vibe {
+    margin-top: 16px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-secondary);
+  }
+  .detail-vibe span {
+    display: inline-block;
+    background: rgba(255,255,255,0.06);
+    padding: 3px 10px;
+    border-radius: 100px;
+    margin: 4px 4px 0 0;
+    color: var(--grey-300);
+    font-size: 10px;
+  }
+
+  /* ── FOOTER ─────────────────────────────────────────────── */
+  .pg-footer {
+    text-align: center;
+    margin-top: 60px;
+    color: #2a2a35;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+  }
+
+  /* responsive stack */
+  @media (max-width: 1100px) {
+    .concepts-grid { gap: 32px; }
+  }
+  @media (max-width: 800px) {
+    .details-section { grid-template-columns: 1fr; }
+    .phone-frame { width: 290px; height: 620px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══ PAGE HEADER ═══════════════════════════════════════ -->
+<div class="page-header">
+  <div class="tag">Propuesta de Diseño · Mobile &amp; Tablet</div>
+  <div class="logo">PADEL<span>MGT</span></div>
+  <p>3 conceptos de UI/UX para app móvil · misma identidad de marca, nueva experiencia táctil</p>
+</div>
+
+<!-- ═══ DESIGN SYSTEM ════════════════════════════════════= -->
+<div class="ds-section">
+  <div class="ds-title">Sistema de Diseño</div>
+
+  <!-- Colors -->
+  <div class="palette">
+    <div class="swatch">
+      <div class="swatch-color" style="background:#0a1638;"></div>
+      <div class="swatch-label"><div class="swatch-hex">#0A1638</div>Court Blue Deep</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#1a4ed8;"></div>
+      <div class="swatch-label"><div class="swatch-hex">#1A4ED8</div>Court Blue</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#d6ff00; border-color:rgba(0,0,0,0.2);"></div>
+      <div class="swatch-label"><div class="swatch-hex" style="color:#d6ff00;">#D6FF00</div>Neon</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#1eaa52;"></div>
+      <div class="swatch-label"><div class="swatch-hex">#1EAA52</div>Turf Green</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#111111;"></div>
+      <div class="swatch-label"><div class="swatch-hex">#111111</div>Black</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#1F1F21;"></div>
+      <div class="swatch-label"><div class="swatch-hex">#1F1F21</div>Grey 900</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#39393B;"></div>
+      <div class="swatch-label"><div class="swatch-hex">#39393B</div>Grey 700</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#CACACB;"></div>
+      <div class="swatch-label"><div class="swatch-hex">#CACACB</div>Grey 300</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#F5F5F5; border-color:rgba(0,0,0,0.1);"></div>
+      <div class="swatch-label"><div class="swatch-hex" style="color:#888;">#F5F5F5</div>Grey 100</div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-color" style="background:#FFFFFF; border-color:rgba(0,0,0,0.1);"></div>
+      <div class="swatch-label"><div class="swatch-hex" style="color:#aaa;">#FFFFFF</div>White</div>
+    </div>
+  </div>
+
+  <!-- Typography -->
+  <div class="typo-row">
+    <div class="typo-block">
+      <div class="typo-tag">Display · Oswald</div>
+      <div class="typo-sample-oswald">PADELMGT<br>Torneos</div>
+    </div>
+    <div class="typo-block">
+      <div class="typo-tag">Body · Inter</div>
+      <div class="typo-sample-inter">Gestiona tus torneos de pádel<br>de manera simple y eficiente.<br>
+        <span style="font-weight:600;color:#fff;">Juega. Organiza. Compite.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Buttons -->
+  <div class="ds-title">Botones Mobile (siempre rounded)</div>
+  <div class="btn-row">
+    <button class="ds-btn neon">⚡ Crear Torneo</button>
+    <button class="ds-btn blue">🏆 Inscribirse</button>
+    <button class="ds-btn green">✅ Confirmar</button>
+    <button class="ds-btn outline">Ver detalles</button>
+    <button class="ds-btn ghost">Cancelar</button>
+    <button class="ds-btn dark">🔒 SA Panel</button>
+  </div>
+</div>
+
+<!-- ═══ CONCEPTS ══════════════════════════════════════════ -->
+<div class="concepts-header">
+  <h2>3 Conceptos de Diseño</h2>
+  <p>Mismos colores · Round corners · Íconos llamativos · UX simple y fluida</p>
+</div>
+
+<div class="concepts-grid">
+
+  <!-- ══ CONCEPT 1: DARK COURT ══ -->
+  <div class="concept-col">
+    <div class="concept-label">
+      <div class="num">Concepto 01</div>
+      <h3>Dark Court</h3>
+      <p>Oscuro, deportivo, premium. Sensación de app profesional tipo ESPN o Nike Training Club.</p>
+    </div>
+
+    <div class="phone-frame c1-frame">
+      <!-- Status bar -->
+      <div class="c1-status">
+        <span>9:41</span>
+        <span>▶▶ 📶 🔋</span>
+      </div>
+
+      <!-- Header -->
+      <div class="c1-header">
+        <div>
+          <div class="c1-greeting">BUENOS DÍAS</div>
+          <div class="c1-name">Luis G. 👋</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="position:relative;">
+            <span style="font-size:20px;opacity:0.5;">🔔</span>
+            <span style="position:absolute;top:-2px;right:-2px;width:8px;height:8px;background:var(--neon);border-radius:100%;border:1.5px solid #111;"></span>
+          </div>
+          <div class="c1-avatar">LG</div>
+        </div>
+      </div>
+
+      <!-- Live match hero -->
+      <div class="c1-court-hero">
+        <svg class="court-svg" viewBox="0 0 120 200" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="white" stroke-width="1.5">
+          <rect x="10" y="10" width="100" height="180" rx="4"/>
+          <line x1="10" y1="100" x2="110" y2="100"/>
+          <rect x="25" y="30" width="70" height="60"/>
+          <rect x="25" y="110" width="70" height="60"/>
+          <line x1="60" y1="10" x2="60" y2="190"/>
+        </svg>
+        <div class="c1-live-badge">
+          <div class="c1-live-dot"></div> EN VIVO
+        </div>
+        <div class="c1-match-title">🏆 Open Buenos Aires</div>
+        <div class="c1-score-row">
+          <span class="c1-team">García/López</span>
+          <span class="c1-score">6 · 4</span>
+          <span class="c1-team">Pérez/Mora</span>
+        </div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:4px;">Set 2 · 23 min</div>
+      </div>
+
+      <!-- Stats -->
+      <div class="c1-stats">
+        <div class="c1-stat">
+          <div class="c1-stat-icon">🏆</div>
+          <div class="c1-stat-val">4</div>
+          <div class="c1-stat-label">Torneos</div>
+        </div>
+        <div class="c1-stat">
+          <div class="c1-stat-icon">🏟️</div>
+          <div class="c1-stat-val">3</div>
+          <div class="c1-stat-label">Clubes</div>
+        </div>
+        <div class="c1-stat">
+          <div class="c1-stat-icon">👥</div>
+          <div class="c1-stat-val">12</div>
+          <div class="c1-stat-label">Equipos</div>
+        </div>
+      </div>
+
+      <!-- Upcoming -->
+      <div class="c1-section-title">PRÓXIMOS EVENTOS</div>
+      <div class="c1-event-card">
+        <div class="c1-event-icon blue">🏆</div>
+        <div class="c1-event-info">
+          <div class="c1-event-name">Copa Personalizada</div>
+          <div class="c1-event-date">📅 28 jun · Club Palermo</div>
+        </div>
+        <span class="c1-event-chip open">ABIERTO</span>
+      </div>
+      <div class="c1-event-card">
+        <div class="c1-event-icon green">🌱</div>
+        <div class="c1-event-info">
+          <div class="c1-event-name">Torneo Americano</div>
+          <div class="c1-event-date">📅 5 jul · Club Norte</div>
+        </div>
+        <span class="c1-event-chip soon">PRONTO</span>
+      </div>
+
+      <!-- FAB -->
+      <div class="c1-fab">＋</div>
+
+      <!-- Bottom nav -->
+      <div class="c1-bottom-nav">
+        <div class="c1-nav-item active">
+          <span class="c1-nav-icon">🏠</span>
+          <span class="c1-nav-label">Inicio</span>
+        </div>
+        <div class="c1-nav-item">
+          <span class="c1-nav-icon">🏆</span>
+          <span class="c1-nav-label">Torneos</span>
+        </div>
+        <div class="c1-nav-item">
+          <span class="c1-nav-icon">🏟️</span>
+          <span class="c1-nav-label">Clubes</span>
+        </div>
+        <div class="c1-nav-item">
+          <span class="c1-nav-icon">👤</span>
+          <span class="c1-nav-label">Perfil</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ CONCEPT 2: PLAY LIGHT ══ -->
+  <div class="concept-col">
+    <div class="concept-label">
+      <div class="num">Concepto 02</div>
+      <h3>Play Light</h3>
+      <p>Limpio, luminoso, amigable. Fácil de leer al sol. Estilo Strava / Duolingo para todos los públicos.</p>
+    </div>
+
+    <div class="phone-frame c2-frame">
+      <div class="c2-status">
+        <span style="color:#333;">9:41</span>
+        <span style="color:#333;">📶 🔋</span>
+      </div>
+
+      <!-- Header -->
+      <div class="c2-header">
+        <div class="c2-header-left">
+          <div class="c2-greeting">Bienvenido de vuelta</div>
+          <div class="c2-name">Luis G. 🎾</div>
+        </div>
+        <div class="c2-avatar">LG</div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="c2-tabs">
+        <div class="c2-tab active">Inicio</div>
+        <div class="c2-tab">Torneos</div>
+        <div class="c2-tab">Clubes</div>
+        <div class="c2-tab">Familia</div>
+      </div>
+
+      <!-- Content -->
+      <div class="c2-scroll">
+
+        <!-- Banner -->
+        <div class="c2-banner">
+          <div class="c2-banner-bg"></div>
+          <div class="c2-banner-bg2"></div>
+          <div class="c2-banner-label">⚡ Torneo Personalizado</div>
+          <div class="c2-banner-title">Creá tu propio<br>torneo hoy</div>
+          <div class="c2-banner-btn">Crear desde $9 →</div>
+        </div>
+
+        <!-- Mis clubes -->
+        <div class="c2-section-row">
+          <div class="c2-section-title">Mis Clubes</div>
+          <div class="c2-section-link">Ver todos</div>
+        </div>
+        <div class="c2-clubs-scroll">
+          <div class="c2-club-card">
+            <div class="c2-club-icon">🏟️</div>
+            <div class="c2-club-name">Club<br>Palermo</div>
+            <div class="c2-club-members">🧑 128 miembros</div>
+            <div class="c2-stars">★★★★★</div>
+          </div>
+          <div class="c2-club-card">
+            <div class="c2-club-icon" style="background:linear-gradient(135deg,#1eaa52,#0d7a38);">🌱</div>
+            <div class="c2-club-name">Club<br>Norte</div>
+            <div class="c2-club-members">🧑 84 miembros</div>
+            <div class="c2-stars">★★★★☆</div>
+          </div>
+          <div class="c2-club-card">
+            <div class="c2-club-icon" style="background:linear-gradient(135deg,#0a1638,#1a4ed8);">🏆</div>
+            <div class="c2-club-name">La<br>Pampa</div>
+            <div class="c2-club-members">🧑 56 miembros</div>
+            <div class="c2-stars">★★★☆☆</div>
+          </div>
+        </div>
+
+        <!-- Torneos activos -->
+        <div class="c2-section-row" style="margin-top:4px;">
+          <div class="c2-section-title">Torneos activos</div>
+          <div class="c2-section-link">Ver todos</div>
+        </div>
+        <div class="c2-torneo-card">
+          <div class="c2-torneo-icon a">🏆</div>
+          <div class="c2-torneo-details">
+            <div class="c2-torneo-name">Copa Personalizada</div>
+            <div class="c2-torneo-meta">28 jun · Palermo · 16 equipos</div>
+          </div>
+          <div class="c2-torneo-badge open">INSCRIPCIÓN ABIERTA</div>
+        </div>
+        <div class="c2-torneo-card">
+          <div class="c2-torneo-icon b">🌿</div>
+          <div class="c2-torneo-details">
+            <div class="c2-torneo-name">Americano Norte</div>
+            <div class="c2-torneo-meta">5 jul · Norte · 8 equipos</div>
+          </div>
+          <div class="c2-torneo-badge reg">REGISTRADO ✓</div>
+        </div>
+
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="c2-bottom-nav">
+        <div class="c2-nav-item active">
+          <div class="c2-nav-icon-wrap"><span class="c2-nav-icon">🏠</span></div>
+          <span class="c2-nav-label" style="color:var(--court-blue);">Inicio</span>
+        </div>
+        <div class="c2-nav-item">
+          <span class="c2-nav-icon">🏆</span>
+          <span class="c2-nav-label">Torneos</span>
+        </div>
+        <div class="c2-nav-item">
+          <span class="c2-nav-icon">🏟️</span>
+          <span class="c2-nav-label">Clubes</span>
+        </div>
+        <div class="c2-nav-item">
+          <span class="c2-nav-icon">👥</span>
+          <span class="c2-nav-label">Familia</span>
+        </div>
+        <div class="c2-nav-item">
+          <span class="c2-nav-icon">👤</span>
+          <span class="c2-nav-label">Perfil</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ CONCEPT 3: NEON SPLIT ══ -->
+  <div class="concept-col">
+    <div class="concept-label">
+      <div class="num">Concepto 03</div>
+      <h3>Neon Split</h3>
+      <p>Audaz, moderno, diferenciador. Header oscuro que se funde con contenido claro. Estilo Revolut / Notion.</p>
+    </div>
+
+    <div class="phone-frame c3-frame">
+
+      <!-- Top dark section -->
+      <div class="c3-top">
+        <div class="c3-geo-circle a"></div>
+        <div class="c3-geo-circle b"></div>
+
+        <div class="c3-status">
+          <span>9:41</span>
+          <span>📶 🔋</span>
+        </div>
+
+        <div class="c3-logo-row">
+          <div class="c3-logo">PADEL<span>MGT</span></div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:18px;opacity:0.45;filter:invert(1);">🔔</span>
+            <div class="c3-avatar">LG</div>
+          </div>
+        </div>
+
+        <!-- Stats card -->
+        <div class="c3-hero-card">
+          <div class="c3-hero-title">Mi resumen · Junio</div>
+          <div class="c3-hero-name">Luis González</div>
+          <div class="c3-hero-row">
+            <div class="c3-hero-stat">
+              <div class="c3-hero-stat-val">4</div>
+              <div class="c3-hero-stat-label">Torneos</div>
+            </div>
+            <div class="c3-hero-stat">
+              <div class="c3-hero-stat-val">12</div>
+              <div class="c3-hero-stat-label">Equipos</div>
+            </div>
+            <div class="c3-hero-stat">
+              <div class="c3-hero-stat-val">★4.8</div>
+              <div class="c3-hero-stat-label">Rating</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom sheet -->
+      <div class="c3-bottom-sheet">
+        <div class="c3-sheet-handle"></div>
+
+        <!-- Quick actions -->
+        <div class="c3-actions">
+          <div class="c3-action">
+            <div class="c3-action-icon">🏆</div>
+            <div class="c3-action-label">Torneos</div>
+          </div>
+          <div class="c3-action">
+            <div class="c3-action-icon">🏟️</div>
+            <div class="c3-action-label">Clubes</div>
+          </div>
+          <div class="c3-action">
+            <div class="c3-action-icon">👥</div>
+            <div class="c3-action-label">Familia</div>
+          </div>
+          <div class="c3-action">
+            <div class="c3-action-icon">📊</div>
+            <div class="c3-action-label">Stats</div>
+          </div>
+        </div>
+
+        <!-- Pricing card -->
+        <div class="c3-pricing-card">
+          <div class="c3-pricing-card-glow"></div>
+          <div class="c3-pricing-label">⚡ Torneo Personalizado</div>
+          <div class="c3-pricing-title">Abrí la inscripción</div>
+          <div class="c3-pricing-tiers">
+            <div class="c3-tier">
+              <div class="c3-tier-price">$9</div>
+              <div class="c3-tier-label">≤8 eq.</div>
+            </div>
+            <div class="c3-tier">
+              <div class="c3-tier-price">$19</div>
+              <div class="c3-tier-label">≤16 eq.</div>
+            </div>
+            <div class="c3-tier highlight">
+              <div class="c3-tier-price">$29</div>
+              <div class="c3-tier-label">≤32 eq.</div>
+            </div>
+            <div class="c3-tier">
+              <div class="c3-tier-price">$49</div>
+              <div class="c3-tier-label">+32 eq.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Promo code -->
+        <div class="c3-promo-row">
+          <input class="c3-promo-input" placeholder="🏷 CÓDIGO PROMO" readonly>
+          <button class="c3-promo-btn">Aplicar</button>
+        </div>
+      </div>
+
+      <!-- FAB -->
+      <div class="c3-fab">＋</div>
+
+      <!-- Pill bottom nav -->
+      <div class="c3-bottom-nav">
+        <div class="c3-nav-item active">
+          <span class="c3-nav-icon" style="filter:none;opacity:1;">🏠</span>
+        </div>
+        <div class="c3-nav-item">
+          <span class="c3-nav-icon">🏆</span>
+        </div>
+        <div class="c3-nav-spacer"></div>
+        <div class="c3-nav-item">
+          <span class="c3-nav-icon">🏟️</span>
+        </div>
+        <div class="c3-nav-item">
+          <span class="c3-nav-icon">👤</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ DETAILS ═══════════════════════════════════════════ -->
+<div class="details-section">
+  <div class="detail-card">
+    <div class="detail-card-num">01</div>
+    <div class="detail-card-name">Dark Court</div>
+    <ul class="detail-list">
+      <li>Fondo degradado azul profundo → negro · cards con 20px de radio</li>
+      <li>CTAs neon (#d6ff00) · texto negro sobre neon · alto contraste</li>
+      <li>Barra inferior oscura con indicador neon arriba del ícono activo</li>
+      <li>FAB flotante neon con sombra brillante para acción principal</li>
+      <li>Tarjeta "En Vivo" con badge animado + cancha SVG semitransparente</li>
+      <li>Stats en grilla de 3 con degradado interior sutil</li>
+    </ul>
+    <div class="detail-vibe">Vibe
+      <span>ESPN</span><span>Nike Training</span><span>FotMob</span>
+    </div>
+  </div>
+  <div class="detail-card">
+    <div class="detail-card-num">02</div>
+    <div class="detail-card-name">Play Light</div>
+    <ul class="detail-list">
+      <li>Fondo blanco / gris clarísimo · cards blancas con sombra suave</li>
+      <li>Botones azul brand (#1a4ed8) pill shape · verde para confirmaciones</li>
+      <li>Barra de tabs en el header · navegación inferior blanca con línea sutil</li>
+      <li>Banner hero degradado azul para destacar Torneo Personalizado</li>
+      <li>Club cards con rating de estrellas visible en el listado</li>
+      <li>Legible bajo sol · ideal para usuarios de todas las edades</li>
+    </ul>
+    <div class="detail-vibe">Vibe
+      <span>Strava</span><span>Duolingo</span><span>Headspace</span>
+    </div>
+  </div>
+  <div class="detail-card">
+    <div class="detail-card-num">03</div>
+    <div class="detail-card-name">Neon Split</div>
+    <ul class="detail-list">
+      <li>Header oscuro 40% · hoja de contenido blanca que "sube" desde abajo</li>
+      <li>Cards que cruzan el punto de split para dar profundidad visual</li>
+      <li>FAB neon centrado sobre barra pill flotante en negro</li>
+      <li>Precios del Torneo Personalizado integrados en el home con tier destacado</li>
+      <li>Input de código promo accesible desde el inicio (conversión directa)</li>
+      <li>Acciones rápidas en grilla 4×1 para acceso de un tap</li>
+    </ul>
+    <div class="detail-vibe">Vibe
+      <span>Revolut</span><span>Notion</span><span>Linear</span>
+    </div>
+  </div>
+</div>
+
+<div class="pg-footer">
+  PadelMGT · Propuesta Diseño Mobile · 2026 · Solo conceptual, sin cambios al código
+</div>
+
+</body>
+</html>
