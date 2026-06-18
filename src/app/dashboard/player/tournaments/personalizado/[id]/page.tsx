@@ -226,7 +226,12 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 
   // Access guard: this is the organizer management view — creator or co-creators only.
   const accessDenied = !!tournament && !canManagePersonalizado(tournament, currentUser?.id);
-  const isCreator = !!tournament && !!currentUser && tournament.creatorId === currentUser.id;
+  // isCreator: true when the logged-in user is the creator. If creatorId is empty (legacy
+  // tournaments created before creator tracking), we treat the manager as the creator so
+  // they can still cancel/delete their own tournament.
+  const isCreator = !!tournament && !!currentUser && (
+    tournament.creatorId === currentUser.id || (!tournament.creatorId && canManagePersonalizado(tournament, currentUser.id))
+  );
 
   // Base/auto price from the public config; a validated code overrides via codedPrice.
   const totalTeams = tournament ? totalTeamsOf(tournament.categories) : 0;
@@ -401,27 +406,30 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 
   // ── SOLO PRUEBA: eliminar antes del lanzamiento ────────────────────────────
   async function handleSeedTeams(catId: string) {
-    if (!tournament) return;
+    if (!tournament || !currentUser) return;
     setSeeding(true);
     const cat = tournament.categories.find(c => c.id === catId);
     if (!cat) { setSeeding(false); return; }
-    const alreadyIn = enrolledCount(tournament, catId);
-    const slots = Math.min(seedCount, cat.maxTeams - alreadyIn);
-    for (let i = 0; i < slots; i++) {
-      const n = alreadyIn + i + 1;
-      const res = await registerTeam(tournament.code, {
-        categoryId: catId,
-        player1Name: `[Prueba] ${cat.name} ${n}A`,
-        player2Name: `[Prueba] ${cat.name} ${n}B`,
+    const slots = Math.min(seedCount, cat.maxTeams - enrolledCount(tournament, catId));
+    if (slots <= 0) { setSeeding(false); return; }
+
+    try {
+      const res = await fetch('/api/personalizado/seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId: tournament.id, categoryId: catId, count: slots, requesterId: currentUser.id }),
       });
-      if (res.ok && res.team?.id) await changeTeamStatus(id, res.team.id, 'confirmed');
+      const data = await res.json() as { ok?: boolean; added?: number; error?: string };
+      if (!res.ok) { showToast(data.error ?? 'Error al generar equipos', 'error'); setSeeding(false); return; }
+      const updated = await loadPersonalizadoById(id);
+      setTournament(updated);
+      showToast(`${data.added ?? slots} equipos de prueba generados y confirmados`, 'success');
+    } catch {
+      showToast('Error de red', 'error');
     }
-    const updated = await loadPersonalizadoById(id);
-    setTournament(updated);
     setSeedCatId(null);
     setSeedCount(4);
     setSeeding(false);
-    showToast(`${slots} equipos de prueba agregados y confirmados`, 'success');
   }
 
   async function handleCancelTournament() {
@@ -606,7 +614,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   </button>
                 )}
                 {/* SOLO PRUEBA — eliminar antes del lanzamiento */}
-                {tournament.status === 'registration_open' && seedCatId !== cat.id && enrolledCount(tournament, cat.id) < cat.maxTeams && (
+                {(tournament.status === 'registration_open' || tournament.status === 'configured') && seedCatId !== cat.id && enrolledCount(tournament, cat.id) < cat.maxTeams && (
                   <button
                     onClick={() => { setSeedCatId(cat.id); setSeedCount(Math.min(4, cat.maxTeams - enrolledCount(tournament, cat.id))); }}
                     style={{ padding: '6px 14px', background: 'rgba(234,179,8,0.1)', color: '#854d0e', border: '1px dashed #ca8a04', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
