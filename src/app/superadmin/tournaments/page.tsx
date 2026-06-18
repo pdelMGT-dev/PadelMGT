@@ -12,6 +12,8 @@ import {
   mergeCorrectionsFromSupabase,
   type ScoreCorrectionRequest,
 } from '@/lib/score-correction-store';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { rowToTournament, rowToTeam, type PersonalizadoTournament, type PersonalizadoTeam } from '@/lib/personalizado-store';
 
 const PAGE_SIZE = 15;
 
@@ -70,6 +72,209 @@ function exportCSV(rows: Record<string, unknown>[], filename: string) {
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── Personalizado Detail Drawer (SA) ─────────────────────────────────────────
+
+const P_STATUSES: Array<{ value: PersonalizadoTournament['status']; label: string; bg: string; color: string }> = [
+  { value: 'draft',             label: 'Borrador',           bg: '#f3f4f6',             color: '#374151' },
+  { value: 'registration_open', label: 'Inscripción abierta', bg: 'rgba(214,255,0,0.35)', color: '#6b7a00' },
+  { value: 'configured',        label: 'Configurado',         bg: '#dbeafe',             color: '#1e40af' },
+  { value: 'live',              label: 'En vivo',             bg: '#dcfce7',             color: '#166534' },
+  { value: 'finished',          label: 'Finalizado',          bg: '#f3f4f6',             color: '#374151' },
+  { value: 'cancelled',         label: 'Cancelado',           bg: '#fee2e2',             color: '#991b1b' },
+];
+
+const P_GENDER: Record<string, string> = { libre: 'Libre', masculino: 'Masculino', femenino: 'Femenino', mixto: 'Mixto' };
+
+function PersonalizadoDetailDrawer({
+  tournament: initial,
+  onClose,
+  onUpdated,
+  onDeleted,
+}: {
+  tournament: PersonalizadoTournament;
+  onClose: () => void;
+  onUpdated: (t: PersonalizadoTournament) => void;
+  onDeleted: (id: string) => void;
+}) {
+  const [tournament, setTournament] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [expandedCat, setExpandedCat] = useState<string | null>(null);
+
+  const statusCfg = P_STATUSES.find(s => s.value === tournament.status) ?? P_STATUSES[0];
+
+  async function changeStatus(newStatus: PersonalizadoTournament['status']) {
+    if (!isSupabaseConfigured || !supabase) return;
+    setSaving(true);
+    const patch: Record<string, unknown> = { status: newStatus, updated_at: new Date().toISOString() };
+    if (newStatus === 'cancelled' && tournament.status !== 'cancelled') patch.previous_status = tournament.status;
+    else if (newStatus !== 'cancelled') patch.previous_status = null;
+    await supabase.from('personalizado_tournaments').update(patch).eq('id', tournament.id);
+    const updated = { ...tournament, status: newStatus, previousStatus: newStatus === 'cancelled' ? tournament.status : undefined };
+    setTournament(updated);
+    onUpdated(updated);
+    setSaving(false);
+  }
+
+  async function handleTeamStatus(teamId: string, newStatus: PersonalizadoTeam['status']) {
+    if (!isSupabaseConfigured || !supabase) return;
+    await supabase.from('personalizado_teams').update({ status: newStatus }).eq('id', teamId);
+    const updatedTeams = tournament.teams.map(t => t.id === teamId ? { ...t, status: newStatus } : t);
+    const updated = { ...tournament, teams: updatedTeams };
+    setTournament(updated);
+    onUpdated(updated);
+  }
+
+  async function deleteTournament() {
+    if (!isSupabaseConfigured || !supabase) return;
+    if (!window.confirm(`¿Eliminar "${tournament.name}" permanentemente? Esta acción no se puede deshacer.`)) return;
+    setSaving(true);
+    await supabase.from('personalizado_tournaments').delete().eq('id', tournament.id);
+    onDeleted(tournament.id);
+    onClose();
+  }
+
+  const totalEnrolled = tournament.teams.filter(t => t.status === 'pending' || t.status === 'confirmed').length;
+  const totalCapacity = tournament.categories.reduce((s, c) => s + c.maxTeams, 0);
+
+  return (
+    <>
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 1009 }} onClick={onClose} />
+      <div
+        style={{ position: 'fixed', top: 0, right: 0, width: 620, height: '100vh', background: '#fff', boxShadow: '-4px 0 40px rgba(0,0,0,0.15)', zIndex: 1010, overflowY: 'auto', padding: '32px 36px' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 5 }}>Torneo Personalizado</div>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', lineHeight: 1.3 }}>{tournament.name}</h2>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--grey-400)', lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
+          <span style={{ background: statusCfg.bg, color: statusCfg.color, padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>{statusCfg.label}</span>
+          <span style={{ fontFamily: 'monospace', fontSize: 12, background: '#f3f4f6', padding: '3px 10px', borderRadius: 6, fontWeight: 700 }}>{tournament.code}</span>
+        </div>
+
+        {/* Info */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 20 }}>
+          {[
+            { label: 'Organizador', value: tournament.creatorName || '—' },
+            { label: 'Fecha', value: [tournament.date, tournament.time].filter(Boolean).join(' · ') || '—' },
+            { label: 'Sede', value: tournament.locationName || '—' },
+            { label: 'Ciudad', value: [tournament.city, tournament.country].filter(Boolean).join(', ') || '—' },
+            { label: 'Canchas', value: String(tournament.courts) },
+            { label: 'Categorías', value: String(tournament.categories.length) },
+            { label: 'Equipos', value: `${totalEnrolled} / ${totalCapacity} cupos` },
+            { label: 'Creado', value: new Date(tournament.createdAt).toLocaleString('es-ES') },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--grey-100)', fontSize: 13 }}>
+              <span style={{ color: 'var(--grey-500)' }}>{label}</span>
+              <span style={{ fontWeight: 600, textAlign: 'right', maxWidth: '60%' }}>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Status change */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 8 }}>Cambiar Estado (Admin)</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {P_STATUSES.map(s => (
+              <button key={s.value} onClick={() => changeStatus(s.value)} disabled={saving || s.value === tournament.status}
+                style={{ padding: '5px 11px', borderRadius: 4, border: `1px solid ${s.value === tournament.status ? 'transparent' : 'var(--grey-200)'}`, cursor: s.value === tournament.status ? 'default' : 'pointer', fontSize: 11, fontWeight: 700, background: s.value === tournament.status ? '#0a0a0a' : '#fff', color: s.value === tournament.status ? '#fff' : 'var(--grey-600)', opacity: saving ? 0.6 : 1 }}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Categories + teams */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 10 }}>Categorías e Inscriptos</div>
+          {tournament.categories.map(cat => {
+            const catTeams = tournament.teams.filter(t => t.categoryId === cat.id);
+            const enrolled = catTeams.filter(t => t.status === 'pending' || t.status === 'confirmed').length;
+            const expanded = expandedCat === cat.id;
+            return (
+              <div key={cat.id} style={{ border: '1px solid var(--grey-200)', marginBottom: 8, borderRadius: 4, overflow: 'hidden' }}>
+                <div onClick={() => setExpandedCat(expanded ? null : cat.id)}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', cursor: 'pointer', background: expanded ? '#fafafa' : '#fff' }}>
+                  <div>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{cat.name}</span>
+                    <span style={{ fontSize: 11, color: 'var(--grey-400)', marginLeft: 8 }}>{P_GENDER[cat.gender] ?? cat.gender}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700 }}>{enrolled}/{cat.maxTeams}</span>
+                    <span style={{ fontSize: 10, color: 'var(--grey-400)' }}>{expanded ? '▲' : '▼'}</span>
+                  </div>
+                </div>
+                {expanded && (
+                  <div style={{ borderTop: '1px solid var(--grey-100)' }}>
+                    {catTeams.length === 0 ? (
+                      <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-400)', fontStyle: 'italic' }}>Sin inscriptos</div>
+                    ) : catTeams.map(team => {
+                      const tsCfg = {
+                        pending:   { label: 'Pendiente',   bg: 'rgba(0,0,0,0.05)',        color: 'var(--grey-600)' },
+                        confirmed: { label: 'Confirmado',  bg: 'rgba(34,197,94,0.1)',     color: '#15803d' },
+                        rejected:  { label: 'Rechazado',   bg: 'rgba(220,38,38,0.08)',    color: '#b91c1c' },
+                        waitlisted:{ label: 'En espera',   bg: 'rgba(245,158,11,0.1)',    color: '#b45309' },
+                      }[team.status] ?? { label: team.status, bg: '#f3f4f6', color: '#374151' };
+                      return (
+                        <div key={team.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 14px', borderBottom: '1px solid var(--grey-50)', fontSize: 12 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontWeight: 600 }}>{team.player1Name}</span>
+                            {team.player2Name && <span style={{ color: 'var(--grey-400)' }}> / {team.player2Name}</span>}
+                            {team.player1Email && <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 1 }}>{team.player1Email}</div>}
+                          </div>
+                          <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', background: tsCfg.bg, color: tsCfg.color, borderRadius: 3 }}>{tsCfg.label}</span>
+                            {team.status !== 'confirmed' && (
+                              <button onClick={() => handleTeamStatus(team.id, 'confirmed')} style={{ fontSize: 10, padding: '2px 6px', background: 'rgba(34,197,94,0.1)', color: '#15803d', border: '1px solid rgba(34,197,94,0.3)', cursor: 'pointer', fontWeight: 700, borderRadius: 3 }}>✓</button>
+                            )}
+                            {team.status !== 'rejected' && (
+                              <button onClick={() => handleTeamStatus(team.id, 'rejected')} style={{ fontSize: 10, padding: '2px 6px', background: 'rgba(220,38,38,0.06)', color: '#b91c1c', border: '1px solid rgba(220,38,38,0.25)', cursor: 'pointer', fontWeight: 700, borderRadius: 3 }}>✕</button>
+                            )}
+                            {team.status === 'rejected' && (
+                              <button onClick={() => handleTeamStatus(team.id, 'pending')} style={{ fontSize: 10, padding: '2px 6px', background: '#f3f4f6', color: '#374151', border: '1px solid var(--grey-200)', cursor: 'pointer', fontWeight: 700, borderRadius: 3 }}>↩</button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Danger zone */}
+        <div style={{ borderTop: '1px solid rgba(220,38,38,0.2)', paddingTop: 20, marginBottom: 20 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: '#b91c1c', textTransform: 'uppercase', marginBottom: 10 }}>Zona de Peligro (Admin)</div>
+          <button onClick={deleteTournament} disabled={saving}
+            style={{ padding: '8px 16px', background: '#b91c1c', color: '#fff', border: 'none', borderRadius: 4, cursor: saving ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            🗑 Eliminar torneo definitivamente
+          </button>
+          <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 6 }}>
+            Elimina el torneo y todos los datos (equipos, partidos). Irreversible.
+          </div>
+        </div>
+
+        {saving && (
+          <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, fontSize: 12, color: '#166534', marginBottom: 12 }}>
+            Guardando cambios…
+          </div>
+        )}
+
+        <button onClick={onClose} style={{ padding: '10px 20px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          Cerrar
+        </button>
+      </div>
+    </>
+  );
 }
 
 // ── Tournament Detail Drawer ──────────────────────────────────────────────────
@@ -365,7 +570,7 @@ function TournamentDetailDrawer({
 export default function TournamentsPage() {
   const [tournaments, setTournaments] = useState<SATournament[]>([]);
   const [corrections, setCorrections] = useState<ScoreCorrectionRequest[]>([]);
-  const [tab, setTab] = useState<'tournaments' | 'corrections'>('tournaments');
+  const [tab, setTab] = useState<'tournaments' | 'corrections' | 'personalizado'>('tournaments');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [formatFilter, setFormatFilter] = useState<string>('all');
@@ -377,6 +582,8 @@ export default function TournamentsPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [reorgRequestIds, setReorgRequestIds] = useState<Set<string>>(new Set());
+  const [personalizados, setPersonalizados] = useState<PersonalizadoTournament[]>([]);
+  const [selectedPersonalizado, setSelectedPersonalizado] = useState<PersonalizadoTournament | null>(null);
   // ── CSV Import ──────────────────────────────────────────────────────────────
   const [showImportModal, setShowImportModal] = useState(false);
   const [csvRows, setCsvRows] = useState<string[][]>([]);
@@ -410,7 +617,35 @@ export default function TournamentsPage() {
 
     fetchFromSupabase();
     const interval = setInterval(fetchFromSupabase, 15000);
-    return () => clearInterval(interval);
+
+    async function fetchPersonalizados() {
+      if (!isSupabaseConfigured || !supabase) return;
+      const { data: tRows } = await supabase
+        .from('personalizado_tournaments')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!tRows || tRows.length === 0) { setPersonalizados([]); return; }
+      const ids = (tRows as Record<string, unknown>[]).map(r => r.id as string);
+      const { data: teamRows } = await supabase
+        .from('personalizado_teams')
+        .select('*')
+        .in('tournament_id', ids);
+      const teamsByTid: Record<string, PersonalizadoTeam[]> = {};
+      for (const row of (teamRows ?? []) as Record<string, unknown>[]) {
+        const tid = row.tournament_id as string;
+        if (!teamsByTid[tid]) teamsByTid[tid] = [];
+        teamsByTid[tid].push(rowToTeam(row));
+      }
+      const result = (tRows as Record<string, unknown>[]).map(row => {
+        const t = rowToTournament(row);
+        return { ...t, teams: teamsByTid[t.id] ?? [] };
+      });
+      setPersonalizados(result);
+    }
+    fetchPersonalizados();
+    const pInterval = setInterval(fetchPersonalizados, 20000);
+
+    return () => { clearInterval(interval); clearInterval(pInterval); };
   }, []);
 
   function toast(msg: string, ok = true) {
@@ -619,6 +854,7 @@ export default function TournamentsPage() {
         {([
           { key: 'tournaments', label: `Lista de Torneos (${tournaments.length})` },
           { key: 'corrections', label: `Correcciones de Score (${pendingCorrCount} pendiente${pendingCorrCount !== 1 ? 's' : ''})` },
+          { key: 'personalizado', label: `Torneos Personalizados (${personalizados.length})` },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)} style={{
             padding: '10px 24px', border: 'none', background: 'none', cursor: 'pointer',
@@ -781,6 +1017,72 @@ export default function TournamentsPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {tab === 'personalizado' && (
+        <div style={{ background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-200)' }}>
+                  <th style={thStyle}>Nombre</th>
+                  <th style={thStyle}>Código</th>
+                  <th style={thStyle}>Organizador</th>
+                  <th style={thStyle}>Fecha</th>
+                  <th style={{ ...thStyle, cursor: 'default' }}>Categorías</th>
+                  <th style={{ ...thStyle, textAlign: 'center', cursor: 'default' }}>Equipos</th>
+                  <th style={thStyle}>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {personalizados.map(pt => {
+                  const enrolled = pt.teams.filter(t => t.status === 'pending' || t.status === 'confirmed').length;
+                  const capacity = pt.categories.reduce((s, c) => s + c.maxTeams, 0);
+                  const psCfg = P_STATUSES.find(s => s.value === pt.status) ?? P_STATUSES[0];
+                  return (
+                    <tr key={pt.id}
+                      style={{ borderBottom: '1px solid var(--grey-100)', cursor: 'pointer' }}
+                      onClick={() => setSelectedPersonalizado(pt)}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                    >
+                      <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--black)' }}>{pt.name}</td>
+                      <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: 11, color: 'var(--grey-500)' }}>{pt.code}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-600)' }}>{pt.creatorName || '—'}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{pt.date || '—'}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 12 }}>{pt.categories.length}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>{enrolled}/{capacity}</td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={{ background: psCfg.bg, color: psCfg.color, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>{psCfg.label}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {personalizados.length === 0 && (
+                  <tr>
+                    <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: 'var(--grey-400)', fontSize: 14 }}>No hay torneos personalizados</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* PERSONALIZADO DETAIL DRAWER */}
+      {selectedPersonalizado && (
+        <PersonalizadoDetailDrawer
+          tournament={selectedPersonalizado}
+          onClose={() => setSelectedPersonalizado(null)}
+          onUpdated={updated => {
+            setPersonalizados(prev => prev.map(p => p.id === updated.id ? updated : p));
+            setSelectedPersonalizado(updated);
+          }}
+          onDeleted={id => {
+            setPersonalizados(prev => prev.filter(p => p.id !== id));
+            setSelectedPersonalizado(null);
+          }}
+        />
       )}
 
       {/* DETAIL DRAWER */}

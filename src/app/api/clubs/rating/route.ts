@@ -1,5 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceClient } from '@/lib/supabase-server';
+import { serviceClient, getServerUser } from '@/lib/supabase-server';
+import { createClient } from '@supabase/supabase-js';
+
+async function resolveUser(request: NextRequest): Promise<{ id: string } | null> {
+  // 1. Try cookie-based session (web)
+  const cookieUser = await getServerUser(request);
+  if (cookieUser) return cookieUser;
+
+  // 2. Try Bearer token (mobile)
+  const auth = request.headers.get('authorization');
+  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (!token) return null;
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+
+  const client = createClient(url, key, { auth: { persistSession: false } });
+  const { data, error } = await client.auth.getUser(token);
+  if (error || !data.user) return null;
+  return { id: data.user.id };
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -34,17 +55,22 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  let body: { clubId?: string; playerId?: string; rating?: number };
+  const authUser = await resolveUser(request);
+  if (!authUser) {
+    return NextResponse.json({ error: 'Autenticación requerida' }, { status: 401 });
+  }
+
+  let body: { clubId?: string; rating?: number };
   try {
-    body = await request.json() as { clubId?: string; playerId?: string; rating?: number };
+    body = await request.json() as { clubId?: string; rating?: number };
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { clubId, playerId, rating } = body;
+  const { clubId, rating } = body;
 
-  if (!clubId || !playerId || !rating || rating < 1 || rating > 5) {
-    return NextResponse.json({ error: 'clubId, playerId and rating (1–5) are required' }, { status: 400 });
+  if (!clubId || !rating || rating < 1 || rating > 5) {
+    return NextResponse.json({ error: 'clubId and rating (1–5) are required' }, { status: 400 });
   }
 
   const svc = serviceClient();
@@ -52,7 +78,7 @@ export async function POST(request: NextRequest) {
 
   const { error } = await svc
     .from('club_ratings')
-    .upsert({ club_id: clubId, player_id: playerId, rating }, { onConflict: 'club_id,player_id' });
+    .upsert({ club_id: clubId, player_id: authUser.id, rating }, { onConflict: 'club_id,player_id' });
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 

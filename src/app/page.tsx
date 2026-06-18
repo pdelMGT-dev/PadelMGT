@@ -6,12 +6,12 @@ import { getSAPlayersFromSupabase, getSATournamentsFromSupabase } from '@/lib/su
 import { fetchPersonalizadoPricing, tierLabelInList, type PricingTier, type PersonalizadoPromo } from '@/lib/personalizado-pricing';
 
 const formats = [
-  { k: 'americano', name: 'Americano', desc: 'Cada pareja juega contra todas. Ideal para una tarde de juego.', when: '1 sesión', teams: '4–32 parejas', img: '/assets/court-card.svg' },
-  { k: 'express', name: 'Express', desc: 'Grupos cortos a 1 set. Termina en una mañana.', when: '3–4 horas', teams: '8–24 parejas', img: '/assets/court-green.svg' },
-  { k: 'champions', name: 'Champions League', desc: 'Fase de grupos + eliminatorias. El formato premium.', when: 'Multi-jornada', teams: '8–32 parejas', img: '/assets/court-dark.svg' },
-  { k: 'liga', name: 'Liga Regular', desc: 'Temporada larga con ascensos y descensos.', when: '8–24 semanas', teams: '6–48 equipos', img: '/assets/court-card.svg' },
-  { k: 'directa', name: 'Eliminatoria Directa', desc: 'Cuadro clásico. Pierdes y vuelas. Con consolación.', when: '1–3 días', teams: '8–128 parejas', img: '/assets/court-green.svg' },
-  { k: 'equipos', name: 'Por Equipos', desc: 'Club contra club. Liguilla por puntos colectivos.', when: 'Multi-jornada', teams: '4–24 clubes', img: '/assets/court-dark.svg' },
+  { k: 'americano',   name: 'Americano',   desc: 'Rotación de parejas cada ronda. Todos juegan con todos. Ideal para tardes sociales.',              when: '2–3 horas',    teams: '8–32 parejas',  img: '/assets/court-card.svg'  },
+  { k: 'mexicano',    name: 'Mexicano',    desc: 'Parejas dinámicas según puntuación. Auto-balanceo competitivo: los mejores se enfrentan entre sí.', when: '2–4 horas',    teams: '8–32 parejas',  img: '/assets/court-green.svg' },
+  { k: 'round-robin', name: 'Round Robin', desc: 'Todos contra todos. El formato más justo para determinar un ranking real — ganás tu lugar por mérito.', when: '4–6 horas', teams: '4–16 parejas',  img: '/assets/court-dark.svg'  },
+  { k: 'team-league', name: 'Team League', desc: 'Liga por equipos con jornadas semanales. Ascensos, descensos y playoffs al final de temporada.',    when: 'Multi-jornada', teams: '6–48 equipos', img: '/assets/court-card.svg'  },
+  { k: 'knockout',    name: 'Knockout',    desc: 'Cuadro de eliminación directa. Perdés y te vas. Alta adrenalina desde la primera ronda.',           when: '4–8 horas',    teams: '4–16 parejas',  img: '/assets/court-green.svg' },
+  { k: 'world-cup',   name: 'World Cup',   desc: 'Grupos de 4 equipos, los 2 mejores clasifican al cuadro. La emoción del Mundial de Pádel.',         when: '2–3 jornadas', teams: '16–64 parejas', img: '/assets/court-dark.svg'  },
 ];
 
 const liveMatches = [
@@ -165,8 +165,8 @@ export default function HomePage() {
               <div className="section-eyebrow">Formatos</div>
               <h2 className="section-title">TODO FORMATO.<br />UN SOLO LUGAR.</h2>
               <p className="section-sub">
-                Desde Americano de una tarde hasta Champions League con grupos y eliminatorias.
-                PadelMGT automatiza el cuadro, los puntos y la difusión.
+                Americano, Mexicano, Round Robin, Team League, Knockout y World Cup.
+                PadelMGT automatiza el cuadro, los puntos y la difusión — vos solo jugás.
               </p>
             </div>
             <Link href="/tournaments" className="btn btn-secondary">Ver Todo →</Link>
@@ -183,7 +183,7 @@ export default function HomePage() {
                 <img src={f.img} alt={f.name} style={{ opacity: 0.82 }} />
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0) 25%, rgba(0,0,0,0.88) 100%)' }} />
                 <div style={{ position: 'absolute', top: 22, left: 22, color: '#fff' }}>
-                  <div style={{ fontSize: 10, letterSpacing: '0.2em', fontWeight: 600, opacity: 0.6 }}>0{i + 1} / 06</div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.2em', fontWeight: 600, opacity: 0.6 }}>{String(i + 1).padStart(2, '0')} / {String(formats.length).padStart(2, '0')}</div>
                 </div>
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '24px' }}>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 2.5vw, 34px)', fontWeight: 600, textTransform: 'uppercase', lineHeight: 0.95, letterSpacing: '-0.015em', color: '#fff', marginBottom: 8 }}>

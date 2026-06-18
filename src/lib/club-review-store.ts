@@ -105,7 +105,14 @@ export async function submitClubReview(input: {
   playerName: string;
   rating: number;
   comment?: string;
-}): Promise<void> {
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: 'Sin conexión' };
+
+  // Verify the caller has an active session and owns the playerId
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return { ok: false, error: 'Debés iniciar sesión para valorar este club.' };
+  if (session.user.id !== input.playerId) return { ok: false, error: 'Usuario no autorizado.' };
+
   const review: ClubReview = {
     clubId: input.clubId,
     playerId: input.playerId,
@@ -117,11 +124,8 @@ export async function submitClubReview(input: {
 
   mergeIntoLocal([review]);
 
-  // Best-effort Supabase upsert (cross-device). Degrades gracefully if the
-  // migration hasn't run yet.
-  if (!supabase) return;
   try {
-    await supabase.from('club_reviews').upsert({
+    const { error } = await supabase.from('club_reviews').upsert({
       club_id: review.clubId,
       player_id: review.playerId,
       player_name: review.playerName,
@@ -129,5 +133,8 @@ export async function submitClubReview(input: {
       comment: review.comment ?? null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'club_id,player_id' });
-  } catch { /* offline / table missing — local cache already updated */ }
+    if (error) return { ok: false, error: error.message };
+  } catch { /* offline — local cache already updated */ }
+
+  return { ok: true };
 }

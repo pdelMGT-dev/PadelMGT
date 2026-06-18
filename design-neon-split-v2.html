@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PadelMGT · Neon Split — 3 versiones íconos minimalistas</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --black:      #111111;
+  --white:      #FFFFFF;
+  --neon:       #d6ff00;
+  --neon-dim:   #a8ca00;
+  --neon-ghost: rgba(214,255,0,0.15);
+  --blue-deep:  #0a1638;
+  --blue:       #1a4ed8;
+  --blue-mid:   #2d63f5;
+  --blue-light: #6fa3ff;
+  --blue-pale:  #dbeafe;
+  --green:      #1eaa52;
+  --grey-100:   #F5F5F5;
+  --grey-200:   #E5E5E5;
+  --grey-300:   #CACACB;
+  --grey-500:   #707072;
+  --grey-700:   #39393B;
+  --grey-800:   #28282A;
+  --grey-900:   #1F1F21;
+  --font-d: 'Oswald', Arial, sans-serif;
+  --font-b: 'Inter', Arial, sans-serif;
+}
+
+body {
+  font-family: var(--font-b);
+  background: #090b12;
+  color: #fff;
+  padding: 48px 24px 80px;
+}
+
+/* ── PAGE HEADER ─────────────────────────────────── */
+.page-header {
+  text-align: center;
+  margin-bottom: 56px;
+}
+.page-header .eyebrow {
+  display: inline-block;
+  background: rgba(214,255,0,0.1);
+  border: 1px solid rgba(214,255,0,0.25);
+  color: var(--neon);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 4px 14px;
+  border-radius: 100px;
+  margin-bottom: 14px;
+}
+.page-header .logo {
+  font-family: var(--font-d);
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--neon);
+}
+.page-header .logo span { color: #fff; }
+.page-header p {
+  font-size: 14px;
+  color: var(--grey-500);
+  margin-top: 8px;
+  letter-spacing: 0.3px;
+}
+
+/* ── ICON PALETTES LEGEND ────────────────────────── */
+.legend {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin-bottom: 48px;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.legend-dots {
+  display: flex;
+  gap: 6px;
+}
+.dot {
+  width: 18px; height: 18px;
+  border-radius: 100%;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.legend-name {
+  font-family: var(--font-d);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #fff;
+}
+.legend-desc {
+  font-size: 11px;
+  color: var(--grey-500);
+  text-align: center;
+  max-width: 140px;
+  line-height: 1.4;
+}
+
+/* ── GRID ─────────────────────────────────────────── */
+.grid {
+  display: flex;
+  justify-content: center;
+  gap: 52px;
+  flex-wrap: wrap;
+  max-width: 1300px;
+  margin: 0 auto;
+}
+
+/* ── CONCEPT COL ──────────────────────────────────── */
+.col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+.col-label {
+  text-align: center;
+}
+.col-label .ver {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--grey-700);
+  margin-bottom: 4px;
+}
+.col-label h3 {
+  font-family: var(--font-d);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #fff;
+}
+.col-label p {
+  font-size: 12px;
+  color: var(--grey-500);
+  margin-top: 4px;
+  max-width: 260px;
+}
+
+/* ── PHONE FRAME ──────────────────────────────────── */
+.phone {
+  width: 320px;
+  height: 692px;
+  border-radius: 46px;
+  border: 2px solid #2a2a3a;
+  box-shadow:
+    0 0 0 7px #12121a,
+    0 48px 96px rgba(0,0,0,0.75);
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  font-family: var(--font-b);
+}
+/* Dynamic island */
+.phone::before {
+  content: '';
+  position: absolute;
+  top: 14px; left: 50%;
+  transform: translateX(-50%);
+  width: 88px; height: 26px;
+  background: #000;
+  border-radius: 100px;
+  z-index: 200;
+}
+
+/* ── TOP DARK HEADER (all 3 share same layout) ───── */
+.top {
+  height: 278px;
+  position: relative;
+  overflow: hidden;
+  padding: 50px 20px 0;
+}
+
+/* Geo decoration */
+.geo-ring {
+  position: absolute;
+  border-radius: 100%;
+  border: 1px solid;
+}
+
+/* Status */
+.status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 14px;
+}
+.status-icons { display: flex; gap: 6px; align-items: center; }
+
+/* Logo row */
+.logo-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.logo-text {
+  font-family: var(--font-d);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+.avatar {
+  width: 36px; height: 36px;
+  border-radius: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+/* Stats glass card */
+.stats-card {
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 22px;
+  padding: 14px 16px;
+}
+.stats-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 2px;
+}
+.stats-name {
+  font-family: var(--font-d);
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 10px;
+}
+.stats-row {
+  display: flex;
+  gap: 8px;
+}
+.stat-box {
+  flex: 1;
+  background: rgba(0,0,0,0.22);
+  border-radius: 12px;
+  padding: 8px 6px;
+  text-align: center;
+}
+.stat-val {
+  font-family: var(--font-d);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+.stat-lbl {
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.35);
+  margin-top: 2px;
+}
+
+/* ── BOTTOM SHEET ─────────────────────────────────── */
+.sheet {
+  background: #fff;
+  border-radius: 28px 28px 0 0;
+  margin-top: -28px;
+  position: relative;
+  z-index: 2;
+  padding: 14px 16px 70px;
+  height: calc(692px - 250px);
+  overflow: hidden;
+}
+.sheet-handle {
+  width: 38px; height: 4px;
+  background: var(--grey-200);
+  border-radius: 100px;
+  margin: 0 auto 16px;
+}
+
+/* Quick actions */
+.actions-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.action-item {
+  background: var(--grey-100);
+  border-radius: 16px;
+  padding: 11px 6px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.action-lbl {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--grey-500);
+}
+
+/* Pricing card */
+.pricing-card {
+  background: linear-gradient(140deg, #0a1638, #1040b0);
+  border-radius: 20px;
+  padding: 14px 14px 12px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.pricing-glow {
+  position: absolute;
+  top: -30px; right: -30px;
+  width: 90px; height: 90px;
+  border-radius: 100%;
+  opacity: 0.12;
+}
+.pricing-eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--neon);
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pricing-title {
+  font-family: var(--font-d);
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 10px;
+}
+.tiers-row {
+  display: flex;
+  gap: 5px;
+}
+.tier {
+  flex: 1;
+  border-radius: 10px;
+  padding: 7px 4px;
+  text-align: center;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.tier.active {
+  background: var(--neon);
+  border-color: var(--neon);
+}
+.tier-price {
+  font-family: var(--font-d);
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+.tier.active .tier-price { color: #111; }
+.tier-lbl {
+  font-size: 7px;
+  color: rgba(255,255,255,0.45);
+  margin-top: 2px;
+  font-weight: 500;
+}
+.tier.active .tier-lbl { color: rgba(0,0,0,0.55); }
+
+/* Promo row */
+.promo-row {
+  display: flex;
+  gap: 7px;
+  margin-top: 10px;
+}
+.promo-input {
+  flex: 1;
+  background: var(--grey-100);
+  border: 1.5px solid var(--grey-200);
+  border-radius: 100px;
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--grey-500);
+  font-family: var(--font-b);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  outline: none;
+}
+.promo-btn {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 100px;
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-b);
+  cursor: pointer;
+}
+
+/* FAB */
+.fab {
+  position: absolute;
+  bottom: 74px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 52px; height: 52px;
+  background: var(--neon);
+  border-radius: 100%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 24px rgba(214,255,0,0.4);
+  z-index: 10;
+}
+
+/* Pill nav */
+.pill-nav {
+  position: absolute;
+  bottom: 12px;
+  left: 14px; right: 14px;
+  height: 52px;
+  background: #111;
+  border-radius: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 6px;
+  z-index: 5;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.3);
+}
+.nav-item {
+  width: 38px; height: 36px;
+  border-radius: 100px;
+  display: flex; align-items: center; justify-content: center;
+}
+.nav-spacer { width: 56px; }
+
+/* SVG icons base */
+svg.icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════════════════
+   VERSION A — NEON MONO
+   Icons: neon #d6ff00 fill / neon outline on dark,
+          near-black fill on light backgrounds.
+   2 colors: #d6ff00 + #111111
+══════════════════════════════════════════════════════ */
+.vA .top { background: linear-gradient(160deg, #0a1638 0%, #0e1a3a 100%); }
+.vA .geo-ring.r1 { width: 200px; height: 200px; top: -60px; right: -60px; border-color: rgba(214,255,0,0.1); }
+.vA .geo-ring.r2 { width: 110px; height: 110px; top: -10px; right: -10px; border-color: rgba(214,255,0,0.07); background: rgba(214,255,0,0.04); }
+.vA .logo-text { color: var(--neon); }
+.vA .logo-text span { color: rgba(255,255,255,0.9); }
+.vA .avatar { background: var(--neon); color: #111; }
+.vA .stat-val { color: var(--neon); }
+/* nav */
+.vA .nav-item.active { background: var(--neon); }
+/* fab icon */
+.vA .fab-icon { color: #111; }
+/* icon colors on dark bg (neon) */
+.vA .icon-dark { color: var(--neon); }
+/* icon colors on light bg (dark) */
+.vA .icon-light { color: #111; }
+/* action bg */
+.vA .action-item { background: #f7ffe0; }
+
+/* ══════════════════════════════════════════════════════
+   VERSION B — BLUE SPECTRUM
+   Icons: 3 shades of blue — #0a1638, #1a4ed8, #6fa3ff
+   All icons use only these tones.
+══════════════════════════════════════════════════════ */
+.vB .top { background: linear-gradient(160deg, #050e25 0%, #0d1f4e 100%); }
+.vB .geo-ring.r1 { width: 200px; height: 200px; top: -60px; right: -60px; border-color: rgba(26,78,216,0.2); }
+.vB .geo-ring.r2 { width: 110px; height: 110px; top: -10px; right: -10px; border-color: rgba(26,78,216,0.12); background: rgba(26,78,216,0.06); }
+.vB .logo-text { color: #fff; }
+.vB .logo-text span { color: var(--blue-light); }
+.vB .avatar { background: var(--blue); color: #fff; }
+.vB .stat-val { color: var(--blue-light); }
+/* nav */
+.vB .nav-item.active { background: var(--blue); }
+/* fab */
+.vB .fab { background: var(--blue); box-shadow: 0 6px 24px rgba(26,78,216,0.5); }
+.vB .fab-icon { color: #fff; }
+/* action */
+.vB .action-item { background: #eff6ff; }
+/* pricing eyebrow override */
+.vB .pricing-eyebrow { color: var(--blue-light); }
+/* promo btn */
+.vB .promo-btn { background: var(--blue-deep); }
+
+/* ══════════════════════════════════════════════════════
+   VERSION C — WHITE GHOST (outline only)
+   Icons: strokes only in white (dark bg) or grey (light bg).
+   1 weight, pure outline. 2 colors: #fff + #39393B
+══════════════════════════════════════════════════════ */
+.vC .top { background: linear-gradient(160deg, #0a1638 0%, #1a1a2e 100%); }
+.vC .geo-ring.r1 { width: 200px; height: 200px; top: -60px; right: -60px; border-color: rgba(255,255,255,0.06); }
+.vC .geo-ring.r2 { width: 110px; height: 110px; top: -10px; right: -10px; border-color: rgba(255,255,255,0.04); background: rgba(255,255,255,0.03); }
+.vC .logo-text { color: #fff; }
+.vC .logo-text span { color: rgba(255,255,255,0.45); }
+.vC .avatar { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.2); }
+.vC .stat-val { color: #fff; }
+/* nav */
+.vC .nav-item.active { background: rgba(255,255,255,0.15); }
+/* fab */
+.vC .fab { background: #fff; box-shadow: 0 6px 24px rgba(255,255,255,0.2); }
+.vC .fab-icon { color: #111; }
+/* action */
+.vC .action-item { background: #f9f9f9; border: 1px solid var(--grey-200); }
+/* pricing eyebrow */
+.vC .pricing-eyebrow { color: rgba(255,255,255,0.6); }
+
+/* ── DETAIL CARDS ──────────────────────────────────── */
+.details {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  max-width: 1100px;
+  margin: 60px auto 0;
+}
+.detail {
+  flex: 1;
+  min-width: 260px;
+  max-width: 320px;
+  background: #12121c;
+  border: 1px solid #1e1e2e;
+  border-radius: 20px;
+  padding: 26px 24px;
+}
+.detail-num {
+  font-family: var(--font-d);
+  font-size: 52px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.08;
+}
+.detail-name {
+  font-family: var(--font-d);
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #fff;
+  margin: 4px 0 14px;
+}
+.palette-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.p-swatch {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+}
+.p-dot {
+  width: 32px; height: 32px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.p-lbl { font-size: 9px; color: var(--grey-500); letter-spacing: 0.3px; }
+.detail ul { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.detail li {
+  display: flex; gap: 8px; align-items: flex-start;
+  font-size: 12px; color: var(--grey-300); line-height: 1.4;
+}
+.detail li::before { content: '—'; color: var(--grey-700); flex-shrink: 0; }
+
+/* footer */
+.footer {
+  text-align: center;
+  margin-top: 60px;
+  color: #1e1e2e;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 1100px) {
+  .grid { gap: 36px; }
+}
+@media (max-width: 740px) {
+  .phone { width: 290px; height: 630px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ════════════════════════════════════════ -->
+<div class="page-header">
+  <div class="eyebrow">Neon Split · Variantes de íconos</div>
+  <div class="logo">PADEL<span>MGT</span></div>
+  <p>3 versiones del mismo concepto · íconos SVG minimalistas · 2–3 colores por rama</p>
+</div>
+
+<!-- ═══ PALETTE LEGEND ════════════════════════════════ -->
+<div class="legend">
+  <div class="legend-item">
+    <div class="legend-dots">
+      <div class="dot" style="background:#d6ff00;"></div>
+      <div class="dot" style="background:#111111;"></div>
+    </div>
+    <div class="legend-name">A · Neon Mono</div>
+    <div class="legend-desc">Neon puro + negro. Íconos sólidos en #d6ff00 sobre oscuro.</div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dots">
+      <div class="dot" style="background:#0a1638;"></div>
+      <div class="dot" style="background:#1a4ed8;"></div>
+      <div class="dot" style="background:#6fa3ff;"></div>
+    </div>
+    <div class="legend-name">B · Blue Spectrum</div>
+    <div class="legend-desc">3 azules del mismo tono. Íconos sólidos con jerarquía de azul.</div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dots">
+      <div class="dot" style="background:rgba(255,255,255,0.9);border-color:rgba(255,255,255,0.3);"></div>
+      <div class="dot" style="background:#39393B;"></div>
+    </div>
+    <div class="legend-name">C · White Ghost</div>
+    <div class="legend-desc">Solo stroke outline. Blanco sobre oscuro, gris sobre claro.</div>
+  </div>
+</div>
+
+<!-- ═══ PHONE FRAMES ══════════════════════════════════ -->
+<div class="grid">
+
+<!-- ─────────────────────────────────────────────────────
+     VERSION A — NEON MONO
+───────────────────────────────────────────────────── -->
+<div class="col vA">
+  <div class="col-label">
+    <div class="ver">Versión A</div>
+    <h3>Neon Mono</h3>
+    <p>Íconos en neon sólido (#d6ff00) · negro sobre fondos claros · 2 colores</p>
+  </div>
+
+  <div class="phone vA">
+    <!-- top dark -->
+    <div class="top">
+      <div class="geo-ring r1"></div>
+      <div class="geo-ring r2"></div>
+
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <!-- signal -->
+          <svg class="icon" width="16" height="12" viewBox="0 0 16 12" fill="none">
+            <rect x="0" y="8" width="3" height="4" rx="0.5" fill="rgba(214,255,0,0.4)"/>
+            <rect x="4.5" y="5" width="3" height="7" rx="0.5" fill="rgba(214,255,0,0.6)"/>
+            <rect x="9" y="2" width="3" height="10" rx="0.5" fill="rgba(214,255,0,0.8)"/>
+            <rect x="13.5" y="0" width="3" height="12" rx="0.5" fill="#d6ff00"/>
+          </svg>
+          <!-- battery -->
+          <svg class="icon" width="22" height="12" viewBox="0 0 22 12" fill="none">
+            <rect x="0.5" y="0.5" width="18" height="11" rx="2.5" stroke="#d6ff00" stroke-opacity="0.5"/>
+            <rect x="2" y="2" width="13" height="8" rx="1.5" fill="#d6ff00"/>
+            <path d="M19.5 4v4a1.5 1.5 0 0 0 0-4z" fill="#d6ff00" fill-opacity="0.4"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="logo-row">
+        <div class="logo-text">PADEL<span>MGT</span></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <!-- bell icon neon -->
+          <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 3a7 7 0 0 0-7 7v3l-1.7 2.3A1 1 0 0 0 4 17h16a1 1 0 0 0 .7-1.7L19 13v-3a7 7 0 0 0-7-7z" fill="#d6ff00"/>
+            <path d="M10 19a2 2 0 0 0 4 0" stroke="#d6ff00" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="18" cy="5" r="3" fill="#d6ff00"/>
+            <circle cx="18" cy="5" r="3" fill="#111" fill-opacity="0.5"/>
+          </svg>
+          <div class="avatar">LG</div>
+        </div>
+      </div>
+
+      <div class="stats-card">
+        <div class="stats-eyebrow">Mi resumen · Junio</div>
+        <div class="stats-name">Luis González</div>
+        <div class="stats-row">
+          <div class="stat-box">
+            <div class="stat-val">4</div>
+            <div class="stat-lbl">Torneos</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val">12</div>
+            <div class="stat-lbl">Equipos</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val">4.8</div>
+            <div class="stat-lbl">Rating</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- bottom sheet -->
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+
+      <!-- quick actions -->
+      <div class="actions-grid">
+        <div class="action-item">
+          <!-- trophy -->
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M8 21h8M12 17v4M7 3h10v8a5 5 0 0 1-10 0V3z" stroke="#111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 5H4a1 1 0 0 0-1 1v2a4 4 0 0 0 4 4M17 5h3a1 1 0 0 1 1 1v2a4 4 0 0 1-4 4" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <span class="action-lbl">Torneos</span>
+        </div>
+        <div class="action-item">
+          <!-- court / grid -->
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="18" height="18" rx="3" stroke="#111" stroke-width="1.8"/>
+            <line x1="12" y1="3" x2="12" y2="21" stroke="#111" stroke-width="1.8"/>
+            <line x1="3" y1="12" x2="21" y2="12" stroke="#111" stroke-width="1.8"/>
+            <rect x="5.5" y="5.5" width="13" height="13" rx="1.5" stroke="#111" stroke-width="0.8" stroke-dasharray="2 1.5"/>
+          </svg>
+          <span class="action-lbl">Clubes</span>
+        </div>
+        <div class="action-item">
+          <!-- family -->
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <circle cx="9" cy="7" r="3" stroke="#111" stroke-width="1.8"/>
+            <path d="M3 20a6 6 0 0 1 12 0" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>
+            <circle cx="18" cy="9" r="2" stroke="#111" stroke-width="1.6"/>
+            <path d="M15 20a4 4 0 0 1 6 0" stroke="#111" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <span class="action-lbl">Familia</span>
+        </div>
+        <div class="action-item">
+          <!-- chart -->
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M4 18L9 11l4 4 4-5 3 2" stroke="#111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="3" y="3" width="18" height="18" rx="3" stroke="#111" stroke-width="1.8"/>
+          </svg>
+          <span class="action-lbl">Stats</span>
+        </div>
+      </div>
+
+      <!-- pricing card -->
+      <div class="pricing-card">
+        <div class="pricing-glow" style="background:var(--neon);"></div>
+        <div class="pricing-eyebrow">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="#d6ff00"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Torneo Personalizado
+        </div>
+        <div class="pricing-title">Abrí la inscripción</div>
+        <div class="tiers-row">
+          <div class="tier"><div class="tier-price">$9</div><div class="tier-lbl">≤8 eq.</div></div>
+          <div class="tier"><div class="tier-price">$19</div><div class="tier-lbl">≤16 eq.</div></div>
+          <div class="tier active"><div class="tier-price">$29</div><div class="tier-lbl">≤32 eq.</div></div>
+          <div class="tier"><div class="tier-price">$49</div><div class="tier-lbl">+32 eq.</div></div>
+        </div>
+      </div>
+
+      <!-- promo -->
+      <div class="promo-row">
+        <input class="promo-input" placeholder="CÓDIGO PROMO" readonly>
+        <button class="promo-btn">Aplicar</button>
+      </div>
+
+      <!-- FAB -->
+      <div class="fab">
+        <svg class="icon fab-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </div>
+
+      <!-- pill nav -->
+      <div class="pill-nav">
+        <div class="nav-item active">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12L12 4l9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1v-9"/>
+          </svg>
+        </div>
+        <div class="nav-item">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 21h8M12 17v4M7 3h10v8a5 5 0 0 1-10 0V3z"/>
+          </svg>
+        </div>
+        <div class="nav-spacer"></div>
+        <div class="nav-item">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="3"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>
+          </svg>
+        </div>
+        <div class="nav-item">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /vA -->
+
+
+<!-- ─────────────────────────────────────────────────────
+     VERSION B — BLUE SPECTRUM
+───────────────────────────────────────────────────── -->
+<div class="col vB">
+  <div class="col-label">
+    <div class="ver">Versión B</div>
+    <h3>Blue Spectrum</h3>
+    <p>3 tonos de azul (#0a1638 / #1a4ed8 / #6fa3ff) · íconos sólidos con jerarquía visual</p>
+  </div>
+
+  <div class="phone vB">
+    <div class="top">
+      <div class="geo-ring r1"></div>
+      <div class="geo-ring r2"></div>
+
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <svg class="icon" width="16" height="12" viewBox="0 0 16 12" fill="none">
+            <rect x="0" y="8" width="3" height="4" rx="0.5" fill="rgba(111,163,255,0.35)"/>
+            <rect x="4.5" y="5" width="3" height="7" rx="0.5" fill="rgba(111,163,255,0.55)"/>
+            <rect x="9" y="2" width="3" height="10" rx="0.5" fill="rgba(111,163,255,0.75)"/>
+            <rect x="13.5" y="0" width="3" height="12" rx="0.5" fill="#6fa3ff"/>
+          </svg>
+          <svg class="icon" width="22" height="12" viewBox="0 0 22 12" fill="none">
+            <rect x="0.5" y="0.5" width="18" height="11" rx="2.5" stroke="#6fa3ff" stroke-opacity="0.4"/>
+            <rect x="2" y="2" width="13" height="8" rx="1.5" fill="#1a4ed8"/>
+            <path d="M19.5 4v4a1.5 1.5 0 0 0 0-4z" fill="#6fa3ff" fill-opacity="0.4"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="logo-row">
+        <div class="logo-text">PADEL<span>MGT</span></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 3a7 7 0 0 0-7 7v3l-1.7 2.3A1 1 0 0 0 4 17h16a1 1 0 0 0 .7-1.7L19 13v-3a7 7 0 0 0-7-7z" fill="#6fa3ff" fill-opacity="0.6"/>
+            <path d="M10 19a2 2 0 0 0 4 0" stroke="#6fa3ff" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <div class="avatar">LG</div>
+        </div>
+      </div>
+
+      <div class="stats-card">
+        <div class="stats-eyebrow">Mi resumen · Junio</div>
+        <div class="stats-name">Luis González</div>
+        <div class="stats-row">
+          <div class="stat-box">
+            <div class="stat-val">4</div>
+            <div class="stat-lbl">Torneos</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val">12</div>
+            <div class="stat-lbl">Equipos</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val">4.8</div>
+            <div class="stat-lbl">Rating</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+
+      <div class="actions-grid">
+        <div class="action-item">
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M8 21h8M12 17v4M7 3h10v8a5 5 0 0 1-10 0V3z" stroke="#1a4ed8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 5H4a1 1 0 0 0-1 1v2a4 4 0 0 0 4 4M17 5h3a1 1 0 0 1 1 1v2a4 4 0 0 1-4 4" stroke="#6fa3ff" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <span class="action-lbl">Torneos</span>
+        </div>
+        <div class="action-item">
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="18" height="18" rx="3" stroke="#0a1638" stroke-width="1.8" fill="#dbeafe"/>
+            <line x1="12" y1="3" x2="12" y2="21" stroke="#1a4ed8" stroke-width="1.5"/>
+            <line x1="3" y1="12" x2="21" y2="12" stroke="#1a4ed8" stroke-width="1.5"/>
+          </svg>
+          <span class="action-lbl">Clubes</span>
+        </div>
+        <div class="action-item">
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <circle cx="9" cy="7" r="3" fill="#dbeafe" stroke="#1a4ed8" stroke-width="1.6"/>
+            <path d="M3 20a6 6 0 0 1 12 0" stroke="#1a4ed8" stroke-width="1.8" stroke-linecap="round"/>
+            <circle cx="18" cy="9" r="2" stroke="#6fa3ff" stroke-width="1.4"/>
+            <path d="M15 20a4 4 0 0 1 6 0" stroke="#6fa3ff" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span class="action-lbl">Familia</span>
+        </div>
+        <div class="action-item">
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="18" height="18" rx="3" fill="#dbeafe" stroke="#1a4ed8" stroke-width="1.6"/>
+            <path d="M6 16l4-5 3 3 3-4 2 2" stroke="#0a1638" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="action-lbl">Stats</span>
+        </div>
+      </div>
+
+      <div class="pricing-card">
+        <div class="pricing-glow" style="background:#6fa3ff;"></div>
+        <div class="pricing-eyebrow">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="#6fa3ff"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Torneo Personalizado
+        </div>
+        <div class="pricing-title">Abrí la inscripción</div>
+        <div class="tiers-row">
+          <div class="tier"><div class="tier-price">$9</div><div class="tier-lbl">≤8 eq.</div></div>
+          <div class="tier"><div class="tier-price">$19</div><div class="tier-lbl">≤16 eq.</div></div>
+          <div class="tier active"><div class="tier-price">$29</div><div class="tier-lbl">≤32 eq.</div></div>
+          <div class="tier"><div class="tier-price">$49</div><div class="tier-lbl">+32 eq.</div></div>
+        </div>
+      </div>
+
+      <div class="promo-row">
+        <input class="promo-input" placeholder="CÓDIGO PROMO" readonly>
+        <button class="promo-btn">Aplicar</button>
+      </div>
+
+      <div class="fab">
+        <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </div>
+
+      <div class="pill-nav">
+        <div class="nav-item active">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12L12 4l9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1v-9"/>
+          </svg>
+        </div>
+        <div class="nav-item">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 21h8M12 17v4M7 3h10v8a5 5 0 0 1-10 0V3z"/>
+          </svg>
+        </div>
+        <div class="nav-spacer"></div>
+        <div class="nav-item">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="3"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>
+          </svg>
+        </div>
+        <div class="nav-item">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /vB -->
+
+
+<!-- ─────────────────────────────────────────────────────
+     VERSION C — WHITE GHOST
+───────────────────────────────────────────────────── -->
+<div class="col vC">
+  <div class="col-label">
+    <div class="ver">Versión C</div>
+    <h3>White Ghost</h3>
+    <p>Solo stroke outline · blanco sobre oscuro · gris #39393B sobre claro · máximo minimalismo</p>
+  </div>
+
+  <div class="phone vC">
+    <div class="top">
+      <div class="geo-ring r1"></div>
+      <div class="geo-ring r2"></div>
+
+      <div class="status">
+        <span>9:41</span>
+        <div class="status-icons">
+          <svg class="icon" width="16" height="12" viewBox="0 0 16 12" fill="none">
+            <rect x="0" y="8" width="3" height="4" rx="0.5" fill="rgba(255,255,255,0.2)"/>
+            <rect x="4.5" y="5" width="3" height="7" rx="0.5" fill="rgba(255,255,255,0.35)"/>
+            <rect x="9" y="2" width="3" height="10" rx="0.5" fill="rgba(255,255,255,0.55)"/>
+            <rect x="13.5" y="0" width="3" height="12" rx="0.5" fill="rgba(255,255,255,0.8)"/>
+          </svg>
+          <svg class="icon" width="22" height="12" viewBox="0 0 22 12" fill="none">
+            <rect x="0.5" y="0.5" width="18" height="11" rx="2.5" stroke="rgba(255,255,255,0.35)"/>
+            <rect x="2" y="2" width="12" height="8" rx="1.5" fill="rgba(255,255,255,0.5)"/>
+            <path d="M19.5 4v4a1.5 1.5 0 0 0 0-4z" fill="rgba(255,255,255,0.25)"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="logo-row">
+        <div class="logo-text">PADEL<span>MGT</span></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3a7 7 0 0 0-7 7v3l-1.7 2.3A1 1 0 0 0 4 17h16a1 1 0 0 0 .7-1.7L19 13v-3a7 7 0 0 0-7-7z"/>
+            <path d="M10 19a2 2 0 0 0 4 0"/>
+          </svg>
+          <div class="avatar">LG</div>
+        </div>
+      </div>
+
+      <div class="stats-card">
+        <div class="stats-eyebrow">Mi resumen · Junio</div>
+        <div class="stats-name">Luis González</div>
+        <div class="stats-row">
+          <div class="stat-box">
+            <div class="stat-val">4</div>
+            <div class="stat-lbl">Torneos</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val">12</div>
+            <div class="stat-lbl">Equipos</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val">4.8</div>
+            <div class="stat-lbl">Rating</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+
+      <div class="actions-grid">
+        <div class="action-item">
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#39393B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 21h8M12 17v4M7 3h10v8a5 5 0 0 1-10 0V3z"/>
+            <path d="M7 5H4a1 1 0 0 0-1 1v2a4 4 0 0 0 4 4M17 5h3a1 1 0 0 1 1 1v2a4 4 0 0 1-4 4"/>
+          </svg>
+          <span class="action-lbl">Torneos</span>
+        </div>
+        <div class="action-item">
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#39393B" stroke-width="1.8" stroke-linecap="round">
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+            <line x1="12" y1="3" x2="12" y2="21"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+          </svg>
+          <span class="action-lbl">Clubes</span>
+        </div>
+        <div class="action-item">
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#39393B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="7" r="3"/>
+            <path d="M3 20a6 6 0 0 1 12 0"/>
+            <circle cx="18" cy="9" r="2"/>
+            <path d="M15 20a4 4 0 0 1 6 0"/>
+          </svg>
+          <span class="action-lbl">Familia</span>
+        </div>
+        <div class="action-item">
+          <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#39393B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+            <path d="M6 16l4-5 3 3 3-4 2 2"/>
+          </svg>
+          <span class="action-lbl">Stats</span>
+        </div>
+      </div>
+
+      <div class="pricing-card">
+        <div class="pricing-glow" style="background:#fff;"></div>
+        <div class="pricing-eyebrow">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="rgba(255,255,255,0.6)"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Torneo Personalizado
+        </div>
+        <div class="pricing-title">Abrí la inscripción</div>
+        <div class="tiers-row">
+          <div class="tier"><div class="tier-price">$9</div><div class="tier-lbl">≤8 eq.</div></div>
+          <div class="tier"><div class="tier-price">$19</div><div class="tier-lbl">≤16 eq.</div></div>
+          <div class="tier" style="background:rgba(255,255,255,0.18);border-color:rgba(255,255,255,0.5);">
+            <div class="tier-price">$29</div><div class="tier-lbl" style="color:rgba(255,255,255,0.6);">≤32 eq.</div>
+          </div>
+          <div class="tier"><div class="tier-price">$49</div><div class="tier-lbl">+32 eq.</div></div>
+        </div>
+      </div>
+
+      <div class="promo-row">
+        <input class="promo-input" placeholder="CÓDIGO PROMO" readonly>
+        <button class="promo-btn" style="background:#111;">Aplicar</button>
+      </div>
+
+      <div class="fab">
+        <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="2.5" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </div>
+
+      <div class="pill-nav">
+        <div class="nav-item active">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12L12 4l9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1v-9"/>
+          </svg>
+        </div>
+        <div class="nav-item">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 21h8M12 17v4M7 3h10v8a5 5 0 0 1-10 0V3z"/>
+          </svg>
+        </div>
+        <div class="nav-spacer"></div>
+        <div class="nav-item">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="2" stroke-linecap="round">
+            <rect x="3" y="3" width="18" height="18" rx="3"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>
+          </svg>
+        </div>
+        <div class="nav-item">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /vC -->
+
+</div><!-- /grid -->
+
+
+<!-- ═══ DETAIL CARDS ══════════════════════════════════ -->
+<div class="details">
+
+  <div class="detail">
+    <div class="detail-num">A</div>
+    <div class="detail-name">Neon Mono</div>
+    <div class="palette-row">
+      <div class="p-swatch"><div class="p-dot" style="background:#d6ff00;"></div><div class="p-lbl">#D6FF00</div></div>
+      <div class="p-swatch"><div class="p-dot" style="background:#111111;"></div><div class="p-lbl">#111111</div></div>
+    </div>
+    <ul>
+      <li>Íconos sólidos (filled) en neon puro sobre fondos oscuros</li>
+      <li>Mismos íconos en negro sólido sobre el sheet blanco</li>
+      <li>Nav activo con chip neon · inactivos en blanco 35% opacidad</li>
+      <li>Alto contraste · accesible · WCAG AA en todos los fondos</li>
+      <li>Sensación eléctrica y deportiva · identidad de marca fuerte</li>
+    </ul>
+  </div>
+
+  <div class="detail">
+    <div class="detail-num">B</div>
+    <div class="detail-name">Blue Spectrum</div>
+    <div class="palette-row">
+      <div class="p-swatch"><div class="p-dot" style="background:#0a1638;"></div><div class="p-lbl">#0A1638</div></div>
+      <div class="p-swatch"><div class="p-dot" style="background:#1a4ed8;"></div><div class="p-lbl">#1A4ED8</div></div>
+      <div class="p-swatch"><div class="p-dot" style="background:#6fa3ff;"></div><div class="p-lbl">#6FA3FF</div></div>
+    </div>
+    <ul>
+      <li>3 tonos de azul crean jerarquía: azul deep → blue → light</li>
+      <li>Íconos primarios en #1a4ed8 · secundarios en #6fa3ff</li>
+      <li>Relleno suave #dbeafe para fondos de actions en sheet blanco</li>
+      <li>FAB y nav activo en azul brand #1a4ed8 · coherencia total</li>
+      <li>Profesional · confiable · ideal para contexto corporativo LATAM</li>
+    </ul>
+  </div>
+
+  <div class="detail">
+    <div class="detail-num">C</div>
+    <div class="detail-name">White Ghost</div>
+    <div class="palette-row">
+      <div class="p-swatch"><div class="p-dot" style="background:rgba(255,255,255,0.85);border-color:rgba(255,255,255,0.3);"></div><div class="p-lbl">#FFFFFF</div></div>
+      <div class="p-swatch"><div class="p-dot" style="background:#39393B;"></div><div class="p-lbl">#39393B</div></div>
+    </div>
+    <ul>
+      <li>Solo stroke outline, 1.8px · sin rellenos ni sombras en íconos</li>
+      <li>Blancos sobre oscuro · gris #39393B sobre el sheet claro</li>
+      <li>Nav activo: ícono al 90% opacidad · inactivos al 25%</li>
+      <li>FAB blanco sólido con ícono en negro · único punto de color</li>
+      <li>Ultra minimalista · elegante · menos es más · atemporal</li>
+    </ul>
+  </div>
+
+</div>
+
+<div class="footer">PadelMGT · Neon Split v2 · Conceptual · Sin cambios al código · 2026</div>
+
+</body>
+</html>

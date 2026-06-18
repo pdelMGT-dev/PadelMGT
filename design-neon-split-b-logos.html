@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PadelMGT · Neon Split B — Blue Spectrum · Logo Real</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --blue-deep:  #0a1638;
+  --blue-mid:   #0d1f4e;
+  --blue:       #1a4ed8;
+  --blue-light: #6fa3ff;
+  --blue-pale:  #dbeafe;
+  --blue-50:    #eff6ff;
+  --neon:       #d6ff00;
+  --white:      #FFFFFF;
+  --black:      #111111;
+  --grey-100:   #F5F5F5;
+  --grey-200:   #E5E5E5;
+  --grey-300:   #CACACB;
+  --grey-500:   #707072;
+  --grey-700:   #39393B;
+  --font-d: 'Oswald', Arial, sans-serif;
+  --font-b: 'Inter', Arial, sans-serif;
+}
+
+body {
+  font-family: var(--font-b);
+  background: #07090f;
+  color: #fff;
+  padding: 52px 24px 90px;
+  min-height: 100vh;
+}
+
+/* ── PAGE HEADER ──────────────────────────────────── */
+.page-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(26,78,216,0.15);
+  border: 1px solid rgba(26,78,216,0.3);
+  color: var(--blue-light);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 5px 14px;
+  border-radius: 100px;
+  margin-bottom: 18px;
+}
+.page-header h1 {
+  font-family: var(--font-d);
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #fff;
+  line-height: 1;
+}
+.page-header p {
+  font-size: 14px;
+  color: var(--grey-500);
+  margin-top: 10px;
+  letter-spacing: 0.3px;
+}
+
+/* ── LOGO PREVIEW STRIP ───────────────────────────── */
+.logo-strip {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  margin-bottom: 52px;
+}
+.logo-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 32px;
+  border-radius: 16px;
+}
+.logo-chip.dark-bg { background: var(--blue-deep); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px 0 0 16px; }
+.logo-chip.mid-bg  { background: var(--blue-mid);  border: 1px solid rgba(255,255,255,0.06); }
+.logo-chip.light-bg{ background: #fff; border: 1px solid var(--grey-200); border-radius: 0 16px 16px 0; }
+.logo-chip img { height: 32px; object-fit: contain; }
+.logo-chip span { font-size: 10px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; opacity: 0.45; }
+
+/* ── SCREENS GRID ─────────────────────────────────── */
+.screens-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 56px;
+  flex-wrap: wrap;
+  max-width: 1280px;
+  margin: 0 auto 64px;
+}
+.screen-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.screen-label {
+  text-align: center;
+}
+.screen-label .tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--blue-light);
+  opacity: 0.6;
+}
+.screen-label h3 {
+  font-family: var(--font-d);
+  font-size: 18px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #fff;
+  margin-top: 3px;
+}
+
+/* ── PHONE FRAME ──────────────────────────────────── */
+.phone {
+  width: 320px;
+  height: 694px;
+  border-radius: 48px;
+  border: 2px solid #1e2840;
+  box-shadow:
+    0 0 0 7px #0c0e18,
+    0 50px 100px rgba(0,0,0,0.8),
+    0 0 60px rgba(26,78,216,0.08);
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  font-family: var(--font-b);
+  background: #fff;
+}
+/* Dynamic island */
+.phone::before {
+  content: '';
+  position: absolute;
+  top: 14px; left: 50%;
+  transform: translateX(-50%);
+  width: 86px; height: 26px;
+  background: #000;
+  border-radius: 100px;
+  z-index: 200;
+}
+
+/* ── TOP HEADER DARK ──────────────────────────────── */
+.top {
+  background: linear-gradient(160deg, #050e25 0%, #0c1d4a 60%, #0d1f4e 100%);
+  height: 282px;
+  position: relative;
+  overflow: hidden;
+  padding: 50px 20px 0;
+}
+
+/* Geometric rings */
+.ring {
+  position: absolute;
+  border-radius: 100%;
+  border: 1px solid rgba(26,78,216,0.18);
+}
+.ring.a { width: 220px; height: 220px; top: -70px; right: -70px; }
+.ring.b { width: 130px; height: 130px; top: -20px; right: -20px; background: rgba(26,78,216,0.05); }
+.ring.c { width: 80px; height: 80px; top: 10px; right: 10px; border-color: rgba(111,163,255,0.1); }
+
+/* Status bar */
+.status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.4);
+}
+.status-right {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+/* ── HEADER ROW: Real logo + avatar ──────────────── */
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.logo-img {
+  height: 26px;
+  object-fit: contain;
+  /* Ensure white logo is visible */
+  filter: brightness(0) invert(1);
+}
+/* For the color icon, don't invert */
+.logo-img.keep-color {
+  filter: none;
+}
+
+/* Avatar: foto de perfil circular */
+.avatar-wrap {
+  position: relative;
+}
+.avatar-photo {
+  width: 38px;
+  height: 38px;
+  border-radius: 100%;
+  overflow: hidden;
+  border: 2px solid rgba(111,163,255,0.4);
+  background: linear-gradient(135deg, #1a4ed8 0%, #0a1638 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex-shrink: 0;
+}
+/* Silhouette person inside the circle */
+.avatar-silhouette {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.avatar-head {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 100%;
+  background: rgba(255,255,255,0.55);
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.avatar-body {
+  position: absolute;
+  bottom: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 16px;
+  border-radius: 14px 14px 0 0;
+  background: rgba(255,255,255,0.35);
+}
+.avatar-online {
+  position: absolute;
+  bottom: 1px; right: 1px;
+  width: 9px; height: 9px;
+  border-radius: 100%;
+  background: #1eaa52;
+  border: 1.5px solid #050e25;
+}
+
+/* Bell icon */
+.bell-wrap {
+  position: relative;
+  margin-right: 6px;
+}
+.notif-dot {
+  position: absolute;
+  top: -1px; right: -1px;
+  width: 7px; height: 7px;
+  background: var(--blue-light);
+  border-radius: 100%;
+  border: 1.5px solid #050e25;
+}
+
+/* ── STATS GLASS CARD ─────────────────────────────── */
+.stats-card {
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 22px;
+  padding: 14px 16px;
+}
+.stats-greeting {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.38);
+  margin-bottom: 1px;
+}
+.stats-name {
+  font-family: var(--font-d);
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 10px;
+  letter-spacing: 0.3px;
+}
+.stats-row {
+  display: flex;
+  gap: 8px;
+}
+.stat-box {
+  flex: 1;
+  background: rgba(0,0,0,0.2);
+  border-radius: 12px;
+  padding: 8px 6px;
+  text-align: center;
+}
+.stat-val {
+  font-family: var(--font-d);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--blue-light);
+  line-height: 1;
+}
+.stat-lbl {
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.3);
+  margin-top: 2px;
+}
+
+/* ── BOTTOM SHEET ─────────────────────────────────── */
+.sheet {
+  background: #fff;
+  border-radius: 28px 28px 0 0;
+  margin-top: -28px;
+  position: relative;
+  z-index: 2;
+  padding: 14px 16px 72px;
+  height: calc(694px - 254px);
+  overflow: hidden;
+}
+.sheet-handle {
+  width: 38px; height: 4px;
+  background: var(--grey-200);
+  border-radius: 100px;
+  margin: 0 auto 16px;
+}
+
+/* Quick actions */
+.actions-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.action-item {
+  background: var(--blue-50);
+  border-radius: 16px;
+  padding: 11px 6px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(26,78,216,0.07);
+}
+.action-lbl {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--grey-500);
+}
+
+/* Pricing card */
+.pricing-card {
+  background: linear-gradient(140deg, #050e25, #1040b0);
+  border-radius: 20px;
+  padding: 14px 14px 12px;
+  margin-bottom: 10px;
+  position: relative;
+  overflow: hidden;
+}
+.pricing-glow {
+  position: absolute;
+  top: -30px; right: -30px;
+  width: 90px; height: 90px;
+  border-radius: 100%;
+  background: var(--blue-light);
+  opacity: 0.1;
+}
+.pricing-eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--blue-light);
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pricing-title {
+  font-family: var(--font-d);
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 10px;
+}
+.tiers-row {
+  display: flex;
+  gap: 5px;
+}
+.tier {
+  flex: 1;
+  border-radius: 10px;
+  padding: 7px 4px;
+  text-align: center;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.tier.hl {
+  background: var(--blue-light);
+  border-color: var(--blue-light);
+}
+.tier-price {
+  font-family: var(--font-d);
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+.tier.hl .tier-price { color: var(--blue-deep); }
+.tier-lbl { font-size: 7px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+.tier.hl .tier-lbl { color: rgba(10,22,56,0.55); }
+
+/* Promo row */
+.promo-row {
+  display: flex;
+  gap: 7px;
+}
+.promo-input {
+  flex: 1;
+  background: var(--grey-100);
+  border: 1.5px solid var(--grey-200);
+  border-radius: 100px;
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--grey-500);
+  font-family: var(--font-b);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  outline: none;
+}
+.promo-btn {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 100px;
+  padding: 9px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-b);
+  cursor: pointer;
+}
+
+/* FAB */
+.fab {
+  position: absolute;
+  bottom: 74px; left: 50%;
+  transform: translateX(-50%);
+  width: 52px; height: 52px;
+  background: var(--blue);
+  border-radius: 100%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 24px rgba(26,78,216,0.5);
+  z-index: 10;
+}
+
+/* Pill nav */
+.pill-nav {
+  position: absolute;
+  bottom: 12px; left: 14px; right: 14px;
+  height: 52px;
+  background: var(--blue-deep);
+  border-radius: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 6px;
+  z-index: 5;
+  box-shadow: 0 8px 28px rgba(5,14,37,0.6);
+  border: 1px solid rgba(26,78,216,0.25);
+}
+.nav-item {
+  width: 38px; height: 36px;
+  border-radius: 100px;
+  display: flex; align-items: center; justify-content: center;
+}
+.nav-item.active { background: var(--blue); }
+.nav-spacer { width: 56px; }
+
+/* ════════════════════════════════════════════════════
+   SCREEN 2 — TORNEOS
+════════════════════════════════════════════════════ */
+.s2-top {
+  background: linear-gradient(160deg, #050e25 0%, #0c1d4a 60%, #0d1f4e 100%);
+  height: 282px;
+  position: relative;
+  overflow: hidden;
+  padding: 50px 20px 0;
+}
+
+/* Back button */
+.back-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.back-btn {
+  width: 32px; height: 32px;
+  border-radius: 100%;
+  background: rgba(255,255,255,0.08);
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.back-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.45);
+  letter-spacing: 0.3px;
+}
+
+/* Tournament hero card */
+.t-hero {
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 22px;
+  padding: 14px 16px;
+}
+.t-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(26,78,216,0.3);
+  border: 1px solid rgba(111,163,255,0.35);
+  border-radius: 100px;
+  padding: 3px 10px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--blue-light);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 7px;
+}
+.t-live-dot {
+  width: 5px; height: 5px;
+  background: var(--blue-light);
+  border-radius: 100%;
+  animation: blink 1.4s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+.t-name {
+  font-family: var(--font-d);
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+}
+.t-meta-row {
+  display: flex;
+  gap: 14px;
+}
+.t-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.45);
+  font-weight: 500;
+}
+
+/* Sheet screen 2 */
+.s2-sheet {
+  background: #fff;
+  border-radius: 28px 28px 0 0;
+  margin-top: -28px;
+  position: relative;
+  z-index: 2;
+  padding: 14px 16px 72px;
+  height: calc(694px - 254px);
+  overflow: hidden;
+}
+
+/* Teams list */
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--grey-300);
+  margin-bottom: 10px;
+}
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--grey-100);
+}
+.team-rank {
+  font-family: var(--font-d);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--blue-light);
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.team-rank.gold { color: #f59e0b; }
+.team-avatars {
+  display: flex;
+  margin-right: 4px;
+}
+.mini-avatar {
+  width: 26px; height: 26px;
+  border-radius: 100%;
+  border: 1.5px solid #fff;
+  overflow: hidden;
+  background: linear-gradient(135deg, #1a4ed8, #0a1638);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.mini-avatar:last-child { margin-left: -8px; }
+.mini-head { width: 8px; height: 8px; border-radius: 100%; background: rgba(255,255,255,0.6); position: absolute; margin-top: 5px; }
+.mini-body { width: 14px; height: 9px; border-radius: 8px 8px 0 0; background: rgba(255,255,255,0.35); }
+.team-info { flex: 1; }
+.team-name { font-size: 12px; font-weight: 700; color: var(--black); }
+.team-pts { font-size: 10px; color: var(--grey-500); margin-top: 1px; }
+.team-score {
+  font-family: var(--font-d);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--blue);
+}
+
+/* CTA button */
+.cta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 100px;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-b);
+  cursor: pointer;
+  width: 100%;
+  margin-top: 10px;
+  letter-spacing: 0.3px;
+}
+
+/* ════════════════════════════════════════════════════
+   SCREEN 3 — PERFIL / CLUB DETAIL
+════════════════════════════════════════════════════ */
+.s3-top {
+  background: linear-gradient(160deg, #050e25 0%, #0c1d4a 60%, #0d1f4e 100%);
+  height: 282px;
+  position: relative;
+  overflow: hidden;
+  padding: 50px 20px 0;
+}
+/* Club header inside top */
+.club-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.club-icon-big {
+  width: 64px; height: 64px;
+  border-radius: 22px;
+  background: rgba(26,78,216,0.2);
+  border: 1px solid rgba(111,163,255,0.3);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 8px;
+}
+.club-name-big {
+  font-family: var(--font-d);
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+.club-meta-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.club-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 100px;
+  padding: 3px 9px;
+  font-size: 9px;
+  color: rgba(255,255,255,0.55);
+  font-weight: 500;
+}
+
+.s3-sheet {
+  background: #fff;
+  border-radius: 28px 28px 0 0;
+  margin-top: -28px;
+  position: relative;
+  z-index: 2;
+  padding: 14px 16px 72px;
+  height: calc(694px - 254px);
+  overflow: hidden;
+}
+.rating-section {
+  background: var(--blue-50);
+  border-radius: 18px;
+  padding: 14px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(26,78,216,0.08);
+}
+.rating-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--grey-500); margin-bottom: 8px; }
+.stars-row { display: flex; gap: 5px; margin-bottom: 6px; }
+.star-btn {
+  width: 34px; height: 34px;
+  border-radius: 100%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--blue-pale);
+  background: #fff;
+}
+.star-btn.filled { background: var(--blue); border-color: var(--blue); }
+.rating-avg { font-size: 12px; color: var(--grey-500); font-weight: 500; }
+.rating-avg strong { color: var(--blue); font-weight: 700; }
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.info-box {
+  background: var(--grey-100);
+  border-radius: 14px;
+  padding: 12px 12px;
+}
+.info-box-val {
+  font-family: var(--font-d);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--blue);
+  line-height: 1;
+}
+.info-box-lbl { font-size: 10px; color: var(--grey-500); font-weight: 500; margin-top: 2px; }
+
+.join-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 100px;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-b);
+  cursor: pointer;
+  width: 100%;
+  letter-spacing: 0.3px;
+}
+
+/* ── FOOTER NOTES ─────────────────────────────────── */
+.notes {
+  max-width: 1060px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.note-card {
+  background: #0d1020;
+  border: 1px solid #1a2240;
+  border-radius: 18px;
+  padding: 22px 20px;
+}
+.note-screen {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--blue-light);
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
+.note-title {
+  font-family: var(--font-d);
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #fff;
+  margin-bottom: 12px;
+}
+.note-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.note-list li {
+  display: flex; gap: 8px; align-items: flex-start;
+  font-size: 11px; color: var(--grey-300); line-height: 1.4;
+}
+.note-list li::before { content: '·'; color: var(--blue-light); font-size: 16px; line-height: 1; flex-shrink: 0; margin-top: -1px; }
+
+.pg-footer {
+  text-align: center;
+  margin-top: 52px;
+  color: #12172a;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ══════════════════════════════════════ -->
+<div class="page-header">
+  <div class="eyebrow">
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+    Neon Split · Blue Spectrum · Logo Real
+  </div>
+  <h1>PadelMGT Mobile</h1>
+  <p>3 pantallas · logo real · foto de perfil · íconos SVG minimalistas en azul</p>
+</div>
+
+<!-- ═══ LOGO PREVIEW ═════════════════════════════════ -->
+<div class="logo-strip">
+  <div class="logo-chip dark-bg">
+    <img src="public/assets/brand/logo-white.png" alt="Logo blanco" style="height:28px;filter:brightness(0) invert(1);">
+    <span style="color:rgba(255,255,255,0.4);">sobre oscuro → blanco</span>
+  </div>
+  <div class="logo-chip mid-bg">
+    <img src="public/assets/brand/logo-white.png" alt="Logo" style="height:28px;filter:brightness(0) invert(1);">
+    <span style="color:rgba(255,255,255,0.35);">header azul medio</span>
+  </div>
+  <div class="logo-chip light-bg">
+    <img src="public/assets/padelmgt-wordmark.png" alt="Logo color" style="height:28px;">
+    <span style="color:#aaa;">sobre blanco → original</span>
+  </div>
+</div>
+
+<!-- ═══ SCREENS ══════════════════════════════════════ -->
+<div class="screens-row">
+
+  <!-- ── SCREEN 1: HOME DASHBOARD ── -->
+  <div class="screen-col">
+    <div class="screen-label">
+      <div class="tag">Pantalla 01</div>
+      <h3>Dashboard · Home</h3>
+    </div>
+
+    <div class="phone">
+      <!-- top -->
+      <div class="top">
+        <div class="ring a"></div>
+        <div class="ring b"></div>
+        <div class="ring c"></div>
+
+        <div class="status">
+          <span>9:41</span>
+          <div class="status-right">
+            <svg width="15" height="11" viewBox="0 0 15 11" fill="none">
+              <rect x="0" y="7" width="2.5" height="4" rx="0.4" fill="rgba(111,163,255,0.3)"/>
+              <rect x="4" y="4.5" width="2.5" height="6.5" rx="0.4" fill="rgba(111,163,255,0.5)"/>
+              <rect x="8" y="2" width="2.5" height="9" rx="0.4" fill="rgba(111,163,255,0.7)"/>
+              <rect x="12" y="0" width="2.5" height="11" rx="0.4" fill="#6fa3ff"/>
+            </svg>
+            <svg width="21" height="11" viewBox="0 0 21 11" fill="none">
+              <rect x="0.5" y="0.5" width="17" height="10" rx="2.5" stroke="rgba(111,163,255,0.4)"/>
+              <rect x="2" y="2" width="11" height="7" rx="1.5" fill="rgba(111,163,255,0.6)"/>
+              <path d="M18.5 3.5v4a1.5 1.5 0 0 0 0-4z" fill="rgba(111,163,255,0.3)"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Header: logo real + bell + foto perfil -->
+        <div class="header-row">
+          <img class="logo-img" src="public/assets/brand/logo-white.png" alt="PadelMGT">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="bell-wrap">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3a7 7 0 0 0-7 7v3l-1.7 2.3A1 1 0 0 0 4 17h16a1 1 0 0 0 .7-1.7L19 13v-3a7 7 0 0 0-7-7z"/>
+                <path d="M10 19a2 2 0 0 0 4 0"/>
+              </svg>
+              <div class="notif-dot"></div>
+            </div>
+            <div class="avatar-wrap">
+              <div class="avatar-photo">
+                <div class="avatar-silhouette">
+                  <div class="avatar-head"></div>
+                  <div class="avatar-body"></div>
+                </div>
+              </div>
+              <div class="avatar-online"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats card -->
+        <div class="stats-card">
+          <div class="stats-greeting">Bienvenido de vuelta</div>
+          <div class="stats-name">Luis González</div>
+          <div class="stats-row">
+            <div class="stat-box">
+              <div class="stat-val">4</div>
+              <div class="stat-lbl">Torneos</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-val">12</div>
+              <div class="stat-lbl">Equipos</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-val">★ 4.8</div>
+              <div class="stat-lbl">Rating</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- sheet -->
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+
+        <!-- Quick actions -->
+        <div class="actions-grid">
+          <div class="action-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path d="M8 21h8M12 17v4M7 3h10v8a5 5 0 0 1-10 0V3z" stroke="#1a4ed8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M7 5H4a1 1 0 0 0-1 1v2a4 4 0 0 0 4 4M17 5h3a1 1 0 0 1 1 1v2a4 4 0 0 1-4 4" stroke="#6fa3ff" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span class="action-lbl">Torneos</span>
+          </div>
+          <div class="action-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="18" rx="3" fill="#dbeafe" stroke="#1a4ed8" stroke-width="1.7"/>
+              <line x1="12" y1="3" x2="12" y2="21" stroke="#1a4ed8" stroke-width="1.5"/>
+              <line x1="3" y1="12" x2="21" y2="12" stroke="#1a4ed8" stroke-width="1.5"/>
+            </svg>
+            <span class="action-lbl">Clubes</span>
+          </div>
+          <div class="action-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <circle cx="9" cy="7" r="3" fill="#dbeafe" stroke="#1a4ed8" stroke-width="1.7"/>
+              <path d="M3 20a6 6 0 0 1 12 0" stroke="#1a4ed8" stroke-width="1.8" stroke-linecap="round"/>
+              <circle cx="18" cy="9" r="2" stroke="#6fa3ff" stroke-width="1.5"/>
+              <path d="M15 20a4 4 0 0 1 6 0" stroke="#6fa3ff" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span class="action-lbl">Familia</span>
+          </div>
+          <div class="action-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="18" rx="3" fill="#dbeafe" stroke="#1a4ed8" stroke-width="1.7"/>
+              <path d="M6 16l4-5 3 3 3-4 2 2" stroke="#0a1638" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="action-lbl">Stats</span>
+          </div>
+        </div>
+
+        <!-- Pricing card -->
+        <div class="pricing-card">
+          <div class="pricing-glow"></div>
+          <div class="pricing-eyebrow">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="#6fa3ff"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Torneo Personalizado
+          </div>
+          <div class="pricing-title">Abrí la inscripción</div>
+          <div class="tiers-row">
+            <div class="tier"><div class="tier-price">$9</div><div class="tier-lbl">≤8 eq.</div></div>
+            <div class="tier"><div class="tier-price">$19</div><div class="tier-lbl">≤16 eq.</div></div>
+            <div class="tier hl"><div class="tier-price">$29</div><div class="tier-lbl">≤32 eq.</div></div>
+            <div class="tier"><div class="tier-price">$49</div><div class="tier-lbl">+32 eq.</div></div>
+          </div>
+        </div>
+
+        <!-- Promo code -->
+        <div class="promo-row">
+          <input class="promo-input" placeholder="CÓDIGO PROMO" readonly>
+          <button class="promo-btn">Aplicar</button>
+        </div>
+
+        <!-- FAB -->
+        <div class="fab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </div>
+
+        <!-- Pill nav -->
+        <div class="pill-nav">
+          <div class="nav-item active">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12L12 4l9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1v-9"/>
+            </svg>
+          </div>
+          <div class="nav-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 21h8M12 17v4M7 3h10v8a5 5 0 0 1-10 0V3z"/>
+            </svg>
+          </div>
+          <div class="nav-spacer"></div>
+          <div class="nav-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round">
+              <rect x="3" y="3" width="18" height="18" rx="3"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>
+            </svg>
+          </div>
+          <div class="nav-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 2: TORNEO DETAIL ── -->
+  <div class="screen-col">
+    <div class="screen-label">
+      <div class="tag">Pantalla 02</div>
+      <h3>Torneo · Detalle</h3>
+    </div>
+
+    <div class="phone">
+      <div class="s2-top">
+        <div class="ring a"></div>
+        <div class="ring b"></div>
+
+        <div class="status">
+          <span>9:41</span>
+          <div class="status-right">
+            <svg width="15" height="11" viewBox="0 0 15 11" fill="none">
+              <rect x="0" y="7" width="2.5" height="4" rx="0.4" fill="rgba(111,163,255,0.3)"/>
+              <rect x="4" y="4.5" width="2.5" height="6.5" rx="0.4" fill="rgba(111,163,255,0.5)"/>
+              <rect x="8" y="2" width="2.5" height="9" rx="0.4" fill="rgba(111,163,255,0.7)"/>
+              <rect x="12" y="0" width="2.5" height="11" rx="0.4" fill="#6fa3ff"/>
+            </svg>
+            <svg width="21" height="11" viewBox="0 0 21 11" fill="none">
+              <rect x="0.5" y="0.5" width="17" height="10" rx="2.5" stroke="rgba(111,163,255,0.4)"/>
+              <rect x="2" y="2" width="11" height="7" rx="1.5" fill="rgba(111,163,255,0.6)"/>
+              <path d="M18.5 3.5v4a1.5 1.5 0 0 0 0-4z" fill="rgba(111,163,255,0.3)"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Back + small logo -->
+        <div class="back-row">
+          <div class="back-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </div>
+          <span class="back-label">Torneos</span>
+          <div style="margin-left:auto;">
+            <img class="logo-img" src="public/assets/brand/logo-icon.png" alt="PadelMGT" style="height:22px;opacity:0.5;filter:brightness(0) invert(1);">
+          </div>
+        </div>
+
+        <!-- Tournament hero -->
+        <div class="t-hero">
+          <div class="t-badge"><div class="t-live-dot"></div> INSCRIPCIÓN ABIERTA</div>
+          <div class="t-name">Copa Personalizada<br>Buenos Aires 2026</div>
+          <div class="t-meta-row">
+            <div class="t-meta">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              28 jun · 2026
+            </div>
+            <div class="t-meta">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="10" r="3"/><path d="M12 3a7 7 0 0 0-7 7c0 4 7 11 7 11s7-7 7-11a7 7 0 0 0-7-7z"/></svg>
+              Club Palermo
+            </div>
+            <div class="t-meta">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+              32 equipos
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="s2-sheet">
+        <div class="sheet-handle"></div>
+        <div class="section-title">Posiciones · Grupo A</div>
+
+        <div class="team-row">
+          <div class="team-rank gold">1</div>
+          <div class="team-avatars">
+            <div class="mini-avatar"><div class="mini-body"></div></div>
+            <div class="mini-avatar" style="background:linear-gradient(135deg,#6fa3ff,#1a4ed8);"><div class="mini-body"></div></div>
+          </div>
+          <div class="team-info">
+            <div class="team-name">García / López</div>
+            <div class="team-pts">3V · 0D · 9 pts</div>
+          </div>
+          <div class="team-score">9</div>
+        </div>
+        <div class="team-row">
+          <div class="team-rank">2</div>
+          <div class="team-avatars">
+            <div class="mini-avatar" style="background:linear-gradient(135deg,#1eaa52,#0d7a38);"><div class="mini-body"></div></div>
+            <div class="mini-avatar" style="background:linear-gradient(135deg,#0a1638,#1a4ed8);"><div class="mini-body"></div></div>
+          </div>
+          <div class="team-info">
+            <div class="team-name">Pérez / Mora</div>
+            <div class="team-pts">2V · 1D · 6 pts</div>
+          </div>
+          <div class="team-score">6</div>
+        </div>
+        <div class="team-row">
+          <div class="team-rank" style="color:#cacacb;">3</div>
+          <div class="team-avatars">
+            <div class="mini-avatar" style="background:linear-gradient(135deg,#707072,#39393b);"><div class="mini-body"></div></div>
+            <div class="mini-avatar" style="background:linear-gradient(135deg,#9E9EA0,#707072);"><div class="mini-body"></div></div>
+          </div>
+          <div class="team-info">
+            <div class="team-name">Silva / Ramos</div>
+            <div class="team-pts">1V · 2D · 3 pts</div>
+          </div>
+          <div class="team-score" style="color:#cacacb;">3</div>
+        </div>
+
+        <button class="cta-btn" style="margin-top:14px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14M5 12l7 7 7-7"/>
+          </svg>
+          Inscribirse al torneo
+        </button>
+
+        <!-- FAB -->
+        <div class="fab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </div>
+
+        <!-- Pill nav -->
+        <div class="pill-nav">
+          <div class="nav-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12L12 4l9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1v-9"/>
+            </svg>
+          </div>
+          <div class="nav-item active">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 21h8M12 17v4M7 3h10v8a5 5 0 0 1-10 0V3z"/>
+            </svg>
+          </div>
+          <div class="nav-spacer"></div>
+          <div class="nav-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round">
+              <rect x="3" y="3" width="18" height="18" rx="3"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>
+            </svg>
+          </div>
+          <div class="nav-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 3: CLUB DETAIL ── -->
+  <div class="screen-col">
+    <div class="screen-label">
+      <div class="tag">Pantalla 03</div>
+      <h3>Club · Detalle</h3>
+    </div>
+
+    <div class="phone">
+      <div class="s3-top">
+        <div class="ring a"></div>
+        <div class="ring b"></div>
+
+        <div class="status">
+          <span>9:41</span>
+          <div class="status-right">
+            <svg width="15" height="11" viewBox="0 0 15 11" fill="none">
+              <rect x="0" y="7" width="2.5" height="4" rx="0.4" fill="rgba(111,163,255,0.3)"/>
+              <rect x="4" y="4.5" width="2.5" height="6.5" rx="0.4" fill="rgba(111,163,255,0.5)"/>
+              <rect x="8" y="2" width="2.5" height="9" rx="0.4" fill="rgba(111,163,255,0.7)"/>
+              <rect x="12" y="0" width="2.5" height="11" rx="0.4" fill="#6fa3ff"/>
+            </svg>
+            <svg width="21" height="11" viewBox="0 0 21 11" fill="none">
+              <rect x="0.5" y="0.5" width="17" height="10" rx="2.5" stroke="rgba(111,163,255,0.4)"/>
+              <rect x="2" y="2" width="11" height="7" rx="1.5" fill="rgba(111,163,255,0.6)"/>
+              <path d="M18.5 3.5v4a1.5 1.5 0 0 0 0-4z" fill="rgba(111,163,255,0.3)"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Back -->
+        <div class="back-row" style="margin-bottom:10px;">
+          <div class="back-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </div>
+          <span class="back-label">Mis Clubes</span>
+          <div style="margin-left:auto;">
+            <img class="logo-img" src="public/assets/brand/logo-icon.png" alt="PadelMGT" style="height:22px;opacity:0.5;filter:brightness(0) invert(1);">
+          </div>
+        </div>
+
+        <!-- Club hero centered -->
+        <div class="club-hero">
+          <div class="club-icon-big">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="18" height="18" rx="3" fill="rgba(111,163,255,0.15)" stroke="#6fa3ff" stroke-width="1.5"/>
+              <line x1="12" y1="3" x2="12" y2="21" stroke="#1a4ed8" stroke-width="1.4"/>
+              <line x1="3" y1="12" x2="21" y2="12" stroke="#1a4ed8" stroke-width="1.4"/>
+            </svg>
+          </div>
+          <div class="club-name-big">Club Palermo</div>
+          <div class="club-meta-row">
+            <div class="club-chip">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="10" r="3"/><path d="M12 3a7 7 0 0 0-7 7c0 4 7 11 7 11s7-7 7-11a7 7 0 0 0-7-7z"/></svg>
+              Buenos Aires
+            </div>
+            <div class="club-chip">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+              6 canchas
+            </div>
+            <div class="club-chip">Premium</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="s3-sheet">
+        <div class="sheet-handle"></div>
+
+        <!-- Rating widget -->
+        <div class="rating-section">
+          <div class="rating-title">Valoración del club</div>
+          <div class="stars-row">
+            <div class="star-btn filled">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </div>
+            <div class="star-btn filled">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </div>
+            <div class="star-btn filled">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </div>
+            <div class="star-btn filled">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </div>
+            <div class="star-btn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a4ed8" stroke-width="1.5">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="rating-avg"><strong>4.2</strong> · 128 valoraciones</div>
+        </div>
+
+        <!-- Info grid -->
+        <div class="info-grid">
+          <div class="info-box">
+            <div class="info-box-val">128</div>
+            <div class="info-box-lbl">Miembros</div>
+          </div>
+          <div class="info-box">
+            <div class="info-box-val">6</div>
+            <div class="info-box-lbl">Canchas</div>
+          </div>
+          <div class="info-box">
+            <div class="info-box-val">12</div>
+            <div class="info-box-lbl">Torneos activos</div>
+          </div>
+          <div class="info-box">
+            <div class="info-box-val">★ 4.2</div>
+            <div class="info-box-lbl">Rating global</div>
+          </div>
+        </div>
+
+        <button class="join-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><path d="M18 21v-6M15 18h6"/>
+          </svg>
+          Unirse al club
+        </button>
+
+        <!-- FAB -->
+        <div class="fab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </div>
+
+        <!-- Pill nav -->
+        <div class="pill-nav">
+          <div class="nav-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12L12 4l9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1v-9"/>
+            </svg>
+          </div>
+          <div class="nav-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 21h8M12 17v4M7 3h10v8a5 5 0 0 1-10 0V3z"/>
+            </svg>
+          </div>
+          <div class="nav-spacer"></div>
+          <div class="nav-item active">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
+              <rect x="3" y="3" width="18" height="18" rx="3"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>
+            </svg>
+          </div>
+          <div class="nav-item">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /screens-row -->
+
+
+<!-- ═══ NOTES ════════════════════════════════════════ -->
+<div class="notes">
+  <div class="note-card">
+    <div class="note-screen">Pantalla 01</div>
+    <div class="note-title">Dashboard · Home</div>
+    <ul class="note-list">
+      <li>Logo blanco real (logo-white.png) en el header oscuro</li>
+      <li>Foto de perfil circular con placeholder de silueta + dot online verde</li>
+      <li>Bell con dot azul para notificaciones pendientes</li>
+      <li>Stats card con glassmorphism · valores en azul claro</li>
+      <li>Quick actions con fondo azul pálido · íconos 2/3 tonos de azul</li>
+      <li>FAB azul brand + pill nav en azul profundo</li>
+    </ul>
+  </div>
+  <div class="note-card">
+    <div class="note-screen">Pantalla 02</div>
+    <div class="note-title">Torneo · Detalle</div>
+    <ul class="note-list">
+      <li>Header con botón volver + ícono de logo a la derecha (50% opacidad)</li>
+      <li>Badge "Inscripción Abierta" con punto animado · borde azul</li>
+      <li>Meta: fecha, club, capacidad con íconos outline azul</li>
+      <li>Tabla de posiciones con ranking de color (oro → azul → gris)</li>
+      <li>Avatares de equipo apilados superpuestos</li>
+      <li>CTA inscripción como botón pill azul full-width</li>
+    </ul>
+  </div>
+  <div class="note-card">
+    <div class="note-screen">Pantalla 03</div>
+    <div class="note-title">Club · Detalle</div>
+    <ul class="note-list">
+      <li>Header centrado: ícono de cancha SVG + nombre + chips de info</li>
+      <li>Widget de rating con 5 estrellas interactivas · activas en azul</li>
+      <li>Grid de stats 2×2: miembros, canchas, torneos, rating global</li>
+      <li>Botón "Unirse" con ícono de persona + plus</li>
+      <li>Nav activo en "Clubes" (tercer ícono) para coherencia</li>
+    </ul>
+  </div>
+</div>
+
+<div class="pg-footer">PadelMGT · Neon Split B · Blue Spectrum · Logo Real · Conceptual · 2026</div>
+
+</body>
+</html>

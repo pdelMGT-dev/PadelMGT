@@ -203,7 +203,8 @@ export interface PersonalizadoTournament {
   categories: PersonalizadoCategory[];
   teams: PersonalizadoTeam[];
   config?: ControlPanelConfig;
-  status: 'draft' | 'registration_open' | 'configured' | 'live' | 'finished';
+  status: 'draft' | 'registration_open' | 'configured' | 'live' | 'finished' | 'cancelled';
+  previousStatus?: string;
   creatorId: string;
   creatorName: string;
   createdAt: string;
@@ -277,6 +278,7 @@ export function tournamentToRow(t: PersonalizadoTournament): Record<string, unkn
     categories: t.categories,
     config: t.config ?? {},
     status: t.status,
+    previous_status: t.previousStatus ?? null,
     creator_player_id: t.creatorId ?? null,
     creator_name: t.creatorName ?? '',
     created_at: t.createdAt,
@@ -303,6 +305,7 @@ export function rowToTournament(
     teams,
     config: (r.config as ControlPanelConfig) ?? undefined,
     status: r.status as PersonalizadoTournament['status'],
+    previousStatus: (r.previous_status as string) ?? undefined,
     creatorId: (r.creator_player_id as string) ?? '',
     creatorName: (r.creator_name as string) ?? '',
     createdAt: (r.created_at as string) ?? new Date().toISOString(),
@@ -600,6 +603,12 @@ export async function changeTeamStatus(
     }
   }
   return setTeamStatusLocal(tournamentId, teamId, status);
+}
+
+// ── Remove from local cache ────────────────────────────────────────────────────
+
+export function removePersonalizado(id: string): void {
+  _store.persist(_store.load().filter(t => t.id !== id));
 }
 
 // ── Calendar generation (multi-day group-stage schedule + bracket) ────────────

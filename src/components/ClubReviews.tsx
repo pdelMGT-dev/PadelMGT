@@ -46,6 +46,7 @@ export default function ClubReviews({
   const [myComment, setMyComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   function refresh() {
     setReviews(getClubReviews(clubId));
@@ -74,7 +75,8 @@ export default function ClubReviews({
     e.preventDefault();
     if (!user?.id || myRating < 1) return;
     setSaving(true);
-    await submitClubReview({
+    setSubmitError(null);
+    const result = await submitClubReview({
       clubId,
       playerId: user.id,
       playerName: user.name,
@@ -82,8 +84,12 @@ export default function ClubReviews({
       comment: myComment,
     });
     setSaving(false);
-    setSubmitted(true);
-    refresh();
+    if (result.ok) {
+      setSubmitted(true);
+      refresh();
+    } else {
+      setSubmitError(result.error ?? 'Error al enviar la valoración');
+    }
   }
 
   return (
@@ -142,6 +148,9 @@ export default function ClubReviews({
             >
               {saving ? 'Enviando…' : submitted ? '✓ Valoración enviada' : 'Enviar valoración'}
             </button>
+            {submitError && (
+              <div style={{ marginTop: 10, fontSize: 13, color: 'var(--error)', fontWeight: 500 }}>{submitError}</div>
+            )}
           </form>
         )}
       </div>

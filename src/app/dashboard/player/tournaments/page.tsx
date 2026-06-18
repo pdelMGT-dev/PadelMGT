@@ -2160,11 +2160,15 @@ export default function PlayerTournamentsPage() {
             {activePersonalizados.map(pt => {
               const enrolled = pt.teams.filter(tm => tm.status !== 'rejected').length;
               const totalSlots = pt.categories.reduce((s, c) => s + c.maxTeams, 0);
-              const si = {
+              const si: Record<string, { label: string; color: string }> = {
+                draft: { label: 'Borrador', color: 'var(--grey-400)' },
                 registration_open: { label: 'Inscripciones abiertas', color: '#7c3aed' },
                 configured: { label: 'Configurado', color: '#f5a623' },
                 live: { label: 'En Vivo', color: 'var(--turf-green)' },
-              }[pt.status] ?? { label: pt.status, color: 'var(--grey-400)' };
+                finished: { label: 'Finalizado', color: 'var(--grey-400)' },
+                cancelled: { label: 'Cancelado', color: '#b91c1c' },
+              };
+              const siEntry = si[pt.status] ?? { label: pt.status, color: 'var(--grey-400)' };
               return (
                 <div key={pt.id} style={{ background: '#fff', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -2172,7 +2176,7 @@ export default function PlayerTournamentsPage() {
                       <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 3 }}>Personalizado</div>
                       <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', lineHeight: 1.2 }}>{pt.name}</div>
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: si.color, flexShrink: 0, marginLeft: 8 }}>{si.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: siEntry.color, flexShrink: 0, marginLeft: 8 }}>{siEntry.label}</span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--grey-400)', lineHeight: 1.7 }}>
                     {pt.date}{pt.time ? ` · ${pt.time}` : ''}<br />
@@ -2201,11 +2205,15 @@ export default function PlayerTournamentsPage() {
             {activePersonalizados.map(pt => {
               const enrolled = pt.teams.filter(tm => tm.status !== 'rejected').length;
               const totalSlots = pt.categories.reduce((s, c) => s + c.maxTeams, 0);
-              const si = {
+              const si: Record<string, string> = {
+                draft: 'Borrador',
                 registration_open: 'Inscripciones abiertas',
                 configured: 'Configurado',
                 live: 'En Vivo',
-              }[pt.status] ?? pt.status;
+                finished: 'Finalizado',
+                cancelled: 'Cancelado',
+              };
+              const siLabel = si[pt.status] ?? pt.status;
               return (
                 <div key={pt.id} style={{ padding: '14px 20px', borderBottom: '1px solid var(--grey-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                   <div>
@@ -2216,7 +2224,7 @@ export default function PlayerTournamentsPage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: pt.status === 'live' ? 'var(--turf-green)' : pt.status === 'configured' ? '#f5a623' : '#7c3aed' }}>{si}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: pt.status === 'live' ? 'var(--turf-green)' : pt.status === 'configured' ? '#f5a623' : pt.status === 'cancelled' ? '#b91c1c' : '#7c3aed' }}>{siLabel}</span>
                     <Link href={`/dashboard/player/tournaments/personalizado/${pt.id}`}
                       style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--neon)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none' }}>
                       GESTIONAR

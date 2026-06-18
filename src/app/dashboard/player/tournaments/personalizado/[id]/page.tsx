@@ -8,6 +8,7 @@ import {
   getPersonalizado,
   loadPersonalizadoById,
   savePersonalizado,
+  removePersonalizado,
   changeTeamStatus,
   clearTeamPartner,
   registerTeam,
@@ -46,14 +47,17 @@ const lbl: React.CSSProperties = {
 const STATUS_LABELS: Record<PersonalizadoTournament['status'], string> = {
   draft: 'BORRADOR', registration_open: 'INSCRIPCIÓN ABIERTA',
   configured: 'CONFIGURADO', live: 'EN VIVO', finished: 'FINALIZADO',
+  cancelled: 'CANCELADO',
 };
 const STATUS_COLORS: Record<PersonalizadoTournament['status'], string> = {
   draft: 'rgba(0,0,0,0.12)', registration_open: 'rgba(214,255,0,0.15)',
   configured: 'rgba(59,130,246,0.15)', live: 'rgba(34,197,94,0.15)', finished: 'rgba(156,163,175,0.15)',
+  cancelled: 'rgba(220,38,38,0.08)',
 };
 const STATUS_TEXT_COLORS: Record<PersonalizadoTournament['status'], string> = {
   draft: 'var(--grey-500)', registration_open: '#6b7a00',
   configured: '#1d4ed8', live: '#15803d', finished: 'var(--grey-400)',
+  cancelled: '#b91c1c',
 };
 const GENDER_LABELS: Record<string, string> = {
   libre: 'Libre', masculino: 'Masculino', femenino: 'Femenino', mixto: 'Mixto',
@@ -165,6 +169,19 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const [selectedP2, setSelectedP2] = useState<RegisteredPlayer | null>(null);
   const [addingTeam, setAddingTeam] = useState(false);
 
+  // ── Seed de prueba (ELIMINAR ANTES DEL LANZAMIENTO) ──────────────────────────
+  const [seedCatId, setSeedCatId] = useState<string | null>(null);
+  const [seedCount, setSeedCount] = useState(4);
+  const [seeding, setSeeding] = useState(false);
+
+  // ── Cancel / reactivate / delete ─────────────────────────────────────────────
+  const [cancelModal, setCancelModal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
   // Search debounce
   useEffect(() => {
     if (p1Query.trim().length < 2) { setP1Results([]); return; }
@@ -209,6 +226,12 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 
   // Access guard: this is the organizer management view — creator or co-creators only.
   const accessDenied = !!tournament && !canManagePersonalizado(tournament, currentUser?.id);
+  // isCreator: true when the logged-in user is the creator. If creatorId is empty (legacy
+  // tournaments created before creator tracking), we treat the manager as the creator so
+  // they can still cancel/delete their own tournament.
+  const isCreator = !!tournament && !!currentUser && (
+    tournament.creatorId === currentUser.id || (!tournament.creatorId && canManagePersonalizado(tournament, currentUser.id))
+  );
 
   // Base/auto price from the public config; a validated code overrides via codedPrice.
   const totalTeams = tournament ? totalTeamsOf(tournament.categories) : 0;
@@ -381,6 +404,97 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     showToast('Equipo agregado y confirmado', 'success');
   }
 
+  // ── SOLO PRUEBA: eliminar antes del lanzamiento ────────────────────────────
+  async function handleSeedTeams(catId: string) {
+    if (!tournament || !currentUser) return;
+    setSeeding(true);
+    const cat = tournament.categories.find(c => c.id === catId);
+    if (!cat) { setSeeding(false); return; }
+    const slots = Math.min(seedCount, cat.maxTeams - enrolledCount(tournament, catId));
+    if (slots <= 0) { setSeeding(false); return; }
+
+    try {
+      const res = await fetch('/api/personalizado/seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId: tournament.id, categoryId: catId, count: slots, requesterId: currentUser.id }),
+      });
+      const data = await res.json() as { ok?: boolean; added?: number; error?: string };
+      if (!res.ok) { showToast(data.error ?? 'Error al generar equipos', 'error'); setSeeding(false); return; }
+      const updated = await loadPersonalizadoById(id);
+      setTournament(updated);
+      showToast(`${data.added ?? slots} equipos de prueba generados y confirmados`, 'success');
+    } catch {
+      showToast('Error de red', 'error');
+    }
+    setSeedCatId(null);
+    setSeedCount(4);
+    setSeeding(false);
+  }
+
+  async function handleCancelTournament() {
+    if (!tournament || !currentUser) return;
+    setCancelling(true);
+    try {
+      const res = await fetch('/api/personalizado/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: tournament.id, requesterId: currentUser.id }),
+      });
+      const data = await res.json() as { ok?: boolean; previousStatus?: string; error?: string };
+      if (!res.ok) { showToast(data.error ?? 'No se pudo cancelar', 'error'); setCancelling(false); return; }
+      savePersonalizado({ ...tournament, status: 'cancelled', previousStatus: tournament.status });
+      const updated = await loadPersonalizadoById(id);
+      setTournament(updated);
+      setCancelModal(false);
+      showToast('Torneo cancelado. Los datos e inscripciones se conservaron.', 'success');
+    } catch {
+      showToast('Error de red', 'error');
+    }
+    setCancelling(false);
+  }
+
+  async function handleReactivateTournament() {
+    if (!tournament || !currentUser) return;
+    setReactivating(true);
+    try {
+      const res = await fetch('/api/personalizado/reactivate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: tournament.id, requesterId: currentUser.id }),
+      });
+      const data = await res.json() as { ok?: boolean; restoredStatus?: string; error?: string };
+      if (!res.ok) { showToast(data.error ?? 'No se pudo reactivar', 'error'); setReactivating(false); return; }
+      const restored = (data.restoredStatus ?? tournament.previousStatus ?? 'registration_open') as PersonalizadoTournament['status'];
+      savePersonalizado({ ...tournament, status: restored, previousStatus: undefined });
+      const updated = await loadPersonalizadoById(id);
+      setTournament(updated);
+      showToast(`Torneo reactivado — volvió a estado "${STATUS_LABELS[restored]}"`, 'success');
+    } catch {
+      showToast('Error de red', 'error');
+    }
+    setReactivating(false);
+  }
+
+  async function handleDeleteTournament() {
+    if (!tournament || !currentUser) return;
+    setDeleting(true);
+    try {
+      const res = await fetch('/api/personalizado/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: tournament.id, requesterId: currentUser.id }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) { showToast(data.error ?? 'No se pudo eliminar', 'error'); setDeleting(false); return; }
+      removePersonalizado(tournament.id);
+      router.push('/dashboard/player/tournaments');
+    } catch {
+      showToast('Error de red', 'error');
+      setDeleting(false);
+    }
+  }
+
   const STATUS_CSV: Record<string, string> = { pending: 'Pendiente', confirmed: 'Confirmado', rejected: 'Rechazado', waitlisted: 'Lista de espera' };
   const PAYMENT_CSV: Record<string, string> = { unpaid: 'Pendiente', paid: 'Pagado', free: 'Gratis' };
 
@@ -499,6 +613,15 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                     + Agregar equipo
                   </button>
                 )}
+                {/* SOLO PRUEBA — eliminar antes del lanzamiento */}
+                {(tournament.status === 'registration_open' || tournament.status === 'configured') && seedCatId !== cat.id && enrolledCount(tournament, cat.id) < cat.maxTeams && (
+                  <button
+                    onClick={() => { setSeedCatId(cat.id); setSeedCount(Math.min(4, cat.maxTeams - enrolledCount(tournament, cat.id))); }}
+                    style={{ padding: '6px 14px', background: 'rgba(234,179,8,0.1)', color: '#854d0e', border: '1px dashed #ca8a04', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
+                  >
+                    🎲 Seed prueba
+                  </button>
+                )}
               </div>
             </div>
 
@@ -547,6 +670,47 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   <button onClick={resetAddForm} style={{ padding: '9px 16px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, color: 'var(--grey-500)', fontWeight: 600, textTransform: 'uppercase' }}>
                     Cancelar
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* SOLO PRUEBA — seed form — eliminar antes del lanzamiento */}
+            {seedCatId === cat.id && (
+              <div style={{ padding: '14px 16px', background: 'rgba(234,179,8,0.06)', border: '1px dashed #ca8a04', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#854d0e', marginBottom: 12 }}>
+                  🎲 Seed de Prueba — ELIMINAR ANTES DEL LANZAMIENTO
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--grey-600)' }}>Equipos a generar:</span>
+                    <input
+                      type="number" min={1} max={cat.maxTeams - enrolledCount(tournament, cat.id)}
+                      value={seedCount}
+                      onChange={e => setSeedCount(Math.max(1, Math.min(Number(e.target.value), cat.maxTeams - enrolledCount(tournament, cat.id))))}
+                      style={{ width: 56, padding: '6px 8px', fontSize: 13, border: '1px solid var(--grey-200)', textAlign: 'center' }}
+                    />
+                    <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+                      (máx disponibles: {cat.maxTeams - enrolledCount(tournament, cat.id)})
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => handleSeedTeams(cat.id)}
+                      disabled={seeding || seedCount < 1}
+                      style={{ padding: '7px 16px', background: seeding ? 'var(--grey-300)' : '#854d0e', color: '#fff', border: 'none', cursor: seeding ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}
+                    >
+                      {seeding ? 'Generando…' : `Generar ${seedCount} equipos`}
+                    </button>
+                    <button
+                      onClick={() => setSeedCatId(null)}
+                      style={{ padding: '7px 12px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, color: 'var(--grey-500)' }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+                  Nombres generados: &ldquo;[Prueba] {cat.name} 1A / 1B&rdquo;, &ldquo;[Prueba] {cat.name} 2A / 2B&rdquo;, etc. Auto-confirmados.
                 </div>
               </div>
             )}
@@ -676,6 +840,127 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
           </div>
           <div style={{ padding: '10px 14px', background: 'rgba(0,0,0,0.03)', border: '1px solid var(--grey-100)', fontSize: 12, color: 'var(--grey-400)' }}>
             ℹ️ El torneo está en borrador. Una vez abierto, se generará un QR único para cada categoría que podrás compartir con los participantes.
+          </div>
+        </div>
+      )}
+
+      {/* Danger zone — cancel / reactivate / delete (creator only) */}
+      {isCreator && ['draft','registration_open','configured','cancelled'].includes(tournament.status) && (
+        <div style={{ ...card, borderColor: 'rgba(220,38,38,0.2)', background: 'rgba(220,38,38,0.02)', marginTop: 24 }}>
+          <div style={{ ...secTitle, color: '#b91c1c', borderBottomColor: 'rgba(220,38,38,0.15)' }}>Zona de Peligro</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            {tournament.status !== 'cancelled' && (
+              <button
+                onClick={() => setCancelModal(true)}
+                style={{ padding: '9px 18px', background: '#fff', color: '#b91c1c', border: '1px solid rgba(220,38,38,0.4)', cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}
+              >
+                ⏸ Cancelar torneo
+              </button>
+            )}
+            {tournament.status === 'cancelled' && (
+              <button
+                onClick={handleReactivateTournament}
+                disabled={reactivating}
+                style={{ padding: '9px 18px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: reactivating ? 'wait' : 'pointer', opacity: reactivating ? 0.6 : 1, fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}
+              >
+                {reactivating ? 'Reactivando…' : '▶ Reactivar torneo'}
+              </button>
+            )}
+            <button
+              onClick={() => { setDeleteConfirmText(''); setDeleteModal(true); }}
+              style={{ padding: '9px 18px', background: '#b91c1c', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}
+            >
+              🗑 Eliminar torneo
+            </button>
+          </div>
+          {tournament.status === 'cancelled' && (
+            <div style={{ marginTop: 12, fontSize: 12, color: '#b91c1c', background: 'rgba(220,38,38,0.06)', padding: '10px 14px', border: '1px solid rgba(220,38,38,0.15)' }}>
+              Este torneo está cancelado. Las inscripciones se conservaron. Podés reactivarlo para otra fecha o sede, o eliminarlo definitivamente.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cancel confirmation modal */}
+      {cancelModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setCancelModal(false); }}
+        >
+          <div style={{ background: '#fff', padding: '28px 32px', maxWidth: 440, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 8 }}>
+              ¿Cancelar el torneo?
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--grey-500)', lineHeight: 1.6, marginBottom: 20 }}>
+              El torneo pasará a estado <strong>Cancelado</strong>. Las inscripciones y todos los datos se conservarán.
+              Podrás reactivarlo en cualquier momento para otra fecha o sede.
+            </div>
+            <div style={{ padding: '10px 14px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', fontSize: 12, color: '#b91c1c', marginBottom: 22 }}>
+              Si los participantes ya pagaron su inscripción, el reintegro debe tramitarse manualmente en Stripe.
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setCancelModal(false)}
+                style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--grey-500)', textTransform: 'uppercase' }}
+              >
+                Volver
+              </button>
+              <button
+                onClick={handleCancelTournament}
+                disabled={cancelling}
+                style={{ padding: '9px 22px', background: '#b91c1c', color: '#fff', border: 'none', cursor: cancelling ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: cancelling ? 0.6 : 1 }}
+              >
+                {cancelling ? 'Cancelando…' : 'Sí, cancelar torneo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setDeleteModal(false); }}
+        >
+          <div style={{ background: '#fff', padding: '28px 32px', maxWidth: 460, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 8, color: '#b91c1c' }}>
+              ¿Eliminar el torneo?
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--grey-500)', lineHeight: 1.6, marginBottom: 12 }}>
+              Esta acción es <strong>permanente e irreversible</strong>. Se eliminarán el torneo y todos los datos asociados: inscripciones, equipos, partidos y configuración.
+            </div>
+            {tournament.status !== 'draft' && (
+              <div style={{ padding: '10px 14px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)', fontSize: 12, color: '#b91c1c', marginBottom: 12 }}>
+                ⚠️ Si los participantes ya pagaron, el reintegro debe tramitarse manualmente en Stripe antes de eliminar el torneo.
+              </div>
+            )}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ ...lbl, marginBottom: 6 }}>
+                Escribí el nombre del torneo para confirmar: <strong>{tournament.name}</strong>
+              </label>
+              <input
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value)}
+                placeholder={tournament.name}
+                style={{ width: '100%', padding: '9px 12px', fontSize: 13, border: '2px solid rgba(220,38,38,0.4)', boxSizing: 'border-box', outline: 'none' }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setDeleteModal(false)}
+                style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--grey-500)', textTransform: 'uppercase' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteTournament}
+                disabled={deleting || deleteConfirmText !== tournament.name}
+                style={{ padding: '9px 22px', background: deleteConfirmText === tournament.name ? '#b91c1c' : 'var(--grey-300)', color: '#fff', border: 'none', cursor: (deleting || deleteConfirmText !== tournament.name) ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: deleting ? 0.6 : 1 }}
+              >
+                {deleting ? 'Eliminando…' : 'Eliminar definitivamente'}
+              </button>
+            </div>
           </div>
         </div>
       )}
