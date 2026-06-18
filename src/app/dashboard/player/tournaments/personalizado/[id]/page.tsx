@@ -165,6 +165,11 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const [selectedP2, setSelectedP2] = useState<RegisteredPlayer | null>(null);
   const [addingTeam, setAddingTeam] = useState(false);
 
+  // ── Seed de prueba (ELIMINAR ANTES DEL LANZAMIENTO) ──────────────────────────
+  const [seedCatId, setSeedCatId] = useState<string | null>(null);
+  const [seedCount, setSeedCount] = useState(4);
+  const [seeding, setSeeding] = useState(false);
+
   // Search debounce
   useEffect(() => {
     if (p1Query.trim().length < 2) { setP1Results([]); return; }
@@ -381,6 +386,31 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     showToast('Equipo agregado y confirmado', 'success');
   }
 
+  // ── SOLO PRUEBA: eliminar antes del lanzamiento ────────────────────────────
+  async function handleSeedTeams(catId: string) {
+    if (!tournament) return;
+    setSeeding(true);
+    const cat = tournament.categories.find(c => c.id === catId);
+    if (!cat) { setSeeding(false); return; }
+    const alreadyIn = enrolledCount(tournament, catId);
+    const slots = Math.min(seedCount, cat.maxTeams - alreadyIn);
+    for (let i = 0; i < slots; i++) {
+      const n = alreadyIn + i + 1;
+      const res = await registerTeam(tournament.code, {
+        categoryId: catId,
+        player1Name: `[Prueba] ${cat.name} ${n}A`,
+        player2Name: `[Prueba] ${cat.name} ${n}B`,
+      });
+      if (res.ok && res.team?.id) await changeTeamStatus(id, res.team.id, 'confirmed');
+    }
+    const updated = await loadPersonalizadoById(id);
+    setTournament(updated);
+    setSeedCatId(null);
+    setSeedCount(4);
+    setSeeding(false);
+    showToast(`${slots} equipos de prueba agregados y confirmados`, 'success');
+  }
+
   const STATUS_CSV: Record<string, string> = { pending: 'Pendiente', confirmed: 'Confirmado', rejected: 'Rechazado', waitlisted: 'Lista de espera' };
   const PAYMENT_CSV: Record<string, string> = { unpaid: 'Pendiente', paid: 'Pagado', free: 'Gratis' };
 
@@ -499,6 +529,15 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                     + Agregar equipo
                   </button>
                 )}
+                {/* SOLO PRUEBA — eliminar antes del lanzamiento */}
+                {tournament.status === 'registration_open' && seedCatId !== cat.id && enrolledCount(tournament, cat.id) < cat.maxTeams && (
+                  <button
+                    onClick={() => { setSeedCatId(cat.id); setSeedCount(Math.min(4, cat.maxTeams - enrolledCount(tournament, cat.id))); }}
+                    style={{ padding: '6px 14px', background: 'rgba(234,179,8,0.1)', color: '#854d0e', border: '1px dashed #ca8a04', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
+                  >
+                    🎲 Seed prueba
+                  </button>
+                )}
               </div>
             </div>
 
@@ -547,6 +586,47 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   <button onClick={resetAddForm} style={{ padding: '9px 16px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, color: 'var(--grey-500)', fontWeight: 600, textTransform: 'uppercase' }}>
                     Cancelar
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* SOLO PRUEBA — seed form — eliminar antes del lanzamiento */}
+            {seedCatId === cat.id && (
+              <div style={{ padding: '14px 16px', background: 'rgba(234,179,8,0.06)', border: '1px dashed #ca8a04', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#854d0e', marginBottom: 12 }}>
+                  🎲 Seed de Prueba — ELIMINAR ANTES DEL LANZAMIENTO
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--grey-600)' }}>Equipos a generar:</span>
+                    <input
+                      type="number" min={1} max={cat.maxTeams - enrolledCount(tournament, cat.id)}
+                      value={seedCount}
+                      onChange={e => setSeedCount(Math.max(1, Math.min(Number(e.target.value), cat.maxTeams - enrolledCount(tournament, cat.id))))}
+                      style={{ width: 56, padding: '6px 8px', fontSize: 13, border: '1px solid var(--grey-200)', textAlign: 'center' }}
+                    />
+                    <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+                      (máx disponibles: {cat.maxTeams - enrolledCount(tournament, cat.id)})
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => handleSeedTeams(cat.id)}
+                      disabled={seeding || seedCount < 1}
+                      style={{ padding: '7px 16px', background: seeding ? 'var(--grey-300)' : '#854d0e', color: '#fff', border: 'none', cursor: seeding ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}
+                    >
+                      {seeding ? 'Generando…' : `Generar ${seedCount} equipos`}
+                    </button>
+                    <button
+                      onClick={() => setSeedCatId(null)}
+                      style={{ padding: '7px 12px', background: 'transparent', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, color: 'var(--grey-500)' }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+                  Nombres generados: &ldquo;[Prueba] {cat.name} 1A / 1B&rdquo;, &ldquo;[Prueba] {cat.name} 2A / 2B&rdquo;, etc. Auto-confirmados.
                 </div>
               </div>
             )}
