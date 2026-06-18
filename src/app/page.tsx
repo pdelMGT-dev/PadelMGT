@@ -6,11 +6,12 @@ import { getSAPlayersFromSupabase, getSATournamentsFromSupabase } from '@/lib/su
 import { fetchPersonalizadoPricing, tierLabelInList, type PricingTier, type PersonalizadoPromo } from '@/lib/personalizado-pricing';
 
 const formats = [
-  { k: 'americano',   name: 'Americano',   desc: 'Rotación de parejas cada ronda. Todos juegan con todos. Ideal para tardes sociales.',             when: '2–3 horas',    teams: '8–32 parejas',  img: '/assets/court-card.svg'  },
-  { k: 'mexicano',    name: 'Mexicano',    desc: 'Parejas dinámicas según puntuación. Auto-balanceo competitivo: los mejores se enfrentan entre sí.',when: '2–4 horas',    teams: '8–32 parejas',  img: '/assets/court-green.svg' },
-  { k: 'team-league', name: 'Team League', desc: 'Liga por equipos con jornadas semanales. Ascensos, descensos y playoffs al final de temporada.',   when: 'Multi-jornada', teams: '6–48 equipos', img: '/assets/court-dark.svg'  },
-  { k: 'knockout',    name: 'Knockout',    desc: 'Cuadro de eliminación directa. Perdés y te vas. Alta adrenalina desde la primera ronda.',          when: '4–8 horas',    teams: '4–16 parejas',  img: '/assets/court-card.svg'  },
-  { k: 'world-cup',   name: 'World Cup',   desc: 'Grupos de 4 equipos, los 2 mejores clasifican al cuadro. La emoción del Mundial de Pádel.',        when: '2–3 jornadas', teams: '16–64 parejas', img: '/assets/court-green.svg' },
+  { k: 'americano',   name: 'Americano',   desc: 'Rotación de parejas cada ronda. Todos juegan con todos. Ideal para tardes sociales.',              when: '2–3 horas',    teams: '8–32 parejas',  img: '/assets/court-card.svg'  },
+  { k: 'mexicano',    name: 'Mexicano',    desc: 'Parejas dinámicas según puntuación. Auto-balanceo competitivo: los mejores se enfrentan entre sí.', when: '2–4 horas',    teams: '8–32 parejas',  img: '/assets/court-green.svg' },
+  { k: 'round-robin', name: 'Round Robin', desc: 'Todos contra todos. El formato más justo para determinar un ranking real — ganás tu lugar por mérito.', when: '4–6 horas', teams: '4–16 parejas',  img: '/assets/court-dark.svg'  },
+  { k: 'team-league', name: 'Team League', desc: 'Liga por equipos con jornadas semanales. Ascensos, descensos y playoffs al final de temporada.',    when: 'Multi-jornada', teams: '6–48 equipos', img: '/assets/court-card.svg'  },
+  { k: 'knockout',    name: 'Knockout',    desc: 'Cuadro de eliminación directa. Perdés y te vas. Alta adrenalina desde la primera ronda.',           when: '4–8 horas',    teams: '4–16 parejas',  img: '/assets/court-green.svg' },
+  { k: 'world-cup',   name: 'World Cup',   desc: 'Grupos de 4 equipos, los 2 mejores clasifican al cuadro. La emoción del Mundial de Pádel.',         when: '2–3 jornadas', teams: '16–64 parejas', img: '/assets/court-dark.svg'  },
 ];
 
 const liveMatches = [
@@ -164,7 +165,7 @@ export default function HomePage() {
               <div className="section-eyebrow">Formatos</div>
               <h2 className="section-title">TODO FORMATO.<br />UN SOLO LUGAR.</h2>
               <p className="section-sub">
-                Americano, Mexicano, Team League, Knockout y World Cup.
+                Americano, Mexicano, Round Robin, Team League, Knockout y World Cup.
                 PadelMGT automatiza el cuadro, los puntos y la difusión — vos solo jugás.
               </p>
             </div>
