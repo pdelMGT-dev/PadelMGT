@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, use, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -271,9 +271,6 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
     [teams],
   );
 
-  // ── Group D&D state ─────────────────────────────────────────────────────────
-  const [groupDragTeamId, setGroupDragTeamId] = useState<string | null>(null);
-  const [groupDropTarget, setGroupDropTarget] = useState<string | null>(null); // groupId or 'POOL-{catId}'
 
   function patchConfig(patch: Partial<ControlPanelConfig>) {
     setConfig(prev => ({ ...prev, ...patch }));
@@ -330,35 +327,6 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   }
   function setCourtName(idx: number, name: string) {
     setConfig(prev => ({ ...prev, courtNames: prev.courtNames.map((c, i) => i === idx ? name : c) }));
-  }
-
-  // ── Group formation helpers ─────────────────────────────────────────────────
-  const GL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
-  function groupIdsForCat(catId: string, groupCount: number): string[] {
-    return Array.from({ length: groupCount }, (_, i) => `${catId}-G${i + 1}`);
-  }
-
-  const randomAssignGroups = useCallback((catId: string) => {
-    const g = config.groups.find(x => x.categoryId === catId);
-    if (!g) return;
-    const catTeams = assignable.filter(t => t.categoryId === catId);
-    const shuffled = [...catTeams].sort(() => Math.random() - 0.5);
-    const groups = groupIdsForCat(catId, g.groupCount);
-    setTeams(prev => prev.map(t => {
-      if (t.categoryId !== catId || !shuffled.find(s => s.id === t.id)) return t;
-      const idx = shuffled.findIndex(s => s.id === t.id);
-      return { ...t, groupId: groups[idx % groups.length] };
-    }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assignable, config.groups]);
-
-  function clearGroupsForCat(catId: string) {
-    setTeams(prev => prev.map(t => t.categoryId === catId ? { ...t, groupId: undefined } : t));
-  }
-
-  function moveTeamToGroup(teamId: string, newGroupId: string | null) {
-    setTeams(prev => prev.map(t => t.id === teamId ? { ...t, groupId: newGroupId ?? undefined } : t));
   }
 
   // ── Save ────────────────────────────────────────────────────────────────────
@@ -568,101 +536,20 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
         </div>
       ), 2)}
 
-      {/* 3 — Formación de Grupos (D&D) */}
+      {/* 3 — Formación de Grupos (ahora en la ventana de cada categoría) */}
       {block('Formación de Grupos', (
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 16, lineHeight: 1.6 }}>
-            Arrastrá los equipos para asignarlos a grupos. Los cambios se guardan junto con la configuración.
-          </div>
-          {categories.map(cat => {
-            const g = config.groups.find(x => x.categoryId === cat.id);
-            if (!g) return null;
-            const groupCount = g.groupCount;
-            const groups = groupIdsForCat(cat.id, groupCount);
-            const catAssignable = assignable.filter(t => t.categoryId === cat.id);
-            const poolId = `POOL-${cat.id}`;
-            const unassignedTeams = catAssignable.filter(t => !t.groupId || !groups.includes(t.groupId));
-
-            return (
-              <div key={cat.id} style={{ marginBottom: 28, paddingBottom: 24, borderBottom: '1px solid var(--grey-100)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)' }}>
-                    {cat.name} <span style={{ fontWeight: 400, color: 'var(--grey-400)' }}>· {catAssignable.length} equipo(s) · {groupCount} grupo(s)</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      type="button"
-                      onClick={() => randomAssignGroups(cat.id)}
-                      style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer' }}
-                    >
-                      🎲 Sortear al azar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => clearGroupsForCat(cat.id)}
-                      style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: '#fff', color: 'var(--grey-500)', border: '1px solid var(--grey-200)', cursor: 'pointer' }}
-                    >
-                      ✕ Limpiar
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: `minmax(120px, 1fr) ${'minmax(100px, 1fr) '.repeat(groupCount).trim()}`, gap: 10 }}>
-                  {/* Pool */}
-                  <div
-                    onDragOver={(e) => { e.preventDefault(); setGroupDropTarget(poolId); }}
-                    onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setGroupDropTarget(null); }}
-                    onDrop={(e) => { e.preventDefault(); if (groupDragTeamId) moveTeamToGroup(groupDragTeamId, null); setGroupDragTeamId(null); setGroupDropTarget(null); }}
-                    style={{ minHeight: 80, padding: 8, border: `1px dashed ${groupDropTarget === poolId ? 'rgba(214,255,0,0.8)' : 'var(--grey-200)'}`, background: groupDropTarget === poolId ? 'rgba(214,255,0,0.06)' : 'var(--grey-50, #fafafa)', transition: 'background 0.1s' }}
-                  >
-                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Sin grupo</div>
-                    {unassignedTeams.map(t => (
-                      <GroupTeamChip
-                        key={t.id}
-                        team={t}
-                        isDragging={groupDragTeamId === t.id}
-                        onDragStart={() => setGroupDragTeamId(t.id)}
-                        onDragEnd={() => { setGroupDragTeamId(null); setGroupDropTarget(null); }}
-                      />
-                    ))}
-                    {unassignedTeams.length === 0 && <div style={{ fontSize: 10, color: 'var(--grey-300)', fontStyle: 'italic' }}>Vacío</div>}
-                  </div>
-
-                  {/* Groups */}
-                  {groups.map((gid, i) => {
-                    const gTeams = catAssignable.filter(t => t.groupId === gid);
-                    const label = GL[i % GL.length];
-                    const isTarget = groupDropTarget === gid;
-                    return (
-                      <div
-                        key={gid}
-                        onDragOver={(e) => { e.preventDefault(); setGroupDropTarget(gid); }}
-                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setGroupDropTarget(null); }}
-                        onDrop={(e) => { e.preventDefault(); if (groupDragTeamId) moveTeamToGroup(groupDragTeamId, gid); setGroupDragTeamId(null); setGroupDropTarget(null); }}
-                        style={{ minHeight: 80, padding: 8, border: `1px solid ${isTarget ? 'var(--black)' : 'var(--grey-100)'}`, background: isTarget ? 'rgba(214,255,0,0.06)' : '#fff', transition: 'background 0.1s' }}
-                      >
-                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 8 }}>
-                          Grupo {label} <span style={{ color: 'var(--grey-400)', fontWeight: 400 }}>({gTeams.length}/{g.teamsPerGroup})</span>
-                        </div>
-                        {gTeams.map(t => (
-                          <GroupTeamChip
-                            key={t.id}
-                            team={t}
-                            isDragging={groupDragTeamId === t.id}
-                            onDragStart={() => setGroupDragTeamId(t.id)}
-                            onDragEnd={() => { setGroupDragTeamId(null); setGroupDropTarget(null); }}
-                          />
-                        ))}
-                        {gTeams.length === 0 && <div style={{ fontSize: 10, color: 'var(--grey-300)', fontStyle: 'italic' }}>Vacío</div>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-          <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>
-            Los grupos se guardan al hacer clic en "Guardar configuración" o "Guardar y marcar configurado".
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '14px 16px', background: 'var(--grey-50, #fafafa)', border: '1px solid var(--grey-100)' }}>
+          <div style={{ fontSize: 22 }}>⚙</div>
+          <div>
+            <div style={{ fontSize: 13, color: 'var(--grey-600)', lineHeight: 1.6, marginBottom: 10 }}>
+              La formación de grupos ahora se hace directamente en la <strong>ventana de cada categoría</strong>, en la página del torneo. Cuando una categoría se completa, podés pulsar <strong>&ldquo;Formar grupos&rdquo;</strong> para arrastrar los equipos o sortearlos al azar. La cantidad de grupos se toma del valor configurado arriba (&ldquo;Cantidad de grupos&rdquo;) y se puede ajustar ahí mismo.
+            </div>
+            <Link
+              href={`/dashboard/player/tournaments/personalizado/${id}`}
+              style={{ display: 'inline-block', padding: '8px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--black)', color: 'var(--neon)', textDecoration: 'none' }}
+            >
+              Ir a las categorías →
+            </Link>
           </div>
         </div>
       ), 3)}
@@ -874,32 +761,3 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   );
 }
 
-// ── GroupTeamChip ─────────────────────────────────────────────────────────────
-
-function GroupTeamChip({
-  team, isDragging, onDragStart, onDragEnd,
-}: {
-  team: PersonalizadoTeam;
-  isDragging: boolean;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-}) {
-  return (
-    <div
-      draggable
-      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(); }}
-      onDragEnd={onDragEnd}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', marginBottom: 4,
-        border: '1px solid var(--grey-100)', background: isDragging ? 'var(--grey-50)' : '#fff',
-        cursor: 'grab', fontSize: 11, opacity: isDragging ? 0.4 : 1,
-      }}
-    >
-      <span style={{ color: 'var(--grey-300)', fontSize: 14 }}>⠿</span>
-      <div>
-        <div style={{ fontWeight: 600, color: 'var(--black)' }}>{team.player1Name}</div>
-        {team.player2Name && <div style={{ color: 'var(--grey-400)' }}>{team.player2Name}</div>}
-      </div>
-    </div>
-  );
-}
