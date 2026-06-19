@@ -695,6 +695,26 @@ export async function changeTeamStatus(
   return setTeamStatusLocal(tournamentId, teamId, status);
 }
 
+/** Permanently delete a team registration from the tournament. */
+export async function removeTeam(
+  tournamentId: string,
+  teamId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase
+      .from('personalizado_teams')
+      .delete()
+      .eq('id', teamId)
+      .eq('tournament_id', tournamentId);
+    if (error) return { ok: false, error: error.message };
+  }
+  const all = _store.load();
+  _store.persist(all.map(t =>
+    t.id === tournamentId ? { ...t, teams: t.teams.filter(tm => tm.id !== teamId) } : t,
+  ));
+  return { ok: true };
+}
+
 /**
  * Flag a team for review. target='both' moves it to the unassigned pool
  * (category_id = null). target='player1'|'player2' keeps it in the category

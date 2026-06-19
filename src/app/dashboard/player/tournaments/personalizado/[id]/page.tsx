@@ -22,10 +22,12 @@ import {
   saveControlPanel,
   teamsPerGroupFromCount,
   DEFAULT_CONTROL_CONFIG,
+  removeTeam,
   type PersonalizadoTournament,
   type PersonalizadoTeam,
   type ControlPanelConfig,
 } from '@/lib/personalizado-store';
+import { TournamentTabs } from './TournamentTabs';
 import { sendPersonalizadoStatusEmail } from '@/lib/email';
 import { searchPlayers, type RegisteredPlayer } from '@/lib/player-store';
 import { useToast } from '@/components/ToastProvider';
@@ -221,6 +223,10 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  // ── Remove unassigned team + Tabs toggle ─────────────────────────────────────
+  const [removingTeamId, setRemovingTeamId] = useState<string | null>(null);
+  const [showTabs, setShowTabs] = useState(false);
 
   // Search debounce
   useEffect(() => {
@@ -708,6 +714,17 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     }
   }
 
+  async function handleRemoveTeam(teamId: string) {
+    if (!tournament) return;
+    setRemovingTeamId(teamId);
+    const result = await removeTeam(tournament.id, teamId);
+    setRemovingTeamId(null);
+    if (!result.ok) { showToast(result.error ?? 'No se pudo eliminar el registro', 'error'); return; }
+    const updated = await loadPersonalizadoById(id);
+    setTournament(updated);
+    showToast('Registro eliminado permanentemente', 'success');
+  }
+
   const STATUS_CSV: Record<string, string> = { pending: 'Pendiente', confirmed: 'Confirmado', rejected: 'Rechazado', waitlisted: 'Lista de espera' };
   const PAYMENT_CSV: Record<string, string> = { unpaid: 'Pendiente', paid: 'Pagado', free: 'Gratis' };
 
@@ -790,9 +807,12 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
             </Link>
           )}
           {(tournament.status === 'configured' || tournament.status === 'live') && (
-            <Link href={`/dashboard/player/tournaments/personalizado/${tournament.id}/schedule`} style={{ padding: '9px 18px', background: '#fff', color: 'var(--black)', border: '1px solid var(--grey-200)', cursor: 'pointer', textDecoration: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              🗓 Calendario
-            </Link>
+            <button
+              onClick={() => { setShowTabs(prev => !prev); if (!showTabs) setTimeout(() => document.getElementById('tournament-tabs-anchor')?.scrollIntoView({ behavior: 'smooth' }), 50); }}
+              style={{ padding: '9px 18px', background: showTabs ? 'var(--black)' : '#fff', color: showTabs ? 'var(--neon)' : 'var(--black)', border: showTabs ? 'none' : '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}
+            >
+              📅 {showTabs ? 'Ocultar Calendario' : 'Ver Calendario Completo'}
+            </button>
           )}
         </div>
       </div>
@@ -827,7 +847,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {tournament.categories.map(cat => (
                   <button
                     key={cat.id}
@@ -837,6 +857,13 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                     → {cat.name}
                   </button>
                 ))}
+                <button
+                  onClick={() => void handleRemoveTeam(team.id)}
+                  disabled={removingTeamId === team.id}
+                  style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: removingTeamId === team.id ? 'wait' : 'pointer', background: 'rgba(220,38,38,0.08)', color: '#b91c1c', border: '1px solid rgba(220,38,38,0.3)', whiteSpace: 'nowrap', opacity: removingTeamId === team.id ? 0.6 : 1 }}
+                >
+                  {removingTeamId === team.id ? '…' : '✕ Eliminar Registro'}
+                </button>
               </div>
             </div>
           ))}
@@ -1141,6 +1168,17 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
           </div>
         );
       })}
+
+      {/* Tournament Tabs (Calendario · Clasificación · Bracket) */}
+      {showTabs && (tournament.status === 'configured' || tournament.status === 'live') && (
+        <div id="tournament-tabs-anchor" style={{ marginTop: 32 }}>
+          <TournamentTabs
+            tournament={tournament}
+            canManage={!!canManagePersonalizado(tournament, currentUser?.id)}
+            onUpdate={setTournament}
+          />
+        </div>
+      )}
 
       {/* Open Registration CTA */}
       {tournament.status === 'draft' && (
