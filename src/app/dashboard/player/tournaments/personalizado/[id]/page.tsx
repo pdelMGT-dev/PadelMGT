@@ -12,6 +12,7 @@ import {
   changeTeamStatus,
   setTeamReview,
   resolveTeamReview,
+  moveTeamToCategory,
   clearTeamPartner,
   registerTeam,
   enrolledCount,
@@ -162,6 +163,11 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const [reviewModal, setReviewModal] = useState<{ teamId: string; catId: string; catName: string; p1Name: string; p2Name?: string } | null>(null);
   const [reviewTarget, setReviewTarget] = useState<'player1' | 'player2' | 'both'>('player1');
   const [reviewing, setReviewing] = useState(false);
+
+  // ── Drag & Drop ───────────────────────────────────────────────────────────────
+  const [draggedTeamId, setDraggedTeamId] = useState<string | null>(null);
+  // dropTargetId: catId string = hovering over category, 'UNASSIGNED' = hovering over pool, null = not hovering
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   // ── Collapsed rejected sections per category ─────────────────────────────────
   const [showRejected, setShowRejected] = useState<Record<string, boolean>>({});
@@ -427,6 +433,39 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     showToast('Revisión resuelta — equipo confirmado', 'success');
   }
 
+  async function handleDrop(targetCatId: string | null) {
+    if (!draggedTeamId || !tournament) { setDraggedTeamId(null); setDropTargetId(null); return; }
+    const team = tournament.teams.find(t => t.id === draggedTeamId);
+    if (!team) { setDraggedTeamId(null); setDropTargetId(null); return; }
+
+    const currentCatId = team.categoryId || null;
+    if (currentCatId === targetCatId) { setDraggedTeamId(null); setDropTargetId(null); return; }
+
+    if (targetCatId) {
+      const cat = tournament.categories.find(c => c.id === targetCatId);
+      if (cat) {
+        const alreadyEnrolled = enrolledCount(tournament, targetCatId);
+        const willFit = team.status === 'partial_review' || team.status === 'confirmed' || team.status === 'unassigned';
+        if (willFit && alreadyEnrolled >= cat.maxTeams) {
+          showToast(`La categoría "${cat.name}" está completa (${cat.maxTeams}/${cat.maxTeams})`, 'error');
+          setDraggedTeamId(null); setDropTargetId(null);
+          return;
+        }
+      }
+    }
+
+    const result = await moveTeamToCategory(tournament.id, draggedTeamId, targetCatId, team.status);
+    setDraggedTeamId(null);
+    setDropTargetId(null);
+    if (!result.ok) { showToast(result.error ?? 'Error al mover equipo', 'error'); return; }
+    const updated = await loadPersonalizadoById(id);
+    setTournament(updated);
+    const catName = targetCatId
+      ? tournament.categories.find(c => c.id === targetCatId)?.name ?? targetCatId
+      : 'Sin categoría';
+    showToast(`Equipo movido a "${catName}"`, 'success');
+  }
+
   async function handleAddTeam(catId: string) {
     if (!selectedP1 || !selectedP2 || !tournament) return;
     setAddingTeam(true);
@@ -625,22 +664,37 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      {/* Equipos sin categoría (unassigned pool) */}
-      {tournament.teams.filter(t => t.status === 'unassigned').length > 0 && (
-        <div style={{ ...card, border: '1px dashed rgba(234,179,8,0.5)', background: 'rgba(234,179,8,0.04)', marginBottom: 16 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#92400e', marginBottom: 12 }}>
-            ⚠ Equipos sin categoría — ambos jugadores en revisión
+      {/* Equipos sin categoría (unassigned pool) — also a drop target */}
+      {(tournament.teams.filter(t => t.status === 'unassigned').length > 0 || draggedTeamId) && (
+        <div
+          style={{ ...card, border: `1px dashed ${dropTargetId === 'UNASSIGNED' ? 'rgba(234,179,8,0.9)' : 'rgba(234,179,8,0.5)'}`, background: dropTargetId === 'UNASSIGNED' ? 'rgba(254,249,195,0.5)' : 'rgba(234,179,8,0.04)', marginBottom: 16, transition: 'background 0.15s' }}
+          onDragOver={(e) => { e.preventDefault(); setDropTargetId('UNASSIGNED'); }}
+          onDragLeave={() => setDropTargetId(null)}
+          onDrop={(e) => { e.preventDefault(); void handleDrop(null); }}
+        >
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#92400e', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            ⚠ Sin categoría
+            {draggedTeamId && <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--grey-400)', letterSpacing: '0.06em' }}>— SOLTAR AQUÍ PARA QUITAR DE CATEGORÍA</span>}
           </div>
           {tournament.teams.filter(t => t.status === 'unassigned').map(team => (
-            <div key={team.id} style={{ padding: '10px 12px', border: '1px solid rgba(234,179,8,0.3)', background: '#fff', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, flexWrap: 'wrap', gap: 6 }}>
-              <div>
-                <span style={{ fontWeight: 600 }}>{team.player1Name}</span>
-                {team.player2Name && <span style={{ color: 'var(--grey-400)' }}> / {team.player2Name}</span>}
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', marginTop: 3 }}>
-                  SIN CATEGORÍA · AMBOS EN REVISIÓN
+            <div
+              key={team.id}
+              draggable
+              onDragStart={(e) => { setDraggedTeamId(team.id); e.dataTransfer.effectAllowed = 'move'; }}
+              onDragEnd={() => { setDraggedTeamId(null); setDropTargetId(null); }}
+              style={{ padding: '10px 12px', border: `1px solid ${draggedTeamId === team.id ? 'var(--black)' : 'rgba(234,179,8,0.3)'}`, background: '#fff', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, flexWrap: 'wrap', gap: 6, cursor: 'grab', opacity: draggedTeamId === team.id ? 0.5 : 1 }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: 'var(--grey-300)', fontSize: 16 }}>⠿</span>
+                <div>
+                  <span style={{ fontWeight: 600 }}>{team.player1Name}</span>
+                  {team.player2Name && <span style={{ color: 'var(--grey-400)' }}> / {team.player2Name}</span>}
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', marginTop: 3 }}>
+                    SIN CATEGORÍA
+                  </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {tournament.categories.map(cat => (
                   <button
                     key={cat.id}
@@ -653,9 +707,11 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               </div>
             </div>
           ))}
-          <div style={{ fontSize: 11, color: '#92400e', marginTop: 6 }}>
-            Usa los botones para mover el equipo a la categoría correcta y confirmarlo.
-          </div>
+          {tournament.teams.filter(t => t.status === 'unassigned').length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--grey-300)', fontStyle: 'italic', textAlign: 'center', padding: '12px 0' }}>
+              Arrastrá un equipo aquí para quitarlo de su categoría
+            </div>
+          )}
         </div>
       )}
 
@@ -672,8 +728,16 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         const progress        = cat.maxTeams > 0 ? Math.min(100, Math.round((enrolled / cat.maxTeams) * 100)) : 0;
         const collapsed       = !!collapsedCats[cat.id];
 
+        const isDragTarget = dropTargetId === cat.id;
+
         return (
-          <div key={cat.id} style={card}>
+          <div
+            key={cat.id}
+            style={{ ...card, outline: isDragTarget ? '2px dashed var(--neon)' : 'none', transition: 'outline 0.1s' }}
+            onDragOver={(e) => { e.preventDefault(); setDropTargetId(cat.id); }}
+            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTargetId(null); }}
+            onDrop={(e) => { e.preventDefault(); void handleDrop(cat.id); }}
+          >
             {/* Category header — clickable to collapse/expand */}
             <div
               onClick={() => toggleCat(cat.id)}
@@ -810,12 +874,18 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
             {/* Active teams */}
             {activeTeams.length > 0 && (
               <div style={{ marginTop: 4 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Inscriptos</div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>
+                  Inscriptos
+                  {draggedTeamId && <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neon)', marginLeft: 8, background: 'var(--black)', padding: '1px 6px' }}>DROP AQUÍ</span>}
+                </div>
                 {activeTeams.map((team) => (
                   <TeamRow
                     key={team.id}
                     team={team}
                     canManage={tournament.status === 'registration_open'}
+                    isDragging={draggedTeamId === team.id}
+                    onDragStart={() => setDraggedTeamId(team.id)}
+                    onDragEnd={() => { setDraggedTeamId(null); setDropTargetId(null); }}
                     onConfirm={() => handleConfirm(team.id)}
                     onReject={() => openRejectModal(team, cat.name)}
                     onReview={() => openReviewModal(team, cat.id, cat.name)}
@@ -1188,10 +1258,13 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 // ── TeamRow sub-component ─────────────────────────────────────────────────────
 
 function TeamRow({
-  team, canManage, onConfirm, onReject, onReview, onResolveReview,
+  team, canManage, isDragging, onDragStart, onDragEnd, onConfirm, onReject, onReview, onResolveReview,
 }: {
   team: PersonalizadoTeam;
   canManage: boolean;
+  isDragging?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
   onConfirm: () => void;
   onReject: () => void;
   onReview: () => void;
@@ -1205,8 +1278,14 @@ function TeamRow({
   const bgColor = isReview ? 'rgba(254,249,195,0.3)' : '#fff';
 
   return (
-    <div style={{ padding: '9px 12px', border: `1px solid ${borderColor}`, background: bgColor, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: 13, flexWrap: 'wrap', gap: 6 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <div
+      draggable={canManage}
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart?.(); }}
+      onDragEnd={onDragEnd}
+      style={{ padding: '9px 12px', border: `1px solid ${borderColor}`, background: bgColor, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: 13, flexWrap: 'wrap', gap: 6, opacity: isDragging ? 0.4 : 1, cursor: canManage ? 'grab' : 'default' }}
+    >
+      {canManage && <span style={{ color: 'var(--grey-300)', fontSize: 16, flexShrink: 0, lineHeight: 1, marginTop: 2 }}>⠿</span>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
         {/* Player 1 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontWeight: 600 }}>{team.player1Name}</span>

@@ -681,6 +681,53 @@ export async function resolveTeamReview(
   return { ok: true };
 }
 
+/**
+ * Move a team to a different category (or to the unassigned pool when
+ * newCategoryId is null). Automatically adjusts status:
+ *   - to null  → 'unassigned'
+ *   - from null → 'confirmed' (clears review flags)
+ *   - otherwise → keeps existing status (partial_review stays partial_review)
+ */
+export async function moveTeamToCategory(
+  tournamentId: string,
+  teamId: string,
+  newCategoryId: string | null,
+  currentStatus?: PersonalizadoTeam['status'],
+): Promise<{ ok: boolean; error?: string }> {
+  const update: Record<string, unknown> = { category_id: newCategoryId };
+  if (newCategoryId === null) {
+    update.status = 'unassigned';
+    update.review_player = null;
+  } else if (currentStatus === 'unassigned') {
+    update.status = 'confirmed';
+    update.review_player = null;
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase
+      .from('personalizado_teams')
+      .update(update)
+      .eq('id', teamId)
+      .eq('tournament_id', tournamentId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
+  // localStorage fallback
+  const all = _store.load();
+  const tidx = all.findIndex(t => t.id === tournamentId);
+  if (tidx === -1) return { ok: false, error: 'Torneo no encontrado' };
+  const t = all[tidx];
+  const teams = t.teams.map(tm => {
+    if (tm.id !== teamId) return tm;
+    const newStatus = newCategoryId === null
+      ? 'unassigned' as const
+      : currentStatus === 'unassigned' ? 'confirmed' as const : tm.status;
+    return { ...tm, categoryId: newCategoryId ?? '', status: newStatus, reviewPlayer: update.review_player === null ? undefined : tm.reviewPlayer };
+  });
+  _store.persist(all.map((t2, i) => i === tidx ? { ...t2, teams } : t2));
+  return { ok: true };
+}
+
 // ── Remove from local cache ────────────────────────────────────────────────────
 
 export function removePersonalizado(id: string): void {
