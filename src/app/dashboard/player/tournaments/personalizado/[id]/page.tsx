@@ -159,6 +159,10 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   // ── Collapsed rejected sections per category ─────────────────────────────────
   const [showRejected, setShowRejected] = useState<Record<string, boolean>>({});
 
+  // ── Collapsible category windows (accordion) ─────────────────────────────────
+  const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
+  const toggleCat = (catId: string) => setCollapsedCats(prev => ({ ...prev, [catId]: !prev[catId] }));
+
   // ── Manual team addition ─────────────────────────────────────────────────────
   const [addTeamCatId, setAddTeamCatId] = useState<string | null>(null);
   const [p1Query, setP1Query] = useState('');
@@ -592,31 +596,41 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         const rejectedTeams   = allCatTeams.filter(t => t.status === 'rejected');
         const waiting         = waitlistCount(tournament, cat.id);
         const isAddingHere    = addTeamCatId === cat.id;
+        const enrolled        = enrolledCount(tournament, cat.id);
+        const isFull          = enrolled >= cat.maxTeams;
+        const progress        = cat.maxTeams > 0 ? Math.min(100, Math.round((enrolled / cat.maxTeams) * 100)) : 0;
+        const collapsed       = !!collapsedCats[cat.id];
 
         return (
           <div key={cat.id} style={card}>
-            {/* Category header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--black)', marginBottom: 4 }}>{cat.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{GENDER_LABELS[cat.gender]} · Parejas</div>
+            {/* Category header — clickable to collapse/expand */}
+            <div
+              onClick={() => toggleCat(cat.id)}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8, cursor: 'pointer', userSelect: 'none' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <span style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 3, transition: 'transform 0.15s', display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'none' }}>▾</span>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--black)', marginBottom: 4 }}>{cat.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{GENDER_LABELS[cat.gender]} · Parejas</div>
+                </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', textAlign: 'right' }}>
-                  {enrolledCount(tournament, cat.id)} / {cat.maxTeams} inscritos{waiting > 0 ? ` · ${waiting} en espera` : ''}
+                <div style={{ fontSize: 13, fontWeight: 700, color: isFull ? 'var(--turf-green, #15803d)' : 'var(--black)', textAlign: 'right' }}>
+                  {enrolled} / {cat.maxTeams} inscritos{waiting > 0 ? ` · ${waiting} en espera` : ''}
                 </div>
                 {tournament.status === 'registration_open' && !isAddingHere && (
                   <button
-                    onClick={() => { resetAddForm(); setAddTeamCatId(cat.id); }}
+                    onClick={(e) => { e.stopPropagation(); resetAddForm(); setAddTeamCatId(cat.id); setCollapsedCats(prev => ({ ...prev, [cat.id]: false })); }}
                     style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
                   >
                     + Agregar equipo
                   </button>
                 )}
                 {/* SOLO PRUEBA — eliminar antes del lanzamiento */}
-                {(tournament.status === 'registration_open' || tournament.status === 'configured') && seedCatId !== cat.id && enrolledCount(tournament, cat.id) < cat.maxTeams && (
+                {(tournament.status === 'registration_open' || tournament.status === 'configured') && seedCatId !== cat.id && enrolled < cat.maxTeams && (
                   <button
-                    onClick={() => { setSeedCatId(cat.id); setSeedCount(Math.min(4, cat.maxTeams - enrolledCount(tournament, cat.id))); }}
+                    onClick={(e) => { e.stopPropagation(); setSeedCatId(cat.id); setSeedCount(Math.min(4, cat.maxTeams - enrolled)); setCollapsedCats(prev => ({ ...prev, [cat.id]: false })); }}
                     style={{ padding: '6px 14px', background: 'rgba(234,179,8,0.1)', color: '#854d0e', border: '1px dashed #ca8a04', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
                   >
                     🎲 Seed prueba
@@ -624,6 +638,13 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                 )}
               </div>
             </div>
+
+            {/* Progress bar */}
+            <div style={{ height: 6, background: 'var(--grey-100)', borderRadius: 3, overflow: 'hidden', marginBottom: collapsed ? 0 : 14 }}>
+              <div style={{ height: '100%', width: `${progress}%`, background: isFull ? 'var(--turf-green, #15803d)' : 'var(--neon, #d6ff00)', borderRadius: 3, transition: 'width 0.3s ease' }} />
+            </div>
+
+            {!collapsed && (<>
 
             {/* QR */}
             {tournament.status === 'registration_open' && (
@@ -784,6 +805,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
             {activeTeams.length === 0 && waitlistedTeams.length === 0 && !isAddingHere && tournament.status !== 'draft' && (
               <div style={{ marginTop: 12, fontSize: 12, color: 'var(--grey-300)', fontStyle: 'italic' }}>Aún no hay inscriptos en esta categoría.</div>
             )}
+            </>)}
           </div>
         );
       })}

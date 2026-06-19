@@ -33,8 +33,10 @@ export interface PersonalizadoTeam {
   player2Id?: string;
   groupId?: string; // assigned via control-panel drag & drop
   registeredAt: string;
-  status: 'pending' | 'confirmed' | 'rejected' | 'waitlisted';
+  status: 'pending' | 'confirmed' | 'rejected' | 'waitlisted' | 'partial_review' | 'unassigned';
   paymentStatus: 'unpaid' | 'paid' | 'free';
+  reviewPlayer?: 'player1' | 'player2'; // which player is flagged for review
+  partnerInviteToken?: string;          // token for "buscar compañero" invite link
 }
 
 // ── Control-panel configuration ──────────────────────────────────────────────
@@ -233,7 +235,7 @@ export function teamToRow(tournamentId: string, t: PersonalizadoTeam): Record<st
   return {
     id: t.id,
     tournament_id: tournamentId,
-    category_id: t.categoryId,
+    category_id: t.categoryId || null,
     player1_name: t.player1Name,
     player1_email: t.player1Email ?? null,
     player1_id: t.player1Id ?? null,
@@ -244,13 +246,15 @@ export function teamToRow(tournamentId: string, t: PersonalizadoTeam): Record<st
     status: t.status,
     payment_status: t.paymentStatus,
     registered_at: t.registeredAt,
+    review_player: t.reviewPlayer ?? null,
+    partner_invite_token: t.partnerInviteToken ?? null,
   };
 }
 
 export function rowToTeam(r: Record<string, unknown>): PersonalizadoTeam {
   return {
     id: r.id as string,
-    categoryId: r.category_id as string,
+    categoryId: (r.category_id as string) ?? '',
     player1Name: r.player1_name as string,
     player1Email: (r.player1_email as string) ?? undefined,
     player1Id: (r.player1_id as string) ?? undefined,
@@ -261,6 +265,8 @@ export function rowToTeam(r: Record<string, unknown>): PersonalizadoTeam {
     registeredAt: (r.registered_at as string) ?? new Date().toISOString(),
     status: r.status as PersonalizadoTeam['status'],
     paymentStatus: r.payment_status as PersonalizadoTeam['paymentStatus'],
+    reviewPlayer: (r.review_player as 'player1' | 'player2') ?? undefined,
+    partnerInviteToken: (r.partner_invite_token as string) ?? undefined,
   };
 }
 
