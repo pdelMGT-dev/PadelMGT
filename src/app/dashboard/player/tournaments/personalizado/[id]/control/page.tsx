@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, use, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -327,35 +327,6 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   }
   function setCourtName(idx: number, name: string) {
     setConfig(prev => ({ ...prev, courtNames: prev.courtNames.map((c, i) => i === idx ? name : c) }));
-  }
-
-  // ── Group formation helpers ─────────────────────────────────────────────────
-  const GL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
-  function groupIdsForCat(catId: string, groupCount: number): string[] {
-    return Array.from({ length: groupCount }, (_, i) => `${catId}-G${i + 1}`);
-  }
-
-  const randomAssignGroups = useCallback((catId: string) => {
-    const g = config.groups.find(x => x.categoryId === catId);
-    if (!g) return;
-    const catTeams = assignable.filter(t => t.categoryId === catId);
-    const shuffled = [...catTeams].sort(() => Math.random() - 0.5);
-    const groups = groupIdsForCat(catId, g.groupCount);
-    setTeams(prev => prev.map(t => {
-      if (t.categoryId !== catId || !shuffled.find(s => s.id === t.id)) return t;
-      const idx = shuffled.findIndex(s => s.id === t.id);
-      return { ...t, groupId: groups[idx % groups.length] };
-    }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assignable, config.groups]);
-
-  function clearGroupsForCat(catId: string) {
-    setTeams(prev => prev.map(t => t.categoryId === catId ? { ...t, groupId: undefined } : t));
-  }
-
-  function moveTeamToGroup(teamId: string, newGroupId: string | null) {
-    setTeams(prev => prev.map(t => t.id === teamId ? { ...t, groupId: newGroupId ?? undefined } : t));
   }
 
   // ── Save ────────────────────────────────────────────────────────────────────
