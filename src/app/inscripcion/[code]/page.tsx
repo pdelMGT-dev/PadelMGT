@@ -484,17 +484,20 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
             const count = enrolledCount(tournament, cat.id);
             const waiting = waitlistCount(tournament, cat.id);
             const full = count >= cat.maxTeams;
+            const closed = tournament.config?.categoryStages?.[cat.id] === 'grupos';
             const selected = selectedCatId === cat.id;
             return (
               <button
                 key={cat.id}
                 type="button"
-                onClick={() => { setSelectedCatId(cat.id); setError(null); }}
+                disabled={closed}
+                onClick={() => { if (closed) return; setSelectedCatId(cat.id); setError(null); }}
                 style={{
-                  textAlign: 'left', padding: '14px 16px', cursor: 'pointer',
-                  background: selected ? 'rgba(214,255,0,0.10)' : '#fff',
-                  border: selected ? '2px solid var(--black)' : '1px solid var(--grey-200)',
+                  textAlign: 'left', padding: '14px 16px', cursor: closed ? 'not-allowed' : 'pointer',
+                  background: closed ? 'var(--grey-50, #fafafa)' : selected ? 'rgba(214,255,0,0.10)' : '#fff',
+                  border: selected && !closed ? '2px solid var(--black)' : '1px solid var(--grey-200)',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+                  opacity: closed ? 0.65 : 1,
                 }}
               >
                 <div>
@@ -506,7 +509,12 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
                         background: 'rgba(34,197,94,0.12)', color: '#15803d',
                       }}>MENORES DE {cat.maxAge}</span>
                     )}
-                    {full && (
+                    {closed ? (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', padding: '2px 6px',
+                        background: 'rgba(0,0,0,0.06)', color: 'var(--grey-500)',
+                      }}>INSCRIPCIÓN CERRADA</span>
+                    ) : full && (
                       <span style={{
                         fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', padding: '2px 6px',
                         background: 'rgba(245,158,11,0.14)', color: '#b45309',
@@ -519,7 +527,11 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
                   <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 3 }}>
                     {count} / {cat.maxTeams} inscritos{waiting > 0 ? ` · ${waiting} en espera` : ''}
                   </div>
-                  {full && (
+                  {closed ? (
+                    <div style={{ fontSize: 12, color: 'var(--grey-500)', marginTop: 3 }}>
+                      Esta categoría ya está formando los grupos. No admite nuevas inscripciones.
+                    </div>
+                  ) : full && (
                     <div style={{ fontSize: 12, color: '#b45309', marginTop: 3 }}>
                       Al inscribirte entrarás en la lista de espera.
                     </div>

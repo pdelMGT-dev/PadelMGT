@@ -19,8 +19,12 @@ import {
   enrolledCount,
   waitlistCount,
   canManagePersonalizado,
+  saveControlPanel,
+  teamsPerGroupFromCount,
+  DEFAULT_CONTROL_CONFIG,
   type PersonalizadoTournament,
   type PersonalizadoTeam,
+  type ControlPanelConfig,
 } from '@/lib/personalizado-store';
 import { sendPersonalizadoStatusEmail } from '@/lib/email';
 import { searchPlayers, type RegisteredPlayer } from '@/lib/player-store';
@@ -182,6 +186,11 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     const t = setTimeout(() => setNewPartnerResults(searchPlayers(newPartnerQuery.trim()).slice(0, 6)), 200);
     return () => clearTimeout(t);
   }, [newPartnerQuery]);
+
+  // ── Group formation (per-category stage) ──────────────────────────────────────
+  const [groupDragTeamId, setGroupDragTeamId] = useState<string | null>(null);
+  const [groupDropTarget, setGroupDropTarget] = useState<string | null>(null);
+  const [savingGroups, setSavingGroups] = useState(false);
 
   // ── Collapsed rejected sections per category ─────────────────────────────────
   const [showRejected, setShowRejected] = useState<Record<string, boolean>>({});
@@ -499,6 +508,97 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     showToast(`Nuevo compañero/a asignado: ${selectedNewPartner.name}`, 'success');
   }
 
+  // ── Group formation helpers ─────────────────────────────────────────────────
+  const GROUP_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+  function currentConfig(): ControlPanelConfig {
+    return { ...DEFAULT_CONTROL_CONFIG, ...(tournament?.config ?? {}) };
+  }
+  function groupCountFor(catId: string, maxTeams: number): number {
+    const g = (tournament?.config?.groups ?? []).find(x => x.categoryId === catId);
+    if (g?.groupCount && g.groupCount > 0) return g.groupCount;
+    return Math.max(1, Math.round(maxTeams / 4));
+  }
+  function groupIdsForCat(catId: string, count: number): string[] {
+    return Array.from({ length: count }, (_, i) => `${catId}-G${i + 1}`);
+  }
+  function stageOf(catId: string): 'inscripcion' | 'grupos' {
+    return tournament?.config?.categoryStages?.[catId] ?? 'inscripcion';
+  }
+
+  // Persist config (+ optional team group assignments) via the control-panel save route.
+  async function persistGroupState(newConfig: ControlPanelConfig, newTeams?: PersonalizadoTeam[]) {
+    if (!tournament) return;
+    setSavingGroups(true);
+    // optimistic local update
+    setTournament(prev => prev ? { ...prev, config: newConfig, ...(newTeams ? { teams: newTeams } : {}) } : prev);
+    const groupAssignments: Record<string, string | null> | undefined = newTeams
+      ? Object.fromEntries(newTeams.map(t => [t.id, t.groupId ?? null]))
+      : undefined;
+    const res = await saveControlPanel({
+      id: tournament.id,
+      categories: tournament.categories,
+      config: newConfig,
+      groupAssignments,
+      requesterId: currentUser?.id,
+    });
+    setSavingGroups(false);
+    if (!res.ok) { showToast(res.error ?? 'No se pudo guardar', 'error'); return; }
+    if (res.teams) setTournament(prev => prev ? { ...prev, teams: res.teams!, config: newConfig } : prev);
+  }
+
+  async function setCategoryStage(catId: string, stage: 'inscripcion' | 'grupos') {
+    const cfg = currentConfig();
+    const newConfig: ControlPanelConfig = { ...cfg, categoryStages: { ...(cfg.categoryStages ?? {}), [catId]: stage } };
+    await persistGroupState(newConfig);
+    showToast(stage === 'grupos' ? 'Categoría en Formación de Grupos' : 'Categoría reabierta a Inscripción', 'success');
+  }
+
+  function randomAssignGroups(catId: string) {
+    if (!tournament) return;
+    const cat = tournament.categories.find(c => c.id === catId);
+    if (!cat) return;
+    const count = groupCountFor(catId, cat.maxTeams);
+    const groups = groupIdsForCat(catId, count);
+    const catTeams = tournament.teams.filter(t => t.categoryId === catId && (t.status === 'pending' || t.status === 'confirmed' || t.status === 'partial_review'));
+    const shuffled = [...catTeams].sort(() => Math.random() - 0.5);
+    const assignMap = new Map<string, string>();
+    shuffled.forEach((t, i) => assignMap.set(t.id, groups[i % groups.length]));
+    const newTeams = tournament.teams.map(t => assignMap.has(t.id) ? { ...t, groupId: assignMap.get(t.id) } : t);
+    void persistGroupState(currentConfig(), newTeams);
+  }
+
+  function clearGroups(catId: string) {
+    if (!tournament) return;
+    const newTeams = tournament.teams.map(t => t.categoryId === catId ? { ...t, groupId: undefined } : t);
+    void persistGroupState(currentConfig(), newTeams);
+  }
+
+  function moveTeamToGroup(teamId: string, groupId: string | null) {
+    if (!tournament) return;
+    const newTeams = tournament.teams.map(t => t.id === teamId ? { ...t, groupId: groupId ?? undefined } : t);
+    void persistGroupState(currentConfig(), newTeams);
+  }
+
+  function adjustGroupCount(catId: string, delta: number) {
+    if (!tournament) return;
+    const cat = tournament.categories.find(c => c.id === catId);
+    if (!cat) return;
+    const cfg = currentConfig();
+    const cur = groupCountFor(catId, cat.maxTeams);
+    const next = Math.max(1, Math.min(cat.maxTeams, cur + delta));
+    if (next === cur) return;
+    const tpg = teamsPerGroupFromCount(cat.maxTeams, next);
+    const groups = [...(cfg.groups ?? [])];
+    const idx = groups.findIndex(g => g.categoryId === catId);
+    if (idx >= 0) groups[idx] = { ...groups[idx], groupCount: next, teamsPerGroup: tpg };
+    else groups.push({ categoryId: catId, groupCount: next, teamsPerGroup: tpg, qualifyPerGroup: 2 });
+    // Drop assignments that point to now-removed groups.
+    const valid = new Set(groupIdsForCat(catId, next));
+    const newTeams = tournament.teams.map(t => (t.categoryId === catId && t.groupId && !valid.has(t.groupId)) ? { ...t, groupId: undefined } : t);
+    void persistGroupState({ ...cfg, groups }, newTeams);
+  }
+
   async function handleAddTeam(catId: string) {
     if (!selectedP1 || !selectedP2 || !tournament) return;
     setAddingTeam(true);
@@ -760,6 +860,8 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         const isFull          = enrolled >= cat.maxTeams;
         const progress        = cat.maxTeams > 0 ? Math.min(100, Math.round((enrolled / cat.maxTeams) * 100)) : 0;
         const collapsed       = !!collapsedCats[cat.id];
+        const stage           = stageOf(cat.id);
+        const inGroups        = stage === 'grupos';
 
         const isDragTarget = dropTargetId === cat.id;
 
@@ -779,15 +881,42 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <span style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 3, transition: 'transform 0.15s', display: 'inline-block', transform: collapsed ? 'rotate(-90deg)' : 'none' }}>▾</span>
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--black)', marginBottom: 4 }}>{cat.name}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--black)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {cat.name}
+                    {inGroups && (
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 7px', background: 'var(--black)', color: 'var(--neon)' }}>
+                        ⚙ Formación de Grupos
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{GENDER_LABELS[cat.gender]} · Parejas</div>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: isFull ? 'var(--turf-green, #15803d)' : 'var(--black)', textAlign: 'right' }}>
                   {enrolled} / {cat.maxTeams} inscritos{waiting > 0 ? ` · ${waiting} en espera` : ''}
+                  {inGroups && <span style={{ display: 'block', fontSize: 10, fontWeight: 600, color: '#854d0e', marginTop: 2 }}>Inscripción cerrada</span>}
                 </div>
-                {tournament.status === 'registration_open' && !isAddingHere && (
+                {/* Group-formation toggle */}
+                {tournament.status === 'registration_open' && !inGroups && isFull && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setCollapsedCats(prev => ({ ...prev, [cat.id]: false })); void setCategoryStage(cat.id, 'grupos'); }}
+                    disabled={savingGroups}
+                    style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: savingGroups ? 'wait' : 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
+                  >
+                    ▶ Formar grupos
+                  </button>
+                )}
+                {tournament.status === 'registration_open' && inGroups && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); void setCategoryStage(cat.id, 'inscripcion'); }}
+                    disabled={savingGroups}
+                    style={{ padding: '6px 14px', background: '#fff', color: 'var(--grey-600)', border: '1px solid var(--grey-300)', cursor: savingGroups ? 'wait' : 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
+                  >
+                    ← Reabrir inscripción
+                  </button>
+                )}
+                {tournament.status === 'registration_open' && !inGroups && !isAddingHere && (
                   <button
                     onClick={(e) => { e.stopPropagation(); resetAddForm(); setAddTeamCatId(cat.id); setCollapsedCats(prev => ({ ...prev, [cat.id]: false })); }}
                     style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
@@ -796,7 +925,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   </button>
                 )}
                 {/* SOLO PRUEBA — eliminar antes del lanzamiento */}
-                {(tournament.status === 'registration_open' || tournament.status === 'configured') && seedCatId !== cat.id && enrolled < cat.maxTeams && (
+                {!inGroups && (tournament.status === 'registration_open' || tournament.status === 'configured') && seedCatId !== cat.id && enrolled < cat.maxTeams && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setSeedCatId(cat.id); setSeedCount(Math.min(4, cat.maxTeams - enrolled)); setCollapsedCats(prev => ({ ...prev, [cat.id]: false })); }}
                     style={{ padding: '6px 14px', background: 'rgba(234,179,8,0.1)', color: '#854d0e', border: '1px dashed #ca8a04', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
@@ -812,7 +941,28 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               <div style={{ height: '100%', width: `${progress}%`, background: isFull ? 'var(--turf-green, #15803d)' : 'var(--neon, #d6ff00)', borderRadius: 3, transition: 'width 0.3s ease' }} />
             </div>
 
-            {!collapsed && (<>
+            {!collapsed && inGroups && (
+              <GroupFormation
+                cat={cat}
+                groupCount={groupCountFor(cat.id, cat.maxTeams)}
+                groupIds={groupIdsForCat(cat.id, groupCountFor(cat.id, cat.maxTeams))}
+                groupLetters={GROUP_LETTERS}
+                teams={tournament.teams.filter(t => t.categoryId === cat.id && (t.status === 'pending' || t.status === 'confirmed' || t.status === 'partial_review'))}
+                teamsPerGroup={teamsPerGroupFromCount(cat.maxTeams, groupCountFor(cat.id, cat.maxTeams))}
+                saving={savingGroups}
+                dragTeamId={groupDragTeamId}
+                dropTarget={groupDropTarget}
+                onDragStart={(id) => setGroupDragTeamId(id)}
+                onDragEnd={() => { setGroupDragTeamId(null); setGroupDropTarget(null); }}
+                onSetDropTarget={setGroupDropTarget}
+                onDropTeam={(gid) => { if (groupDragTeamId) moveTeamToGroup(groupDragTeamId, gid); setGroupDragTeamId(null); setGroupDropTarget(null); }}
+                onRandom={() => randomAssignGroups(cat.id)}
+                onClear={() => clearGroups(cat.id)}
+                onAdjustGroupCount={(d) => adjustGroupCount(cat.id, d)}
+              />
+            )}
+
+            {!collapsed && !inGroups && (<>
 
             {/* QR */}
             {tournament.status === 'registration_open' && (
@@ -1333,6 +1483,108 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── GroupFormation sub-component ──────────────────────────────────────────────
+
+function GroupFormation({
+  cat, groupCount, groupIds, groupLetters, teams, teamsPerGroup, saving,
+  dragTeamId, dropTarget, onDragStart, onDragEnd, onSetDropTarget, onDropTeam,
+  onRandom, onClear, onAdjustGroupCount,
+}: {
+  cat: { id: string; name: string; maxTeams: number };
+  groupCount: number;
+  groupIds: string[];
+  groupLetters: string;
+  teams: PersonalizadoTeam[];
+  teamsPerGroup: number;
+  saving: boolean;
+  dragTeamId: string | null;
+  dropTarget: string | null;
+  onDragStart: (teamId: string) => void;
+  onDragEnd: () => void;
+  onSetDropTarget: (target: string | null) => void;
+  onDropTeam: (groupId: string | null) => void;
+  onRandom: () => void;
+  onClear: () => void;
+  onAdjustGroupCount: (delta: number) => void;
+}) {
+  const poolId = `POOL-${cat.id}`;
+  const unassigned = teams.filter(t => !t.groupId || !groupIds.includes(t.groupId));
+
+  const chip = (t: PersonalizadoTeam) => (
+    <div
+      key={t.id}
+      draggable
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(t.id); }}
+      onDragEnd={onDragEnd}
+      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', marginBottom: 4, border: '1px solid var(--grey-100)', background: dragTeamId === t.id ? 'var(--grey-50)' : '#fff', cursor: 'grab', fontSize: 11, opacity: dragTeamId === t.id ? 0.4 : 1 }}
+    >
+      <span style={{ color: 'var(--grey-300)', fontSize: 14 }}>⠿</span>
+      <div>
+        <div style={{ fontWeight: 600, color: 'var(--black)' }}>{t.player1Name}</div>
+        {t.player2Name && <div style={{ color: 'var(--grey-400)' }}>{t.player2Name}</div>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Grupos:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => onAdjustGroupCount(-1)} disabled={saving || groupCount <= 1} style={{ width: 26, height: 26, border: '1px solid var(--grey-200)', background: '#fff', cursor: (saving || groupCount <= 1) ? 'not-allowed' : 'pointer', fontSize: 16, fontWeight: 700, lineHeight: 1, color: 'var(--grey-600)' }}>−</button>
+            <span style={{ minWidth: 24, textAlign: 'center', fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{groupCount}</span>
+            <button onClick={() => onAdjustGroupCount(1)} disabled={saving || groupCount >= cat.maxTeams} style={{ width: 26, height: 26, border: '1px solid var(--grey-200)', background: '#fff', cursor: (saving || groupCount >= cat.maxTeams) ? 'not-allowed' : 'pointer', fontSize: 16, fontWeight: 700, lineHeight: 1, color: 'var(--grey-600)' }}>+</button>
+          </div>
+          <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>~{teamsPerGroup} equipos por grupo</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onRandom} disabled={saving} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: saving ? 'wait' : 'pointer' }}>🎲 Sortear al azar</button>
+          <button onClick={onClear} disabled={saving} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: '#fff', color: 'var(--grey-500)', border: '1px solid var(--grey-200)', cursor: saving ? 'wait' : 'pointer' }}>✕ Limpiar</button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(150px, 1fr))`, gap: 10 }}>
+        {/* Pool */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); onSetDropTarget(poolId); }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onSetDropTarget(null); }}
+          onDrop={(e) => { e.preventDefault(); onDropTeam(null); }}
+          style={{ minHeight: 90, padding: 8, border: `1px dashed ${dropTarget === poolId ? 'rgba(214,255,0,0.9)' : 'var(--grey-200)'}`, background: dropTarget === poolId ? 'rgba(214,255,0,0.06)' : 'var(--grey-50, #fafafa)' }}
+        >
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Sin grupo ({unassigned.length})</div>
+          {unassigned.map(chip)}
+          {unassigned.length === 0 && <div style={{ fontSize: 10, color: 'var(--grey-300)', fontStyle: 'italic' }}>Todos asignados</div>}
+        </div>
+
+        {/* Groups */}
+        {groupIds.map((gid, i) => {
+          const gTeams = teams.filter(t => t.groupId === gid);
+          const isTarget = dropTarget === gid;
+          return (
+            <div
+              key={gid}
+              onDragOver={(e) => { e.preventDefault(); onSetDropTarget(gid); }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onSetDropTarget(null); }}
+              onDrop={(e) => { e.preventDefault(); onDropTeam(gid); }}
+              style={{ minHeight: 90, padding: 8, border: `1px solid ${isTarget ? 'var(--black)' : 'var(--grey-100)'}`, background: isTarget ? 'rgba(214,255,0,0.06)' : '#fff' }}
+            >
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 8 }}>
+                Grupo {groupLetters[i % groupLetters.length]} <span style={{ color: 'var(--grey-400)', fontWeight: 400 }}>({gTeams.length})</span>
+              </div>
+              {gTeams.map(chip)}
+              {gTeams.length === 0 && <div style={{ fontSize: 10, color: 'var(--grey-300)', fontStyle: 'italic' }}>Vacío</div>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 12 }}>
+        Arrastrá los equipos entre grupos o usá &ldquo;Sortear al azar&rdquo;. Los cambios se guardan automáticamente.
+      </div>
     </div>
   );
 }
