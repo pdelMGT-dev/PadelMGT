@@ -10,6 +10,8 @@ import {
   savePersonalizado,
   removePersonalizado,
   changeTeamStatus,
+  setTeamReview,
+  resolveTeamReview,
   clearTeamPartner,
   registerTeam,
   enrolledCount,
@@ -155,6 +157,11 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const [rejectReason, setRejectReason] = useState('');
   const [rejectTarget, setRejectTarget] = useState<'team' | 'partner'>('team');
   const [rejecting, setRejecting] = useState(false);
+
+  // ── Review modal ──────────────────────────────────────────────────────────────
+  const [reviewModal, setReviewModal] = useState<{ teamId: string; catId: string; catName: string; p1Name: string; p2Name?: string } | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<'player1' | 'player2' | 'both'>('player1');
+  const [reviewing, setReviewing] = useState(false);
 
   // ── Collapsed rejected sections per category ─────────────────────────────────
   const [showRejected, setShowRejected] = useState<Record<string, boolean>>({});
@@ -390,6 +397,36 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     showToast('Inscripción restaurada a Pendiente', 'success');
   }
 
+  function openReviewModal(team: PersonalizadoTeam, catId: string, catName: string) {
+    setReviewModal({ teamId: team.id, catId, catName, p1Name: team.player1Name, p2Name: team.player2Name });
+    setReviewTarget(team.player2Name ? 'player1' : 'both');
+  }
+
+  async function handleConfirmReview() {
+    if (!reviewModal) return;
+    setReviewing(true);
+    const result = await setTeamReview(id, reviewModal.teamId, reviewTarget);
+    setReviewing(false);
+    if (!result.ok) { showToast(result.error ?? 'No se pudo poner en revisión', 'error'); return; }
+    const updated = await loadPersonalizadoById(id);
+    setTournament(updated);
+    setReviewModal(null);
+    if (reviewTarget === 'both') {
+      showToast('Equipo movido a "Sin categoría" — ambos jugadores en revisión', 'success');
+    } else {
+      const who = reviewTarget === 'player1' ? reviewModal.p1Name : (reviewModal.p2Name ?? 'J2');
+      showToast(`${who} puesto/a en revisión — el equipo queda marcado`, 'success');
+    }
+  }
+
+  async function handleResolveReview(team: PersonalizadoTeam, restoreCatId?: string) {
+    const result = await resolveTeamReview(id, team.id, restoreCatId ?? (team.categoryId || undefined));
+    if (!result.ok) { showToast(result.error ?? 'No se pudo resolver', 'error'); return; }
+    const updated = await loadPersonalizadoById(id);
+    setTournament(updated);
+    showToast('Revisión resuelta — equipo confirmado', 'success');
+  }
+
   async function handleAddTeam(catId: string) {
     if (!selectedP1 || !selectedP2 || !tournament) return;
     setAddingTeam(true);
@@ -588,10 +625,44 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
+      {/* Equipos sin categoría (unassigned pool) */}
+      {tournament.teams.filter(t => t.status === 'unassigned').length > 0 && (
+        <div style={{ ...card, border: '1px dashed rgba(234,179,8,0.5)', background: 'rgba(234,179,8,0.04)', marginBottom: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#92400e', marginBottom: 12 }}>
+            ⚠ Equipos sin categoría — ambos jugadores en revisión
+          </div>
+          {tournament.teams.filter(t => t.status === 'unassigned').map(team => (
+            <div key={team.id} style={{ padding: '10px 12px', border: '1px solid rgba(234,179,8,0.3)', background: '#fff', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, flexWrap: 'wrap', gap: 6 }}>
+              <div>
+                <span style={{ fontWeight: 600 }}>{team.player1Name}</span>
+                {team.player2Name && <span style={{ color: 'var(--grey-400)' }}> / {team.player2Name}</span>}
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#92400e', marginTop: 3 }}>
+                  SIN CATEGORÍA · AMBOS EN REVISIÓN
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {tournament.categories.map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => handleResolveReview(team, cat.id)}
+                    style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', background: 'var(--black)', color: 'var(--neon)', border: 'none', whiteSpace: 'nowrap' }}
+                  >
+                    → {cat.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: '#92400e', marginTop: 6 }}>
+            Usa los botones para mover el equipo a la categoría correcta y confirmarlo.
+          </div>
+        </div>
+      )}
+
       {/* Categories */}
       {tournament.categories.map((cat) => {
         const allCatTeams     = tournament.teams.filter(t => t.categoryId === cat.id);
-        const activeTeams     = allCatTeams.filter(t => t.status !== 'waitlisted' && t.status !== 'rejected');
+        const activeTeams     = allCatTeams.filter(t => t.status !== 'waitlisted' && t.status !== 'rejected' && t.status !== 'unassigned');
         const waitlistedTeams = allCatTeams.filter(t => t.status === 'waitlisted');
         const rejectedTeams   = allCatTeams.filter(t => t.status === 'rejected');
         const waiting         = waitlistCount(tournament, cat.id);
@@ -747,6 +818,8 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                     canManage={tournament.status === 'registration_open'}
                     onConfirm={() => handleConfirm(team.id)}
                     onReject={() => openRejectModal(team, cat.name)}
+                    onReview={() => openReviewModal(team, cat.id, cat.name)}
+                    onResolveReview={() => handleResolveReview(team)}
                   />
                 ))}
               </div>
@@ -987,6 +1060,61 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         </div>
       )}
 
+      {/* Review modal */}
+      {reviewModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setReviewModal(null); }}
+        >
+          <div style={{ background: '#fff', padding: '28px 32px', maxWidth: 460, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 6 }}>
+              Poner en revisión
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--grey-500)', marginBottom: 4 }}>
+              {reviewModal.p1Name}{reviewModal.p2Name ? ` / ${reviewModal.p2Name}` : ''}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 20 }}>
+              Categoría: {reviewModal.catName}
+            </div>
+
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 10, display: 'block' }}>
+              ¿Cuál jugador/a está en revisión?
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+              {([
+                { value: 'player1' as const, label: reviewModal.p1Name, desc: 'J1 en revisión. J2 puede buscar nuevo compañero/a.' },
+                ...(reviewModal.p2Name ? [{ value: 'player2' as const, label: reviewModal.p2Name, desc: 'J2 en revisión. J1 puede buscar nuevo compañero/a.' }] : []),
+                { value: 'both' as const, label: 'Ambos jugadores', desc: 'El equipo sale de la categoría y queda sin asignar.' },
+              ] as const).map(opt => (
+                <label key={opt.value} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', border: `1px solid ${reviewTarget === opt.value ? 'var(--black)' : 'var(--grey-200)'}`, background: reviewTarget === opt.value ? 'rgba(0,0,0,0.03)' : '#fff', cursor: 'pointer' }}>
+                  <input type="radio" name="reviewTarget" value={opt.value} checked={reviewTarget === opt.value} onChange={() => setReviewTarget(opt.value)} style={{ marginTop: 2, flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)' }}>{opt.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 2 }}>{opt.desc}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setReviewModal(null)}
+                style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--grey-500)', textTransform: 'uppercase' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmReview}
+                disabled={reviewing}
+                style={{ padding: '9px 22px', background: 'rgba(234,179,8,0.9)', color: '#fff', border: 'none', cursor: reviewing ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: reviewing ? 0.6 : 1 }}
+              >
+                {reviewing ? 'Procesando…' : 'Poner en revisión'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rejection modal */}
       {rejectModal && (
         <div
@@ -1060,22 +1188,47 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 // ── TeamRow sub-component ─────────────────────────────────────────────────────
 
 function TeamRow({
-  team, canManage, onConfirm, onReject,
+  team, canManage, onConfirm, onReject, onReview, onResolveReview,
 }: {
   team: PersonalizadoTeam;
   canManage: boolean;
   onConfirm: () => void;
   onReject: () => void;
+  onReview: () => void;
+  onResolveReview: () => void;
 }) {
   const hasInvitePending = team.player1Id && team.player2Email && !team.player2Id;
+  const isReview = team.status === 'partial_review';
+  const reviewedPlayer = team.reviewPlayer;
+
+  const borderColor = isReview ? 'rgba(234,179,8,0.4)' : 'var(--grey-100)';
+  const bgColor = isReview ? 'rgba(254,249,195,0.3)' : '#fff';
 
   return (
-    <div style={{ padding: '9px 12px', border: '1px solid var(--grey-100)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, flexWrap: 'wrap', gap: 6 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <div>
+    <div style={{ padding: '9px 12px', border: `1px solid ${borderColor}`, background: bgColor, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: 13, flexWrap: 'wrap', gap: 6 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* Player 1 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontWeight: 600 }}>{team.player1Name}</span>
-          {team.player2Name && <span style={{ color: 'var(--grey-400)' }}> / {team.player2Name}</span>}
+          {isReview && reviewedPlayer === 'player1' && (
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 5px', background: 'rgba(234,179,8,0.2)', color: '#92400e', border: '1px solid rgba(234,179,8,0.4)' }}>EN REVISIÓN</span>
+          )}
+          {isReview && reviewedPlayer === 'player2' && (
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 5px', background: 'rgba(59,130,246,0.1)', color: '#1d4ed8', border: '1px solid rgba(59,130,246,0.3)' }}>BUSCAR COMPAÑERO</span>
+          )}
         </div>
+        {/* Player 2 */}
+        {team.player2Name && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: 'var(--grey-500)', fontSize: 12 }}>{team.player2Name}</span>
+            {isReview && reviewedPlayer === 'player2' && (
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 5px', background: 'rgba(234,179,8,0.2)', color: '#92400e', border: '1px solid rgba(234,179,8,0.4)' }}>EN REVISIÓN</span>
+            )}
+            {isReview && reviewedPlayer === 'player1' && (
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 5px', background: 'rgba(59,130,246,0.1)', color: '#1d4ed8', border: '1px solid rgba(59,130,246,0.3)' }}>BUSCAR COMPAÑERO</span>
+            )}
+          </div>
+        )}
         {hasInvitePending && (
           <div style={{ fontSize: 10, color: '#1d4ed8', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
             ✉ Esperando que {team.player2Name ?? 'compañero/a'} acepte la invitación
@@ -1087,19 +1240,34 @@ function TeamRow({
           </div>
         )}
       </div>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-        <span style={{
-          fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 6px',
-          background: team.status === 'confirmed' ? 'rgba(34,197,94,0.1)' : 'rgba(0,0,0,0.05)',
-          color: team.status === 'confirmed' ? '#15803d' : 'var(--grey-500)',
-        }}>
-          {team.status === 'confirmed' ? 'Confirmado' : 'Pendiente'}
-        </span>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+        {/* Status badge */}
+        {!isReview && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 6px',
+            background: team.status === 'confirmed' ? 'rgba(34,197,94,0.1)' : 'rgba(0,0,0,0.05)',
+            color: team.status === 'confirmed' ? '#15803d' : 'var(--grey-500)',
+          }}>
+            {team.status === 'confirmed' ? 'Confirmado' : 'Pendiente'}
+          </span>
+        )}
+        {isReview && (
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 6px', background: 'rgba(234,179,8,0.15)', color: '#92400e' }}>
+            En revisión
+          </span>
+        )}
+        {/* Action buttons */}
         {canManage && team.status === 'pending' && (
           <>
             <button onClick={onConfirm} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', background: 'rgba(34,197,94,0.1)', color: '#15803d', border: '1px solid rgba(34,197,94,0.3)' }}>✓ Confirmar</button>
             <button onClick={onReject} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', background: 'rgba(220,38,38,0.06)', color: '#b91c1c', border: '1px solid rgba(220,38,38,0.25)' }}>✕ Rechazar</button>
           </>
+        )}
+        {canManage && team.status === 'confirmed' && (
+          <button onClick={onReview} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', background: 'rgba(234,179,8,0.1)', color: '#92400e', border: '1px solid rgba(234,179,8,0.35)' }}>⚑ Revisar</button>
+        )}
+        {canManage && isReview && (
+          <button onClick={onResolveReview} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', background: 'rgba(34,197,94,0.1)', color: '#15803d', border: '1px solid rgba(34,197,94,0.3)' }}>✓ Resolver</button>
         )}
       </div>
     </div>

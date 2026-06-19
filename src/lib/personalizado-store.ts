@@ -488,7 +488,7 @@ export function calcOpeningPrice(tournament: PersonalizadoTournament): number {
 // ── Slot counting ─────────────────────────────────────────────────────────────
 
 export function enrolledCount(t: PersonalizadoTournament, categoryId: string): number {
-  return t.teams.filter(tm => tm.categoryId === categoryId && (tm.status === 'pending' || tm.status === 'confirmed')).length;
+  return t.teams.filter(tm => tm.categoryId === categoryId && (tm.status === 'pending' || tm.status === 'confirmed' || tm.status === 'partial_review')).length;
 }
 
 export function waitlistCount(t: PersonalizadoTournament, categoryId: string): number {
@@ -609,6 +609,76 @@ export async function changeTeamStatus(
     }
   }
   return setTeamStatusLocal(tournamentId, teamId, status);
+}
+
+/**
+ * Flag a team for review. target='both' moves it to the unassigned pool
+ * (category_id = null). target='player1'|'player2' keeps it in the category
+ * but marks partial_review.
+ */
+export async function setTeamReview(
+  tournamentId: string,
+  teamId: string,
+  target: 'player1' | 'player2' | 'both',
+): Promise<{ ok: boolean; error?: string }> {
+  if (isSupabaseConfigured && supabase) {
+    const update: Record<string, unknown> =
+      target === 'both'
+        ? { status: 'unassigned', category_id: null, review_player: null }
+        : { status: 'partial_review', review_player: target };
+    const { error } = await supabase
+      .from('personalizado_teams')
+      .update(update)
+      .eq('id', teamId)
+      .eq('tournament_id', tournamentId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
+  // localStorage fallback
+  const all = _store.load();
+  const tidx = all.findIndex(t => t.id === tournamentId);
+  if (tidx === -1) return { ok: false, error: 'Torneo no encontrado' };
+  const t = all[tidx];
+  const teams = t.teams.map(tm => {
+    if (tm.id !== teamId) return tm;
+    if (target === 'both') return { ...tm, status: 'unassigned' as const, categoryId: '', reviewPlayer: undefined };
+    return { ...tm, status: 'partial_review' as const, reviewPlayer: target };
+  });
+  _store.persist(all.map((t2, i) => i === tidx ? { ...t2, teams } : t2));
+  return { ok: true };
+}
+
+/**
+ * Resolve a team's review status back to 'confirmed'.
+ * If the team was unassigned, pass the new categoryId to reassign it.
+ */
+export async function resolveTeamReview(
+  tournamentId: string,
+  teamId: string,
+  categoryId?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (isSupabaseConfigured && supabase) {
+    const update: Record<string, unknown> = { status: 'confirmed', review_player: null };
+    if (categoryId) update.category_id = categoryId;
+    const { error } = await supabase
+      .from('personalizado_teams')
+      .update(update)
+      .eq('id', teamId)
+      .eq('tournament_id', tournamentId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
+  // localStorage fallback
+  const all = _store.load();
+  const tidx = all.findIndex(t => t.id === tournamentId);
+  if (tidx === -1) return { ok: false, error: 'Torneo no encontrado' };
+  const t = all[tidx];
+  const teams = t.teams.map(tm => {
+    if (tm.id !== teamId) return tm;
+    return { ...tm, status: 'confirmed' as const, reviewPlayer: undefined, categoryId: categoryId ?? tm.categoryId };
+  });
+  _store.persist(all.map((t2, i) => i === tidx ? { ...t2, teams } : t2));
+  return { ok: true };
 }
 
 // ── Remove from local cache ────────────────────────────────────────────────────
