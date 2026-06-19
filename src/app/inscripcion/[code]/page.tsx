@@ -408,6 +408,20 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
     );
   }
 
+  // ── In-app notification: check if current user has a team in review ──────────
+  const myReviewTeam = user
+    ? tournament.teams.find(t =>
+        (t.player1Id === user.id || t.player2Id === user.id) &&
+        (t.status === 'partial_review' || t.status === 'unassigned')
+      )
+    : undefined;
+  const myReviewCatName = myReviewTeam?.categoryId
+    ? tournament.categories.find(c => c.id === myReviewTeam.categoryId)?.name
+    : undefined;
+  const iAmReviewedPlayer = myReviewTeam?.status === 'partial_review'
+    ? (myReviewTeam.reviewPlayer === 'player1' ? myReviewTeam.player1Id === user?.id : myReviewTeam.player2Id === user?.id)
+    : false;
+
   // ── Registration form ─────────────────────────────────────────────────────────
 
   return (
@@ -427,6 +441,40 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
           )}
         </div>
       </div>
+
+      {/* In-app review notification */}
+      {myReviewTeam && (
+        <div style={{ padding: '16px 20px', marginBottom: 16, border: `1px solid ${myReviewTeam.status === 'unassigned' ? 'rgba(234,179,8,0.5)' : iAmReviewedPlayer ? 'rgba(234,179,8,0.5)' : 'rgba(59,130,246,0.4)'}`, background: `${myReviewTeam.status === 'unassigned' ? 'rgba(254,249,195,0.5)' : iAmReviewedPlayer ? 'rgba(254,249,195,0.5)' : 'rgba(239,246,255,0.8)'}` }}>
+          {myReviewTeam.status === 'unassigned' ? (
+            <>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#92400e', marginBottom: 6 }}>
+                ⚠ Tu equipo está siendo revisado por el organizador
+              </div>
+              <div style={{ fontSize: 13, color: '#78350f', lineHeight: 1.6 }}>
+                Tu equipo fue temporalmente removido de la categoría{myReviewCatName ? ` <strong>${myReviewCatName}</strong>` : ''}. El organizador está revisando los datos. Te notificaremos cuando tu categoría sea asignada.
+              </div>
+            </>
+          ) : iAmReviewedPlayer ? (
+            <>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#92400e', marginBottom: 6 }}>
+                ⚠ Tu inscripción está en revisión
+              </div>
+              <div style={{ fontSize: 13, color: '#78350f', lineHeight: 1.6 }}>
+                El organizador está verificando tu participación en <strong>{myReviewCatName ?? 'la categoría'}</strong>. Por el momento tu lugar está reservado. Te informaremos cuando se resuelva.
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#1d4ed8', marginBottom: 6 }}>
+                ℹ Tu compañero/a está en revisión — podés buscar un reemplazo
+              </div>
+              <div style={{ fontSize: 13, color: '#1e40af', lineHeight: 1.6 }}>
+                Tu compañero/a <strong>{myReviewTeam.reviewPlayer === 'player2' ? myReviewTeam.player2Name : myReviewTeam.player1Name}</strong> está siendo revisado/a por el organizador en <strong>{myReviewCatName ?? 'la categoría'}</strong>. Podés inscribirte de nuevo con un nuevo compañero/a si lo deseas.
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Category selector */}
       <div style={card}>

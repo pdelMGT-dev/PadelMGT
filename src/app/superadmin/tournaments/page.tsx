@@ -217,10 +217,12 @@ function PersonalizadoDetailDrawer({
                       <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--grey-400)', fontStyle: 'italic' }}>Sin inscriptos</div>
                     ) : catTeams.map(team => {
                       const tsCfg = {
-                        pending:   { label: 'Pendiente',   bg: 'rgba(0,0,0,0.05)',        color: 'var(--grey-600)' },
-                        confirmed: { label: 'Confirmado',  bg: 'rgba(34,197,94,0.1)',     color: '#15803d' },
-                        rejected:  { label: 'Rechazado',   bg: 'rgba(220,38,38,0.08)',    color: '#b91c1c' },
-                        waitlisted:{ label: 'En espera',   bg: 'rgba(245,158,11,0.1)',    color: '#b45309' },
+                        pending:        { label: 'Pendiente',    bg: 'rgba(0,0,0,0.05)',        color: 'var(--grey-600)' },
+                        confirmed:      { label: 'Confirmado',   bg: 'rgba(34,197,94,0.1)',     color: '#15803d' },
+                        rejected:       { label: 'Rechazado',    bg: 'rgba(220,38,38,0.08)',    color: '#b91c1c' },
+                        waitlisted:     { label: 'En espera',    bg: 'rgba(245,158,11,0.1)',    color: '#b45309' },
+                        partial_review: { label: 'En revisión',  bg: 'rgba(234,179,8,0.15)',    color: '#92400e' },
+                        unassigned:     { label: 'Sin categoría',bg: 'rgba(168,85,247,0.1)',    color: '#6d28d9' },
                       }[team.status] ?? { label: team.status, bg: '#f3f4f6', color: '#374151' };
                       return (
                         <div key={team.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 14px', borderBottom: '1px solid var(--grey-50)', fontSize: 12 }}>
