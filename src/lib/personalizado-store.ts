@@ -682,6 +682,54 @@ export async function resolveTeamReview(
 }
 
 /**
+ * Replace a team's reviewed player with a new one, restoring the team to
+ * 'confirmed' status and clearing the review flag.
+ */
+export async function replaceTeamPartner(
+  tournamentId: string,
+  teamId: string,
+  reviewPlayer: 'player1' | 'player2',
+  newPlayer: { name: string; email?: string; id?: string },
+): Promise<{ ok: boolean; error?: string }> {
+  const update: Record<string, unknown> = {
+    status: 'confirmed',
+    review_player: null,
+  };
+  if (reviewPlayer === 'player1') {
+    update.player1_name = newPlayer.name;
+    update.player1_email = newPlayer.email ?? null;
+    update.player1_id = newPlayer.id ?? null;
+  } else {
+    update.player2_name = newPlayer.name;
+    update.player2_email = newPlayer.email ?? null;
+    update.player2_id = newPlayer.id ?? null;
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase
+      .from('personalizado_teams')
+      .update(update)
+      .eq('id', teamId)
+      .eq('tournament_id', tournamentId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
+  // localStorage fallback
+  const all = _store.load();
+  const tidx = all.findIndex(t => t.id === tournamentId);
+  if (tidx === -1) return { ok: false, error: 'Torneo no encontrado' };
+  const t = all[tidx];
+  const teams = t.teams.map(tm => {
+    if (tm.id !== teamId) return tm;
+    const base = { ...tm, status: 'confirmed' as const, reviewPlayer: undefined };
+    if (reviewPlayer === 'player1') return { ...base, player1Name: newPlayer.name, player1Email: newPlayer.email, player1Id: newPlayer.id };
+    return { ...base, player2Name: newPlayer.name, player2Email: newPlayer.email, player2Id: newPlayer.id };
+  });
+  _store.persist(all.map((t2, i) => i === tidx ? { ...t2, teams } : t2));
+  return { ok: true };
+}
+
+/**
  * Move a team to a different category (or to the unassigned pool when
  * newCategoryId is null). Automatically adjusts status:
  *   - to null  → 'unassigned'

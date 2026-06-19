@@ -13,6 +13,7 @@ import {
   setTeamReview,
   resolveTeamReview,
   moveTeamToCategory,
+  replaceTeamPartner,
   clearTeamPartner,
   registerTeam,
   enrolledCount,
@@ -168,6 +169,19 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const [draggedTeamId, setDraggedTeamId] = useState<string | null>(null);
   // dropTargetId: catId string = hovering over category, 'UNASSIGNED' = hovering over pool, null = not hovering
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  // ── Replace partner (Buscar compañero) ───────────────────────────────────────
+  const [replaceModal, setReplaceModal] = useState<{ teamId: string; reviewPlayer: 'player1' | 'player2'; teamName: string } | null>(null);
+  const [newPartnerQuery, setNewPartnerQuery] = useState('');
+  const [newPartnerResults, setNewPartnerResults] = useState<RegisteredPlayer[]>([]);
+  const [selectedNewPartner, setSelectedNewPartner] = useState<RegisteredPlayer | null>(null);
+  const [replacing, setReplacing] = useState(false);
+
+  useEffect(() => {
+    if (newPartnerQuery.trim().length < 2) { setNewPartnerResults([]); return; }
+    const t = setTimeout(() => setNewPartnerResults(searchPlayers(newPartnerQuery.trim()).slice(0, 6)), 200);
+    return () => clearTimeout(t);
+  }, [newPartnerQuery]);
 
   // ── Collapsed rejected sections per category ─────────────────────────────────
   const [showRejected, setShowRejected] = useState<Record<string, boolean>>({});
@@ -464,6 +478,25 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
       ? tournament.categories.find(c => c.id === targetCatId)?.name ?? targetCatId
       : 'Sin categoría';
     showToast(`Equipo movido a "${catName}"`, 'success');
+  }
+
+  async function handleReplacePartner() {
+    if (!replaceModal || !selectedNewPartner) return;
+    setReplacing(true);
+    const result = await replaceTeamPartner(id, replaceModal.teamId, replaceModal.reviewPlayer, {
+      name: selectedNewPartner.name,
+      email: selectedNewPartner.email,
+      id: selectedNewPartner.id,
+    });
+    setReplacing(false);
+    if (!result.ok) { showToast(result.error ?? 'No se pudo reemplazar', 'error'); return; }
+    const updated = await loadPersonalizadoById(id);
+    setTournament(updated);
+    setReplaceModal(null);
+    setNewPartnerQuery('');
+    setNewPartnerResults([]);
+    setSelectedNewPartner(null);
+    showToast(`Nuevo compañero/a asignado: ${selectedNewPartner.name}`, 'success');
   }
 
   async function handleAddTeam(catId: string) {
@@ -890,6 +923,11 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                     onReject={() => openRejectModal(team, cat.name)}
                     onReview={() => openReviewModal(team, cat.id, cat.name)}
                     onResolveReview={() => handleResolveReview(team)}
+                    onReplacePartner={() => {
+                      const teamName = team.player2Name ? `${team.player1Name} / ${team.player2Name}` : team.player1Name;
+                      setReplaceModal({ teamId: team.id, reviewPlayer: team.reviewPlayer ?? 'player2', teamName });
+                      setSelectedNewPartner(null); setNewPartnerQuery(''); setNewPartnerResults([]);
+                    }}
                   />
                 ))}
               </div>
@@ -1185,6 +1223,50 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         </div>
       )}
 
+      {/* Replace partner modal (Buscar compañero) */}
+      {replaceModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setReplaceModal(null); setSelectedNewPartner(null); } }}
+        >
+          <div style={{ background: '#fff', padding: '28px 32px', maxWidth: 480, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.01em', marginBottom: 6 }}>
+              Asignar nuevo compañero/a
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--grey-400)', marginBottom: 20 }}>
+              Reemplazando {replaceModal.reviewPlayer === 'player1' ? 'Jugador 1' : 'Jugador 2'} en: <strong>{replaceModal.teamName}</strong>
+            </div>
+            <PlayerSearchBox
+              label={replaceModal.reviewPlayer === 'player1' ? 'Nuevo Jugador 1' : 'Nuevo Jugador 2'}
+              value={newPartnerQuery}
+              onChange={setNewPartnerQuery}
+              results={newPartnerResults}
+              selected={selectedNewPartner}
+              onSelect={p => { setSelectedNewPartner(p); setNewPartnerResults([]); }}
+              onClear={() => { setSelectedNewPartner(null); setNewPartnerQuery(''); }}
+            />
+            <div style={{ fontSize: 11, color: 'var(--grey-400)', marginBottom: 20 }}>
+              El equipo volverá a estado <strong>Confirmado</strong> con el nuevo jugador/a.
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setReplaceModal(null); setSelectedNewPartner(null); }}
+                style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--grey-500)', textTransform: 'uppercase' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleReplacePartner}
+                disabled={!selectedNewPartner || replacing}
+                style={{ padding: '9px 22px', background: !selectedNewPartner ? 'var(--grey-300)' : 'var(--black)', color: !selectedNewPartner ? 'var(--grey-500)' : 'var(--neon)', border: 'none', cursor: (!selectedNewPartner || replacing) ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: replacing ? 0.6 : 1 }}
+              >
+                {replacing ? 'Asignando…' : 'Asignar compañero/a'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rejection modal */}
       {rejectModal && (
         <div
@@ -1258,7 +1340,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 // ── TeamRow sub-component ─────────────────────────────────────────────────────
 
 function TeamRow({
-  team, canManage, isDragging, onDragStart, onDragEnd, onConfirm, onReject, onReview, onResolveReview,
+  team, canManage, isDragging, onDragStart, onDragEnd, onConfirm, onReject, onReview, onResolveReview, onReplacePartner,
 }: {
   team: PersonalizadoTeam;
   canManage: boolean;
@@ -1269,6 +1351,7 @@ function TeamRow({
   onReject: () => void;
   onReview: () => void;
   onResolveReview: () => void;
+  onReplacePartner?: () => void;
 }) {
   const hasInvitePending = team.player1Id && team.player2Email && !team.player2Id;
   const isReview = team.status === 'partial_review';
@@ -1346,7 +1429,12 @@ function TeamRow({
           <button onClick={onReview} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', background: 'rgba(234,179,8,0.1)', color: '#92400e', border: '1px solid rgba(234,179,8,0.35)' }}>⚑ Revisar</button>
         )}
         {canManage && isReview && (
-          <button onClick={onResolveReview} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', background: 'rgba(34,197,94,0.1)', color: '#15803d', border: '1px solid rgba(34,197,94,0.3)' }}>✓ Resolver</button>
+          <>
+            <button onClick={onResolveReview} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', background: 'rgba(34,197,94,0.1)', color: '#15803d', border: '1px solid rgba(34,197,94,0.3)' }}>✓ Resolver</button>
+            {onReplacePartner && (
+              <button onClick={onReplacePartner} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', cursor: 'pointer', background: 'rgba(59,130,246,0.1)', color: '#1d4ed8', border: '1px solid rgba(59,130,246,0.3)' }}>👤 Reemplazar</button>
+            )}
+          </>
         )}
       </div>
     </div>
