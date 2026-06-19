@@ -959,6 +959,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                 onRandom={() => randomAssignGroups(cat.id)}
                 onClear={() => clearGroups(cat.id)}
                 onAdjustGroupCount={(d) => adjustGroupCount(cat.id, d)}
+                tournamentId={tournament.id}
               />
             )}
 
@@ -1492,7 +1493,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 function GroupFormation({
   cat, groupCount, groupIds, groupLetters, teams, teamsPerGroup, saving,
   dragTeamId, dropTarget, onDragStart, onDragEnd, onSetDropTarget, onDropTeam,
-  onRandom, onClear, onAdjustGroupCount,
+  onRandom, onClear, onAdjustGroupCount, tournamentId,
 }: {
   cat: { id: string; name: string; maxTeams: number };
   groupCount: number;
@@ -1510,9 +1511,32 @@ function GroupFormation({
   onRandom: () => void;
   onClear: () => void;
   onAdjustGroupCount: (delta: number) => void;
+  tournamentId: string;
 }) {
+  const [showSchedulePreview, setShowSchedulePreview] = useState(false);
   const poolId = `POOL-${cat.id}`;
   const unassigned = teams.filter(t => !t.groupId || !groupIds.includes(t.groupId));
+  const allAssigned = unassigned.length === 0 && teams.length > 0;
+
+  function rrRounds(ids: string[]): [string, string][][] {
+    const t = [...ids];
+    if (t.length < 2) return [];
+    if (t.length % 2 === 1) t.push('__BYE__');
+    const rounds: [string, string][][] = [];
+    for (let r = 0; r < t.length - 1; r++) {
+      const pairs: [string, string][] = [];
+      for (let i = 0; i < t.length / 2; i++) {
+        const a = t[i], b = t[t.length - 1 - i];
+        if (a !== '__BYE__' && b !== '__BYE__') pairs.push([a, b]);
+      }
+      rounds.push(pairs);
+      t.splice(1, 0, t.pop()!);
+    }
+    return rounds;
+  }
+
+  const teamLabel = (t: PersonalizadoTeam) =>
+    `${t.player1Name}${t.player2Name ? ` / ${t.player2Name}` : ''}`;
 
   const chip = (t: PersonalizadoTeam) => (
     <div
@@ -1532,6 +1556,7 @@ function GroupFormation({
 
   return (
     <div style={{ marginTop: 4 }}>
+      {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Grupos:</span>
@@ -1548,40 +1573,99 @@ function GroupFormation({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(150px, 1fr))`, gap: 10 }}>
-        {/* Pool */}
+      {/* Columns: pool (resizable) + groups (flex, left-aligned) */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+        {/* Pool — resizable by dragging the right edge */}
         <div
           onDragOver={(e) => { e.preventDefault(); onSetDropTarget(poolId); }}
           onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onSetDropTarget(null); }}
           onDrop={(e) => { e.preventDefault(); onDropTeam(null); }}
-          style={{ minHeight: 90, padding: 8, border: `1px dashed ${dropTarget === poolId ? 'rgba(214,255,0,0.9)' : 'var(--grey-200)'}`, background: dropTarget === poolId ? 'rgba(214,255,0,0.06)' : 'var(--grey-50, #fafafa)' }}
+          style={{ resize: 'horizontal', overflow: 'hidden', width: 240, minWidth: 180, maxWidth: 420, flexShrink: 0, minHeight: 90, padding: 8, border: `1px dashed ${dropTarget === poolId ? 'rgba(214,255,0,0.9)' : 'var(--grey-200)'}`, background: dropTarget === poolId ? 'rgba(214,255,0,0.06)' : 'var(--grey-50, #fafafa)' }}
         >
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Sin grupo ({unassigned.length})</div>
           {unassigned.map(chip)}
-          {unassigned.length === 0 && <div style={{ fontSize: 10, color: 'var(--grey-300)', fontStyle: 'italic' }}>Todos asignados</div>}
+          {allAssigned && <div style={{ fontSize: 10, color: 'var(--turf-green, #15803d)', fontStyle: 'italic' }}>✓ Todos asignados</div>}
         </div>
 
-        {/* Groups */}
-        {groupIds.map((gid, i) => {
-          const gTeams = teams.filter(t => t.groupId === gid);
-          const isTarget = dropTarget === gid;
-          return (
-            <div
-              key={gid}
-              onDragOver={(e) => { e.preventDefault(); onSetDropTarget(gid); }}
-              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onSetDropTarget(null); }}
-              onDrop={(e) => { e.preventDefault(); onDropTeam(gid); }}
-              style={{ minHeight: 90, padding: 8, border: `1px solid ${isTarget ? 'var(--black)' : 'var(--grey-100)'}`, background: isTarget ? 'rgba(214,255,0,0.06)' : '#fff' }}
-            >
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 8 }}>
-                Grupo {groupLetters[i % groupLetters.length]} <span style={{ color: 'var(--grey-400)', fontWeight: 400 }}>({gTeams.length})</span>
+        {/* Groups — fixed width, wrap left-to-right */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignContent: 'flex-start' }}>
+          {groupIds.map((gid, i) => {
+            const gTeams = teams.filter(t => t.groupId === gid);
+            const isTarget = dropTarget === gid;
+            return (
+              <div
+                key={gid}
+                onDragOver={(e) => { e.preventDefault(); onSetDropTarget(gid); }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onSetDropTarget(null); }}
+                onDrop={(e) => { e.preventDefault(); onDropTeam(gid); }}
+                style={{ width: 160, flexShrink: 0, minHeight: 90, padding: 8, border: `1px solid ${isTarget ? 'var(--black)' : 'var(--grey-100)'}`, background: isTarget ? 'rgba(214,255,0,0.06)' : '#fff' }}
+              >
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 8 }}>
+                  Grupo {groupLetters[i % groupLetters.length]} <span style={{ color: 'var(--grey-400)', fontWeight: 400 }}>({gTeams.length})</span>
+                </div>
+                {gTeams.map(chip)}
+                {gTeams.length === 0 && <div style={{ fontSize: 10, color: 'var(--grey-300)', fontStyle: 'italic' }}>Vacío</div>}
               </div>
-              {gTeams.map(chip)}
-              {gTeams.length === 0 && <div style={{ fontSize: 10, color: 'var(--grey-300)', fontStyle: 'italic' }}>Vacío</div>}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
+
+      {/* "Generar Calendario Sugerido" — appears when all teams are assigned */}
+      {allAssigned && (
+        <div style={{ marginTop: 16, padding: '12px 16px', background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--black)' }}>
+            ✅ Todos los equipos están asignados a un grupo
+          </div>
+          <button
+            onClick={() => setShowSchedulePreview(p => !p)}
+            style={{ padding: '9px 18px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer' }}
+          >
+            📅 {showSchedulePreview ? 'Ocultar vista previa' : 'Ver Calendario Sugerido'}
+          </button>
+        </div>
+      )}
+
+      {/* Inline schedule preview */}
+      {allAssigned && showSchedulePreview && (
+        <div style={{ marginTop: 2, padding: 16, border: '1px solid var(--grey-100)', borderTop: 'none', background: '#fff' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 14 }}>
+            Partidos de grupo — {cat.name}
+          </div>
+          {groupIds.map((gid, i) => {
+            const gTeams = teams.filter(t => t.groupId === gid);
+            const teamMap = new Map(gTeams.map(t => [t.id, teamLabel(t)]));
+            const rounds = rrRounds(gTeams.map(t => t.id));
+            const totalMatches = rounds.reduce((s, r) => s + r.length, 0);
+            return (
+              <div key={gid} style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--grey-100)' }}>
+                  Grupo {groupLetters[i % groupLetters.length]} · {gTeams.length} equipos · {totalMatches} partidos
+                </div>
+                {rounds.map((pairs, ri) => (
+                  <div key={ri} style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, color: 'var(--grey-400)', fontWeight: 700, marginBottom: 4 }}>Ronda {ri + 1}</div>
+                    {pairs.map(([a, b], pi) => (
+                      <div key={pi} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '5px 8px', background: 'var(--grey-50, #fafafa)', marginBottom: 3 }}>
+                        <span style={{ fontWeight: 600, color: 'var(--black)' }}>{teamMap.get(a)}</span>
+                        <span style={{ color: 'var(--grey-300)', fontSize: 10 }}>vs</span>
+                        <span style={{ fontWeight: 600, color: 'var(--black)' }}>{teamMap.get(b)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {rounds.length === 0 && <div style={{ fontSize: 11, color: 'var(--grey-300)', fontStyle: 'italic' }}>Sin suficientes equipos para generar partidos</div>}
+              </div>
+            );
+          })}
+          <div style={{ marginTop: 8, paddingTop: 12, borderTop: '1px solid var(--grey-100)', display: 'flex', justifyContent: 'flex-end' }}>
+            <Link href={`/dashboard/player/tournaments/personalizado/${tournamentId}/schedule`} style={{ fontSize: 12, fontWeight: 700, color: 'var(--black)', textDecoration: 'none', padding: '8px 16px', border: '1px solid var(--grey-200)', letterSpacing: '0.04em' }}>
+              Ver Calendario Completo →
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 12 }}>
         Arrastrá los equipos entre grupos o usá &ldquo;Sortear al azar&rdquo;. Los cambios se guardan automáticamente.
       </div>
