@@ -19,6 +19,7 @@ import {
   type MatchEntry,
   type UpcomingEvent,
 } from '@/lib/match-history';
+import { loadPlayerReviewTeams, type PlayerReviewTeam } from '@/lib/personalizado-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import PlanUsageBanner from '@/components/PlanUsageBanner';
 
@@ -47,6 +48,7 @@ export default function PlayerHomePage() {
   const [toast, setToast] = useState<string | null>(null);
   const [playerData, setPlayerData] = useState<RegisteredPlayer | null>(null);
   const [realFriends, setRealFriends] = useState<RegisteredPlayer[]>([]);
+  const [reviewTeams, setReviewTeams] = useState<PlayerReviewTeam[]>([]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -76,6 +78,7 @@ export default function PlayerHomePage() {
     setTotalWins(allHistory.filter(m => m.result === 'V').length);
     setEventsPlayed(new Set(allHistory.map(m => m.gameId)).size);
     setPendingInvitations(getPendingInvitationsForPlayer(uid));
+    void loadPlayerReviewTeams(uid).then(setReviewTeams).catch(() => {});
   }, [currentUser]);
 
   async function handleAccept(inv: Invitation) {
@@ -174,6 +177,44 @@ export default function PlayerHomePage() {
               ✕
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Equipos en revisión (torneos personalizados) */}
+      {reviewTeams.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #fcd34d', marginBottom: 24 }}>
+          <div style={{ padding: '12px 20px', background: '#fffbeb', borderBottom: '1px solid #fcd34d', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, color: '#92400e' }}>Inscripciones en revisión</span>
+            <span style={{ fontSize: 11, background: '#ca8a04', color: '#fff', fontWeight: 800, padding: '2px 7px', lineHeight: 1.5 }}>{reviewTeams.length}</span>
+          </div>
+          {reviewTeams.map(rt => {
+            const isUnassigned = rt.status === 'unassigned';
+            const canFindPartner = !isUnassigned && !rt.iAmReviewed;
+            return (
+              <div key={rt.teamId} style={{ padding: '14px 20px', borderBottom: '1px solid #fef9c3', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 240 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--black)', marginBottom: 3 }}>
+                    {rt.tournamentName}{rt.categoryName ? <span style={{ color: 'var(--grey-400)', fontWeight: 400 }}> · {rt.categoryName}</span> : null}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#78350f', lineHeight: 1.5 }}>
+                    {isUnassigned
+                      ? '⚠ Tu equipo quedó sin categoría — el organizador está revisando los datos.'
+                      : rt.iAmReviewed
+                      ? '⚠ Tu inscripción está en revisión por el organizador. Tu lugar sigue reservado.'
+                      : `ℹ Tu compañero/a ${rt.reviewedName ?? ''} está en revisión. Podés inscribirte con un nuevo compañero/a.`}
+                  </div>
+                </div>
+                {canFindPartner && (
+                  <Link
+                    href={`/inscripcion/${rt.tournamentCode}`}
+                    style={{ padding: '8px 16px', background: 'var(--black)', color: 'var(--neon)', fontSize: 12, fontWeight: 700, textDecoration: 'none', letterSpacing: '0.04em', textTransform: 'uppercase', flexShrink: 0 }}
+                  >
+                    Buscar compañero/a →
+                  </Link>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

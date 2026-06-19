@@ -169,6 +169,9 @@ export interface ControlPanelConfig {
   isChildTournament?: boolean;
   // player ids that can co-manage the tournament (everything except delete + co-creator mgmt)
   coCreatorIds?: string[];
+  // per-category stage: 'inscripcion' (default) or 'grupos' (group formation). A full
+  // category can be switched to 'grupos' by the organizer; reversible at any time.
+  categoryStages?: Record<string, 'inscripcion' | 'grupos'>;
 }
 
 export const DEFAULT_CONTROL_CONFIG: ControlPanelConfig = {
@@ -333,6 +336,87 @@ export function getPersonalizado(id: string): PersonalizadoTournament | null {
 
 export function getPersonalizadoByCode(code: string): PersonalizadoTournament | null {
   return _store.load().find(t => t.code === code) ?? null;
+}
+
+// ── Player review notifications ──────────────────────────────────────────────
+
+export interface PlayerReviewTeam {
+  teamId: string;
+  tournamentId: string;
+  tournamentName: string;
+  tournamentCode: string;
+  categoryName?: string;
+  status: 'partial_review' | 'unassigned';
+  iAmReviewed: boolean;      // true if *this* player is the one flagged
+  reviewedName?: string;     // name of the flagged player (for the "buscar compañero" case)
+}
+
+/**
+ * Find all teams where the given player is in review (partial_review or
+ * unassigned), across every tournament. Used for the Dashboard notification.
+ */
+export async function loadPlayerReviewTeams(playerId: string): Promise<PlayerReviewTeam[]> {
+  if (!playerId) return [];
+
+  const build = (
+    row: PersonalizadoTeam,
+    t: { name: string; code: string; categories: PersonalizadoCategory[] },
+  ): PlayerReviewTeam => {
+    const iAmP1 = row.player1Id === playerId;
+    const reviewedIsP1 = row.reviewPlayer === 'player1';
+    const iAmReviewed = row.status === 'unassigned'
+      ? true
+      : (iAmP1 ? reviewedIsP1 : !reviewedIsP1);
+    const reviewedName = reviewedIsP1 ? row.player1Name : row.player2Name;
+    return {
+      teamId: row.id,
+      tournamentId: '', // filled by caller
+      tournamentName: t.name,
+      tournamentCode: t.code,
+      categoryName: t.categories.find(c => c.id === row.categoryId)?.name,
+      status: row.status as 'partial_review' | 'unassigned',
+      iAmReviewed,
+      reviewedName,
+    };
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase
+      .from('personalizado_teams')
+      .select('*')
+      .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
+      .in('status', ['partial_review', 'unassigned']);
+    if (error || !data || data.length === 0) return [];
+    const tids = [...new Set(data.map(r => (r as Record<string, unknown>).tournament_id as string))];
+    const { data: trows } = await supabase
+      .from('personalizado_tournaments')
+      .select('id, name, code, categories')
+      .in('id', tids);
+    const tmap = new Map<string, { name: string; code: string; categories: PersonalizadoCategory[] }>();
+    for (const tr of (trows ?? []) as Record<string, unknown>[]) {
+      tmap.set(tr.id as string, { name: tr.name as string, code: tr.code as string, categories: (tr.categories as PersonalizadoCategory[]) ?? [] });
+    }
+    const out: PlayerReviewTeam[] = [];
+    for (const r of data as Record<string, unknown>[]) {
+      const tid = r.tournament_id as string;
+      const t = tmap.get(tid);
+      if (!t) continue;
+      out.push({ ...build(rowToTeam(r), t), tournamentId: tid });
+    }
+    return out;
+  }
+
+  // localStorage fallback
+  const out: PlayerReviewTeam[] = [];
+  for (const t of _store.load()) {
+    for (const tm of t.teams) {
+      if ((tm.status === 'partial_review' || tm.status === 'unassigned') &&
+          (tm.player1Id === playerId || tm.player2Id === playerId)) {
+        out.push({ ...build(tm, t), tournamentId: t.id });
+      }
+    }
+  }
+  return out;
 }
 
 /**
