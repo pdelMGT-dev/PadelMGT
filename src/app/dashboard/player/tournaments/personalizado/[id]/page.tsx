@@ -23,11 +23,16 @@ import {
   teamsPerGroupFromCount,
   DEFAULT_CONTROL_CONFIG,
   removeTeam,
+  analyzeTournament,
+  generateGroupSchedule,
+  generateBracket,
+  scheduleBracket,
   type PersonalizadoTournament,
   type PersonalizadoTeam,
   type ControlPanelConfig,
 } from '@/lib/personalizado-store';
 import { TournamentTabs } from './TournamentTabs';
+import { Settings, CalendarDays, Download } from 'lucide-react';
 import { sendPersonalizadoStatusEmail } from '@/lib/email';
 import { searchPlayers, type RegisteredPlayer } from '@/lib/player-store';
 import { useToast } from '@/components/ToastProvider';
@@ -224,9 +229,10 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  // ── Remove unassigned team + Tabs toggle ─────────────────────────────────────
+  // ── Remove unassigned team + Tabs toggle + calendar generation ───────────────
   const [removingTeamId, setRemovingTeamId] = useState<string | null>(null);
   const [showTabs, setShowTabs] = useState(false);
+  const [generatingCal, setGeneratingCal] = useState(false);
 
   // Search debounce
   useEffect(() => {
@@ -725,6 +731,37 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     showToast('Registro eliminado permanentemente', 'success');
   }
 
+  // Generate the whole-tournament calendar: group-stage schedule (classification) for all
+  // categories + the elimination bracket per category, in one pass. Bumps registration_open →
+  // configured so the calendar/standings/bracket tabs become available.
+  async function handleGenerateCalendar() {
+    if (!tournament) return;
+    setGeneratingCal(true);
+    const cfg = currentConfig();
+    const matches = generateGroupSchedule(tournament);
+    if (matches.length === 0) {
+      showToast('No hay equipos asignados a grupos. Completá la formación de grupos en todas las categorías.', 'error');
+      setGeneratingCal(false);
+      return;
+    }
+    const bracketMatches = tournament.categories.flatMap(cat =>
+      scheduleBracket(tournament, generateBracket(tournament, cat.id)),
+    );
+    const newConfig: ControlPanelConfig = { ...cfg, matches, bracketMatches };
+    const newStatus = tournament.status === 'registration_open' ? 'configured' : tournament.status;
+    setTournament(prev => prev ? { ...prev, config: newConfig, status: newStatus } : prev);
+    const res = await saveControlPanel({
+      id: tournament.id, categories: tournament.categories, config: newConfig,
+      status: newStatus, requesterId: currentUser?.id,
+    });
+    setGeneratingCal(false);
+    if (!res.ok) { showToast(res.error ?? 'No se pudo generar el calendario', 'error'); return; }
+    if (res.teams) setTournament(prev => prev ? { ...prev, teams: res.teams!, config: newConfig, status: newStatus } : prev);
+    setShowTabs(true);
+    setTimeout(() => document.getElementById('tournament-tabs-anchor')?.scrollIntoView({ behavior: 'smooth' }), 60);
+    showToast(`Calendario generado: ${matches.length} partidos de clasificación + ${bracketMatches.length} de eliminatoria`, 'success');
+  }
+
   const STATUS_CSV: Record<string, string> = { pending: 'Pendiente', confirmed: 'Confirmado', rejected: 'Rechazado', waitlisted: 'Lista de espera' };
   const PAYMENT_CSV: Record<string, string> = { unpaid: 'Pendiente', paid: 'Pagado', free: 'Gratis' };
 
@@ -797,21 +834,22 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         </div>
         <div style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {tournament.teams.length > 0 && (
-            <button onClick={exportCSV} style={{ padding: '9px 18px', background: '#fff', color: 'var(--black)', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              ⬇ Exportar inscritos (CSV)
+            <button onClick={exportCSV} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', background: '#fff', color: 'var(--black)', border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              <Download size={14} /> Exportar inscritos (CSV)
             </button>
           )}
-          {(tournament.status === 'registration_open' || tournament.status === 'configured') && (
-            <Link href={`/dashboard/player/tournaments/personalizado/${tournament.id}/control`} style={{ padding: '9px 18px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', textDecoration: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              ⚙ Panel de Control
+          {/* Panel de Control — always available to the organizer (incl. Live, to extend dates/courts) */}
+          {tournament.status !== 'cancelled' && (
+            <Link href={`/dashboard/player/tournaments/personalizado/${tournament.id}/control`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', textDecoration: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              <Settings size={14} /> Panel de Control
             </Link>
           )}
           {(tournament.status === 'configured' || tournament.status === 'live') && (
             <button
               onClick={() => { setShowTabs(prev => !prev); if (!showTabs) setTimeout(() => document.getElementById('tournament-tabs-anchor')?.scrollIntoView({ behavior: 'smooth' }), 50); }}
-              style={{ padding: '9px 18px', background: showTabs ? 'var(--black)' : '#fff', color: showTabs ? 'var(--neon)' : 'var(--black)', border: showTabs ? 'none' : '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', background: showTabs ? 'var(--black)' : '#fff', color: showTabs ? 'var(--neon)' : 'var(--black)', border: showTabs ? 'none' : '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}
             >
-              📅 {showTabs ? 'Ocultar Calendario' : 'Ver Calendario Completo'}
+              <CalendarDays size={14} /> {showTabs ? 'Ocultar Calendario' : 'Ver Calendario Completo'}
             </button>
           )}
         </div>
@@ -986,7 +1024,6 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                 onRandom={() => randomAssignGroups(cat.id)}
                 onClear={() => clearGroups(cat.id)}
                 onAdjustGroupCount={(d) => adjustGroupCount(cat.id, d)}
-                tournamentId={tournament.id}
               />
             )}
 
@@ -1169,12 +1206,86 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         );
       })}
 
+      {/* Tournament analysis + global "Generar Calendario" */}
+      {tournament.categories.length > 0 && tournament.status !== 'draft' && tournament.status !== 'cancelled' && (() => {
+        const a = analyzeTournament(tournament, currentConfig());
+        const hasCalendar = (tournament.config?.matches?.length ?? 0) > 0;
+        return (
+          <div style={{ ...card, marginTop: 24, borderColor: a.allGroupsReady ? 'rgba(214,255,0,0.6)' : 'var(--grey-200)' }}>
+            <div style={secTitle}>Análisis del Torneo</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 16 }}>
+              {[
+                ['Duración estimada', `${a.days} día${a.days > 1 ? 's' : ''}`, `${a.startDate} → ${a.endDate}`],
+                ['Canchas · franjas', `${a.courts} × ${a.slotsPerDay}`, `${a.matchesPerDay} juegos/día · ${a.matchDurationMin} min`],
+                ['Juegos clasificación', `${a.groupMatches}`, 'fase de grupos'],
+                ['Juegos eliminatoria', `${a.bracketMatches}`, 'fase de eliminación'],
+                ['Total de juegos', `${a.totalMatches}`, `capacidad: ${a.capacityMatches}`],
+              ].map(([label, value, sub], i) => (
+                <div key={i} style={{ padding: '10px 12px', background: 'var(--grey-50, #fafafa)', border: '1px solid var(--grey-100)' }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--black)', lineHeight: 1.1 }}>{value}</div>
+                  <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 2 }}>{sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Per-category breakdown */}
+            <div style={{ overflowX: 'auto', marginBottom: 16 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 460 }}>
+                <thead>
+                  <tr>
+                    {['Categoría', 'Grupos', 'Equipos', 'Clasif.', 'Eliminat.', 'Total'].map((h, i) => (
+                      <th key={i} style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-400)', padding: '6px 10px', textAlign: i === 0 ? 'left' : 'right', borderBottom: '1px solid var(--grey-100)' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {a.perCategory.map(c => (
+                    <tr key={c.categoryId}>
+                      <td style={{ fontSize: 12, fontWeight: 600, padding: '6px 10px', borderBottom: '1px solid var(--grey-50, #f5f5f5)' }}>{c.categoryName}</td>
+                      <td style={{ fontSize: 12, padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--grey-50, #f5f5f5)' }}>{c.groups}</td>
+                      <td style={{ fontSize: 12, padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--grey-50, #f5f5f5)' }}>{c.teams}</td>
+                      <td style={{ fontSize: 12, padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--grey-50, #f5f5f5)' }}>{c.groupMatches}</td>
+                      <td style={{ fontSize: 12, padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--grey-50, #f5f5f5)' }}>{c.bracketMatches}</td>
+                      <td style={{ fontSize: 12, fontWeight: 700, padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--grey-50, #f5f5f5)' }}>{c.totalMatches}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {!a.feasible && (
+              <div style={{ padding: '10px 14px', background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.4)', fontSize: 12, color: '#854d0e', marginBottom: 16 }}>
+                ⚠ Los {a.totalMatches} juegos no entran en los {a.capacityMatches} espacios disponibles. Agregá canchas, extendé el horario o sumá días en el Panel de Control.
+              </div>
+            )}
+
+            {canManagePersonalizado(tournament, currentUser?.id) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <button
+                  onClick={handleGenerateCalendar}
+                  disabled={generatingCal || !a.allGroupsReady}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 26px', background: a.allGroupsReady ? 'var(--black)' : 'var(--grey-200)', color: a.allGroupsReady ? 'var(--neon)' : 'var(--grey-400)', border: 'none', cursor: generatingCal ? 'wait' : a.allGroupsReady ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}
+                >
+                  <CalendarDays size={16} />
+                  {generatingCal ? 'Generando…' : hasCalendar ? 'Regenerar Calendario del Torneo' : 'Generar Calendario del Torneo'}
+                </button>
+                {!a.allGroupsReady && (
+                  <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>Completá la formación de grupos en todas las categorías para habilitar la generación.</span>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Tournament Tabs (Calendario · Clasificación · Bracket) */}
       {showTabs && (tournament.status === 'configured' || tournament.status === 'live') && (
         <div id="tournament-tabs-anchor" style={{ marginTop: 32 }}>
           <TournamentTabs
             tournament={tournament}
             canManage={!!canManagePersonalizado(tournament, currentUser?.id)}
+            canEditResults={isCreator}
             onUpdate={setTournament}
           />
         </div>
@@ -1531,7 +1642,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 function GroupFormation({
   cat, groupCount, groupIds, groupLetters, teams, teamsPerGroup, saving,
   dragTeamId, dropTarget, onDragStart, onDragEnd, onSetDropTarget, onDropTeam,
-  onRandom, onClear, onAdjustGroupCount, tournamentId,
+  onRandom, onClear, onAdjustGroupCount,
 }: {
   cat: { id: string; name: string; maxTeams: number };
   groupCount: number;
@@ -1549,32 +1660,10 @@ function GroupFormation({
   onRandom: () => void;
   onClear: () => void;
   onAdjustGroupCount: (delta: number) => void;
-  tournamentId: string;
 }) {
-  const [showSchedulePreview, setShowSchedulePreview] = useState(false);
   const poolId = `POOL-${cat.id}`;
   const unassigned = teams.filter(t => !t.groupId || !groupIds.includes(t.groupId));
   const allAssigned = unassigned.length === 0 && teams.length > 0;
-
-  function rrRounds(ids: string[]): [string, string][][] {
-    const t = [...ids];
-    if (t.length < 2) return [];
-    if (t.length % 2 === 1) t.push('__BYE__');
-    const rounds: [string, string][][] = [];
-    for (let r = 0; r < t.length - 1; r++) {
-      const pairs: [string, string][] = [];
-      for (let i = 0; i < t.length / 2; i++) {
-        const a = t[i], b = t[t.length - 1 - i];
-        if (a !== '__BYE__' && b !== '__BYE__') pairs.push([a, b]);
-      }
-      rounds.push(pairs);
-      t.splice(1, 0, t.pop()!);
-    }
-    return rounds;
-  }
-
-  const teamLabel = (t: PersonalizadoTeam) =>
-    `${t.player1Name}${t.player2Name ? ` / ${t.player2Name}` : ''}`;
 
   const chip = (t: PersonalizadoTeam) => (
     <div
@@ -1649,58 +1738,10 @@ function GroupFormation({
         </div>
       </div>
 
-      {/* "Generar Calendario Sugerido" — appears when all teams are assigned */}
+      {/* All-assigned indicator — the calendar is generated globally from the tournament header */}
       {allAssigned && (
-        <div style={{ marginTop: 16, padding: '12px 16px', background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--black)' }}>
-            ✅ Todos los equipos están asignados a un grupo
-          </div>
-          <button
-            onClick={() => setShowSchedulePreview(p => !p)}
-            style={{ padding: '9px 18px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer' }}
-          >
-            📅 {showSchedulePreview ? 'Ocultar vista previa' : 'Ver Calendario Sugerido'}
-          </button>
-        </div>
-      )}
-
-      {/* Inline schedule preview */}
-      {allAssigned && showSchedulePreview && (
-        <div style={{ marginTop: 2, padding: 16, border: '1px solid var(--grey-100)', borderTop: 'none', background: '#fff' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 14 }}>
-            Partidos de grupo — {cat.name}
-          </div>
-          {groupIds.map((gid, i) => {
-            const gTeams = teams.filter(t => t.groupId === gid);
-            const teamMap = new Map(gTeams.map(t => [t.id, teamLabel(t)]));
-            const rounds = rrRounds(gTeams.map(t => t.id));
-            const totalMatches = rounds.reduce((s, r) => s + r.length, 0);
-            return (
-              <div key={gid} style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--grey-100)' }}>
-                  Grupo {groupLetters[i % groupLetters.length]} · {gTeams.length} equipos · {totalMatches} partidos
-                </div>
-                {rounds.map((pairs, ri) => (
-                  <div key={ri} style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 10, color: 'var(--grey-400)', fontWeight: 700, marginBottom: 4 }}>Ronda {ri + 1}</div>
-                    {pairs.map(([a, b], pi) => (
-                      <div key={pi} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '5px 8px', background: 'var(--grey-50, #fafafa)', marginBottom: 3 }}>
-                        <span style={{ fontWeight: 600, color: 'var(--black)' }}>{teamMap.get(a)}</span>
-                        <span style={{ color: 'var(--grey-300)', fontSize: 10 }}>vs</span>
-                        <span style={{ fontWeight: 600, color: 'var(--black)' }}>{teamMap.get(b)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                {rounds.length === 0 && <div style={{ fontSize: 11, color: 'var(--grey-300)', fontStyle: 'italic' }}>Sin suficientes equipos para generar partidos</div>}
-              </div>
-            );
-          })}
-          <div style={{ marginTop: 8, paddingTop: 12, borderTop: '1px solid var(--grey-100)', display: 'flex', justifyContent: 'flex-end' }}>
-            <Link href={`/dashboard/player/tournaments/personalizado/${tournamentId}/schedule`} style={{ fontSize: 12, fontWeight: 700, color: 'var(--black)', textDecoration: 'none', padding: '8px 16px', border: '1px solid var(--grey-200)', letterSpacing: '0.04em' }}>
-              Ver Calendario Completo →
-            </Link>
-          </div>
+        <div style={{ marginTop: 16, padding: '10px 14px', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.4)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, color: '#15803d' }}>
+          ✓ Todos los equipos de {cat.name} están asignados a un grupo
         </div>
       )}
 

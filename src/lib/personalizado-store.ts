@@ -102,6 +102,8 @@ export interface BracketMatch {
   slotIndex: number;         // position within the round (left to right)
   teamAId?: string;          // known once seeded (round 0) or once the previous round finishes
   teamBId?: string;
+  placeholderA?: string;     // position label shown until a real team fills the slot ("1ero Grupo A")
+  placeholderB?: string;
   wildcardA?: boolean;       // true if teamA filled a balancing slot (not a direct group qualifier)
   wildcardB?: boolean;
   day?: string;              // "YYYY-MM-DD" — scheduled day, once placed on the calendar
@@ -997,6 +999,226 @@ export function estimateTournamentDays(
   const endDateObj = new Date(`${startDate}T00:00:00`);
   endDateObj.setDate(endDateObj.getDate() + (days - 1));
   return { totalMatches, matchesPerDay, days, suggestedEndDate: endDateObj.toISOString().slice(0, 10) };
+}
+
+// ── Tournament-wide analysis (planning aid shown before generating the calendar) ──
+
+export interface CategoryAnalysis {
+  categoryId: string;
+  categoryName: string;
+  groups: number;
+  teams: number;
+  groupMatches: number;       // round-robin matches across all groups
+  bracketMatches: number;     // knockout matches (+ 3rd place)
+  totalMatches: number;
+  qualifiers: number;         // teams advancing to the bracket
+  bracketSize: number;        // padded to next power of two
+}
+
+export interface TournamentAnalysis {
+  perCategory: CategoryAnalysis[];
+  groupMatches: number;
+  bracketMatches: number;
+  totalMatches: number;
+  courts: number;
+  slotsPerDay: number;
+  matchesPerDay: number;
+  matchDurationMin: number;
+  days: number;
+  startDate: string;
+  endDate: string;
+  feasible: boolean;          // does it fit within the configured days?
+  capacityMatches: number;    // total slots × courts across the configured days
+  allGroupsReady: boolean;    // every category has its teams assigned to groups
+}
+
+/** Are all enrolled teams in a category assigned to a group? (needed before generating.) */
+export function categoryGroupsReady(tournament: PersonalizadoTournament, categoryId: string): boolean {
+  const teams = tournament.teams.filter(
+    tm => tm.categoryId === categoryId && (tm.status === 'pending' || tm.status === 'confirmed'),
+  );
+  if (teams.length < 2) return false;
+  return teams.every(tm => !!tm.groupId);
+}
+
+/**
+ * Full tournament breakdown: per-category group/bracket match counts, total games, estimated
+ * duration in days, and a feasibility flag against the configured courts/hours. Drives the
+ * analysis card the organizer sees before pressing "Generar Calendario".
+ */
+export function analyzeTournament(
+  tournament: PersonalizadoTournament,
+  config: ControlPanelConfig,
+): TournamentAnalysis {
+  const courts = Math.max(1, config.courtNames.length || tournament.courts || 1);
+  const start = parseMinutes(config.schedule.startTime || '09:00');
+  const end = parseMinutes(config.schedule.endTime || '21:00');
+  const lunch = config.schedule.lunchEnabled ? (config.schedule.lunchDurationMin ?? 0) : 0;
+  const matchDur = Math.max(10, config.schedule.matchDurationMin || 50);
+  const slotsPerDay = Math.max(1, Math.floor(Math.max(0, end - start - lunch) / matchDur));
+  const matchesPerDay = slotsPerDay * courts;
+
+  const perCategory: CategoryAnalysis[] = [];
+  let groupMatchesTotal = 0;
+  let bracketMatchesTotal = 0;
+
+  for (const cat of tournament.categories) {
+    const g = config.groups.find(x => x.categoryId === cat.id);
+    const groups = Math.max(1, g?.groupCount ?? 1);
+    const teams = tournament.teams.filter(
+      tm => tm.categoryId === cat.id && (tm.status === 'pending' || tm.status === 'confirmed'),
+    ).length;
+    // round-robin matches per group, summed (uses actual teams per group when available)
+    const byGroup = new Map<string, number>();
+    for (const tm of tournament.teams) {
+      if (tm.categoryId !== cat.id || !tm.groupId) continue;
+      if (tm.status !== 'pending' && tm.status !== 'confirmed') continue;
+      byGroup.set(tm.groupId, (byGroup.get(tm.groupId) ?? 0) + 1);
+    }
+    let groupMatches = 0;
+    if (byGroup.size > 0) {
+      for (const n of byGroup.values()) groupMatches += (n * (n - 1)) / 2;
+    } else {
+      const perGroup = Math.max(2, g?.teamsPerGroup ?? cat.maxTeams);
+      groupMatches = groups * (perGroup * (perGroup - 1)) / 2;
+    }
+    const qualifiers = groups * (g?.qualifyPerGroup ?? 2);
+    const bracketSize = nextPowerOfTwo(qualifiers);
+    const bracketMatches = categoryBracketMatchCount(qualifiers);
+    const totalMatches = groupMatches + bracketMatches;
+    groupMatchesTotal += groupMatches;
+    bracketMatchesTotal += bracketMatches;
+    perCategory.push({
+      categoryId: cat.id, categoryName: cat.name, groups, teams,
+      groupMatches, bracketMatches, totalMatches, qualifiers, bracketSize,
+    });
+  }
+
+  const totalMatches = groupMatchesTotal + bracketMatchesTotal;
+  const days = enumerateDates(tournament.date, config.schedule.endDate || tournament.date);
+  const capacityMatches = matchesPerDay * days.length;
+  return {
+    perCategory,
+    groupMatches: groupMatchesTotal,
+    bracketMatches: bracketMatchesTotal,
+    totalMatches,
+    courts, slotsPerDay, matchesPerDay, matchDurationMin: matchDur,
+    days: days.length,
+    startDate: days[0],
+    endDate: days[days.length - 1],
+    feasible: totalMatches <= capacityMatches,
+    capacityMatches,
+    allGroupsReady: tournament.categories.every(c => categoryGroupsReady(tournament, c.id)),
+  };
+}
+
+// ── Qualified-teams consolidated table (group label + position) ───────────────
+
+export interface QualifiedRow {
+  teamId: string;
+  seed: number;          // 1 = best overall
+  groupLabel: string;    // "A", "B"…
+  groupPosition: number; // 1 = winner of the group, 2 = runner-up…
+  wildcard: boolean;     // filled a balancing slot (best third, etc.)
+  positionLabel: string; // "1ero Grupo A", "2do Grupo B", "Mejor 3ro Grupo C"
+}
+
+const ORDINAL_ES = ['', '1ero', '2do', '3ro', '4to', '5to', '6to', '7mo', '8vo'];
+function ordinalEs(n: number): string { return ORDINAL_ES[n] ?? `${n}º`; }
+
+function groupLabelFromId(groupId: string): string {
+  const n = parseInt(groupId.split('-G')[1] ?? '1', 10);
+  return GROUP_LETTERS[(n - 1) % GROUP_LETTERS.length] ?? String(n);
+}
+
+/**
+ * The consolidated list of teams that advance to the elimination phase for a category, each
+ * annotated with its group, its position within that group, and whether it qualified directly
+ * or as a balancing "best third". Sorted by overall seed (best first).
+ */
+export function computeQualifiedTable(tournament: PersonalizadoTournament, categoryId: string): QualifiedRow[] {
+  const qualifiers = computeQualifiers(tournament, categoryId);
+  if (qualifiers.length === 0) return [];
+
+  // Map each team → { groupLabel, positionWithinGroup }
+  const groupIds = [...new Set(
+    tournament.teams.filter(tm => tm.categoryId === categoryId && tm.groupId).map(tm => tm.groupId!),
+  )];
+  const posInGroup = new Map<string, { label: string; pos: number }>();
+  for (const gid of groupIds) {
+    const standings = calculateGroupStandings(tournament, categoryId, gid);
+    standings.forEach((s, i) => posInGroup.set(s.teamId, { label: groupLabelFromId(gid), pos: i + 1 }));
+  }
+
+  return qualifiers.map(q => {
+    const info = posInGroup.get(q.teamId) ?? { label: '?', pos: 0 };
+    const positionLabel = q.wildcard
+      ? `Mejor ${ordinalEs(info.pos)} Grupo ${info.label}`
+      : `${ordinalEs(info.pos)} Grupo ${info.label}`;
+    return {
+      teamId: q.teamId, seed: q.seed, groupLabel: info.label, groupPosition: info.pos,
+      wildcard: q.wildcard, positionLabel,
+    };
+  });
+}
+
+/** Target bracket size for a category from config (groups × qualifyPerGroup, padded to 2^n). */
+export function bracketSizeForCategory(tournament: PersonalizadoTournament, categoryId: string): number {
+  const g = tournament.config?.groups.find(x => x.categoryId === categoryId);
+  const groupIds = [...new Set(
+    tournament.teams.filter(tm => tm.categoryId === categoryId && tm.groupId).map(tm => tm.groupId!),
+  )];
+  const groups = groupIds.length || Math.max(1, g?.groupCount ?? 1);
+  const qualifiers = groups * (g?.qualifyPerGroup ?? 2);
+  return nextPowerOfTwo(qualifiers);
+}
+
+/**
+ * Build the bracket *structure* with position-label placeholders ("1ero Grupo A", "2do Grupo B")
+ * so it can be shown before any group game is played. No team ids are assigned — those fill in via
+ * generateBracket once results exist. Round 0 is seeded so group winners meet runners-up from a
+ * different group (1A v 2B style). Returns [] if the category has fewer than 2 qualifiers.
+ */
+export function generateBracketSkeleton(tournament: PersonalizadoTournament, categoryId: string): BracketMatch[] {
+  const g = tournament.config?.groups.find(x => x.categoryId === categoryId);
+  const groupIds = [...new Set(
+    tournament.teams.filter(tm => tm.categoryId === categoryId && tm.groupId).map(tm => tm.groupId!),
+  )].sort((a, b) => (parseInt(a.split('-G')[1] ?? '0') - parseInt(b.split('-G')[1] ?? '0')));
+  const groups = groupIds.length || Math.max(1, g?.groupCount ?? 1);
+  const Q = Math.max(1, g?.qualifyPerGroup ?? 2);
+
+  // Seed labels ordered by position then group: all 1st places, then all 2nd places, …
+  const labels: string[] = [];
+  for (let pos = 1; pos <= Q; pos++) {
+    for (let gi = 0; gi < groups; gi++) {
+      const label = GROUP_LETTERS[gi % GROUP_LETTERS.length];
+      labels.push(`${ordinalEs(pos)} Grupo ${label}`);
+    }
+  }
+  const size = nextPowerOfTwo(labels.length);
+  if (size < 2) return [];
+  while (labels.length < size) labels.push('—');
+
+  const out: BracketMatch[] = [];
+  let matchesInRound = size / 2;
+  for (let i = 0; i < matchesInRound; i++) {
+    out.push({
+      id: `b-${categoryId}-r0-${i}`, categoryId, round: 0,
+      roundLabel: BRACKET_ROUND_LABELS[size] ?? `Ronda de ${size}`,
+      slotIndex: i, placeholderA: labels[i], placeholderB: labels[size - 1 - i], status: 'pending',
+    });
+  }
+  let round = 1; matchesInRound = matchesInRound / 2; let finalRound = 0;
+  while (matchesInRound >= 1) {
+    const roundSize = matchesInRound * 2;
+    const label = roundSize === 2 ? 'Final' : (BRACKET_ROUND_LABELS[roundSize] ?? `Ronda de ${roundSize}`);
+    for (let i = 0; i < matchesInRound; i++) {
+      out.push({ id: `b-${categoryId}-r${round}-${i}`, categoryId, round, roundLabel: label, slotIndex: i, status: 'pending' });
+    }
+    finalRound = round; round++; matchesInRound = matchesInRound / 2;
+  }
+  if (size >= 4) out.push({ id: `b-${categoryId}-3rd`, categoryId, round: finalRound, roundLabel: '3er Puesto', slotIndex: 1, status: 'pending' });
+  return out;
 }
 
 /**
