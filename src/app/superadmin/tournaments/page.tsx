@@ -127,12 +127,29 @@ function PersonalizadoDetailDrawer({
   }
 
   async function deleteTournament() {
-    if (!isSupabaseConfigured || !supabase) return;
     if (!window.confirm(`¿Eliminar "${tournament.name}" permanentemente? Esta acción no se puede deshacer.`)) return;
     setSaving(true);
-    await supabase.from('personalizado_tournaments').delete().eq('id', tournament.id);
-    onDeleted(tournament.id);
-    onClose();
+    try {
+      // Route through the service-role API: the anon client is blocked by RLS (no DELETE
+      // policy), so a direct delete would silently fail and the row would reappear on the
+      // next poll. The SA session cookie authorizes an admin-scope deletion server-side.
+      const res = await fetch('/api/personalizado/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: tournament.id }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        window.alert(data.error ?? 'No se pudo eliminar el torneo');
+        setSaving(false);
+        return;
+      }
+      onDeleted(tournament.id);
+      onClose();
+    } catch {
+      window.alert('Error de red al eliminar el torneo');
+      setSaving(false);
+    }
   }
 
   const totalEnrolled = tournament.teams.filter(t => t.status === 'pending' || t.status === 'confirmed').length;
