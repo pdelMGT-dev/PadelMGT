@@ -108,6 +108,7 @@ export interface BracketMatch {
   wildcardB?: boolean;
   day?: string;              // "YYYY-MM-DD" — scheduled day, once placed on the calendar
   time?: string;
+  slot?: number;             // calendar time slot within the day (0-based, day-relative)
   courtName?: string;
   status: 'pending' | 'scheduled' | 'playing' | 'done';
   result?: MatchResult;
@@ -1293,7 +1294,6 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
 
   const out: PersonalizadoMatch[] = [];
   let carry: Pair[] = [];
-  let globalSlotIndex = 0;
 
   for (let di = 0; di < days.length; di++) {
     const day = days[di];
@@ -1302,6 +1302,7 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
     let slotTime = parseMinutes(cfg.schedule.startTime || '09:00');
     let lunchTaken = !lunchEnabled;
     const isLastDay = di === days.length - 1;
+    let daySlotIndex = 0;
 
     while (remaining.length > 0) {
       if (!lunchTaken && slotTime >= lunchStart) { slotTime += lunchDur; lunchTaken = true; }
@@ -1314,7 +1315,7 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
           out.push({
             id: `m-${day}-${m.groupId}-${m.a}-${m.b}`,
             categoryId: m.categoryId, groupId: m.groupId, groupLabel: m.groupLabel, phase: 'group',
-            day, slot: globalSlotIndex, time: fmtMinutes(slotTime), courtName: courts[courtsUsed],
+            day, slot: daySlotIndex, time: fmtMinutes(slotTime), courtName: courts[courtsUsed],
             teamAId: m.a, teamBId: m.b, status: 'scheduled',
           });
           busy.add(m.a); busy.add(m.b);
@@ -1325,8 +1326,8 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
         }
       }
       slotTime += matchDur;
-      globalSlotIndex++;
-      if (globalSlotIndex > 4000) break; // safety
+      daySlotIndex++;
+      if (daySlotIndex > 200) break; // safety
     }
   }
   return out;
@@ -1645,6 +1646,103 @@ export function scheduleBracket(tournament: PersonalizadoTournament, bracketMatc
       ...m, day, time: fmtMinutes(minutes), courtName: courts[m.slotIndex % courts.length],
       status: (m.status === 'pending' ? 'scheduled' : m.status) as BracketMatch['status'],
     };
+  });
+}
+
+/**
+ * Schedule ALL bracket matches for ALL categories together so that:
+ * - Novice categories (ascending level) play earlier in the day; experienced categories play later
+ * - All categories' matches in the same bracket round are grouped in level order
+ * - Finals round: 3rd-place matches scheduled first (novice→experienced), Finals after
+ * - The highest-level category's Final is the absolute last match of the tournament
+ * - Slots are day-relative (0-based per day), matching generateGroupSchedule's convention
+ */
+export function scheduleAllBrackets(
+  tournament: PersonalizadoTournament,
+  allBracketMatches: BracketMatch[]
+): BracketMatch[] {
+  const cfg = tournament.config;
+  if (!cfg || allBracketMatches.length === 0) return allBracketMatches;
+
+  const courts = (cfg.courtNames && cfg.courtNames.length > 0)
+    ? cfg.courtNames
+    : Array.from({ length: Math.max(1, tournament.courts || 1) }, (_, i) => `Cancha ${i + 1}`);
+
+  const days = enumerateDates(tournament.date, cfg.schedule.endDate || tournament.date);
+
+  // Bracket starts the day after the last group-stage match day
+  const groupDayIdxs = (cfg.matches ?? []).map(m => days.indexOf(m.day)).filter(i => i >= 0);
+  const lastGroupDayIdx = groupDayIdxs.length > 0 ? Math.max(...groupDayIdxs) : -1;
+  const bracketStartIdx = Math.min(days.length - 1, lastGroupDayIdx + 1);
+  const bracketDays = days.slice(bracketStartIdx);
+  if (bracketDays.length === 0) return allBracketMatches;
+
+  const matchDur = Math.max(10, cfg.schedule.matchDurationMin || 50);
+  const lunchEnabled = cfg.schedule.lunchEnabled;
+  const lunchStart = parseMinutes(cfg.schedule.lunchStart ?? '13:00');
+  const lunchDur = cfg.schedule.lunchDurationMin ?? 0;
+  const dayStart = parseMinutes(cfg.schedule.startTime || '07:00');
+  const dayEnd = parseMinutes(cfg.schedule.endTime || '22:00');
+
+  // Sort categories novice → experienced (ascending level); highest-level cat's Final is last
+  const catIds = [...tournament.categories]
+    .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
+    .map(c => c.id);
+
+  const rounds = [...new Set(allBracketMatches.map(m => m.round))].sort((a, b) => a - b);
+  const finalRound = rounds.length > 0 ? Math.max(...rounds) : 0;
+
+  // Build ordered groups of matches — each group runs simultaneously (same time slot)
+  const groups: BracketMatch[][] = [];
+  for (const round of rounds) {
+    if (round === finalRound) {
+      // 3rd-place matches first (all cats, novice → experienced)
+      for (const catId of catIds) {
+        const ms = allBracketMatches.filter(m => m.categoryId === catId && m.round === round && m.roundLabel === '3er Puesto');
+        if (ms.length > 0) groups.push(ms);
+      }
+      // Finals after (novice → experienced; highest-level Final is the absolute last group)
+      for (const catId of catIds) {
+        const ms = allBracketMatches.filter(m => m.categoryId === catId && m.round === round && m.roundLabel !== '3er Puesto');
+        if (ms.length > 0) groups.push(ms);
+      }
+    } else {
+      // Normal rounds: all categories in level order
+      for (const catId of catIds) {
+        const ms = allBracketMatches.filter(m => m.categoryId === catId && m.round === round);
+        if (ms.length > 0) groups.push(ms);
+      }
+    }
+  }
+
+  // Assign day-relative time slots (daySlot resets to 0 on each new bracket day)
+  const scheduled = new Map<string, { day: string; time: string; slot: number; courtName: string }>();
+  let dayIdx = 0;
+  let currentMins = dayStart;
+  let lunchTaken = !lunchEnabled;
+  let daySlot = 0;
+
+  for (const group of groups) {
+    if (!lunchTaken && currentMins >= lunchStart) { currentMins += lunchDur; lunchTaken = true; }
+    if (currentMins + matchDur > dayEnd && dayIdx < bracketDays.length - 1) {
+      dayIdx++;
+      currentMins = dayStart;
+      lunchTaken = !lunchEnabled;
+      daySlot = 0;
+    }
+    const day = bracketDays[Math.min(dayIdx, bracketDays.length - 1)];
+    const time = fmtMinutes(currentMins);
+    group.forEach((m, i) => {
+      scheduled.set(m.id, { day, time, slot: daySlot, courtName: courts[i % courts.length] });
+    });
+    currentMins += matchDur;
+    daySlot++;
+  }
+
+  return allBracketMatches.map(m => {
+    const s = scheduled.get(m.id);
+    if (!s) return m;
+    return { ...m, ...s, status: (m.status === 'pending' ? 'scheduled' : m.status) as BracketMatch['status'] };
   });
 }
 

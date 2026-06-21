@@ -26,7 +26,7 @@ import {
   analyzeTournament,
   generateGroupSchedule,
   generateBracket,
-  scheduleBracket,
+  scheduleAllBrackets,
   type PersonalizadoTournament,
   type PersonalizadoTeam,
   type ControlPanelConfig,
@@ -744,9 +744,9 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
       setGeneratingCal(false);
       return;
     }
-    const bracketMatches = tournament.categories.flatMap(cat =>
-      scheduleBracket(tournament, generateBracket(tournament, cat.id)),
-    );
+    const allBracketUnscheduled = tournament.categories.flatMap(cat => generateBracket(tournament, cat.id));
+    const tempTournament = { ...tournament, config: { ...cfg, matches } };
+    const bracketMatches = scheduleAllBrackets(tempTournament, allBracketUnscheduled);
     const newConfig: ControlPanelConfig = { ...cfg, matches, bracketMatches };
     const newStatus = tournament.status === 'registration_open' ? 'configured' : tournament.status;
     setTournament(prev => prev ? { ...prev, config: newConfig, status: newStatus } : prev);
