@@ -1723,7 +1723,17 @@ export function scheduleAllBrackets(
   let daySlot = 0;
 
   for (const group of groups) {
+    // Distribute each bracket round to its own day when multiple bracket days are available
+    const groupRound = group[0]?.round ?? 0;
+    const targetDayIdx = Math.min(groupRound, bracketDays.length - 1);
+    if (targetDayIdx > dayIdx) {
+      dayIdx = targetDayIdx;
+      currentMins = dayStart;
+      lunchTaken = !lunchEnabled;
+      daySlot = 0;
+    }
     if (!lunchTaken && currentMins >= lunchStart) { currentMins += lunchDur; lunchTaken = true; }
+    // Fallback: also advance if time overflows within a day
     if (currentMins + matchDur > dayEnd && dayIdx < bracketDays.length - 1) {
       dayIdx++;
       currentMins = dayStart;
