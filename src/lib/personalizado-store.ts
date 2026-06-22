@@ -1345,10 +1345,10 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
 
   type Pair = { categoryId: string; groupId: string; groupLabel: string; a: string; b: string };
 
-  // Build, per category, the list of "rounds" (each round = all pairs across its groups that
-  // can be played simultaneously), then map round index → day index proportionally.
-  const byDay = new Map<string, Pair[]>();
-  for (const day of days) byDay.set(day, []);
+  // Build all category rounds first so we can compute the minimum classification days needed.
+  interface CatRoundList { catId: string; rounds: Pair[][] }
+  const allCatRounds: CatRoundList[] = [];
+  let totalPairs = 0;
 
   for (const cat of categoriesByLevel) {
     const byGroup = new Map<string, string[]>();
@@ -1375,43 +1375,66 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
         const label = GROUP_LETTERS[(n - 1) % GROUP_LETTERS.length] ?? String(n);
         for (const [a, b] of rounds[r] ?? []) roundPairs.push({ categoryId: cat.id, groupId: gid, groupLabel: label, a, b });
       }
-      if (roundPairs.length > 0) catRounds.push(roundPairs);
+      if (roundPairs.length > 0) { catRounds.push(roundPairs); totalPairs += roundPairs.length; }
     }
-
-    const R = catRounds.length;
-    catRounds.forEach((pairs, r) => {
-      const dayIdx = Math.min(days.length - 1, Math.floor((r * days.length) / R));
-      byDay.get(days[dayIdx])!.push(...pairs);
-    });
+    allCatRounds.push({ catId: cat.id, rounds: catRounds });
   }
 
-  // List-schedule each day's pending pairs into slots × courts.
+  // Schedule parameters
   const matchDur = Math.max(10, cfg.schedule.matchDurationMin || 50);
   const lunchEnabled = cfg.schedule.lunchEnabled;
   const lunchStart = parseMinutes(cfg.schedule.lunchStart ?? '13:00');
   const lunchDur = cfg.schedule.lunchDurationMin ?? 0;
+  const dayStartMinutes = parseMinutes(cfg.schedule.startTime || '09:00');
   const dayEndMinutes = parseMinutes(cfg.schedule.endTime || '23:59');
 
+  // Compute minimum days to fit all classification matches, reserving ≥1 day for elimination.
+  // This prevents classification and elimination from sharing the same day.
+  const effectiveMinutesPerDay = Math.max(matchDur,
+    (dayEndMinutes - dayStartMinutes) - (lunchEnabled ? lunchDur : 0));
+  const slotsPerDay = Math.max(1, Math.floor(effectiveMinutesPerDay / matchDur));
+  const slotsNeeded = Math.ceil(totalPairs / Math.max(1, courts.length));
+  const minDaysForCapacity = Math.max(1, Math.ceil(slotsNeeded / slotsPerDay));
+  const minClassDays = days.length > 1
+    ? Math.min(minDaysForCapacity, days.length - 1)
+    : 1;
+  const classDays = days.slice(0, minClassDays);
+
+  // Map each category's rounds proportionally onto classDays.
+  // Because allCatRounds is already in level-ascending order, lower-level (novice) categories'
+  // matches get added to byDay first and fill morning slots during list-scheduling.
+  const byDay = new Map<string, Pair[]>();
+  for (const day of classDays) byDay.set(day, []);
+
+  const levelMap = new Map(categoriesByLevel.map((c, i) => [c.id, i]));
+  for (const { rounds: catRounds } of allCatRounds) {
+    const R = catRounds.length;
+    catRounds.forEach((pairs, r) => {
+      const dayIdx = Math.min(classDays.length - 1, Math.floor((r * classDays.length) / R));
+      byDay.get(classDays[dayIdx])!.push(...pairs);
+    });
+  }
+
+  // List-schedule each classification day's pending pairs into slots × courts.
   const out: PersonalizadoMatch[] = [];
   let carry: Pair[] = [];
 
-  for (let di = 0; di < days.length; di++) {
-    const day = days[di];
-    // Sort pairs so novice-category pairs come first → they naturally fill morning slots
-    const levelMap = new Map(categoriesByLevel.map((c, i) => [c.id, i]));
+  for (let di = 0; di < classDays.length; di++) {
+    const day = classDays[di];
+    // Sort: novice categories (lower level index) fill morning slots first.
     const remaining = [
       ...carry,
       ...(byDay.get(day) ?? []),
     ].sort((a, b) => (levelMap.get(a.categoryId) ?? 0) - (levelMap.get(b.categoryId) ?? 0));
     carry = [];
-    let slotTime = parseMinutes(cfg.schedule.startTime || '09:00');
+    let slotTime = dayStartMinutes;
     let lunchTaken = !lunchEnabled;
-    const isLastDay = di === days.length - 1;
+    const isLastClassDay = di === classDays.length - 1;
     let daySlotIndex = 0;
 
     while (remaining.length > 0) {
       if (!lunchTaken && slotTime >= lunchStart) { slotTime += lunchDur; lunchTaken = true; }
-      if (!isLastDay && slotTime > dayEndMinutes) { carry.push(...remaining.splice(0)); break; }
+      if (!isLastClassDay && slotTime > dayEndMinutes) { carry.push(...remaining.splice(0)); break; }
       const busy = new Set<string>();
       let courtsUsed = 0;
       for (let i = 0; i < remaining.length && courtsUsed < courts.length; ) {
@@ -1778,7 +1801,9 @@ export function scheduleAllBrackets(
   // Bracket starts the day after the last group-stage match day
   const groupDayIdxs = (cfg.matches ?? []).map(m => days.indexOf(m.day)).filter(i => i >= 0);
   const lastGroupDayIdx = groupDayIdxs.length > 0 ? Math.max(...groupDayIdxs) : -1;
-  const bracketStartIdx = Math.min(days.length - 1, lastGroupDayIdx + 1);
+  // Do NOT clamp to days.length-1: if classification fills all days, bracketDays becomes empty
+  // and the function returns early. generateGroupSchedule already reserves ≥1 day for the bracket.
+  const bracketStartIdx = lastGroupDayIdx + 1;
   const bracketDays = days.slice(bracketStartIdx);
   if (bracketDays.length === 0) return allBracketMatches;
 

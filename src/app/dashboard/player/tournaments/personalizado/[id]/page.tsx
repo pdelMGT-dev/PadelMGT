@@ -736,20 +736,60 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   // configured so the calendar/standings/bracket tabs become available.
   async function handleGenerateCalendar() {
     if (!tournament) return;
-    setGeneratingCal(true);
     const cfg = currentConfig();
+
+    // Capture matches with recorded results so they survive regeneration.
+    const lockedClass = (cfg.matches ?? []).filter(m => m.result != null);
+    const lockedBracket = (cfg.bracketMatches ?? []).filter(m => m.result != null);
+    const totalLocked = lockedClass.length + lockedBracket.length;
+
+    if (totalLocked > 0) {
+      const ok = window.confirm(
+        `Hay ${totalLocked} resultado${totalLocked === 1 ? '' : 's'} ya registrado${totalLocked === 1 ? '' : 's'}.\n` +
+        `Se conservarán en el nuevo calendario. ¿Continuás?`
+      );
+      if (!ok) return;
+    }
+
+    setGeneratingCal(true);
     const matches = generateGroupSchedule(tournament);
     if (matches.length === 0) {
       showToast('No hay equipos asignados a grupos. Completá la formación de grupos en todas las categorías.', 'error');
       setGeneratingCal(false);
       return;
     }
+
+    // Restore results from locked classification matches (identified by matchup within the group).
+    const classKey = (categoryId: string, groupId: string, a: string, b: string) =>
+      `${categoryId}|${groupId}|${[a, b].sort().join('|')}`;
+    const lockedClassByKey = new Map(
+      lockedClass.map(m => [classKey(m.categoryId, m.groupId, m.teamAId, m.teamBId), m])
+    );
+    const matchesWithResults = matches.map(m => {
+      const locked = lockedClassByKey.get(classKey(m.categoryId, m.groupId, m.teamAId, m.teamBId));
+      return locked ? { ...m, result: locked.result, status: 'done' as const } : m;
+    });
+
     // Bracket starts as a structural skeleton (position placeholders, no teams). Teams are
     // released into round-0 slots only as each group's classification is confirmed.
     const allBracketUnscheduled = tournament.categories.flatMap(cat => generateBracketSkeleton(tournament, cat.id));
-    const tempTournament = { ...tournament, config: { ...cfg, matches } };
+    const tempTournament = { ...tournament, config: { ...cfg, matches: matchesWithResults } };
     const bracketMatches = scheduleAllBrackets(tempTournament, allBracketUnscheduled);
-    const newConfig: ControlPanelConfig = { ...cfg, matches, bracketMatches, confirmedGroups: [] };
+
+    // Restore results from locked bracket matches (identified by categoryId + round + slotIndex).
+    const bracketKey = (categoryId: string, round: number, slotIndex: number) =>
+      `${categoryId}|${round}|${slotIndex}`;
+    const lockedBracketByKey = new Map(
+      lockedBracket.map(m => [bracketKey(m.categoryId, m.round, m.slotIndex), m])
+    );
+    const bracketWithResults = bracketMatches.map(m => {
+      const locked = lockedBracketByKey.get(bracketKey(m.categoryId, m.round, m.slotIndex));
+      return locked
+        ? { ...m, result: locked.result, status: 'done' as const, teamAId: locked.teamAId, teamBId: locked.teamBId }
+        : m;
+    });
+
+    const newConfig: ControlPanelConfig = { ...cfg, matches: matchesWithResults, bracketMatches: bracketWithResults, confirmedGroups: [] };
     const newStatus = tournament.status === 'registration_open' ? 'configured' : tournament.status;
     setTournament(prev => prev ? { ...prev, config: newConfig, status: newStatus } : prev);
     const res = await saveControlPanel({
@@ -761,7 +801,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     if (res.teams) setTournament(prev => prev ? { ...prev, teams: res.teams!, config: newConfig, status: newStatus } : prev);
     setShowTabs(true);
     setTimeout(() => document.getElementById('tournament-tabs-anchor')?.scrollIntoView({ behavior: 'smooth' }), 60);
-    showToast(`Calendario generado: ${matches.length} partidos de clasificación + ${bracketMatches.length} de eliminatoria`, 'success');
+    showToast(`Calendario generado: ${matchesWithResults.length} partidos de clasificación + ${bracketWithResults.length} de eliminatoria`, 'success');
   }
 
   const STATUS_CSV: Record<string, string> = { pending: 'Pendiente', confirmed: 'Confirmado', rejected: 'Rechazado', waitlisted: 'Lista de espera' };
