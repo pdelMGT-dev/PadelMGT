@@ -25,7 +25,7 @@ import {
   removeTeam,
   analyzeTournament,
   generateGroupSchedule,
-  generateBracket,
+  generateBracketSkeleton,
   scheduleAllBrackets,
   type PersonalizadoTournament,
   type PersonalizadoTeam,
@@ -744,10 +744,12 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
       setGeneratingCal(false);
       return;
     }
-    const allBracketUnscheduled = tournament.categories.flatMap(cat => generateBracket(tournament, cat.id));
+    // Bracket starts as a structural skeleton (position placeholders, no teams). Teams are
+    // released into round-0 slots only as each group's classification is confirmed.
+    const allBracketUnscheduled = tournament.categories.flatMap(cat => generateBracketSkeleton(tournament, cat.id));
     const tempTournament = { ...tournament, config: { ...cfg, matches } };
     const bracketMatches = scheduleAllBrackets(tempTournament, allBracketUnscheduled);
-    const newConfig: ControlPanelConfig = { ...cfg, matches, bracketMatches };
+    const newConfig: ControlPanelConfig = { ...cfg, matches, bracketMatches, confirmedGroups: [] };
     const newStatus = tournament.status === 'registration_open' ? 'configured' : tournament.status;
     setTournament(prev => prev ? { ...prev, config: newConfig, status: newStatus } : prev);
     const res = await saveControlPanel({
