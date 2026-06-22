@@ -707,14 +707,25 @@ export async function changeTeamStatus(
 export async function removeTeam(
   tournamentId: string,
   teamId: string,
+  requesterId?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   if (isSupabaseConfigured && supabase) {
-    const { error } = await supabase
-      .from('personalizado_teams')
-      .delete()
-      .eq('id', teamId)
-      .eq('tournament_id', tournamentId);
-    if (error) return { ok: false, error: error.message };
+    // personalizado_teams has RLS with no DELETE policy for anon/authenticated, so a direct
+    // anon-client delete is silently dropped (0 rows) and the team reappears on the next poll.
+    // Route through the service-role API so the row is actually removed.
+    try {
+      const res = await fetch('/api/personalizado/team-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId, teamId, requesterId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        return { ok: false, error: data.error ?? 'No se pudo eliminar el registro' };
+      }
+    } catch {
+      return { ok: false, error: 'Error de red al eliminar el registro' };
+    }
   }
   const all = _store.load();
   _store.persist(all.map(t =>

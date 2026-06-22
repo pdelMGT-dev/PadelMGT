@@ -723,7 +723,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   async function handleRemoveTeam(teamId: string) {
     if (!tournament) return;
     setRemovingTeamId(teamId);
-    const result = await removeTeam(tournament.id, teamId);
+    const result = await removeTeam(tournament.id, teamId, currentUser?.id);
     setRemovingTeamId(null);
     if (!result.ok) { showToast(result.error ?? 'No se pudo eliminar el registro', 'error'); return; }
     const updated = await loadPersonalizadoById(id);

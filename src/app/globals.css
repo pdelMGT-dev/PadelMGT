@@ -406,6 +406,10 @@ html, body {
 }
 .dashboard-main {
   margin-left: 256px; flex: 1; min-height: 100vh;
+  /* min-width:0 lets this flex item shrink below its content's intrinsic width so wide
+     children (e.g. the tournament calendar grid) scroll internally instead of widening
+     the whole page. Without it, flex items default to min-width:auto and overflow the viewport. */
+  min-width: 0;
 }
 .dash-mobile-bar {
   display: none;
