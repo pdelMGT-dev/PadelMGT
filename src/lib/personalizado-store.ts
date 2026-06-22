@@ -108,6 +108,7 @@ export interface BracketMatch {
   wildcardB?: boolean;
   day?: string;              // "YYYY-MM-DD" — scheduled day, once placed on the calendar
   time?: string;
+  slot?: number;             // calendar time slot within the day (0-based, day-relative)
   courtName?: string;
   status: 'pending' | 'scheduled' | 'playing' | 'done';
   result?: MatchResult;
@@ -174,6 +175,11 @@ export interface ControlPanelConfig {
   // per-category stage: 'inscripcion' (default) or 'grupos' (group formation). A full
   // category can be switched to 'grupos' by the organizer; reversible at any time.
   categoryStages?: Record<string, 'inscripcion' | 'grupos'>;
+  // groups whose classification has been confirmed by the creator/co-creators, releasing their
+  // qualified teams into the bracket. Keys are `${categoryId}:${groupId}`. Once a group is here,
+  // its results are read-only for co-creators (only the creator/SA may still adjust them, and
+  // only before that team's elimination match starts).
+  confirmedGroups?: string[];
 }
 
 export const DEFAULT_CONTROL_CONFIG: ControlPanelConfig = {
@@ -1221,6 +1227,90 @@ export function generateBracketSkeleton(tournament: PersonalizadoTournament, cat
   return out;
 }
 
+// ── Live bracket resolution (positions → teams as groups are confirmed) ─────────
+
+interface BracketSlotSource {
+  groupId?: string;
+  pos?: number;     // 1-based finishing position within the group
+  label: string;    // placeholder label shown until the team is revealed ("1ero Grupo A")
+  bye?: boolean;
+}
+
+/**
+ * Deterministic round-0 seeding sources for a category, in the SAME order as
+ * generateBracketSkeleton's labels (all 1st places by group, then all 2nd places, …), padded
+ * with byes up to the next power of two. Round-0 match `i` draws side A from `sources[i]` and
+ * side B from `sources[size - 1 - i]`.
+ */
+function bracketSlotSources(
+  tournament: PersonalizadoTournament,
+  categoryId: string,
+): { sources: BracketSlotSource[]; size: number } | null {
+  const g = tournament.config?.groups.find(x => x.categoryId === categoryId);
+  const groupIds = [...new Set(
+    tournament.teams.filter(tm => tm.categoryId === categoryId && tm.groupId).map(tm => tm.groupId!),
+  )].sort((a, b) => (parseInt(a.split('-G')[1] ?? '0') - parseInt(b.split('-G')[1] ?? '0')));
+  const groups = groupIds.length || Math.max(1, g?.groupCount ?? 1);
+  const Q = Math.max(1, g?.qualifyPerGroup ?? 2);
+
+  const sources: BracketSlotSource[] = [];
+  for (let pos = 1; pos <= Q; pos++) {
+    for (let gi = 0; gi < groups; gi++) {
+      const groupId = groupIds[gi];
+      const label = GROUP_LETTERS[gi % GROUP_LETTERS.length];
+      sources.push({ groupId, pos, label: `${ordinalEs(pos)} Grupo ${label}` });
+    }
+  }
+  const size = nextPowerOfTwo(sources.length);
+  if (size < 2) return null;
+  while (sources.length < size) sources.push({ label: '—', bye: true });
+  return { sources, size };
+}
+
+/** True when this group's classification has been confirmed (its qualifiers released to bracket). */
+export function isGroupConfirmed(
+  config: ControlPanelConfig | undefined,
+  categoryId: string,
+  groupId: string,
+): boolean {
+  return (config?.confirmedGroups ?? []).includes(`${categoryId}:${groupId}`);
+}
+
+/**
+ * Fill round-0 bracket slots with the real qualified teams for every group that has been
+ * confirmed; slots whose source group is not yet confirmed keep their position placeholder
+ * ("1ero Grupo A") and no team id. Pure: returns a new bracketMatches array. Later rounds are
+ * left untouched (they are filled by saveBracketResult as earlier rounds finish).
+ */
+export function resolveBracketTeams(
+  tournament: PersonalizadoTournament,
+  confirmedGroups: string[],
+  bracketMatches: BracketMatch[],
+): BracketMatch[] {
+  const confirmed = new Set(confirmedGroups);
+  const srcCache = new Map<string, ReturnType<typeof bracketSlotSources>>();
+  const standCache = new Map<string, TeamStanding[]>();
+
+  const reveal = (categoryId: string, src: BracketSlotSource | undefined): { teamId?: string; label: string } => {
+    if (!src || src.bye || !src.groupId || src.pos === undefined) return { teamId: undefined, label: src?.label ?? '—' };
+    if (!confirmed.has(`${categoryId}:${src.groupId}`)) return { teamId: undefined, label: src.label };
+    const ck = `${categoryId}:${src.groupId}`;
+    let st = standCache.get(ck);
+    if (!st) { st = calculateGroupStandings(tournament, categoryId, src.groupId); standCache.set(ck, st); }
+    return { teamId: st[src.pos - 1]?.teamId, label: src.label };
+  };
+
+  return bracketMatches.map(m => {
+    if (m.round !== 0) return m;
+    let info = srcCache.get(m.categoryId);
+    if (info === undefined) { info = bracketSlotSources(tournament, m.categoryId); srcCache.set(m.categoryId, info); }
+    if (!info) return m;
+    const a = reveal(m.categoryId, info.sources[m.slotIndex]);
+    const b = reveal(m.categoryId, info.sources[info.size - 1 - m.slotIndex]);
+    return { ...m, teamAId: a.teamId, teamBId: b.teamId, placeholderA: a.label, placeholderB: b.label };
+  });
+}
+
 /**
  * Generate the group-stage match schedule from the control-panel config and the teams' group
  * assignments, spread across every day of the tournament (start date → schedule.endDate).
@@ -1293,7 +1383,6 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
 
   const out: PersonalizadoMatch[] = [];
   let carry: Pair[] = [];
-  let globalSlotIndex = 0;
 
   for (let di = 0; di < days.length; di++) {
     const day = days[di];
@@ -1302,6 +1391,7 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
     let slotTime = parseMinutes(cfg.schedule.startTime || '09:00');
     let lunchTaken = !lunchEnabled;
     const isLastDay = di === days.length - 1;
+    let daySlotIndex = 0;
 
     while (remaining.length > 0) {
       if (!lunchTaken && slotTime >= lunchStart) { slotTime += lunchDur; lunchTaken = true; }
@@ -1314,7 +1404,7 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
           out.push({
             id: `m-${day}-${m.groupId}-${m.a}-${m.b}`,
             categoryId: m.categoryId, groupId: m.groupId, groupLabel: m.groupLabel, phase: 'group',
-            day, slot: globalSlotIndex, time: fmtMinutes(slotTime), courtName: courts[courtsUsed],
+            day, slot: daySlotIndex, time: fmtMinutes(slotTime), courtName: courts[courtsUsed],
             teamAId: m.a, teamBId: m.b, status: 'scheduled',
           });
           busy.add(m.a); busy.add(m.b);
@@ -1325,8 +1415,8 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
         }
       }
       slotTime += matchDur;
-      globalSlotIndex++;
-      if (globalSlotIndex > 4000) break; // safety
+      daySlotIndex++;
+      if (daySlotIndex > 200) break; // safety
     }
   }
   return out;
@@ -1646,6 +1736,148 @@ export function scheduleBracket(tournament: PersonalizadoTournament, bracketMatc
       status: (m.status === 'pending' ? 'scheduled' : m.status) as BracketMatch['status'],
     };
   });
+}
+
+/**
+ * Schedule ALL bracket matches for ALL categories together so that:
+ * - Novice categories (ascending level) play earlier in the day; experienced categories play later
+ * - All categories' matches in the same bracket round are grouped in level order
+ * - Finals round: 3rd-place matches scheduled first (novice→experienced), Finals after
+ * - The highest-level category's Final is the absolute last match of the tournament
+ * - Slots are day-relative (0-based per day), matching generateGroupSchedule's convention
+ */
+export function scheduleAllBrackets(
+  tournament: PersonalizadoTournament,
+  allBracketMatches: BracketMatch[]
+): BracketMatch[] {
+  const cfg = tournament.config;
+  if (!cfg || allBracketMatches.length === 0) return allBracketMatches;
+
+  const courts = (cfg.courtNames && cfg.courtNames.length > 0)
+    ? cfg.courtNames
+    : Array.from({ length: Math.max(1, tournament.courts || 1) }, (_, i) => `Cancha ${i + 1}`);
+
+  const days = enumerateDates(tournament.date, cfg.schedule.endDate || tournament.date);
+
+  // Bracket starts the day after the last group-stage match day
+  const groupDayIdxs = (cfg.matches ?? []).map(m => days.indexOf(m.day)).filter(i => i >= 0);
+  const lastGroupDayIdx = groupDayIdxs.length > 0 ? Math.max(...groupDayIdxs) : -1;
+  const bracketStartIdx = Math.min(days.length - 1, lastGroupDayIdx + 1);
+  const bracketDays = days.slice(bracketStartIdx);
+  if (bracketDays.length === 0) return allBracketMatches;
+
+  const matchDur = Math.max(10, cfg.schedule.matchDurationMin || 50);
+  const lunchEnabled = cfg.schedule.lunchEnabled;
+  const lunchStart = parseMinutes(cfg.schedule.lunchStart ?? '13:00');
+  const lunchDur = cfg.schedule.lunchDurationMin ?? 0;
+  const dayStart = parseMinutes(cfg.schedule.startTime || '07:00');
+  const dayEnd = parseMinutes(cfg.schedule.endTime || '22:00');
+
+  // Sort categories novice → experienced (ascending level); highest-level cat's Final is last
+  const catIds = [...tournament.categories]
+    .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
+    .map(c => c.id);
+
+  const rounds = [...new Set(allBracketMatches.map(m => m.round))].sort((a, b) => a - b);
+  const finalRound = rounds.length > 0 ? Math.max(...rounds) : 0;
+
+  // Build ordered groups of matches — each group runs simultaneously (same time slot)
+  const groups: BracketMatch[][] = [];
+  for (const round of rounds) {
+    if (round === finalRound) {
+      // 3rd-place matches first (all cats, novice → experienced)
+      for (const catId of catIds) {
+        const ms = allBracketMatches.filter(m => m.categoryId === catId && m.round === round && m.roundLabel === '3er Puesto');
+        if (ms.length > 0) groups.push(ms);
+      }
+      // Finals after (novice → experienced; highest-level Final is the absolute last group)
+      for (const catId of catIds) {
+        const ms = allBracketMatches.filter(m => m.categoryId === catId && m.round === round && m.roundLabel !== '3er Puesto');
+        if (ms.length > 0) groups.push(ms);
+      }
+    } else {
+      // Normal rounds: all categories in level order
+      for (const catId of catIds) {
+        const ms = allBracketMatches.filter(m => m.categoryId === catId && m.round === round);
+        if (ms.length > 0) groups.push(ms);
+      }
+    }
+  }
+
+  // Assign day-relative time slots (daySlot resets to 0 on each new bracket day)
+  const scheduled = new Map<string, { day: string; time: string; slot: number; courtName: string }>();
+  let dayIdx = 0;
+  let currentMins = dayStart;
+  let lunchTaken = !lunchEnabled;
+  let daySlot = 0;
+
+  for (const group of groups) {
+    // Distribute each bracket round to its own day when multiple bracket days are available
+    const groupRound = group[0]?.round ?? 0;
+    const targetDayIdx = Math.min(groupRound, bracketDays.length - 1);
+    if (targetDayIdx > dayIdx) {
+      dayIdx = targetDayIdx;
+      currentMins = dayStart;
+      lunchTaken = !lunchEnabled;
+      daySlot = 0;
+    }
+    if (!lunchTaken && currentMins >= lunchStart) { currentMins += lunchDur; lunchTaken = true; }
+    // Fallback: also advance if time overflows within a day
+    if (currentMins + matchDur > dayEnd && dayIdx < bracketDays.length - 1) {
+      dayIdx++;
+      currentMins = dayStart;
+      lunchTaken = !lunchEnabled;
+      daySlot = 0;
+    }
+    const day = bracketDays[Math.min(dayIdx, bracketDays.length - 1)];
+    const time = fmtMinutes(currentMins);
+    group.forEach((m, i) => {
+      scheduled.set(m.id, { day, time, slot: daySlot, courtName: courts[i % courts.length] });
+    });
+    currentMins += matchDur;
+    daySlot++;
+  }
+
+  return allBracketMatches.map(m => {
+    const s = scheduled.get(m.id);
+    if (!s) return m;
+    return { ...m, ...s, status: (m.status === 'pending' ? 'scheduled' : m.status) as BracketMatch['status'] };
+  });
+}
+
+/**
+ * Pure propagation: record `result` on `matchId` and advance the winner to the next round (and,
+ * for a semifinal, drop the loser into the 3rd-place match). Operates on a bracket array that may
+ * span multiple categories — only the played match's category is affected. Used by the calendar
+ * so scores can be entered there with identical behavior to the Bracket tab.
+ */
+export function applyBracketResult(
+  matches: BracketMatch[],
+  matchId: string,
+  result: MatchResult,
+): BracketMatch[] {
+  let bracket = matches.map(m => m.id === matchId ? { ...m, result, status: 'done' as const } : m);
+  const played = bracket.find(m => m.id === matchId);
+  if (played && played.teamAId && played.teamBId) {
+    const winnerId = result.winnerId;
+    const loserId = winnerId === played.teamAId ? played.teamBId : played.teamAId;
+    const catMatches = bracket.filter(m => m.categoryId === played.categoryId);
+    const finalRoundIdx = Math.max(...catMatches.map(m => m.round));
+    const isSemifinal = played.round === finalRoundIdx - 1 && finalRoundIdx >= 1;
+    const nextRound = played.round + 1;
+    const nextSlot = Math.floor(played.slotIndex / 2);
+    const side: 'A' | 'B' = played.slotIndex % 2 === 0 ? 'A' : 'B';
+    bracket = bracket.map(m => {
+      if (m.categoryId === played.categoryId && m.round === nextRound && m.slotIndex === nextSlot && m.roundLabel !== '3er Puesto') {
+        return side === 'A' ? { ...m, teamAId: winnerId, placeholderA: undefined, wildcardA: false } : { ...m, teamBId: winnerId, placeholderB: undefined, wildcardB: false };
+      }
+      if (isSemifinal && m.categoryId === played.categoryId && m.roundLabel === '3er Puesto') {
+        return side === 'A' ? { ...m, teamAId: loserId, placeholderA: undefined } : { ...m, teamBId: loserId, placeholderB: undefined };
+      }
+      return m;
+    });
+  }
+  return bracket;
 }
 
 export interface SaveBracketResultInput {

@@ -15,10 +15,12 @@ import {
 import { useToast } from '@/components/ToastProvider';
 import { ScoreEntry } from './ScoreEntry';
 
-const CARD_W = 236;
+const CARD_W = 220;
 const CARD_H = 64;
-const BASE_GAP = 22;
-const COL_GAP = 48; // horizontal space between rounds (holds connectors)
+const BASE_GAP = 26;        // vertical gap between cards in the outer (first) round
+const COL_GAP = 44;         // horizontal space between rounds (holds connectors)
+const FINAL_W = 248;        // emphasized center Final card width
+const LABEL_H = 22;         // height reserved for the round label row on top of each column
 
 // Apply a result to a category's bracket and propagate the winner (and the semifinal loser into
 // the 3rd-place match) to the next round. `matches` must already be the single category's array.
@@ -91,6 +93,70 @@ function BracketCard({
       )}
       {side(m.teamAId, m.placeholderA, 'a')}
       {side(m.teamBId, m.placeholderB, 'b')}
+    </div>
+  );
+}
+
+// ── BracketColumn ─────────────────────────────────────────────────────────────
+// Renders one round's cards for a single side (left or right), vertically centered
+// inside `colHeight`, plus the thin L-shaped connectors that link each card to the
+// next round (toward the center). `depth` is how many rounds in from the outer edge
+// this column is (0 = outermost), used to compute spacing/centering generically.
+function BracketColumn({
+  matches, side, depth, colHeight, label,
+  editingId, setEditingId, canManage, isSkeleton, editResults, teamName,
+}: {
+  matches: BracketMatch[];
+  side: 'left' | 'right';
+  depth: number;
+  colHeight: number;
+  label: string;
+  editingId: string | null;
+  setEditingId: (id: string | null) => void;
+  canManage: boolean;
+  isSkeleton: boolean;
+  editResults: boolean;
+  teamName: (id: string) => string;
+}) {
+  // Each round halves the card count, so the vertical slot for one card spans
+  // 2^depth of the outer slot height. Center each card within its slot.
+  const slotH = (CARD_H + BASE_GAP) * Math.pow(2, depth);
+  const total = colHeight;
+  // A pair of adjacent cards merges into one card of the next (inner) round, so we
+  // draw a vertical link joining their stubs whenever this column has >1 card.
+  const pairs = matches.length > 1;
+  // Connector points toward center: left cards connect on their right edge, right on left.
+  const connectorOnInnerSide = side === 'left';
+
+  return (
+    <div style={{ position: 'relative', width: CARD_W, height: total + LABEL_H, flexShrink: 0 }}>
+      <div style={{ height: LABEL_H, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>{label}</span>
+      </div>
+      <div style={{ position: 'relative', height: total }}>
+        {matches.map((m, i) => {
+          const top = i * slotH + (slotH - CARD_H) / 2;
+          return (
+            <div key={m.id} style={{ position: 'absolute', top, left: 0, width: CARD_W }}>
+              {/* Connector: short horizontal stub out of every card toward center */}
+              <div style={{
+                position: 'absolute', top: CARD_H / 2 - 0.5, height: 1, width: COL_GAP / 2,
+                background: 'var(--grey-200)',
+                ...(connectorOnInnerSide ? { left: CARD_W } : { right: CARD_W }),
+              }} />
+              {/* Vertical link joining each pair of stubs to the next (center) round */}
+              {pairs && i % 2 === 0 && i + 1 < matches.length && (
+                <div style={{
+                  position: 'absolute', top: CARD_H / 2, width: 1, height: slotH,
+                  background: 'var(--grey-200)',
+                  ...(connectorOnInnerSide ? { left: CARD_W + COL_GAP / 2 } : { right: CARD_W + COL_GAP / 2 }),
+                }} />
+              )}
+              <BracketCard m={m} editingId={editingId} setEditingId={setEditingId} canManage={canManage} isSkeleton={isSkeleton} editResults={editResults} teamName={teamName} />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -172,7 +238,24 @@ export function WorldCupBracket({
   const runnerUp = champion && finalMatch ? (champion === finalMatch.teamAId ? finalMatch.teamBId : finalMatch.teamAId) : undefined;
   const third = thirdPlace?.result?.winnerId;
 
-  const totalHeight = (rounds[0]?.length ?? 1) * (CARD_H + BASE_GAP);
+  // Split each round into left / right halves (Final stays in the center).
+  const sideRounds = useMemo(() => {
+    const left: BracketMatch[][] = [];
+    const right: BracketMatch[][] = [];
+    for (let r = 0; r < finalRoundIdx; r++) {
+      const rm = rounds[r] ?? [];
+      const mid = Math.ceil(rm.length / 2);
+      left.push(rm.slice(0, mid));
+      right.push(rm.slice(mid));
+    }
+    return { left, right };
+  }, [rounds, finalRoundIdx]);
+
+  const outerCount = sideRounds.left[0]?.length ?? 1;
+  // Column body height = outer-round cards stacked with gaps (drives vertical centering for all rounds).
+  const colHeight = Math.max(outerCount * (CARD_H + BASE_GAP), CARD_H + BASE_GAP);
+  // Number of side rounds (R16/QF/SF…). 0 means only a Final exists.
+  const sideCount = sideRounds.left.length;
 
   return (
     <div>
@@ -187,60 +270,108 @@ export function WorldCupBracket({
       )}
       {isSkeleton && <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--grey-400)', marginBottom: 14, fontStyle: 'italic' }}>Vista previa — las posiciones se reemplazan por los equipos al completar la fase de grupos.</div>}
 
-      {/* Champion banner */}
-      {champion && (
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '12px 28px', background: 'var(--black)', color: 'var(--neon)' }}>
-            <Trophy size={22} />
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.7 }}>Campeón</div>
-              <div style={{ fontSize: 17, fontWeight: 800, fontFamily: 'var(--font-display)' }}>{teamName(champion)}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bracket — horizontal scroll, centered */}
-      <div style={{ width: '100%', overflowX: 'auto', display: 'flex', justifyContent: 'center', paddingBottom: 8 }}>
-        <div style={{ display: 'flex', gap: COL_GAP, minHeight: totalHeight, padding: '8px 4px' }}>
-          {rounds.map((roundMatches, r) => (
-            <div key={r} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', minHeight: totalHeight }}>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', textAlign: 'center', marginBottom: 6, height: 12 }}>
-                {roundMatches[0]?.roundLabel ?? ''}
-              </div>
-              {roundMatches.map(m => <BracketCard key={m.id} m={m} editingId={editingId} setEditingId={setEditingId} canManage={canManage} isSkeleton={isSkeleton} editResults={editResults} teamName={teamName} />)}
-            </div>
+      {/* Bracket — mirrored / converging layout (ESPN-style).
+          Left half flows L→R toward center, right half mirrors R→L. The Final sits
+          in the CENTER column with the champion banner above it; the 3rd-place match
+          and podium sit below the Final. Horizontally scrollable on narrow screens. */}
+      <div style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', paddingBottom: 8 }}>
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+          gap: COL_GAP, padding: '8px 4px',
+          minWidth: (sideCount * 2 * CARD_W) + FINAL_W + (sideCount * 2 + 1) * COL_GAP + 16,
+        }}>
+          {/* LEFT side — outer round first, flowing toward the center */}
+          {sideRounds.left.map((roundMatches, idx) => (
+            <BracketColumn
+              key={`L${idx}`}
+              matches={roundMatches}
+              side="left"
+              depth={idx}
+              colHeight={colHeight}
+              label={roundMatches[0]?.roundLabel ?? rounds[idx]?.[0]?.roundLabel ?? ''}
+              editingId={editingId} setEditingId={setEditingId} canManage={canManage}
+              isSkeleton={isSkeleton} editResults={editResults} teamName={teamName}
+            />
           ))}
-        </div>
-      </div>
 
-      {/* 3rd place + podium */}
-      {thirdPlace && (
-        <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#b45309', marginBottom: 6 }}>Partido por el 3er Puesto</div>
-            <BracketCard m={thirdPlace} isThird editingId={editingId} setEditingId={setEditingId} canManage={canManage} isSkeleton={isSkeleton} editResults={editResults} teamName={teamName} />
-          </div>
+          {/* CENTER column — Final + champion banner, then 3rd place + podium below */}
+          <div style={{ width: FINAL_W, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ height: LABEL_H, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--black)', fontFamily: 'var(--font-display)' }}>
+                {rounds[finalRoundIdx]?.[0]?.roundLabel ?? 'Final'}
+              </span>
+            </div>
 
-          {champion && (
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, marginTop: 8 }}>
-              {[
-                { pos: 2, id: runnerUp, h: 56, bg: '#cbd5e1', icon: <Medal size={18} color="#64748b" /> },
-                { pos: 1, id: champion, h: 78, bg: 'var(--neon, #d6ff00)', icon: <Trophy size={20} color="var(--black)" /> },
-                { pos: 3, id: third, h: 42, bg: '#fcd9a8', icon: <Medal size={16} color="#b45309" /> },
-              ].map(p => (
-                <div key={p.pos} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 130 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130, color: p.id ? 'var(--black)' : 'var(--grey-300)' }}>{p.id ? teamName(p.id) : '—'}</div>
-                  <div style={{ width: '100%', height: p.h, background: p.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-                    {p.icon}
-                    <span style={{ fontSize: 16, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--black)' }}>{p.pos}°</span>
+            {/* Center stack, vertically centered against the side columns */}
+            <div style={{ minHeight: colHeight, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, paddingTop: 8 }}>
+              {/* Champion banner */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 22px', minWidth: FINAL_W, justifyContent: 'center', background: champion ? 'var(--black)' : 'var(--grey-100)', color: champion ? 'var(--neon)' : 'var(--grey-400)' }}>
+                <Trophy size={20} />
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.75 }}>Campeón</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, fontFamily: 'var(--font-display)' }}>{champion ? teamName(champion) : 'Por definir'}</div>
+                </div>
+              </div>
+
+              {/* Final card — emphasized */}
+              {rounds[finalRoundIdx]?.[0] && (
+                <div style={{ position: 'relative', width: FINAL_W }}>
+                  <div style={{ position: 'absolute', inset: -4, border: '2px solid var(--black)', pointerEvents: 'none' }} />
+                  <div style={{ position: 'relative' }}>
+                    <BracketCard m={rounds[finalRoundIdx][0]} editingId={editingId} setEditingId={setEditingId} canManage={canManage} isSkeleton={isSkeleton} editResults={editResults} teamName={teamName} />
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* 3rd-place match — directly below the Final */}
+              {thirdPlace && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 6 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#b45309', marginBottom: 8 }}>Partido por el 3er Puesto</div>
+                  <BracketCard m={thirdPlace} isThird editingId={editingId} setEditingId={setEditingId} canManage={canManage} isSkeleton={isSkeleton} editResults={editResults} teamName={teamName} />
+                </div>
+              )}
+
+              {/* Podium */}
+              {champion && (
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, marginTop: 12 }}>
+                  {[
+                    { pos: 2, id: runnerUp, h: 52, bg: '#cbd5e1', icon: <Medal size={16} color="#64748b" /> },
+                    { pos: 1, id: champion, h: 74, bg: 'var(--neon, #d6ff00)', icon: <Trophy size={18} color="var(--black)" /> },
+                    { pos: 3, id: third, h: 40, bg: '#fcd9a8', icon: <Medal size={15} color="#b45309" /> },
+                  ].map(p => (
+                    <div key={p.pos} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: FINAL_W / 3 - 4 }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, marginBottom: 4, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: FINAL_W / 3 - 4, color: p.id ? 'var(--black)' : 'var(--grey-300)' }}>{p.id ? teamName(p.id) : '—'}</div>
+                      <div style={{ width: '100%', height: p.h, background: p.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                        {p.icon}
+                        <span style={{ fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--black)' }}>{p.pos}°</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* RIGHT side — MIRRORED: inner round (SF) closest to center, outer (R16) far right.
+              We render in reverse so the column adjacent to center is the innermost round. */}
+          {sideRounds.right.map((_, idx) => {
+            const roundIdx = sideCount - 1 - idx; // 0 = outermost; render innermost first
+            const r = sideRounds.right[roundIdx] ?? [];
+            return (
+              <BracketColumn
+                key={`R${roundIdx}`}
+                matches={r}
+                side="right"
+                depth={roundIdx}
+                colHeight={colHeight}
+                label={r[0]?.roundLabel ?? rounds[roundIdx]?.[0]?.roundLabel ?? ''}
+                editingId={editingId} setEditingId={setEditingId} canManage={canManage}
+                isSkeleton={isSkeleton} editResults={editResults} teamName={teamName}
+              />
+            );
+          })}
         </div>
-      )}
+      </div>
 
       {/* Inline editor */}
       {editingId && (() => {

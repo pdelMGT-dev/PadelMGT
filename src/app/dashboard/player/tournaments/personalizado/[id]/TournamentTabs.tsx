@@ -4,14 +4,19 @@ import React, { useState, useMemo, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   CalendarDays, BarChart3, Trophy, Plus, Minus, Share2, RefreshCw,
-  ChevronDown, ChevronRight, Play, GripVertical, Move,
+  ChevronDown, ChevronRight, Play, GripVertical, Move, CheckCircle2,
 } from 'lucide-react';
 import {
   generateGroupSchedule,
+  generateBracketSkeleton,
+  scheduleAllBrackets,
+  resolveBracketTeams,
+  isGroupConfirmed,
   calculateGroupStandings,
   computeQualifiedTable,
   saveControlPanel,
   saveMatchResult,
+  applyBracketResult,
   DEFAULT_CONTROL_CONFIG,
   type PersonalizadoTournament,
   type PersonalizadoMatch,
@@ -48,7 +53,29 @@ const scoreStr = (r: MatchResult) => r.walkover ? 'W.O.' : r.sets.map(s => `${s.
 
 // ── Standings tab ─────────────────────────────────────────────────────────────
 
-function StandingsView({ tournament, teamName }: { tournament: PersonalizadoTournament; teamName: (id: string) => string }) {
+function StandingsView({ tournament, teamName, canManage, canEditResults, onUpdate }: {
+  tournament: PersonalizadoTournament; teamName: (id: string) => string;
+  canManage: boolean; canEditResults: boolean; onUpdate: (t: PersonalizadoTournament) => void;
+}) {
+  const { showToast } = useToast();
+  const cfg = tournament.config ?? DEFAULT_CONTROL_CONFIG;
+  const [confirming, setConfirming] = useState<string | null>(null);
+
+  async function setGroupConfirmed(categoryId: string, groupId: string, confirmed: boolean) {
+    const key = `${categoryId}:${groupId}`;
+    setConfirming(key);
+    const set = new Set(cfg.confirmedGroups ?? []);
+    if (confirmed) set.add(key); else set.delete(key);
+    const confirmedGroups = [...set];
+    const bracketMatches = resolveBracketTeams(tournament, confirmedGroups, cfg.bracketMatches ?? []);
+    const newCfg = { ...cfg, confirmedGroups, bracketMatches };
+    onUpdate({ ...tournament, config: newCfg });
+    const res = await saveControlPanel({ id: tournament.id, categories: tournament.categories, config: newCfg });
+    setConfirming(null);
+    if (!res.ok) showToast(res.error ?? 'No se pudo guardar', 'error');
+    else showToast(confirmed ? 'Clasificación confirmada — equipos liberados al bracket' : 'Confirmación revertida', 'success');
+  }
+
   const cats = useMemo(() => {
     const result: { categoryId: string; categoryName: string; groups: { groupId: string; groupLabel: string }[] }[] = [];
     const catSeen = new Map<string, Set<string>>();
@@ -104,11 +131,31 @@ function StandingsView({ tournament, teamName }: { tournament: PersonalizadoTour
                   const doneCount = groupMatches.filter(m => m.result).length;
                   const mKey = `${cat.categoryId}|${g.groupId}`;
                   const matchesOpen = openMatches[mKey] ?? false;
+                  const confirmed = isGroupConfirmed(cfg, cat.categoryId, g.groupId);
+                  const allDone = groupMatches.length > 0 && doneCount === groupMatches.length;
+                  const catBracketStarted = (cfg.bracketMatches ?? []).some(m => m.categoryId === cat.categoryId && (m.status === 'playing' || m.status === 'done' || !!m.result));
+                  const cKey = `${cat.categoryId}:${g.groupId}`;
                   return (
-                    <div key={g.groupId} style={{ marginBottom: 16, border: '1px solid var(--grey-100)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--grey-50, #fafafa)' }}>
+                    <div key={g.groupId} style={{ marginBottom: 16, border: confirmed ? '1px solid rgba(34,197,94,0.4)' : '1px solid var(--grey-100)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '8px 12px', background: confirmed ? 'rgba(34,197,94,0.06)' : 'var(--grey-50, #fafafa)', flexWrap: 'wrap' }}>
                         <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>Grupo {g.groupLabel}</div>
-                        <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{doneCount}/{groupMatches.length} jugados</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 10, color: 'var(--grey-400)' }}>{doneCount}/{groupMatches.length} jugados</span>
+                          {confirmed ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#15803d' }}>
+                              <CheckCircle2 size={12} /> Confirmado
+                              {canEditResults && !catBracketStarted && (
+                                <button onClick={() => setGroupConfirmed(cat.categoryId, g.groupId, false)} disabled={confirming === cKey} style={{ marginLeft: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'none', border: '1px solid var(--grey-200)', padding: '2px 6px', cursor: confirming === cKey ? 'wait' : 'pointer', color: 'var(--grey-500)' }}>Reabrir</button>
+                              )}
+                            </span>
+                          ) : canManage && allDone ? (
+                            <button onClick={() => setGroupConfirmed(cat.categoryId, g.groupId, true)} disabled={confirming === cKey} title="Libera los clasificados de este grupo al bracket y bloquea sus resultados para co-creadores" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '5px 10px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: confirming === cKey ? 'wait' : 'pointer' }}>
+                              <CheckCircle2 size={12} /> {confirming === cKey ? 'Confirmando…' : 'Confirmar clasificación'}
+                            </button>
+                          ) : canManage && !allDone ? (
+                            <span style={{ fontSize: 9, color: 'var(--grey-300)', fontStyle: 'italic' }}>Faltan {groupMatches.length - doneCount} para confirmar</span>
+                          ) : null}
+                        </div>
                       </div>
                       <div style={{ overflowX: 'auto', padding: '0 12px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
@@ -209,6 +256,7 @@ function StandingsView({ tournament, teamName }: { tournament: PersonalizadoTour
 
 const SLOT_W = 158;
 const COURT_H = 84;
+const HEADER_H = 38;
 
 function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
   tournament: PersonalizadoTournament; canManage: boolean; canEditResults: boolean; onUpdate: (t: PersonalizadoTournament) => void;
@@ -216,19 +264,28 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
   const { showToast } = useToast();
   const cfg = tournament.config ?? DEFAULT_CONTROL_CONFIG;
   const matches: PersonalizadoMatch[] = useMemo(() => cfg.matches ?? [], [cfg.matches]);
+  const scheduledBracketMatches = useMemo(
+    () => (cfg.bracketMatches ?? []).filter(m => !!m.day && !!m.time && m.slot !== undefined && !!m.courtName) as (BracketMatch & { day: string; time: string; slot: number; courtName: string })[],
+    [cfg.bracketMatches]
+  );
   const courts = cfg.courtNames.length > 0 ? cfg.courtNames : Array.from({ length: Math.max(1, tournament.courts || 1) }, (_, i) => `Cancha ${i + 1}`);
   const setsCount = cfg.scoreQualification?.sets ?? 1;
+  const setsCountElim = cfg.scoreElimination?.sets ?? 1;
 
   const [generating, setGenerating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dragMatchId, setDragMatchId] = useState<string | null>(null);
   const [savingResultId, setSavingResultId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingBracketId, setEditingBracketId] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [labelW, setLabelW] = useState(140);
   const resizing = useRef(false);
 
-  const days = useMemo(() => [...new Set(matches.map(m => m.day))].sort(), [matches]);
+  const days = useMemo(() => {
+    const all = [...matches.map(m => m.day), ...scheduledBracketMatches.map(m => m.day)];
+    return [...new Set(all)].sort();
+  }, [matches, scheduledBracketMatches]);
   const [selectedDay, setSelectedDay] = useState<string>('');
   const activeDay = selectedDay && days.includes(selectedDay) ? selectedDay : days[0] || '';
 
@@ -246,7 +303,8 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
     return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   };
 
-  const dayMatches = matches.filter(m => m.day === activeDay);
+  const dayGroupMatches = matches.filter(m => m.day === activeDay);
+  const dayBracketMatches = scheduledBracketMatches.filter(m => m.day === activeDay);
   const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.id, t.player2Name ? `${t.player1Name} / ${t.player2Name}` : t.player1Name])), [tournament.teams]);
   const teamName = (id: string) => teamMap.get(id) ?? '—';
   const catMap = useMemo(() => new Map(tournament.categories.map(c => [c.id, c.name])), [tournament.categories]);
@@ -274,10 +332,16 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
       showToast('No hay equipos asignados a grupos. Completa la formación de grupos primero.', 'error');
       setGenerating(false); return;
     }
-    const newCfg = { ...cfg, matches: generated };
+    const allBracketUnscheduled = tournament.categories.flatMap(cat => generateBracketSkeleton(tournament, cat.id));
+    const tempT = { ...tournament, config: { ...cfg, matches: generated } };
+    const bracketMatches = scheduleAllBrackets(tempT, allBracketUnscheduled);
+    const newCfg = { ...cfg, matches: generated, bracketMatches, confirmedGroups: [] };
     const ok = await persist(newCfg);
     setGenerating(false);
-    if (ok) { setSelectedDay([...new Set(generated.map(m => m.day))].sort()[0] ?? ''); showToast(`Calendario generado: ${generated.length} partidos`, 'success'); }
+    if (ok) {
+      setSelectedDay([...new Set(generated.map(m => m.day))].sort()[0] ?? '');
+      showToast(`Calendario regenerado: ${generated.length} clasificación + ${bracketMatches.length} eliminatoria`, 'success');
+    }
   }
 
   function updateMatch(matchId: string, patch: Partial<PersonalizadoMatch>) {
@@ -322,6 +386,15 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
     showToast('Resultado guardado', 'success');
   }
 
+  async function handleSaveBracketResult(matchId: string, result: MatchResult) {
+    setSavingResultId(matchId);
+    const newBracket = applyBracketResult(cfg.bracketMatches ?? [], matchId, result);
+    await persist({ ...cfg, bracketMatches: newBracket });
+    setSavingResultId(null);
+    setEditingBracketId(null);
+    showToast('Resultado guardado', 'success');
+  }
+
   async function handleAddCourt() {
     setBusy(true);
     await persist({ ...cfg, courtNames: [...courts, `Cancha ${courts.length + 1}`] });
@@ -336,7 +409,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
     showToast('Cancha eliminada. Regenerá el calendario para reubicar los juegos sin jugar.', 'success');
   }
 
-  if (matches.length === 0) {
+  if (matches.length === 0 && scheduledBracketMatches.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '48px 24px', background: '#fff', border: '1px solid var(--grey-100)' }}>
         <CalendarDays size={34} style={{ color: 'var(--grey-300)', marginBottom: 12 }} />
@@ -354,7 +427,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
   }
 
   const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/t/${tournament.code}/live` : `/t/${tournament.code}/live`;
-  const editing = editingId ? dayMatches.find(m => m.id === editingId) ?? matches.find(m => m.id === editingId) : null;
+  const editing = editingId ? dayGroupMatches.find(m => m.id === editingId) ?? matches.find(m => m.id === editingId) : null;
 
   return (
     <div>
@@ -402,66 +475,103 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
 
       {/* Legend */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
-        {[['#3b82f6', 'Pautado'], ['#16a34a', 'En vivo'], ['#0a0a0a', 'Finalizado']].map(([c, l]) => (
+        {[['#3b82f6', 'Clasificación'], ['#7c3aed', 'Eliminatoria'], ['#16a34a', 'En vivo'], ['#0a0a0a', 'Finalizado']].map(([c, l]) => (
           <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 600, color: 'var(--grey-500)' }}>
             <span style={{ width: 12, height: 12, background: c, borderRadius: 2 }} /> {l}
           </span>
         ))}
       </div>
 
-      {/* Calendar grid — full width, horizontal scroll, sticky court column */}
-      <div style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', border: '1px solid var(--grey-200)', background: '#fff' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: `${labelW}px repeat(${totalSlots}, ${SLOT_W}px)`, gridAutoRows: `${COURT_H}px`, minWidth: labelW + totalSlots * SLOT_W }}>
-          {/* Corner (sticky) */}
-          <div style={{ position: 'sticky', left: 0, zIndex: 3, height: 38, background: '#fff', borderBottom: '2px solid var(--grey-200)', borderRight: '1px solid var(--grey-200)', display: 'flex', alignItems: 'center', paddingLeft: 12 }}>
+      {/* Calendar grid — fixed courts column on the left + horizontally scrollable time grid */}
+      <div style={{ display: 'flex', width: '100%', maxWidth: '100%', border: '1px solid var(--grey-200)', background: '#fff', overflow: 'hidden' }}>
+
+        {/* Fixed left column: court labels */}
+        <div style={{ flexShrink: 0, width: labelW, borderRight: '1px solid var(--grey-200)', zIndex: 2, background: '#fff', position: 'relative' }}>
+          <div style={{ height: HEADER_H, background: '#fff', borderBottom: '2px solid var(--grey-200)', display: 'flex', alignItems: 'center', paddingLeft: 12, position: 'relative' }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Cancha</span>
             <div onMouseDown={startResize} style={{ position: 'absolute', top: 0, right: 0, width: 8, height: '100%', cursor: 'col-resize' }} />
           </div>
-          {/* Time headers */}
-          {Array.from({ length: totalSlots }, (_, i) => (
-            <div key={i} style={{ height: 38, background: '#fff', borderBottom: '2px solid var(--grey-200)', borderRight: '1px solid rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', paddingLeft: 8 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-500)' }}>{slotToTime(i)}</span>
+          {courts.map(court => (
+            <div key={court} style={{ height: COURT_H, background: 'var(--grey-50, #fafafa)', borderBottom: '1px solid var(--grey-100)', display: 'flex', alignItems: 'center', padding: '0 12px' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--grey-700)' }}>{court}</span>
             </div>
           ))}
+        </div>
 
-          {/* Court rows */}
-          {courts.map(court => (
-            <React.Fragment key={court}>
-              <div style={{ position: 'sticky', left: 0, zIndex: 2, width: labelW, background: 'var(--grey-50, #fafafa)', borderBottom: '1px solid var(--grey-100)', borderRight: '1px solid var(--grey-200)', display: 'flex', alignItems: 'center', padding: '0 12px' }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--grey-700)' }}>{court}</span>
+        {/* Scrollable right area: time headers + match slots.
+            minWidth:0 is essential — without it the flex child refuses to shrink below its grid
+            width, so the whole calendar overflows the page instead of scrolling internally. */}
+        <div style={{ overflowX: 'auto', flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totalSlots}, ${SLOT_W}px)`, gridTemplateRows: `${HEADER_H}px repeat(${courts.length}, ${COURT_H}px)`, width: totalSlots * SLOT_W }}>
+            {/* Time headers */}
+            {Array.from({ length: totalSlots }, (_, i) => (
+              <div key={i} style={{ background: '#fff', borderBottom: '2px solid var(--grey-200)', borderRight: '1px solid rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', paddingLeft: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-500)' }}>{slotToTime(i)}</span>
               </div>
-              {Array.from({ length: totalSlots }, (_, slotIdx) => {
-                const match = dayMatches.find(m => m.courtName === court && m.slot === slotIdx);
-                const vis = match ? matchVisual(match) : null;
-                return (
-                  <div
-                    key={slotIdx}
-                    onDragOver={e => { e.preventDefault(); }}
-                    onDrop={e => { e.preventDefault(); handleDropOnCell(slotIdx, court); }}
-                    style={{ borderBottom: '1px solid var(--grey-100)', borderRight: '1px solid rgba(0,0,0,0.04)', position: 'relative', background: dragMatchId && !match ? 'rgba(59,130,246,0.05)' : 'transparent' }}
-                  >
-                    {match && vis && (
-                      <div
-                        draggable={canManage && editingId !== match.id}
-                        onDragStart={e => { if (!canManage) return; e.dataTransfer.effectAllowed = 'move'; setDragMatchId(match.id); }}
-                        onDragEnd={() => setDragMatchId(null)}
-                        onClick={() => canManage && setEditingId(editingId === match.id ? null : match.id)}
-                        style={{ position: 'absolute', inset: 3, background: vis.bg, color: vis.fg, border: editingId === match.id ? '2px solid var(--neon)' : '1px solid rgba(0,0,0,0.12)', padding: '5px 8px', cursor: canManage ? 'pointer' : 'default', opacity: dragMatchId === match.id ? 0.4 : 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: vis.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catMap.get(match.categoryId) ?? ''} · Gr.{match.groupLabel}</span>
-                          {vis.label && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.08em', color: vis.fg }}>{vis.label}</span>}
+            ))}
+
+            {/* Court rows */}
+            {courts.map(court => (
+              <React.Fragment key={court}>
+                {Array.from({ length: totalSlots }, (_, slotIdx) => {
+                  const groupMatch = dayGroupMatches.find(m => m.courtName === court && m.slot === slotIdx);
+                  const bracketMatch = dayBracketMatches.find(m => m.courtName === court && m.slot === slotIdx);
+                  const gvis = groupMatch ? matchVisual(groupMatch) : null;
+                  const bvis = bracketMatch
+                    ? bracketMatch.result || bracketMatch.status === 'done'
+                      ? { bg: '#4c1d95', fg: '#f5f3ff', sub: 'rgba(245,243,255,0.7)', label: 'FINAL' }
+                      : bracketMatch.status === 'playing'
+                        ? { bg: '#16a34a', fg: '#ffffff', sub: 'rgba(255,255,255,0.8)', label: 'EN VIVO' }
+                        : { bg: '#7c3aed', fg: '#ffffff', sub: 'rgba(255,255,255,0.78)', label: '' }
+                    : null;
+                  return (
+                    <div
+                      key={slotIdx}
+                      onDragOver={e => { e.preventDefault(); }}
+                      onDrop={e => { e.preventDefault(); if (!bracketMatch) handleDropOnCell(slotIdx, court); }}
+                      style={{ borderBottom: '1px solid var(--grey-100)', borderRight: '1px solid rgba(0,0,0,0.04)', position: 'relative', background: dragMatchId && !groupMatch && !bracketMatch ? 'rgba(59,130,246,0.05)' : 'transparent' }}
+                    >
+                      {groupMatch && gvis && (
+                        <div
+                          draggable={canManage && editingId !== groupMatch.id}
+                          onDragStart={e => { if (!canManage) return; e.dataTransfer.effectAllowed = 'move'; setDragMatchId(groupMatch.id); }}
+                          onDragEnd={() => setDragMatchId(null)}
+                          onClick={() => canManage && setEditingId(editingId === groupMatch.id ? null : groupMatch.id)}
+                          style={{ position: 'absolute', inset: 3, background: gvis.bg, color: gvis.fg, border: editingId === groupMatch.id ? '2px solid var(--neon)' : '1px solid rgba(0,0,0,0.12)', padding: '5px 8px', cursor: canManage ? 'pointer' : 'default', opacity: dragMatchId === groupMatch.id ? 0.4 : 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: gvis.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catMap.get(groupMatch.categoryId) ?? ''} · Gr.{groupMatch.groupLabel}</span>
+                            {gvis.label && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.08em', color: gvis.fg }}>{gvis.label}</span>}
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{teamName(groupMatch.teamAId)}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{teamName(groupMatch.teamBId)}</div>
+                          {groupMatch.result && <div style={{ fontSize: 10, fontWeight: 800, marginTop: 1, color: gvis.fg }}>{scoreStr(groupMatch.result)}</div>}
                         </div>
-                        <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{teamName(match.teamAId)}</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{teamName(match.teamBId)}</div>
-                        {match.result && <div style={{ fontSize: 10, fontWeight: 800, marginTop: 1, color: vis.fg }}>{scoreStr(match.result)}</div>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </React.Fragment>
-          ))}
+                      )}
+                      {bracketMatch && bvis && (() => {
+                        const bothKnown = !!bracketMatch.teamAId && !!bracketMatch.teamBId;
+                        const bClickable = canManage && bothKnown && (!bracketMatch.result || canEditResults);
+                        return (
+                        <div
+                          onClick={() => bClickable && setEditingBracketId(editingBracketId === bracketMatch.id ? null : bracketMatch.id)}
+                          style={{ position: 'absolute', inset: 3, background: bvis.bg, color: bvis.fg, border: editingBracketId === bracketMatch.id ? '2px solid var(--neon)' : '1px solid rgba(0,0,0,0.12)', padding: '5px 8px', cursor: bClickable ? 'pointer' : 'default', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: bvis.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catMap.get(bracketMatch.categoryId) ?? ''} · {bracketMatch.roundLabel}</span>
+                            {bvis.label && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.08em', color: bvis.fg }}>{bvis.label}</span>}
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bracketMatch.teamAId ? teamName(bracketMatch.teamAId) : (bracketMatch.placeholderA ?? 'Por definir')}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bracketMatch.teamBId ? teamName(bracketMatch.teamBId) : (bracketMatch.placeholderB ?? 'Por definir')}</div>
+                          {bracketMatch.result && <div style={{ fontSize: 10, fontWeight: 800, marginTop: 1, color: bvis.fg }}>{scoreStr(bracketMatch.result)}</div>}
+                        </div>
+                        );
+                      })()}
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -479,7 +589,9 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
       {/* Inline editor for the selected match */}
       {editing && (() => {
         const vis = matchVisual(editing);
-        const readOnly = editing.result && !canEditResults;
+        const groupConfirmed = isGroupConfirmed(cfg, editing.categoryId, editing.groupId);
+        const lockedForCoCreator = groupConfirmed && !canEditResults;
+        const readOnly = (editing.result && !canEditResults) || lockedForCoCreator;
         return (
           <div style={{ marginTop: 12, padding: 18, background: '#fff', border: `2px solid ${vis.bg}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -504,12 +616,16 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
             {readOnly ? (
               <div>
                 <div style={{ fontSize: 14, marginBottom: 4 }}><strong>{teamName(editing.teamAId)}</strong> vs <strong>{teamName(editing.teamBId)}</strong></div>
-                <div style={{ fontSize: 13, color: 'var(--grey-500)' }}>Resultado: {editing.result && scoreStr(editing.result)} · Gana {editing.result && teamName(editing.result.winnerId)}</div>
-                <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 8 }}>Solo el creador del torneo puede modificar un resultado guardado.</div>
+                {editing.result && <div style={{ fontSize: 13, color: 'var(--grey-500)' }}>Resultado: {scoreStr(editing.result)} · Gana {teamName(editing.result.winnerId)}</div>}
+                <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 8 }}>
+                  {lockedForCoCreator
+                    ? 'La clasificación de este grupo fue confirmada. Solo el creador del torneo puede ajustar los resultados.'
+                    : 'Solo el creador del torneo puede modificar un resultado guardado.'}
+                </div>
               </div>
             ) : (
               <>
-                {canManage && !editing.result && editing.status !== 'playing' && (
+                {canManage && !lockedForCoCreator && !editing.result && editing.status !== 'playing' && (
                   <button onClick={() => handleStartLive(editing.id)} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 14, padding: '8px 16px', background: '#16a34a', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     <Play size={14} /> Marcar En Vivo
                   </button>
@@ -521,6 +637,38 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
                   onSave={(r) => handleSaveResult(editing.id, r)} onCancel={() => setEditingId(null)}
                 />
               </>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Inline editor for the selected bracket (elimination) match */}
+      {(() => {
+        const bm = editingBracketId ? scheduledBracketMatches.find(m => m.id === editingBracketId) : null;
+        if (!bm || !bm.teamAId || !bm.teamBId) return null;
+        const readOnly = bm.result && !canEditResults;
+        return (
+          <div style={{ marginTop: 12, padding: 18, background: '#fff', border: '2px solid #7c3aed' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#fff', background: '#7c3aed', padding: '3px 8px' }}>Eliminatoria</span>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>
+                {catMap.get(bm.categoryId)} · {bm.roundLabel} · {bm.courtName} · {bm.time}
+              </span>
+              <button onClick={() => setEditingBracketId(null)} style={{ marginLeft: 'auto', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)' }}>Cerrar ✕</button>
+            </div>
+            {readOnly ? (
+              <div>
+                <div style={{ fontSize: 14, marginBottom: 4 }}><strong>{teamName(bm.teamAId)}</strong> vs <strong>{teamName(bm.teamBId)}</strong></div>
+                <div style={{ fontSize: 13, color: 'var(--grey-500)' }}>Resultado: {bm.result && scoreStr(bm.result)} · Gana {bm.result && teamName(bm.result.winnerId)}</div>
+                <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 8 }}>Solo el creador del torneo puede modificar un resultado guardado.</div>
+              </div>
+            ) : (
+              <ScoreEntry
+                teamAId={bm.teamAId} teamBId={bm.teamBId}
+                teamAName={teamName(bm.teamAId)} teamBName={teamName(bm.teamBId)}
+                setsCount={setsCountElim} result={bm.result} saving={savingResultId === bm.id}
+                onSave={(r) => handleSaveBracketResult(bm.id, r)} onCancel={() => setEditingBracketId(null)}
+              />
             )}
           </div>
         );
@@ -624,7 +772,7 @@ export function TournamentTabs({ tournament, canManage, canEditResults, onUpdate
 
       <div style={{ padding: '20px clamp(12px, 3vw, 24px) 28px' }}>
         {activeTab === 'calendario' && <CourtCalendar tournament={tournament} canManage={canManage} canEditResults={editResults} onUpdate={onUpdate} />}
-        {activeTab === 'clasificacion' && <StandingsView tournament={tournament} teamName={teamName} />}
+        {activeTab === 'clasificacion' && <StandingsView tournament={tournament} teamName={teamName} canManage={canManage} canEditResults={editResults} onUpdate={onUpdate} />}
         {activeTab === 'bracket' && <BracketTab tournament={tournament} canManage={canManage} canEditResults={editResults} onUpdate={onUpdate} />}
       </div>
     </div>
