@@ -1397,7 +1397,12 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
 
   for (let di = 0; di < days.length; di++) {
     const day = days[di];
-    const remaining = [...carry, ...(byDay.get(day) ?? [])];
+    // Sort pairs so novice-category pairs come first → they naturally fill morning slots
+    const levelMap = new Map(categoriesByLevel.map((c, i) => [c.id, i]));
+    const remaining = [
+      ...carry,
+      ...(byDay.get(day) ?? []),
+    ].sort((a, b) => (levelMap.get(a.categoryId) ?? 0) - (levelMap.get(b.categoryId) ?? 0));
     carry = [];
     let slotTime = parseMinutes(cfg.schedule.startTime || '09:00');
     let lunchTaken = !lunchEnabled;
@@ -1785,69 +1790,166 @@ export function scheduleAllBrackets(
   const dayEnd = parseMinutes(cfg.schedule.endTime || '22:00');
 
   // Sort categories novice → experienced (ascending level); highest-level cat's Final is last
-  const catIds = [...tournament.categories]
-    .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
-    .map(c => c.id);
+  const categoriesSorted = [...tournament.categories].sort((a, b) => (a.level ?? 0) - (b.level ?? 0));
+  const catIds = categoriesSorted.map(c => c.id);
+  const catLevelIdx = new Map(categoriesSorted.map((c, i) => [c.id, i]));
 
   const rounds = [...new Set(allBracketMatches.map(m => m.round))].sort((a, b) => a - b);
   const finalRound = rounds.length > 0 ? Math.max(...rounds) : 0;
 
-  // Build ordered groups of matches — each group runs simultaneously (same time slot)
-  const groups: BracketMatch[][] = [];
+  // Build ordered "layers" — each layer is all matches that share the same round (and for
+  // the final round, 3rd-place is one layer, Finals is a separate layer after).
+  // Within each layer the matches are sorted by category level (ascending) so that the
+  // mitad/mitad court assignment gives morning courts to novice categories.
+  type Layer = BracketMatch[];
+  const layers: Layer[] = [];
   for (const round of rounds) {
     if (round === finalRound) {
-      // 3rd-place matches first (all cats, novice → experienced)
-      for (const catId of catIds) {
-        const ms = allBracketMatches.filter(m => m.categoryId === catId && m.round === round && m.roundLabel === '3er Puesto');
-        if (ms.length > 0) groups.push(ms);
-      }
-      // Finals after (novice → experienced; highest-level Final is the absolute last group)
-      for (const catId of catIds) {
-        const ms = allBracketMatches.filter(m => m.categoryId === catId && m.round === round && m.roundLabel !== '3er Puesto');
-        if (ms.length > 0) groups.push(ms);
-      }
+      // 3rd-place layer
+      const thirdMs = allBracketMatches
+        .filter(m => m.round === round && m.roundLabel === '3er Puesto')
+        .sort((a, b) => (catLevelIdx.get(a.categoryId) ?? 0) - (catLevelIdx.get(b.categoryId) ?? 0));
+      if (thirdMs.length > 0) layers.push(thirdMs);
+      // Finals layer
+      const finalsMs = allBracketMatches
+        .filter(m => m.round === round && m.roundLabel !== '3er Puesto')
+        .sort((a, b) => (catLevelIdx.get(a.categoryId) ?? 0) - (catLevelIdx.get(b.categoryId) ?? 0));
+      if (finalsMs.length > 0) layers.push(finalsMs);
     } else {
-      // Normal rounds: all categories in level order
-      for (const catId of catIds) {
-        const ms = allBracketMatches.filter(m => m.categoryId === catId && m.round === round);
-        if (ms.length > 0) groups.push(ms);
+      const ms = allBracketMatches
+        .filter(m => m.round === round)
+        .sort((a, b) => (catLevelIdx.get(a.categoryId) ?? 0) - (catLevelIdx.get(b.categoryId) ?? 0));
+      if (ms.length > 0) layers.push(ms);
+    }
+  }
+
+  if (layers.length === 0) return allBracketMatches;
+
+  // Compute available bracket minutes across all bracket days (all days share same schedule params)
+  const dayAvailableMinutes = () => {
+    const raw = dayEnd - dayStart;
+    return Math.max(0, lunchEnabled ? raw - lunchDur : raw);
+  };
+  const totalAvailableMinutes = bracketDays.length * dayAvailableMinutes();
+
+  // Compute each layer's needed minutes: ceil(layer.length / courts) slots × matchDur
+  const layerNeeded = layers.map(layer => Math.ceil(layer.length / courts.length) * matchDur);
+  const totalNeededMinutes = layerNeeded.reduce((s, v) => s + v, 0);
+  const extraMinutes = totalAvailableMinutes - totalNeededMinutes;
+  const gapMinutes = layers.length > 1 ? Math.max(0, Math.floor(extraMinutes / (layers.length - 1))) : 0;
+
+  // Cursor state for advancing through bracket days
+  let curDayIdx = 0;
+  let curMins = dayStart;
+  let curLunchTaken = !lunchEnabled;
+  let curDaySlot = 0;
+
+  /** Advance the cursor by `minutes` (handles lunch and day boundaries). */
+  function advanceCursor(minutes: number): void {
+    let remaining = minutes;
+    while (remaining > 0) {
+      // Apply lunch if not yet taken and we're at or past lunchStart
+      if (!curLunchTaken && curMins >= lunchStart) {
+        curMins += lunchDur;
+        curLunchTaken = true;
+      }
+      const minutesToDayEnd = dayEnd - curMins;
+      if (remaining <= minutesToDayEnd) {
+        curMins += remaining;
+        remaining = 0;
+      } else {
+        // Overflow to next day
+        remaining -= minutesToDayEnd;
+        if (curDayIdx < bracketDays.length - 1) {
+          curDayIdx++;
+          curMins = dayStart;
+          curLunchTaken = !lunchEnabled;
+          curDaySlot = 0;
+        } else {
+          curMins = dayEnd; // clamp to last day's end
+          remaining = 0;
+        }
       }
     }
+    // Re-check lunch after advance
+    if (!curLunchTaken && curMins >= lunchStart) {
+      curMins += lunchDur;
+      curLunchTaken = true;
+    }
   }
 
-  // Assign day-relative time slots (daySlot resets to 0 on each new bracket day)
+  // Assign each layer's matches to actual days/times using mitad/mitad court assignment
   const scheduled = new Map<string, { day: string; time: string; slot: number; courtName: string }>();
-  let dayIdx = 0;
-  let currentMins = dayStart;
-  let lunchTaken = !lunchEnabled;
-  let daySlot = 0;
 
-  for (const group of groups) {
-    // Distribute each bracket round to its own day when multiple bracket days are available
-    const groupRound = group[0]?.round ?? 0;
-    const targetDayIdx = Math.min(groupRound, bracketDays.length - 1);
-    if (targetDayIdx > dayIdx) {
-      dayIdx = targetDayIdx;
-      currentMins = dayStart;
-      lunchTaken = !lunchEnabled;
-      daySlot = 0;
+  for (let li = 0; li < layers.length; li++) {
+    const layer = layers[li];
+
+    // Determine the distinct categories in this layer (already sorted by level due to prior sort)
+    const layerCatIds: string[] = [];
+    for (const m of layer) {
+      if (!layerCatIds.includes(m.categoryId)) layerCatIds.push(m.categoryId);
     }
-    if (!lunchTaken && currentMins >= lunchStart) { currentMins += lunchDur; lunchTaken = true; }
-    // Fallback: also advance if time overflows within a day
-    if (currentMins + matchDur > dayEnd && dayIdx < bracketDays.length - 1) {
-      dayIdx++;
-      currentMins = dayStart;
-      lunchTaken = !lunchEnabled;
-      daySlot = 0;
+    const numCats = layerCatIds.length;
+
+    // Group layer matches by category (in order)
+    const matchesByCat = new Map<string, BracketMatch[]>();
+    for (const catId of layerCatIds) matchesByCat.set(catId, []);
+    for (const m of layer) matchesByCat.get(m.categoryId)!.push(m);
+
+    // Compute court ranges per category (mitad/mitad)
+    // catIdx 0 gets courts[0 .. floor(N/numCats)-1], catIdx 1 gets next share, etc.
+    const catCourtStart = layerCatIds.map((_, ci) => Math.floor(ci * courts.length / numCats));
+    const catCourtEnd = layerCatIds.map((_, ci) => Math.floor((ci + 1) * courts.length / numCats));
+
+    // Compute number of slots for this layer
+    const numSlots = Math.ceil(layer.length / courts.length);
+
+    // For each slot, fill courts
+    for (let slot = 0; slot < numSlots; slot++) {
+      // Apply lunch before this slot if needed
+      if (!curLunchTaken && curMins >= lunchStart) {
+        curMins += lunchDur;
+        curLunchTaken = true;
+      }
+
+      const day = bracketDays[Math.min(curDayIdx, bracketDays.length - 1)];
+      const time = fmtMinutes(curMins);
+      const slotNum = curDaySlot;
+
+      // Assign courts to matches per category for this slot
+      for (let ci = 0; ci < layerCatIds.length; ci++) {
+        const catId = layerCatIds[ci];
+        const catMatches = matchesByCat.get(catId)!;
+        const courtStart = catCourtStart[ci];
+        const courtEnd = catCourtEnd[ci];
+        const numCourtsForCat = courtEnd - courtStart;
+        if (numCourtsForCat <= 0) continue;
+
+        // Matches for this category in this slot
+        const slotStart = slot * numCourtsForCat;
+        const slotMs = catMatches.slice(slotStart, slotStart + numCourtsForCat);
+        slotMs.forEach((m, j) => {
+          scheduled.set(m.id, {
+            day,
+            time,
+            slot: slotNum,
+            courtName: courts[courtStart + j],
+          });
+        });
+      }
+
+      curMins += matchDur;
+      curDaySlot++;
     }
-    const day = bracketDays[Math.min(dayIdx, bracketDays.length - 1)];
-    const time = fmtMinutes(currentMins);
-    group.forEach((m, i) => {
-      scheduled.set(m.id, { day, time, slot: daySlot, courtName: courts[i % courts.length] });
-    });
-    currentMins += matchDur;
-    daySlot++;
+
+    // After the layer, advance by gapMinutes (except after the last layer)
+    if (li < layers.length - 1 && gapMinutes > 0) {
+      advanceCursor(gapMinutes);
+    }
   }
+
+  // Suppress unused variable warning for catIds (it's used to maintain order intent)
+  void catIds;
 
   return allBracketMatches.map(m => {
     const s = scheduled.get(m.id);
