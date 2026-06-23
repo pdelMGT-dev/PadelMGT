@@ -276,6 +276,8 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
   const [busy, setBusy] = useState(false);
   const [dragMatchId, setDragMatchId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const suppressClick = useRef(false);
   const [savingResultId, setSavingResultId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBracketId, setEditingBracketId] = useState<string | null>(null);
@@ -448,6 +450,47 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
     moveToDay(movingIdsFor(dragMatchId), day);
   }
 
+  // Mouse rubber-band (marquee) selection: drag a rectangle over empty grid area to select
+  // every match card it touches. Starting on a card lets the native drag-to-move take over.
+  function startMarquee(e: React.MouseEvent) {
+    if (!canManage || e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('[data-match-card]')) return;
+    e.preventDefault(); // suppress text selection while dragging over the grid
+    const x0 = e.clientX, y0 = e.clientY;
+    let moved = false;
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+    const move = (ev: MouseEvent) => {
+      if (!moved && Math.abs(ev.clientX - x0) + Math.abs(ev.clientY - y0) > 4) moved = true;
+      if (moved) setMarquee({ x0, y0, x1: ev.clientX, y1: ev.clientY });
+    };
+    const up = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      setMarquee(null);
+      if (!moved) return;
+      const left = Math.min(x0, ev.clientX), right = Math.max(x0, ev.clientX);
+      const top = Math.min(y0, ev.clientY), bottom = Math.max(y0, ev.clientY);
+      const ids: string[] = [];
+      document.querySelectorAll<HTMLElement>('[data-match-card]').forEach(el => {
+        const r = el.getBoundingClientRect();
+        if (r.left < right && r.right > left && r.top < bottom && r.bottom > top && el.dataset.matchId) {
+          ids.push(el.dataset.matchId);
+        }
+      });
+      setSelectedIds(prev => {
+        if (additive) { const next = new Set(prev); ids.forEach(id => next.add(id)); return next; }
+        return new Set(ids);
+      });
+      setEditingId(null);
+      // Swallow the click that fires right after the drag so the empty-cell handler
+      // doesn't immediately clear the fresh selection.
+      suppressClick.current = true;
+      setTimeout(() => { suppressClick.current = false; }, 120);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  }
+
   async function handleStartLive(matchId: string) {
     setBusy(true);
     updateMatch(matchId, { status: 'playing' });
@@ -511,6 +554,16 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
 
   return (
     <div>
+      {/* Marquee selection rectangle (drag over empty grid area) */}
+      {marquee && (
+        <div style={{
+          position: 'fixed', zIndex: 200, pointerEvents: 'none',
+          left: Math.min(marquee.x0, marquee.x1), top: Math.min(marquee.y0, marquee.y1),
+          width: Math.abs(marquee.x1 - marquee.x0), height: Math.abs(marquee.y1 - marquee.y0),
+          background: 'rgba(214,255,0,0.12)', border: '1.5px solid var(--neon)',
+        }} />
+      )}
+
       {/* Top bar: days + actions */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -548,7 +601,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
       )}
 
       {canManage && selectedIds.size === 0 && (
-        <div style={{ marginBottom: 10, fontSize: 11, color: 'var(--grey-400)', fontStyle: 'italic' }}>Ctrl+clic para seleccionar varios partidos y moverlos juntos.</div>
+        <div style={{ marginBottom: 10, fontSize: 11, color: 'var(--grey-400)', fontStyle: 'italic' }}>Arrastrá un recuadro sobre el calendario (o Ctrl+clic) para seleccionar varios partidos y moverlos juntos.</div>
       )}
 
       {dragMatchId && <div style={{ marginBottom: 10, fontSize: 11, color: 'var(--grey-400)', fontStyle: 'italic' }}>Soltá sobre una celda para mover, o sobre una fecha de arriba para cambiar de día.</div>}
@@ -593,8 +646,8 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
         {/* Scrollable right area: time headers + match slots.
             minWidth:0 is essential — without it the flex child refuses to shrink below its grid
             width, so the whole calendar overflows the page instead of scrolling internally. */}
-        <div style={{ overflowX: 'auto', flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totalSlots}, ${SLOT_W}px)`, gridTemplateRows: `${HEADER_H}px repeat(${courts.length}, ${COURT_H}px)`, width: totalSlots * SLOT_W }}>
+        <div style={{ overflowX: 'auto', flex: 1, minWidth: 0 }} onMouseDown={startMarquee}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totalSlots}, ${SLOT_W}px)`, gridTemplateRows: `${HEADER_H}px repeat(${courts.length}, ${COURT_H}px)`, width: totalSlots * SLOT_W, userSelect: marquee ? 'none' : 'auto' }}>
             {/* Time headers */}
             {Array.from({ length: totalSlots }, (_, i) => (
               <div key={i} style={{ background: '#fff', borderBottom: '2px solid var(--grey-200)', borderRight: '1px solid rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', paddingLeft: 8 }}>
@@ -621,11 +674,13 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
                       key={slotIdx}
                       onDragOver={e => { e.preventDefault(); }}
                       onDrop={e => { e.preventDefault(); if (!bracketMatch) handleDropOnCell(slotIdx, court); }}
-                      onClick={() => { if (!groupMatch && !bracketMatch && selectedIds.size) setSelectedIds(new Set()); }}
+                      onClick={() => { if (suppressClick.current) return; if (!groupMatch && !bracketMatch && selectedIds.size) setSelectedIds(new Set()); }}
                       style={{ borderBottom: '1px solid var(--grey-100)', borderRight: '1px solid rgba(0,0,0,0.04)', position: 'relative', background: dragMatchId && !groupMatch && !bracketMatch ? 'rgba(59,130,246,0.05)' : 'transparent' }}
                     >
                       {groupMatch && gvis && (
                         <div
+                          data-match-card
+                          data-match-id={groupMatch.id}
                           draggable={canManage && editingId !== groupMatch.id}
                           onDragStart={e => { if (!canManage) return; e.dataTransfer.effectAllowed = 'move'; setDragMatchId(groupMatch.id); }}
                           onDragEnd={() => setDragMatchId(null)}
