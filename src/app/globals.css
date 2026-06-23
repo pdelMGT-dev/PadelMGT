@@ -403,6 +403,7 @@ html, body {
   position: fixed; left: 0; top: 0; bottom: 0; z-index: 100;
   border-right: 1px solid rgba(255,255,255,0.06);
   overflow-y: auto;
+  transition: width 0.25s ease;
 }
 .dashboard-main {
   margin-left: 256px; flex: 1; min-height: 100vh;
@@ -410,6 +411,7 @@ html, body {
      children (e.g. the tournament calendar grid) scroll internally instead of widening
      the whole page. Without it, flex items default to min-width:auto and overflow the viewport. */
   min-width: 0;
+  transition: margin-left 0.25s ease;
 }
 .dash-mobile-bar {
   display: none;
@@ -442,9 +444,33 @@ body.sidebar-collapsed .dashboard-main {
   body.sidebar-collapsed .dashboard-main { margin-left: 0; }
 }
 
-/* Sidebar collapse toggle button */
-.sidebar-collapse-btn { display: flex; }
-@media (max-width: 1024px) { .sidebar-collapse-btn { display: none !important; } }
+/* Sidebar collapse toggle button (legacy, kept hidden) */
+.sidebar-collapse-btn { display: none !important; }
+
+/* Floating edge toggle — straddles the sidebar's right border, follows its width */
+.sidebar-edge-toggle {
+  position: fixed;
+  top: 50%;
+  left: calc(256px - 14px);
+  transform: translateY(-50%);
+  z-index: 110;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: #0a0a0a;
+  border: 1px solid rgba(214,255,0,0.4);
+  color: var(--neon);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  transition: left 0.25s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.sidebar-edge-toggle:hover {
+  background: var(--neon);
+  color: #0a0a0a;
+  border-color: var(--neon);
+}
+body.sidebar-collapsed .sidebar-edge-toggle { left: calc(64px - 14px); }
+@media (max-width: 1024px) { .sidebar-edge-toggle { display: none !important; } }
 
 /* ── TABLET (≤ 1024px) ── */
 @media (max-width: 1024px) {

@@ -280,21 +280,6 @@ export default function DashboardSidebar() {
           </div>
         )}
 
-        {/* Collapse toggle button — desktop only */}
-        <button
-          onClick={() => setCollapsed(c => !c)}
-          className="sidebar-collapse-btn"
-          style={{
-            width: '100%', padding: '10px 0', background: 'transparent', border: 'none',
-            borderTop: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer',
-            color: 'rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center',
-            justifyContent: collapsed ? 'center' : 'flex-end', paddingRight: collapsed ? 0 : 20,
-            marginTop: 12,
-          }}
-          title={collapsed ? 'Expandir menú' : 'Colapsar menú'}
-        >
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
       </nav>
 
       {/* User */}
@@ -380,6 +365,16 @@ export default function DashboardSidebar() {
         </button>
         {sidebarContent}
       </aside>
+
+      {/* Floating edge toggle — desktop only, straddles the sidebar border */}
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        className="sidebar-edge-toggle"
+        title={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+        aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+      >
+        {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+      </button>
     </>
   );
 }
