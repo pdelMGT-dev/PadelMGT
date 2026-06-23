@@ -1,7 +1,7 @@
 'use client';
 
 import React, { use, useEffect, useState, useMemo, useCallback } from 'react';
-import { CalendarDays, MapPin, Search, Clock, Trophy, RefreshCw, Zap } from 'lucide-react';
+import { CalendarDays, MapPin, Search, Clock, Trophy, RefreshCw, Zap, Maximize, Minimize } from 'lucide-react';
 import {
   loadPersonalizadoByCode,
   calculateGroupStandings,
@@ -42,6 +42,22 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [secondsAgo, setSecondsAgo] = useState(0);
   const [query, setQuery] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Fullscreen toggle (native Fullscreen API)
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
 
   const loadData = useCallback(async () => {
     const t = await loadPersonalizadoByCode(code);
@@ -168,7 +184,7 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <div style={{ background: '#0a0a0a', color: '#fff', padding: '36px clamp(16px, 4vw, 48px) 30px' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+        <div style={{ width: '100%', margin: '0 auto' }}>
 
           {/* Title + status */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
@@ -186,10 +202,29 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
                 {STATUS_LABELS[tournament.status] ?? tournament.status}
               </span>
             </div>
-            {/* Refresh badge */}
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', gap: 5, paddingTop: 6, flexShrink: 0 }}>
-              <RefreshCw size={11} />
-              {secondsAgo < 5 ? 'Actualizado' : `Hace ${secondsAgo}s`}
+            {/* Refresh badge + fullscreen */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingTop: 6, flexShrink: 0 }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <RefreshCw size={11} />
+                {secondsAgo < 5 ? 'Actualizado' : `Hace ${secondsAgo}s`}
+              </div>
+              <button
+                onClick={toggleFullscreen}
+                title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  background: 'rgba(255,255,255,0.08)', color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.14)', borderRadius: 8,
+                  padding: '6px 12px', fontSize: 11, fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: '0.08em', cursor: 'pointer',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.16)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+              >
+                {isFullscreen ? <Minimize size={13} /> : <Maximize size={13} />}
+                {isFullscreen ? 'Salir' : 'Pantalla completa'}
+              </button>
             </div>
           </div>
 
@@ -244,7 +279,7 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
       </div>
 
       {/* ── Page body ────────────────────────────────────────────────────── */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: 'clamp(16px, 3vw, 32px)', display: 'flex', flexDirection: 'column', gap: 28 }}>
+      <div style={{ width: '100%', margin: '0 auto', padding: 'clamp(16px, 3vw, 32px)', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
         {/* ── Live now ─────────────────────────────────────────────────── */}
         {liveNow.length > 0 && (
