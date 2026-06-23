@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   CalendarDays, BarChart3, Trophy, Plus, Minus, Share2, RefreshCw,
@@ -275,12 +275,20 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
   const [generating, setGenerating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dragMatchId, setDragMatchId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [savingResultId, setSavingResultId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBracketId, setEditingBracketId] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [labelW, setLabelW] = useState(140);
   const resizing = useRef(false);
+
+  // Clear multi-selection with Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedIds(new Set()); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const days = useMemo(() => {
     const all = [...matches.map(m => m.day), ...scheduledBracketMatches.map(m => m.day)];
@@ -349,23 +357,95 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
     void persist({ ...cfg, matches: updated });
   }
 
+  function applyMatches(newMatches: PersonalizadoMatch[]) {
+    void persist({ ...cfg, matches: newMatches });
+  }
+
+  // The set of matches a drag affects: if the dragged card is part of a multi-selection,
+  // the whole selection moves together; otherwise just the dragged card.
+  function movingIdsFor(dragId: string): string[] {
+    return selectedIds.has(dragId) && selectedIds.size > 1 ? [...selectedIds] : [dragId];
+  }
+
+  // Stable ordering for a group of matches being moved (by day, then slot, then court).
+  function orderForMove(ms: PersonalizadoMatch[]): PersonalizadoMatch[] {
+    return [...ms].sort((a, b) =>
+      a.day.localeCompare(b.day) || a.slot - b.slot || courts.indexOf(a.courtName) - courts.indexOf(b.courtName));
+  }
+
+  // Move one or more matches to `day`. Moving to a LATER day inserts the matches at the START
+  // of that day (shifting existing matches forward); moving to an EARLIER day appends them at
+  // the END (after the last occupied slot).
+  function moveToDay(movingIds: string[], day: string) {
+    const movingSet = new Set(movingIds);
+    const moving = orderForMove(matches.filter(m => movingSet.has(m.id)));
+    if (moving.length === 0) return;
+
+    const numCourts = courts.length;
+    const slotsNeeded = Math.ceil(moving.length / numCourts);
+    const sourceIdx = days.indexOf(moving[0].day);
+    const targetIdx = days.indexOf(day);
+    const insertAtStart = targetIdx > sourceIdx;
+
+    const existing = matches.filter(m => m.day === day && !movingSet.has(m.id));
+
+    let shiftedExisting = existing;
+    let base = 0;
+    if (insertAtStart) {
+      shiftedExisting = existing.map(m => ({ ...m, slot: m.slot + slotsNeeded, time: slotToTime(m.slot + slotsNeeded) }));
+      base = 0;
+    } else {
+      const maxSlot = existing.length ? Math.max(...existing.map(m => m.slot)) : -1;
+      base = maxSlot + 1;
+    }
+
+    const assignedMoving = moving.map((m, i) => {
+      const s = base + Math.floor(i / numCourts);
+      const c = courts[i % numCourts];
+      return { ...m, day, slot: s, time: slotToTime(s), courtName: c };
+    });
+
+    const untouched = matches.filter(m => !movingSet.has(m.id) && m.day !== day);
+    applyMatches([...untouched, ...shiftedExisting, ...assignedMoving]);
+    setSelectedDay(day);
+    setSelectedIds(new Set());
+    setDragMatchId(null);
+  }
+
   function handleDropOnCell(slotIdx: number, courtName: string) {
     if (!dragMatchId) return;
-    updateMatch(dragMatchId, { slot: slotIdx, time: slotToTime(slotIdx), courtName });
+    const movingIds = movingIdsFor(dragMatchId);
+
+    if (movingIds.length <= 1) {
+      updateMatch(dragMatchId, { slot: slotIdx, time: slotToTime(slotIdx), courtName });
+      setDragMatchId(null);
+      return;
+    }
+
+    // Multi: cascade the selection into free cells on the active day starting at the drop cell.
+    const movingSet = new Set(movingIds);
+    const moving = orderForMove(matches.filter(m => movingSet.has(m.id)));
+    const occupied = new Set(matches.filter(m => m.day === activeDay && !movingSet.has(m.id)).map(m => `${m.courtName}|${m.slot}`));
+    const startCourtIdx = Math.max(0, courts.indexOf(courtName));
+    const assigned: PersonalizadoMatch[] = [];
+    let mi = 0;
+    for (let s = slotIdx; mi < moving.length && s < slotIdx + moving.length + totalSlots; s++) {
+      for (let ci = s === slotIdx ? startCourtIdx : 0; ci < courts.length && mi < moving.length; ci++) {
+        if (occupied.has(`${courts[ci]}|${s}`)) continue;
+        assigned.push({ ...moving[mi], day: activeDay, slot: s, time: slotToTime(s), courtName: courts[ci] });
+        mi++;
+      }
+    }
+    const assignedIds = new Set(assigned.map(m => m.id));
+    const rest = matches.filter(m => !assignedIds.has(m.id));
+    applyMatches([...rest, ...assigned]);
+    setSelectedIds(new Set());
     setDragMatchId(null);
   }
 
   function handleDropOnDay(day: string) {
     if (!dragMatchId) return;
-    // first free (slot, court) on the target day
-    const occupied = new Set(matches.filter(m => m.day === day && m.id !== dragMatchId).map(m => `${m.courtName}|${m.slot}`));
-    for (let s = 0; s < totalSlots; s++) {
-      for (const c of courts) {
-        if (!occupied.has(`${c}|${s}`)) { updateMatch(dragMatchId, { day, slot: s, time: slotToTime(s), courtName: c }); setDragMatchId(null); return; }
-      }
-    }
-    updateMatch(dragMatchId, { day, slot: 0, time: slotToTime(0), courtName: courts[0] });
-    setDragMatchId(null);
+    moveToDay(movingIdsFor(dragMatchId), day);
   }
 
   async function handleStartLive(matchId: string) {
@@ -459,6 +539,18 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
         </div>
       </div>
 
+      {canManage && selectedIds.size > 0 && (
+        <div style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 12, background: 'var(--black)', color: 'var(--neon)', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
+          <span>✓ {selectedIds.size} {selectedIds.size === 1 ? 'partido seleccionado' : 'partidos seleccionados'}</span>
+          <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 400 }}>Arrastrá uno para mover todos · Esc para limpiar</span>
+          <button onClick={() => setSelectedIds(new Set())} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6 }}>✕ Limpiar</button>
+        </div>
+      )}
+
+      {canManage && selectedIds.size === 0 && (
+        <div style={{ marginBottom: 10, fontSize: 11, color: 'var(--grey-400)', fontStyle: 'italic' }}>Ctrl+clic para seleccionar varios partidos y moverlos juntos.</div>
+      )}
+
       {dragMatchId && <div style={{ marginBottom: 10, fontSize: 11, color: 'var(--grey-400)', fontStyle: 'italic' }}>Soltá sobre una celda para mover, o sobre una fecha de arriba para cambiar de día.</div>}
 
       {/* Share panel */}
@@ -529,6 +621,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
                       key={slotIdx}
                       onDragOver={e => { e.preventDefault(); }}
                       onDrop={e => { e.preventDefault(); if (!bracketMatch) handleDropOnCell(slotIdx, court); }}
+                      onClick={() => { if (!groupMatch && !bracketMatch && selectedIds.size) setSelectedIds(new Set()); }}
                       style={{ borderBottom: '1px solid var(--grey-100)', borderRight: '1px solid rgba(0,0,0,0.04)', position: 'relative', background: dragMatchId && !groupMatch && !bracketMatch ? 'rgba(59,130,246,0.05)' : 'transparent' }}
                     >
                       {groupMatch && gvis && (
@@ -536,8 +629,22 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
                           draggable={canManage && editingId !== groupMatch.id}
                           onDragStart={e => { if (!canManage) return; e.dataTransfer.effectAllowed = 'move'; setDragMatchId(groupMatch.id); }}
                           onDragEnd={() => setDragMatchId(null)}
-                          onClick={() => canManage && setEditingId(editingId === groupMatch.id ? null : groupMatch.id)}
-                          style={{ position: 'absolute', inset: 3, background: gvis.bg, color: gvis.fg, border: editingId === groupMatch.id ? '2px solid var(--neon)' : '1px solid rgba(0,0,0,0.12)', padding: '5px 8px', cursor: canManage ? 'pointer' : 'default', opacity: dragMatchId === groupMatch.id ? 0.4 : 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}
+                          onClick={e => {
+                            if (!canManage) return;
+                            if (e.ctrlKey || e.metaKey) {
+                              e.stopPropagation();
+                              setSelectedIds(prev => {
+                                const next = new Set(prev);
+                                if (next.has(groupMatch.id)) next.delete(groupMatch.id); else next.add(groupMatch.id);
+                                return next;
+                              });
+                              setEditingId(null);
+                            } else {
+                              setSelectedIds(new Set());
+                              setEditingId(editingId === groupMatch.id ? null : groupMatch.id);
+                            }
+                          }}
+                          style={{ position: 'absolute', inset: 3, background: gvis.bg, color: gvis.fg, border: editingId === groupMatch.id ? '2px solid var(--neon)' : '1px solid rgba(0,0,0,0.12)', outline: selectedIds.has(groupMatch.id) ? '3px solid var(--neon)' : 'none', outlineOffset: -1, padding: '5px 8px', cursor: canManage ? 'pointer' : 'default', opacity: dragMatchId && movingIdsFor(dragMatchId).includes(groupMatch.id) ? 0.4 : 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: gvis.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catMap.get(groupMatch.categoryId) ?? ''} · Gr.{groupMatch.groupLabel}</span>
@@ -683,13 +790,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
   );
 
   function handleDropOnDayFor(matchId: string, day: string) {
-    const occupied = new Set(matches.filter(m => m.day === day && m.id !== matchId).map(m => `${m.courtName}|${m.slot}`));
-    for (let s = 0; s < totalSlots; s++) {
-      for (const c of courts) {
-        if (!occupied.has(`${c}|${s}`)) { updateMatch(matchId, { day, slot: s, time: slotToTime(s), courtName: c }); setSelectedDay(day); return; }
-      }
-    }
-    updateMatch(matchId, { day, slot: 0, time: slotToTime(0), courtName: courts[0] }); setSelectedDay(day);
+    moveToDay([matchId], day);
   }
 }
 
