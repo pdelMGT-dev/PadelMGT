@@ -14,6 +14,7 @@ import {
   scheduleBracket,
   saveBracketResult,
   canManagePersonalizado,
+  createScheduleNotifications,
   DEFAULT_CONTROL_CONFIG,
   type PersonalizadoTournament,
   type PersonalizadoTeam,
@@ -76,7 +77,6 @@ function ResultForm({ matchId, teamAId, teamBId, result, teamName, saving, onSav
     });
   };
 
-  // Count sets won by each side from the first two sets
   const scored2 = sets.slice(0, 2).filter(s => s.a !== '' && s.b !== '');
   let s2A = 0, s2B = 0;
   for (const s of scored2) {
@@ -127,7 +127,6 @@ function ResultForm({ matchId, teamAId, teamBId, result, teamName, saving, onSav
 
   return (
     <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--grey-100)' }}>
-      {/* Walkover / forfeit */}
       <div style={{ marginBottom: 10 }}>
         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 5 }}>
           Walkover / Retiro
@@ -144,7 +143,6 @@ function ResultForm({ matchId, teamAId, teamBId, result, teamName, saving, onSav
         </div>
       </div>
 
-      {/* Set scores */}
       {!walkover && (
         <div style={{ marginBottom: 10 }}>
           {[0, 1, 2].map(idx => {
@@ -196,7 +194,7 @@ function ResultForm({ matchId, teamAId, teamBId, result, teamName, saving, onSav
   );
 }
 
-// ── Match card ────────────────────────────────────────────────────────────────
+// ── Match card (selectable + draggable) ───────────────────────────────────────
 
 interface MatchCardProps {
   match: PersonalizadoMatch;
@@ -207,9 +205,17 @@ interface MatchCardProps {
   onEdit: (id: string) => void;
   onSave: (matchId: string, result: MatchResult) => void;
   onCancelEdit: () => void;
+  // multiselect + drag
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
+  onDragStart: (id: string) => void;
+  isDragging: boolean;
 }
 
-function MatchCard({ match, teamName, catName, editingId, savingId, onEdit, onSave, onCancelEdit }: MatchCardProps) {
+function MatchCard({
+  match, teamName, catName, editingId, savingId, onEdit, onSave, onCancelEdit,
+  selected, onToggleSelect, onDragStart, isDragging,
+}: MatchCardProps) {
   const res = match.result;
   const isEditing = editingId === match.id;
   const isSaving = savingId === match.id;
@@ -219,13 +225,40 @@ function MatchCard({ match, teamName, catName, editingId, savingId, onEdit, onSa
     : null;
 
   return (
-    <div style={{
-      border: `1px solid ${res ? 'var(--grey-200)' : 'var(--grey-100)'}`,
-      padding: '12px 14px',
-      background: res ? '#f9faf9' : 'var(--grey-50, #fafafa)',
-    }}>
+    <div
+      draggable
+      onDragStart={e => { e.stopPropagation(); onDragStart(match.id); }}
+      onClick={e => {
+        // click on the card background toggles selection; ignore if clicking a button/input
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'BUTTON' || target.tagName === 'INPUT') return;
+        onToggleSelect(match.id);
+      }}
+      style={{
+        border: `2px solid ${selected ? 'var(--black)' : res ? 'var(--grey-200)' : 'var(--grey-100)'}`,
+        padding: '12px 14px',
+        background: selected ? 'rgba(0,0,0,0.03)' : res ? '#f9faf9' : 'var(--grey-50, #fafafa)',
+        opacity: isDragging ? 0.4 : 1,
+        cursor: 'grab',
+        userSelect: 'none',
+        position: 'relative',
+        transition: 'border-color 0.12s, background 0.12s',
+      }}
+    >
+      {/* Selection indicator */}
+      <div style={{
+        position: 'absolute', top: 8, right: 8,
+        width: 16, height: 16, border: `2px solid ${selected ? 'var(--black)' : 'var(--grey-200)'}`,
+        background: selected ? 'var(--black)' : 'transparent',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 10, color: 'var(--neon)', fontWeight: 700,
+        pointerEvents: 'none',
+      }}>
+        {selected ? '✓' : ''}
+      </div>
+
       {/* Court + group label */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingRight: 22 }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>
           {match.courtName}
         </span>
@@ -257,7 +290,8 @@ function MatchCard({ match, teamName, catName, editingId, savingId, onEdit, onSa
 
       {/* Action button */}
       {!isEditing && (
-        <button onClick={() => onEdit(match.id)}
+        <button
+          onClick={e => { e.stopPropagation(); onEdit(match.id); }}
           style={{
             marginTop: 10, fontSize: 10, padding: '4px 10px', cursor: 'pointer',
             border: '1px solid var(--grey-200)', background: 'transparent',
@@ -268,13 +302,58 @@ function MatchCard({ match, teamName, catName, editingId, savingId, onEdit, onSa
         </button>
       )}
 
-      {/* Inline result form */}
       {isEditing && (
         <ResultForm
           matchId={match.id} teamAId={match.teamAId} teamBId={match.teamBId} result={match.result}
           teamName={teamName} saving={isSaving}
           onSave={onSave} onCancel={onCancelEdit}
         />
+      )}
+    </div>
+  );
+}
+
+// ── Day drop zone wrapper ─────────────────────────────────────────────────────
+
+function DayDropZone({
+  day, dragActive, onDrop, children,
+}: {
+  day: string;
+  dragActive: boolean;
+  onDrop: (day: string) => void;
+  children: React.ReactNode;
+}) {
+  const [over, setOver] = useState(false);
+
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={e => { e.preventDefault(); setOver(false); onDrop(day); }}
+      style={{
+        marginBottom: 24,
+        outline: over && dragActive ? '2px dashed var(--black)' : 'none',
+        outlineOffset: 4,
+        background: over && dragActive ? 'rgba(0,0,0,0.015)' : 'transparent',
+        transition: 'background 0.1s',
+        borderRadius: 2,
+      }}
+    >
+      {children}
+      {over && dragActive && (
+        <div style={{
+          padding: '10px 16px',
+          border: '2px dashed var(--grey-300)',
+          textAlign: 'center',
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--grey-400)',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          marginTop: 8,
+        }}>
+          Soltar aquí → {fmtDay(day)}
+        </div>
       )}
     </div>
   );
@@ -437,7 +516,6 @@ function StandingsView({ tournament, teamName }: StandingsViewProps) {
     );
   }
 
-  // Group by category for display
   const byCategory = new Map<string, typeof groups>();
   for (const g of groups) {
     const arr = byCategory.get(g.categoryId) ?? [];
@@ -556,8 +634,15 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   const [savingBracketId, setSavingBracketId] = useState<string | null>(null);
   const [generatingBracketCat, setGeneratingBracketCat] = useState<string | null>(null);
 
-  // Drag & drop group assignment
+  // Group assignment drag
   const [dragTeam, setDragTeam] = useState<string | null>(null);
+
+  // Calendar multiselect + drag between days
+  const [selectedMatchIds, setSelectedMatchIds] = useState<Set<string>>(new Set());
+  const [draggingMatchId, setDraggingMatchId] = useState<string | null>(null);
+  // localMatches: null = no pending changes; array = has unsaved moves
+  const [localMatches, setLocalMatches] = useState<PersonalizadoMatch[] | null>(null);
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -567,7 +652,9 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     return () => { active = false; };
   }, [id]);
 
-  // Access guard: only the creator or a co-creator may open the calendar/management view.
+  // Reset pending changes when tournament reloads
+  useEffect(() => { setLocalMatches(null); setSelectedMatchIds(new Set()); }, [tournament?.id]);
+
   const accessDenied = !!tournament && !canManagePersonalizado(tournament, currentUser?.id);
 
   const teamName = useMemo(() => {
@@ -589,10 +676,12 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     [teams],
   );
 
-  const matches = tournament?.config?.matches ?? [];
+  // Use localMatches if there are pending changes, otherwise use saved matches
+  const matches = localMatches ?? (tournament?.config?.matches ?? []);
   const bracketMatches = tournament?.config?.bracketMatches ?? [];
   const assignedCount = assignable.filter(t => t.groupId).length;
   const doneCount = matches.filter(m => m.result).length;
+  const hasPendingChanges = localMatches !== null;
 
   // ── Group assignment handlers ────────────────────────────────────────────
   function assignTeamToGroup(teamId: string, groupId: string | null) {
@@ -639,6 +728,8 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   async function handleGenerate() {
     if (!tournament) return;
     setWorking(true);
+    setLocalMatches(null);
+    setSelectedMatchIds(new Set());
     const liveTournament = { ...tournament, teams };
     const generated = generateGroupSchedule(liveTournament);
     const config = { ...DEFAULT_CONTROL_CONFIG, ...(tournament.config ?? {}), matches: generated };
@@ -657,6 +748,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     showToast(`Calendario generado: ${generated.length} partidos`, 'success');
   }
 
+  // ── Match result save ─────────────────────────────────────────────────────
   const handleSaveResult = useCallback(async (matchId: string, result: MatchResult) => {
     if (!tournament) return;
     setSavingMatchId(matchId);
@@ -664,22 +756,118 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     setSavingMatchId(null);
     if (!res.ok) { showToast(res.error ?? 'Error al guardar', 'error'); return; }
 
-    // Optimistically update local state
-    setTournament(prev => {
-      if (!prev?.config?.matches) return prev;
-      return {
-        ...prev,
-        config: {
-          ...prev.config,
-          matches: prev.config.matches.map(m =>
-            m.id === matchId ? { ...m, result, status: 'done' as const } : m
-          ),
-        },
-      };
-    });
+    // Update in localMatches if pending, otherwise in tournament
+    if (localMatches) {
+      setLocalMatches(prev => prev ? prev.map(m =>
+        m.id === matchId ? { ...m, result, status: 'done' as const } : m
+      ) : null);
+    } else {
+      setTournament(prev => {
+        if (!prev?.config?.matches) return prev;
+        return {
+          ...prev,
+          config: {
+            ...prev.config,
+            matches: prev.config.matches.map(m =>
+              m.id === matchId ? { ...m, result, status: 'done' as const } : m
+            ),
+          },
+        };
+      });
+    }
     setEditingMatchId(null);
     showToast('Resultado guardado', 'success');
-  }, [tournament, showToast]);
+  }, [tournament, localMatches, showToast]);
+
+  // ── Calendar drag & drop between days ─────────────────────────────────────
+
+  function handleMatchDragStart(matchId: string) {
+    setDraggingMatchId(matchId);
+    // If the dragged match is not in the selection, select only it
+    setSelectedMatchIds(prev => {
+      if (!prev.has(matchId)) return new Set([matchId]);
+      return prev;
+    });
+  }
+
+  function handleDropOnDay(targetDay: string) {
+    if (!draggingMatchId) return;
+    const idsToMove = selectedMatchIds.size > 0 ? [...selectedMatchIds] : [draggingMatchId];
+
+    setLocalMatches(prev => {
+      const base = prev ?? (tournament?.config?.matches ?? []);
+      return base.map(m =>
+        idsToMove.includes(m.id) ? { ...m, day: targetDay } : m
+      );
+    });
+
+    setDraggingMatchId(null);
+  }
+
+  function handleToggleSelect(matchId: string) {
+    setSelectedMatchIds(prev => {
+      const next = new Set(prev);
+      if (next.has(matchId)) next.delete(matchId);
+      else next.add(matchId);
+      return next;
+    });
+  }
+
+  function handleSelectAll() {
+    setSelectedMatchIds(new Set(matches.map(m => m.id)));
+  }
+
+  function handleClearSelection() {
+    setSelectedMatchIds(new Set());
+  }
+
+  // ── Save pending schedule changes ─────────────────────────────────────────
+
+  async function handleSaveScheduleChanges() {
+    if (!tournament || !localMatches) return;
+    setSavingSchedule(true);
+
+    const newConfig = { ...(tournament.config ?? DEFAULT_CONTROL_CONFIG), matches: localMatches };
+    const res = await saveControlPanel({
+      id: tournament.id,
+      categories: tournament.categories,
+      config: newConfig,
+      requesterId: currentUser?.id,
+    });
+
+    if (!res.ok) {
+      setSavingSchedule(false);
+      showToast(res.error ?? 'No se pudo guardar el calendario', 'error');
+      return;
+    }
+
+    // Notify all participants (player1Id + player2Id of active teams)
+    const participantIds = teams
+      .filter(t => t.status === 'pending' || t.status === 'confirmed')
+      .flatMap(t => [t.player1Id, t.player2Id])
+      .filter((pid): pid is string => !!pid && pid !== currentUser?.id);
+
+    const tournamentName = tournament.name;
+    await createScheduleNotifications(
+      tournament.id,
+      participantIds,
+      `El calendario del torneo "${tournamentName}" ha sido actualizado por el organizador.`,
+    );
+
+    // Reload from server so local state matches DB
+    const refreshed = await loadPersonalizadoById(id);
+    setTournament(refreshed);
+    if (refreshed) setTeams(refreshed.teams);
+    setLocalMatches(null);
+    setSelectedMatchIds(new Set());
+    setSavingSchedule(false);
+    showToast('Calendario guardado. Participantes notificados.', 'success');
+  }
+
+  function handleDiscardChanges() {
+    setLocalMatches(null);
+    setSelectedMatchIds(new Set());
+  }
 
   // ── Bracket ───────────────────────────────────────────────────────────────
   async function handleGenerateBracket(categoryId: string) {
@@ -737,7 +925,6 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     );
   }
 
-  // Group matches by day, then by time slot within each day.
   const byDay = new Map<string, PersonalizadoMatch[]>();
   for (const m of matches) {
     const arr = byDay.get(m.day) ?? [];
@@ -755,7 +942,10 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   });
 
   return (
-    <div style={{ padding: '40px clamp(16px, 4vw, 40px) 120px', maxWidth: 1000, margin: '0 auto' }}>
+    <div
+      style={{ padding: '40px clamp(16px, 4vw, 40px) 120px', maxWidth: 1000, margin: '0 auto' }}
+      onDragEnd={() => setDraggingMatchId(null)}
+    >
       <Link
         href={`/dashboard/player/tournaments/personalizado/${id}`}
         style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20 }}
@@ -786,7 +976,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
         </button>
       </div>
 
-      {/* Organización de grupos (arrastra y suelta) */}
+      {/* Organización de grupos */}
       <div style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
           <span style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
@@ -853,14 +1043,12 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
         </div>
       </div>
 
-      {/* Warning: no groups */}
       {assignedCount < 2 && (
         <div style={{ ...card, background: 'rgba(245,158,11,0.05)', borderColor: 'rgba(245,158,11,0.25)', color: '#92400e', fontSize: 13, lineHeight: 1.6 }}>
           Asigna al menos 2 equipos a sus grupos arriba (y pulsa <strong>Guardar asignación</strong>) para poder generar el calendario.
         </div>
       )}
 
-      {/* Empty state */}
       {matches.length === 0 && assignedCount >= 2 && (
         <div style={{ ...card, textAlign: 'center', color: 'var(--grey-400)', fontSize: 14 }}>
           Aún no hay calendario. Pulsa <strong>Generar calendario</strong> para crear los partidos de la fase de grupos.
@@ -883,6 +1071,42 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
         </div>
       </div>
 
+      {/* Multiselect toolbar (only on schedule tab with matches) */}
+      {tab === 'schedule' && matches.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          padding: '8px 14px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)',
+          marginBottom: 12, fontSize: 11,
+        }}>
+          <span style={{ color: 'var(--grey-500)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Selección:
+          </span>
+          <button onClick={handleSelectAll}
+            style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff', fontWeight: 600 }}>
+            Seleccionar todos
+          </button>
+          {selectedMatchIds.size > 0 && (
+            <>
+              <span style={{ color: 'var(--black)', fontWeight: 700 }}>
+                {selectedMatchIds.size} seleccionado{selectedMatchIds.size !== 1 ? 's' : ''}
+              </span>
+              <button onClick={handleClearSelection}
+                style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff', color: 'var(--grey-500)', fontWeight: 600 }}>
+                Limpiar
+              </button>
+              <span style={{ color: 'var(--grey-400)', fontSize: 10 }}>
+                Arrastra cualquier seleccionado a otro día para moverlos
+              </span>
+            </>
+          )}
+          {selectedMatchIds.size === 0 && (
+            <span style={{ color: 'var(--grey-400)', fontSize: 10 }}>
+              Haz clic en una tarjeta para seleccionarla, luego arrástrala a otro día
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Schedule tab */}
       {tab === 'schedule' && days.map(day => {
         const dayMatches = byDay.get(day) ?? [];
@@ -894,7 +1118,12 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
         }
         const slots = [...bySlot.entries()].sort((a, b) => a[0] - b[0]);
         return (
-          <div key={day} style={{ marginBottom: 24 }}>
+          <DayDropZone
+            key={day}
+            day={day}
+            dragActive={!!draggingMatchId}
+            onDrop={handleDropOnDay}
+          >
             <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-600)', marginBottom: 10 }}>
               {fmtDay(day)}
             </div>
@@ -915,12 +1144,16 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
                       onEdit={setEditingMatchId}
                       onSave={handleSaveResult}
                       onCancelEdit={() => setEditingMatchId(null)}
+                      selected={selectedMatchIds.has(m.id)}
+                      onToggleSelect={handleToggleSelect}
+                      onDragStart={handleMatchDragStart}
+                      isDragging={draggingMatchId === m.id}
                     />
                   ))}
                 </div>
               </div>
             ))}
-          </div>
+          </DayDropZone>
         );
       })}
 
@@ -990,6 +1223,54 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Sticky save bar — only visible when there are pending calendar changes */}
+      {hasPendingChanges && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
+          background: 'var(--black)', color: '#fff',
+          padding: '14px clamp(16px, 4vw, 40px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
+          borderTop: '2px solid var(--neon)',
+          boxShadow: '0 -4px 24px rgba(0,0,0,0.25)',
+        }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--neon)' }}>
+              Cambios sin guardar
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+              Los participantes serán notificados al guardar
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={handleDiscardChanges}
+              disabled={savingSchedule}
+              style={{
+                padding: '10px 20px', border: '1px solid rgba(255,255,255,0.25)',
+                background: 'transparent', color: 'rgba(255,255,255,0.7)',
+                fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                cursor: 'pointer',
+              }}
+            >
+              Descartar
+            </button>
+            <button
+              onClick={handleSaveScheduleChanges}
+              disabled={savingSchedule}
+              style={{
+                padding: '10px 24px', border: 'none',
+                background: 'var(--neon)', color: 'var(--black)',
+                fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                cursor: savingSchedule ? 'wait' : 'pointer',
+                opacity: savingSchedule ? 0.7 : 1,
+              }}
+            >
+              {savingSchedule ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+          </div>
         </div>
       )}
     </div>

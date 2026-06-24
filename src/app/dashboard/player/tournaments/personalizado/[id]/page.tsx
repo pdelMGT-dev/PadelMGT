@@ -850,6 +850,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   }
 
   const registrationUrl = `${origin}/inscripcion/${tournament.code}`;
+  const liveUrl = `${origin}/t/${tournament.code}/live`;
   const openBasePrice = autoPreview.basePrice;
   const openPrice = codedPrice ?? autoPreview.finalPrice;
   const hasDiscount = openPrice < openBasePrice;
@@ -861,7 +862,8 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
       <Link href="/dashboard/player/tournaments" style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Mis Torneos</Link>
 
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
+      <div style={{ marginBottom: 32, display: 'flex', gap: 24, justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+       <div style={{ flex: 1, minWidth: 280 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(26px, 5vw, 36px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>{tournament.name}</h1>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '4px 10px', background: STATUS_COLORS[tournament.status], color: STATUS_TEXT_COLORS[tournament.status], border: '1px solid currentColor' }}>
@@ -894,6 +896,17 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               <CalendarDays size={14} /> {showTabs ? 'Ocultar Calendario' : 'Ver Calendario Completo'}
             </button>
           )}
+        </div>
+       </div>
+
+        {/* Public calendar QR — same as the other tournaments, at the top of the page */}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', background: '#fff', border: '1px solid var(--grey-200)', padding: '12px 14px', flexShrink: 0 }}>
+          <QRCodeSVG value={liveUrl} size={84} />
+          <div style={{ maxWidth: 220 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 4 }}>Vista pública del calendario</div>
+            <a href={liveUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--black)', wordBreak: 'break-all', textDecoration: 'underline' }}>{liveUrl}</a>
+            <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 4 }}>Los jugadores escanean para ver cuándo y dónde les toca jugar.</div>
+          </div>
         </div>
       </div>
 
@@ -1328,6 +1341,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
             tournament={tournament}
             canManage={!!canManagePersonalizado(tournament, currentUser?.id)}
             canEditResults={isCreator}
+            requesterId={currentUser?.id}
             onUpdate={setTournament}
           />
         </div>

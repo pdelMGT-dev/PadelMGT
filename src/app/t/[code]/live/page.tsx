@@ -1,10 +1,12 @@
 'use client';
 
 import React, { use, useEffect, useState, useMemo, useCallback } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { CalendarDays, MapPin, Search, Clock, Trophy, RefreshCw, Zap, Maximize, Minimize } from 'lucide-react';
 import {
   loadPersonalizadoByCode,
   calculateGroupStandings,
+  publishedTournamentView,
   type PersonalizadoTournament,
   type PersonalizadoMatch,
   type BracketMatch,
@@ -87,10 +89,14 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
   const catMap = useMemo(() =>
     new Map((tournament?.categories ?? []).map(c => [c.id, c.name])), [tournament]);
 
+  // Public view: schedule positions come from the PUBLISHED snapshot; live results/status are
+  // merged on top by id. Everything below reads `view` so unpublished edits stay private.
+  const view = useMemo(() => tournament ? publishedTournamentView(tournament) : null, [tournament]);
+
   const stats = useMemo(() => {
-    if (!tournament?.config) return null;
-    const classM = tournament.config.matches ?? [];
-    const bracketM = tournament.config.bracketMatches ?? [];
+    if (!view?.config) return null;
+    const classM = view.config.matches ?? [];
+    const bracketM = view.config.bracketMatches ?? [];
     const total = classM.length + bracketM.length;
     const done = classM.filter(m => m.status === 'done').length + bracketM.filter(m => m.status === 'done').length;
     const live = classM.filter(m => m.status === 'playing').length + bracketM.filter(m => m.status === 'playing').length;
@@ -100,7 +106,7 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
       ...(bracketM.filter(m => m.day === today) as AnyMatch[]),
     ].sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
     return { total, done, live, todayAll, pct: total ? Math.round(done / total * 100) : 0 };
-  }, [tournament]);
+  }, [view]);
 
   const liveNow = useMemo(() => stats?.todayAll.filter(m => m.status === 'playing') ?? [], [stats]);
 
@@ -112,41 +118,44 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
     const todayUp = stats.todayAll.filter(m => m.status !== 'done' && m.status !== 'playing' && (m.time ?? '') >= nt);
     if (todayUp.length >= 4) return todayUp.slice(0, 8);
     // supplement with next days if today is sparse
-    if (!tournament?.config) return todayUp;
+    if (!view?.config) return todayUp;
     const rest: AnyMatch[] = [
-      ...(tournament.config.matches ?? []).filter(m => m.day > today && m.status !== 'done'),
-      ...(tournament.config.bracketMatches ?? []).filter(m => (m.day ?? '') > today && m.status !== 'done') as AnyMatch[],
+      ...(view.config.matches ?? []).filter(m => m.day > today && m.status !== 'done'),
+      ...(view.config.bracketMatches ?? []).filter(m => (m.day ?? '') > today && m.status !== 'done') as AnyMatch[],
     ].sort((a, b) => {
       const d = (a.day ?? '').localeCompare(b.day ?? '');
       return d !== 0 ? d : (a.time ?? '').localeCompare(b.time ?? '');
     });
     return [...todayUp, ...rest].slice(0, 8);
-  }, [stats, tournament]);
+  }, [stats, view]);
 
-  // Search
+  // Search — shows ALL of a team's published matches (classification + elimination), chronologically.
   const searchResults = useMemo(() => {
-    if (!query.trim() || !tournament?.config) return [];
+    if (!query.trim() || !view?.config) return [];
     const q = norm(query);
-    return tournament.teams
+    const allClass = view.config.matches ?? [];
+    const allBracket = view.config.bracketMatches ?? [];
+    return view.teams
       .filter(t => norm(`${t.player1Name} ${t.player2Name ?? ''}`).includes(q))
       .slice(0, 5)
       .map(team => {
         const standing = team.groupId
           ? (() => {
-              const rows = calculateGroupStandings(tournament, team.categoryId, team.groupId);
+              const rows = calculateGroupStandings(view, team.categoryId, team.groupId);
               const idx = rows.findIndex(r => r.teamId === team.id);
               return idx >= 0 ? { pos: idx + 1, ...rows[idx] } : null;
             })()
           : null;
-        const nextMatch = (tournament.config?.matches ?? []).find(
-          m => m.status !== 'done' && (m.teamAId === team.id || m.teamBId === team.id)
-        );
-        const recent = (tournament.config?.matches ?? [])
-          .filter(m => m.status === 'done' && (m.teamAId === team.id || m.teamBId === team.id))
-          .slice(-3);
-        return { team, standing, nextMatch, recent };
+        const teamMatches: AnyMatch[] = [
+          ...allClass.filter(m => m.teamAId === team.id || m.teamBId === team.id),
+          ...(allBracket.filter(m => m.teamAId === team.id || m.teamBId === team.id) as AnyMatch[]),
+        ].sort((a, b) => {
+          const d = (a.day ?? '').localeCompare(b.day ?? '');
+          return d !== 0 ? d : (a.time ?? '').localeCompare(b.time ?? '');
+        });
+        return { team, standing, teamMatches };
       });
-  }, [query, tournament]);
+  }, [query, view]);
 
   // ── Loading / not found ───────────────────────────────────────────────────
   if (loading) {
@@ -167,6 +176,7 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
     );
   }
 
+  const liveShareUrl = typeof window !== 'undefined' ? `${window.location.origin}/t/${code}/live` : `/t/${code}/live`;
   const totalTeams = tournament.teams.filter(t => t.status === 'confirmed' || t.status === 'pending').length;
   const courtsCount = tournament.config?.courtNames?.length ?? tournament.courts ?? 1;
   const endDate = tournament.config?.schedule?.endDate;
@@ -281,6 +291,20 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
       {/* ── Page body ────────────────────────────────────────────────────── */}
       <div style={{ width: '100%', margin: '0 auto', padding: 'clamp(16px, 3vw, 32px)', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
+        {/* ── Public calendar QR (top of the page) ─────────────────────── */}
+        <section>
+          <div style={{ background: '#fff', borderRadius: 14, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ background: '#fff', padding: 6, border: '1px solid #eee', borderRadius: 10, flexShrink: 0 }}>
+              <QRCodeSVG value={liveShareUrl} size={104} />
+            </div>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#999', marginBottom: 6 }}>Vista pública del calendario</div>
+              <div style={{ fontSize: 13, color: '#333', wordBreak: 'break-all', marginBottom: 6, fontWeight: 600 }}>{liveShareUrl}</div>
+              <div style={{ fontSize: 12, color: '#999' }}>Los jugadores escanean para ver cuándo y dónde les toca jugar (sin cuenta).</div>
+            </div>
+          </div>
+        </section>
+
         {/* ── Live now ─────────────────────────────────────────────────── */}
         {liveNow.length > 0 && (
           <section>
@@ -319,7 +343,10 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
             </div>
           )}
 
-          {searchResults.map(({ team, standing, nextMatch, recent }) => (
+          {searchResults.map(({ team, standing, teamMatches }) => {
+            const doneM = teamMatches.filter(m => m.status === 'done');
+            const recent = doneM.slice(-3);
+            return (
             <div key={team.id} style={{
               background: '#fff', borderRadius: 12, padding: '16px 20px',
               borderLeft: '4px solid var(--neon)', marginBottom: 10,
@@ -373,17 +400,56 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
                 </div>
               )}
 
-              {nextMatch && (
-                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f4f4f4', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#555' }}>
-                  <Clock size={12} style={{ color: 'var(--neon, #d1f000)', flexShrink: 0 }} />
-                  <span>Próximo: <strong>{nextMatch.time}</strong> · {nextMatch.courtName}</span>
-                  <span style={{ marginLeft: 'auto', color: '#aaa', fontSize: 11 }}>
-                    vs {teamName(teamMap.get(nextMatch.teamAId === team.id ? nextMatch.teamBId : nextMatch.teamAId))}
-                  </span>
+              {/* All of this team's scheduled matches (classification + elimination) */}
+              {teamMatches.length > 0 && (
+                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #f4f4f4' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#aaa', marginBottom: 8 }}>
+                    Todos sus partidos ({teamMatches.length})
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {teamMatches.map(m => {
+                      const isElim = 'round' in m;
+                      const rivalId = m.teamAId === team.id ? m.teamBId : m.teamAId;
+                      const rivalTeam = rivalId ? teamMap.get(rivalId) : undefined;
+                      const placeholder = isElim
+                        ? (m.teamAId === team.id ? (m as BracketMatch).placeholderB : (m as BracketMatch).placeholderA)
+                        : undefined;
+                      const rivalName = rivalTeam ? teamName(rivalTeam) : (placeholder ?? 'Por definir');
+                      const done = m.status === 'done';
+                      const playing = m.status === 'playing';
+                      const won = done && m.result?.winnerId === team.id;
+                      const accent = isElim ? '#8b5cf6' : '#3b82f6';
+                      return (
+                        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: '1px solid #f7f7f7', fontSize: 12 }}>
+                          <div style={{ textAlign: 'center', minWidth: 46, flexShrink: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 12, color: '#222' }}>{m.time ?? '—'}</div>
+                            <div style={{ fontSize: 9, color: '#bbb' }}>{(m.day ?? '').slice(5).replace('-', '/')}</div>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: accent }}>
+                              {isElim ? (m as BracketMatch).roundLabel : `Gr. ${(m as PersonalizadoMatch).groupLabel}`}
+                              {m.courtName ? ` · ${m.courtName}` : ''}
+                            </div>
+                            <div style={{ fontWeight: 600, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              vs {rivalName}
+                            </div>
+                          </div>
+                          <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                            {done
+                              ? <span style={{ fontSize: 11, fontWeight: 800, color: won ? '#16a34a' : '#ef4444' }}>{won ? 'Ganó' : 'Perdió'}{m.result ? ` · ${m.result.walkover ? 'W.O.' : m.result.sets.map(s => `${s.a}-${s.b}`).join(' ')}` : ''}</span>
+                              : playing
+                                ? <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#16a34a', padding: '2px 7px', borderRadius: 100, letterSpacing: '0.06em' }}>EN VIVO</span>
+                                : <span style={{ fontSize: 10, color: '#aaa' }}>Pautado</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
-          ))}
+          );
+          })}
         </section>
 
         {/* ── Upcoming + Categories ────────────────────────────────────── */}
@@ -437,10 +503,10 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {tournament.categories.map(cat => {
                 const catTeams = tournament.teams.filter(t => t.categoryId === cat.id && (t.status === 'confirmed' || t.status === 'pending'));
-                const classM = (tournament.config?.matches ?? []).filter(m => m.categoryId === cat.id);
+                const classM = (view?.config?.matches ?? []).filter(m => m.categoryId === cat.id);
                 const done = classM.filter(m => m.status === 'done').length;
                 const pct = classM.length ? Math.round(done / classM.length * 100) : 0;
-                const bracketDone = (tournament.config?.bracketMatches ?? []).filter(m => m.categoryId === cat.id && m.status === 'done').length;
+                const bracketDone = (view?.config?.bracketMatches ?? []).filter(m => m.categoryId === cat.id && m.status === 'done').length;
                 const phase = bracketDone > 0 ? 'Eliminatoria' : done === classM.length && classM.length > 0 ? 'Clasificación completa' : 'Clasificación';
                 return (
                   <div key={cat.id}>
@@ -462,7 +528,7 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
         </div>
 
         {/* ── Full calendar / standings / bracket tabs ─────────────────── */}
-        <TournamentTabs tournament={tournament} canManage={false} canEditResults={false} onUpdate={setTournament} />
+        <TournamentTabs tournament={view ?? tournament} canManage={false} canEditResults={false} onUpdate={setTournament} />
       </div>
 
       <div style={{ textAlign: 'center', padding: '28px 16px', fontSize: 11, color: '#bbb' }}>

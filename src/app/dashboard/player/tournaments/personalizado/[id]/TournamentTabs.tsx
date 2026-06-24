@@ -5,6 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import {
   CalendarDays, BarChart3, Trophy, Plus, Minus, Share2, RefreshCw,
   ChevronDown, ChevronRight, Play, GripVertical, Move, CheckCircle2,
+  Save, Send,
 } from 'lucide-react';
 import {
   generateGroupSchedule,
@@ -17,11 +18,15 @@ import {
   saveControlPanel,
   saveMatchResult,
   applyBracketResult,
+  scheduleSignature,
+  tournamentPlayerIds,
+  createScheduleNotifications,
   DEFAULT_CONTROL_CONFIG,
   type PersonalizadoTournament,
   type PersonalizadoMatch,
   type BracketMatch,
   type MatchResult,
+  type ControlPanelConfig,
 } from '@/lib/personalizado-store';
 import { useToast } from '@/components/ToastProvider';
 import { ScoreEntry } from './ScoreEntry';
@@ -254,18 +259,38 @@ function StandingsView({ tournament, teamName, canManage, canEditResults, onUpda
 
 // ── Court calendar ─────────────────────────────────────────────────────────────
 
-const SLOT_W = 158;
+const GRID_MIN = 15;          // a calendar cell is 15 minutes
+const CELL_W = 38;            // px per 15-min cell → a whole hour is 4 × 38 = 152px
 const COURT_H = 84;
 const HEADER_H = 38;
+const CARD_GAP = 3;
 
-function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
-  tournament: PersonalizadoTournament; canManage: boolean; canEditResults: boolean; onUpdate: (t: PersonalizadoTournament) => void;
+const parseHM = (hhmm: string): number => {
+  const [h, m] = (hhmm || '09:00').split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+const fmtHM = (mins: number): string =>
+  `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+// Whole-hour header label in 12-hour AM/PM form (09:00 AM, 12:00 PM, 01:00 PM…).
+const fmt12 = (mins: number): string => {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  const ap = h < 12 ? 'AM' : 'PM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ap}`;
+};
+
+type SchedEntry = { id: string; kind: 'group' | 'bracket'; day: string; startMin: number; courtName: string };
+
+function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onUpdate }: {
+  tournament: PersonalizadoTournament; canManage: boolean; canEditResults: boolean;
+  requesterId?: string; onUpdate: (t: PersonalizadoTournament) => void;
 }) {
   const { showToast } = useToast();
   const cfg = tournament.config ?? DEFAULT_CONTROL_CONFIG;
   const matches: PersonalizadoMatch[] = useMemo(() => cfg.matches ?? [], [cfg.matches]);
   const scheduledBracketMatches = useMemo(
-    () => (cfg.bracketMatches ?? []).filter(m => !!m.day && !!m.time && m.slot !== undefined && !!m.courtName) as (BracketMatch & { day: string; time: string; slot: number; courtName: string })[],
+    () => (cfg.bracketMatches ?? []).filter(m => !!m.day && !!m.time && !!m.courtName) as (BracketMatch & { day: string; time: string; courtName: string })[],
     [cfg.bracketMatches]
   );
   const courts = cfg.courtNames.length > 0 ? cfg.courtNames : Array.from({ length: Math.max(1, tournament.courts || 1) }, (_, i) => `Cancha ${i + 1}`);
@@ -274,6 +299,9 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
 
   const [generating, setGenerating] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [dragMatchId, setDragMatchId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
@@ -292,6 +320,14 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Warn before leaving with unsaved schedule edits.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
+
   const days = useMemo(() => {
     const all = [...matches.map(m => m.day), ...scheduledBracketMatches.map(m => m.day)];
     return [...new Set(all)].sort();
@@ -301,23 +337,47 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
 
   const startTime = cfg.schedule.startTime || '09:00';
   const endTime = cfg.schedule.endTime ?? '21:00';
-  const matchDur = cfg.schedule.matchDurationMin || 50;
-  const [startH, startM] = startTime.split(':').map(Number);
-  const [endH, endM] = endTime.split(':').map(Number);
-  const startMins = startH * 60 + startM;
-  const endMins = endH * 60 + endM;
-  const totalSlots = Math.max(6, Math.ceil((endMins - startMins) / matchDur));
+  const matchDur = Math.max(GRID_MIN, cfg.schedule.matchDurationMin || 60);
+  // A match block spans this many 15-min cells (rounded up so it never visually overlaps the next).
+  const matchCells = Math.max(1, Math.ceil(matchDur / GRID_MIN));
+  const SPAN = matchCells * GRID_MIN; // minutes a match occupies on the grid (15-aligned)
 
-  const slotToTime = (slot: number) => {
-    const m = startMins + slot * matchDur;
-    return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-  };
+  // Grid runs on whole-hour boundaries: floor(start) … ceil(end), extended to fit the latest
+  // match on the active day plus a little headroom for dropping past the end.
+  const gridStartMin = Math.floor(parseHM(startTime) / 60) * 60;
+  const latestEndOnDay = useMemo(() => {
+    const ends = [
+      ...matches.filter(m => m.day === activeDay).map(m => parseHM(m.time) + SPAN),
+      ...scheduledBracketMatches.filter(m => m.day === activeDay).map(m => parseHM(m.time) + SPAN),
+    ];
+    return ends.length ? Math.max(...ends) : gridStartMin;
+  }, [matches, scheduledBracketMatches, activeDay, SPAN, gridStartMin]);
+  const gridEndMin = Math.max(
+    Math.ceil(parseHM(endTime) / 60) * 60,
+    Math.ceil(latestEndOnDay / 60) * 60,
+  ) + 60; // +1h headroom for dropping past the last match
+  const totalCells = Math.max(8, Math.round((gridEndMin - gridStartMin) / GRID_MIN));
+  const gridWidth = totalCells * CELL_W;
+
+  // Convert a HH:MM time to the nearest 15-min cell index.
+  const cellOf = (time: string) => Math.max(0, Math.round((parseHM(time) - gridStartMin) / GRID_MIN));
 
   const dayGroupMatches = matches.filter(m => m.day === activeDay);
   const dayBracketMatches = scheduledBracketMatches.filter(m => m.day === activeDay);
   const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.id, t.player2Name ? `${t.player1Name} / ${t.player2Name}` : t.player1Name])), [tournament.teams]);
   const teamName = (id: string) => teamMap.get(id) ?? '—';
   const catMap = useMemo(() => new Map(tournament.categories.map(c => [c.id, c.name])), [tournament.categories]);
+
+  // All schedule entries (group + scheduled bracket) as a uniform list for move math.
+  const allEntries: SchedEntry[] = useMemo(() => [
+    ...matches.map(m => ({ id: m.id, kind: 'group' as const, day: m.day, startMin: parseHM(m.time), courtName: m.courtName })),
+    ...scheduledBracketMatches.map(m => ({ id: m.id, kind: 'bracket' as const, day: m.day, startMin: parseHM(m.time), courtName: m.courtName })),
+  ], [matches, scheduledBracketMatches]);
+
+  // "Unpublished" = the live schedule positions differ from the published snapshot (or never published).
+  const draftSignature = useMemo(() => scheduleSignature(matches, cfg.bracketMatches ?? []), [matches, cfg.bracketMatches]);
+  const hasPublished = !!cfg.published;
+  const unpublished = !hasPublished || draftSignature !== cfg.published?.signature;
 
   // Resizer for the sticky court column.
   function startResize(e: React.MouseEvent) {
@@ -328,11 +388,53 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
   }
 
-  async function persist(newCfg: typeof cfg, optimistic = true) {
+  // Persist the given config to the backend (used by immediate actions: generate, courts, results).
+  async function persist(newCfg: ControlPanelConfig, optimistic = true) {
     if (optimistic) onUpdate({ ...tournament, config: newCfg });
-    const res = await saveControlPanel({ id: tournament.id, categories: tournament.categories, config: newCfg });
+    const res = await saveControlPanel({ id: tournament.id, categories: tournament.categories, config: newCfg, requesterId });
     if (!res.ok) showToast(res.error ?? 'No se pudo guardar', 'error');
     return res.ok;
+  }
+
+  // Apply a schedule edit LOCALLY only (optimistic) and mark the draft dirty. The organizer
+  // saves explicitly with "Guardar cambios" so drags are never lost silently, and publishes
+  // with "Publicar calendario" to push positions to the public page + notify players.
+  function applyLocal(newCfg: ControlPanelConfig) {
+    onUpdate({ ...tournament, config: newCfg });
+    setDirty(true);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const ok = await persist(cfg, false);
+    setSaving(false);
+    if (ok) { setDirty(false); showToast('Calendario guardado', 'success'); }
+  }
+
+  async function handlePublish() {
+    setPublishing(true);
+    const published = {
+      matches: JSON.parse(JSON.stringify(matches)) as PersonalizadoMatch[],
+      bracketMatches: JSON.parse(JSON.stringify(cfg.bracketMatches ?? [])) as BracketMatch[],
+      signature: draftSignature,
+      publishedAt: new Date().toISOString(),
+    };
+    const newCfg: ControlPanelConfig = { ...cfg, published };
+    onUpdate({ ...tournament, config: newCfg });
+    const res = await saveControlPanel({ id: tournament.id, categories: tournament.categories, config: newCfg, requesterId });
+    if (!res.ok) {
+      setPublishing(false);
+      showToast(res.error ?? 'No se pudo publicar', 'error');
+      return;
+    }
+    setDirty(false);
+    await createScheduleNotifications(
+      tournament.id,
+      tournamentPlayerIds(tournament),
+      `El calendario de ${tournament.name} fue actualizado`,
+    );
+    setPublishing(false);
+    showToast('Calendario publicado — los jugadores fueron notificados', 'success');
   }
 
   async function handleGenerate() {
@@ -349,18 +451,26 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
     const ok = await persist(newCfg);
     setGenerating(false);
     if (ok) {
+      setDirty(false);
       setSelectedDay([...new Set(generated.map(m => m.day))].sort()[0] ?? '');
-      showToast(`Calendario regenerado: ${generated.length} clasificación + ${bracketMatches.length} eliminatoria`, 'success');
+      showToast(`Calendario regenerado: ${generated.length} clasificación + ${bracketMatches.length} eliminatoria · Publicá para que lo vean los jugadores`, 'success');
     }
   }
 
-  function updateMatch(matchId: string, patch: Partial<PersonalizadoMatch>) {
-    const updated = matches.map(m => m.id === matchId ? { ...m, ...patch } : m);
-    void persist({ ...cfg, matches: updated });
-  }
-
-  function applyMatches(newMatches: PersonalizadoMatch[]) {
-    void persist({ ...cfg, matches: newMatches });
+  // Write a batch of new positions (day · startMin · court) back to both match collections,
+  // locally + dirty. Bracket matches that gain a position become 'scheduled'.
+  function applyPlacements(updates: Map<string, { day: string; startMin: number; courtName: string }>) {
+    const newMatches = matches.map(m => {
+      const u = updates.get(m.id);
+      if (!u) return m;
+      return { ...m, day: u.day, courtName: u.courtName, time: fmtHM(u.startMin), slot: Math.round((u.startMin - gridStartMin) / GRID_MIN) };
+    });
+    const newBracket = (cfg.bracketMatches ?? []).map(m => {
+      const u = updates.get(m.id);
+      if (!u) return m;
+      return { ...m, day: u.day, courtName: u.courtName, time: fmtHM(u.startMin), slot: Math.round((u.startMin - gridStartMin) / GRID_MIN), status: (m.status === 'pending' ? 'scheduled' : m.status) as BracketMatch['status'] };
+    });
+    applyLocal({ ...cfg, matches: newMatches, bracketMatches: newBracket });
   }
 
   // The set of matches a drag affects: if the dragged card is part of a multi-selection,
@@ -369,78 +479,93 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
     return selectedIds.has(dragId) && selectedIds.size > 1 ? [...selectedIds] : [dragId];
   }
 
-  // Stable ordering for a group of matches being moved (by day, then slot, then court).
-  function orderForMove(ms: PersonalizadoMatch[]): PersonalizadoMatch[] {
-    return [...ms].sort((a, b) =>
-      a.day.localeCompare(b.day) || a.slot - b.slot || courts.indexOf(a.courtName) - courts.indexOf(b.courtName));
+  // Stable ordering for a group of entries being moved (by day, then time, then court).
+  function orderEntriesForMove(es: SchedEntry[]): SchedEntry[] {
+    return [...es].sort((a, b) =>
+      a.day.localeCompare(b.day) || a.startMin - b.startMin || courts.indexOf(a.courtName) - courts.indexOf(b.courtName));
   }
 
-  // Move one or more matches to `day`. Moving to a LATER day inserts the matches at the START
-  // of that day (shifting existing matches forward); moving to an EARLIER day appends them at
-  // the END (after the last occupied slot).
-  function moveToDay(movingIds: string[], day: string) {
-    const movingSet = new Set(movingIds);
-    const moving = orderForMove(matches.filter(m => movingSet.has(m.id)));
-    if (moving.length === 0) return;
+  // Drop a SINGLE match at a target cell on a court. If the spot is taken, every match at or
+  // after the drop on that court is cascaded forward (like inserting an event in iCal/Outlook).
+  function dropSingleAtCell(itemId: string, targetCell: number, courtName: string) {
+    const targetStart = gridStartMin + targetCell * GRID_MIN;
+    const rowEntries = allEntries
+      .filter(e => e.day === activeDay && e.courtName === courtName && e.id !== itemId)
+      .sort((a, b) => a.startMin - b.startMin);
+    const before = rowEntries.filter(e => e.startMin + SPAN <= targetStart);
+    const after = rowEntries.filter(e => e.startMin + SPAN > targetStart);
 
-    const numCourts = courts.length;
-    const slotsNeeded = Math.ceil(moving.length / numCourts);
-    const sourceIdx = days.indexOf(moving[0].day);
-    const targetIdx = days.indexOf(day);
-    const insertAtStart = targetIdx > sourceIdx;
-
-    const existing = matches.filter(m => m.day === day && !movingSet.has(m.id));
-
-    let shiftedExisting = existing;
-    let base = 0;
-    if (insertAtStart) {
-      shiftedExisting = existing.map(m => ({ ...m, slot: m.slot + slotsNeeded, time: slotToTime(m.slot + slotsNeeded) }));
-      base = 0;
-    } else {
-      const maxSlot = existing.length ? Math.max(...existing.map(m => m.slot)) : -1;
-      base = maxSlot + 1;
+    const updates = new Map<string, { day: string; startMin: number; courtName: string }>();
+    let cursor = gridStartMin;
+    for (const e of before) {
+      const s = Math.max(e.startMin, cursor);
+      updates.set(e.id, { day: activeDay, startMin: s, courtName });
+      cursor = s + SPAN;
     }
+    const itemStart = Math.max(targetStart, cursor);
+    updates.set(itemId, { day: activeDay, startMin: itemStart, courtName });
+    cursor = itemStart + SPAN;
+    for (const e of after) {
+      const s = Math.max(e.startMin, cursor);
+      updates.set(e.id, { day: activeDay, startMin: s, courtName });
+      cursor = s + SPAN;
+    }
+    applyPlacements(updates);
+    setDragMatchId(null);
+  }
 
-    const assignedMoving = moving.map((m, i) => {
-      const s = base + Math.floor(i / numCourts);
-      const c = courts[i % numCourts];
-      return { ...m, day, slot: s, time: slotToTime(s), courtName: c };
-    });
-
-    const untouched = matches.filter(m => !movingSet.has(m.id) && m.day !== day);
-    applyMatches([...untouched, ...shiftedExisting, ...assignedMoving]);
-    setSelectedDay(day);
+  // Drop MULTIPLE selected matches starting at a cell: fill 15-min-aligned free slots from the
+  // target across courts then forward in time (skipping occupied blocks).
+  function dropMultiAtCell(movingIds: string[], targetCell: number, courtName: string) {
+    const movingSet = new Set(movingIds);
+    const moving = orderEntriesForMove(allEntries.filter(e => movingSet.has(e.id)));
+    const occupied = allEntries.filter(e => e.day === activeDay && !movingSet.has(e.id));
+    const overlaps = (court: string, startMin: number) =>
+      occupied.some(e => e.courtName === court && startMin < e.startMin + SPAN && startMin + SPAN > e.startMin);
+    const startCourtIdx = Math.max(0, courts.indexOf(courtName));
+    const updates = new Map<string, { day: string; startMin: number; courtName: string }>();
+    let mi = 0;
+    for (let cell = targetCell; mi < moving.length && cell < totalCells + moving.length * matchCells; cell += matchCells) {
+      const startMin = gridStartMin + cell * GRID_MIN;
+      for (let ci = cell === targetCell ? startCourtIdx : 0; ci < courts.length && mi < moving.length; ci++) {
+        if (overlaps(courts[ci], startMin)) continue;
+        updates.set(moving[mi].id, { day: activeDay, startMin, courtName: courts[ci] });
+        mi++;
+      }
+    }
+    applyPlacements(updates);
     setSelectedIds(new Set());
     setDragMatchId(null);
   }
 
-  function handleDropOnCell(slotIdx: number, courtName: string) {
+  function handleDropOnCell(targetCell: number, courtName: string) {
     if (!dragMatchId) return;
     const movingIds = movingIdsFor(dragMatchId);
+    if (movingIds.length <= 1) dropSingleAtCell(dragMatchId, targetCell, courtName);
+    else dropMultiAtCell(movingIds, targetCell, courtName);
+  }
 
-    if (movingIds.length <= 1) {
-      updateMatch(dragMatchId, { slot: slotIdx, time: slotToTime(slotIdx), courtName });
-      setDragMatchId(null);
-      return;
-    }
-
-    // Multi: cascade the selection into free cells on the active day starting at the drop cell.
+  // Move one or more matches to `day`: the moved matches are placed FIRST in that day's schedule
+  // (filling courts left→right from the start time), and the day's existing matches are pushed
+  // forward to make room.
+  function moveToDay(movingIds: string[], day: string) {
     const movingSet = new Set(movingIds);
-    const moving = orderForMove(matches.filter(m => movingSet.has(m.id)));
-    const occupied = new Set(matches.filter(m => m.day === activeDay && !movingSet.has(m.id)).map(m => `${m.courtName}|${m.slot}`));
-    const startCourtIdx = Math.max(0, courts.indexOf(courtName));
-    const assigned: PersonalizadoMatch[] = [];
-    let mi = 0;
-    for (let s = slotIdx; mi < moving.length && s < slotIdx + moving.length + totalSlots; s++) {
-      for (let ci = s === slotIdx ? startCourtIdx : 0; ci < courts.length && mi < moving.length; ci++) {
-        if (occupied.has(`${courts[ci]}|${s}`)) continue;
-        assigned.push({ ...moving[mi], day: activeDay, slot: s, time: slotToTime(s), courtName: courts[ci] });
-        mi++;
-      }
-    }
-    const assignedIds = new Set(assigned.map(m => m.id));
-    const rest = matches.filter(m => !assignedIds.has(m.id));
-    applyMatches([...rest, ...assigned]);
+    const moving = orderEntriesForMove(allEntries.filter(e => movingSet.has(e.id)));
+    if (moving.length === 0) return;
+    const numCourts = courts.length;
+    const rowsNeeded = Math.ceil(moving.length / numCourts);
+    const existing = allEntries.filter(e => e.day === day && !movingSet.has(e.id));
+
+    const updates = new Map<string, { day: string; startMin: number; courtName: string }>();
+    // Shift the day's existing matches forward by the number of rows the moved block occupies.
+    for (const e of existing) updates.set(e.id, { day, startMin: e.startMin + rowsNeeded * SPAN, courtName: e.courtName });
+    // Place the moved matches first, from the start of the day.
+    moving.forEach((e, i) => {
+      const startMin = gridStartMin + Math.floor(i / numCourts) * SPAN;
+      updates.set(e.id, { day, startMin, courtName: courts[i % numCourts] });
+    });
+    applyPlacements(updates);
+    setSelectedDay(day);
     setSelectedIds(new Set());
     setDragMatchId(null);
   }
@@ -448,6 +573,18 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
   function handleDropOnDay(day: string) {
     if (!dragMatchId) return;
     moveToDay(movingIdsFor(dragMatchId), day);
+  }
+
+  // Compute the target cell from a drop's X position relative to a court row.
+  function cellFromDrop(e: React.DragEvent): number {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    return Math.max(0, Math.min(totalCells - 1, Math.round(x / CELL_W)));
+  }
+
+  function updateMatch(matchId: string, patch: Partial<PersonalizadoMatch>) {
+    const updated = matches.map(m => m.id === matchId ? { ...m, ...patch } : m);
+    void persist({ ...cfg, matches: updated });
   }
 
   // Mouse rubber-band (marquee) selection: drag a rectangle over empty grid area to select
@@ -580,10 +717,20 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
             </button>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {canManage && (
             <button onClick={handleGenerate} disabled={generating} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff', color: 'var(--grey-500)' }}>
               <RefreshCw size={13} /> {generating ? '…' : 'Regenerar'}
+            </button>
+          )}
+          {canManage && (
+            <button onClick={handleSave} disabled={!dirty || saving} title={dirty ? 'Guardar los cambios del calendario' : 'No hay cambios sin guardar'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: dirty && !saving ? 'pointer' : 'not-allowed', border: '1px solid var(--grey-200)', background: dirty ? 'var(--black)' : '#fff', color: dirty ? 'var(--neon)' : 'var(--grey-300)', opacity: saving ? 0.6 : 1 }}>
+              <Save size={13} /> {saving ? 'Guardando…' : 'Guardar Calendario'}
+            </button>
+          )}
+          {canManage && (
+            <button onClick={handlePublish} disabled={publishing || saving} title="Publica el calendario en la página pública y notifica a los jugadores" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: publishing ? 'wait' : 'pointer', border: 'none', background: unpublished ? 'var(--neon)' : 'var(--grey-100)', color: unpublished ? 'var(--black)' : 'var(--grey-400)' }}>
+              <Send size={13} /> {publishing ? 'Publicando…' : 'Publicar'}
             </button>
           )}
           <button onClick={() => setShowShare(p => !p)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', border: '1px solid var(--grey-200)', background: showShare ? 'var(--black)' : '#fff', color: showShare ? 'var(--neon)' : 'var(--grey-500)' }}>
@@ -591,6 +738,15 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
           </button>
         </div>
       </div>
+
+      {/* Save / publish status hint */}
+      {canManage && (dirty || unpublished) && (
+        <div style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11, fontWeight: 600, color: dirty ? '#b45309' : '#1d4ed8', background: dirty ? 'rgba(234,179,8,0.1)' : 'rgba(59,130,246,0.08)', border: `1px solid ${dirty ? 'rgba(234,179,8,0.4)' : 'rgba(59,130,246,0.3)'}`, padding: '6px 12px', borderRadius: 6 }}>
+          {dirty
+            ? '● Cambios sin guardar — usá "Guardar Calendario" para no perderlos.'
+            : '● Cambios sin publicar — usá "Publicar" para que los jugadores vean el nuevo horario.'}
+        </div>
+      )}
 
       {canManage && selectedIds.size > 0 && (
         <div style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 12, background: 'var(--black)', color: 'var(--neon)', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
@@ -627,7 +783,9 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
         ))}
       </div>
 
-      {/* Calendar grid — fixed courts column on the left + horizontally scrollable time grid */}
+      {/* Calendar grid — fixed courts column on the left + horizontally scrollable time grid.
+          Whole-hour columns (labelled) subdivided into 15-min cells (ticks). Matches are absolutely
+          positioned by their start time and span their duration; they move in 15-min steps. */}
       <div style={{ display: 'flex', width: '100%', maxWidth: '100%', border: '1px solid var(--grey-200)', background: '#fff', overflow: 'hidden' }}>
 
         {/* Fixed left column: court labels */}
@@ -643,96 +801,124 @@ function CourtCalendar({ tournament, canManage, canEditResults, onUpdate }: {
           ))}
         </div>
 
-        {/* Scrollable right area: time headers + match slots.
-            minWidth:0 is essential — without it the flex child refuses to shrink below its grid
+        {/* Scrollable right area: hour headers + court rows.
+            minWidth:0 is essential — without it the flex child refuses to shrink below its content
             width, so the whole calendar overflows the page instead of scrolling internally. */}
         <div style={{ overflowX: 'auto', flex: 1, minWidth: 0 }} onMouseDown={startMarquee}>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totalSlots}, ${SLOT_W}px)`, gridTemplateRows: `${HEADER_H}px repeat(${courts.length}, ${COURT_H}px)`, width: totalSlots * SLOT_W, userSelect: marquee ? 'none' : 'auto' }}>
-            {/* Time headers */}
-            {Array.from({ length: totalSlots }, (_, i) => (
-              <div key={i} style={{ background: '#fff', borderBottom: '2px solid var(--grey-200)', borderRight: '1px solid rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', paddingLeft: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-500)' }}>{slotToTime(i)}</span>
-              </div>
-            ))}
+          <div style={{ width: gridWidth, userSelect: marquee ? 'none' : 'auto' }}>
+            {/* Hour header strip */}
+            <div style={{ position: 'relative', height: HEADER_H, borderBottom: '2px solid var(--grey-200)', background: '#fff' }}>
+              {Array.from({ length: Math.floor(totalCells / 4) + 1 }, (_, h) => {
+                const cell = h * 4;
+                return (
+                  <div key={h} style={{ position: 'absolute', left: cell * CELL_W, top: 0, bottom: 0, borderLeft: '1px solid var(--grey-200)', display: 'flex', alignItems: 'center', paddingLeft: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-500)', whiteSpace: 'nowrap' }}>{fmt12(gridStartMin + cell * GRID_MIN)}</span>
+                  </div>
+                );
+              })}
+            </div>
 
             {/* Court rows */}
-            {courts.map(court => (
-              <React.Fragment key={court}>
-                {Array.from({ length: totalSlots }, (_, slotIdx) => {
-                  const groupMatch = dayGroupMatches.find(m => m.courtName === court && m.slot === slotIdx);
-                  const bracketMatch = dayBracketMatches.find(m => m.courtName === court && m.slot === slotIdx);
-                  const gvis = groupMatch ? matchVisual(groupMatch) : null;
-                  const bvis = bracketMatch
-                    ? bracketMatch.result || bracketMatch.status === 'done'
+            {courts.map(court => {
+              const rowGroup = dayGroupMatches.filter(m => m.courtName === court);
+              const rowBracket = dayBracketMatches.filter(m => m.courtName === court);
+              const cardW = matchCells * CELL_W - CARD_GAP;
+              return (
+                <div
+                  key={court}
+                  onDragOver={e => { if (dragMatchId) e.preventDefault(); }}
+                  onDrop={e => { e.preventDefault(); if (dragMatchId) handleDropOnCell(cellFromDrop(e), court); }}
+                  onClick={() => { if (suppressClick.current) return; if (selectedIds.size) setSelectedIds(new Set()); }}
+                  style={{
+                    position: 'relative', height: COURT_H, borderBottom: '1px solid var(--grey-100)',
+                    backgroundImage: `repeating-linear-gradient(to right, var(--grey-100) 0, var(--grey-100) 1px, transparent 1px, transparent ${CELL_W}px), repeating-linear-gradient(to right, var(--grey-300) 0, var(--grey-300) 1px, transparent 1px, transparent ${CELL_W * 4}px)`,
+                    backgroundColor: dragMatchId ? 'rgba(59,130,246,0.04)' : 'transparent',
+                  }}
+                >
+                  {rowGroup.map(groupMatch => {
+                    const gvis = matchVisual(groupMatch);
+                    const left = cellOf(groupMatch.time) * CELL_W;
+                    return (
+                      <div
+                        key={groupMatch.id}
+                        data-match-card
+                        data-match-id={groupMatch.id}
+                        draggable={canManage && editingId !== groupMatch.id}
+                        onDragStart={e => { if (!canManage) return; e.dataTransfer.effectAllowed = 'move'; setDragMatchId(groupMatch.id); }}
+                        onDragEnd={() => setDragMatchId(null)}
+                        onClick={e => {
+                          if (!canManage) return;
+                          e.stopPropagation();
+                          if (e.ctrlKey || e.metaKey) {
+                            setSelectedIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(groupMatch.id)) next.delete(groupMatch.id); else next.add(groupMatch.id);
+                              return next;
+                            });
+                            setEditingId(null);
+                          } else {
+                            setSelectedIds(new Set());
+                            setEditingId(editingId === groupMatch.id ? null : groupMatch.id);
+                          }
+                        }}
+                        style={{ position: 'absolute', left: left + Math.floor(CARD_GAP / 2), top: 4, width: cardW, height: COURT_H - 8, background: gvis.bg, color: gvis.fg, border: editingId === groupMatch.id ? '2px solid var(--neon)' : '1px solid rgba(0,0,0,0.12)', borderRadius: 4, outline: selectedIds.has(groupMatch.id) ? '3px solid var(--neon)' : 'none', outlineOffset: -1, padding: '5px 8px', cursor: canManage ? 'grab' : 'default', opacity: dragMatchId && movingIdsFor(dragMatchId).includes(groupMatch.id) ? 0.4 : 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1, boxSizing: 'border-box' }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: gvis.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catMap.get(groupMatch.categoryId) ?? ''} · Gr.{groupMatch.groupLabel}</span>
+                          {gvis.label && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.08em', color: gvis.fg }}>{gvis.label}</span>}
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{teamName(groupMatch.teamAId)}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{teamName(groupMatch.teamBId)}</div>
+                        {groupMatch.result && <div style={{ fontSize: 10, fontWeight: 800, marginTop: 1, color: gvis.fg }}>{scoreStr(groupMatch.result)}</div>}
+                      </div>
+                    );
+                  })}
+                  {rowBracket.map(bracketMatch => {
+                    const bvis = bracketMatch.result || bracketMatch.status === 'done'
                       ? { bg: '#4c1d95', fg: '#f5f3ff', sub: 'rgba(245,243,255,0.7)', label: 'FINAL' }
                       : bracketMatch.status === 'playing'
                         ? { bg: '#16a34a', fg: '#ffffff', sub: 'rgba(255,255,255,0.8)', label: 'EN VIVO' }
-                        : { bg: '#7c3aed', fg: '#ffffff', sub: 'rgba(255,255,255,0.78)', label: '' }
-                    : null;
-                  return (
-                    <div
-                      key={slotIdx}
-                      onDragOver={e => { e.preventDefault(); }}
-                      onDrop={e => { e.preventDefault(); if (!bracketMatch) handleDropOnCell(slotIdx, court); }}
-                      onClick={() => { if (suppressClick.current) return; if (!groupMatch && !bracketMatch && selectedIds.size) setSelectedIds(new Set()); }}
-                      style={{ borderBottom: '1px solid var(--grey-100)', borderRight: '1px solid rgba(0,0,0,0.04)', position: 'relative', background: dragMatchId && !groupMatch && !bracketMatch ? 'rgba(59,130,246,0.05)' : 'transparent' }}
-                    >
-                      {groupMatch && gvis && (
-                        <div
-                          data-match-card
-                          data-match-id={groupMatch.id}
-                          draggable={canManage && editingId !== groupMatch.id}
-                          onDragStart={e => { if (!canManage) return; e.dataTransfer.effectAllowed = 'move'; setDragMatchId(groupMatch.id); }}
-                          onDragEnd={() => setDragMatchId(null)}
-                          onClick={e => {
-                            if (!canManage) return;
-                            if (e.ctrlKey || e.metaKey) {
-                              e.stopPropagation();
-                              setSelectedIds(prev => {
-                                const next = new Set(prev);
-                                if (next.has(groupMatch.id)) next.delete(groupMatch.id); else next.add(groupMatch.id);
-                                return next;
-                              });
-                              setEditingId(null);
-                            } else {
-                              setSelectedIds(new Set());
-                              setEditingId(editingId === groupMatch.id ? null : groupMatch.id);
-                            }
-                          }}
-                          style={{ position: 'absolute', inset: 3, background: gvis.bg, color: gvis.fg, border: editingId === groupMatch.id ? '2px solid var(--neon)' : '1px solid rgba(0,0,0,0.12)', outline: selectedIds.has(groupMatch.id) ? '3px solid var(--neon)' : 'none', outlineOffset: -1, padding: '5px 8px', cursor: canManage ? 'pointer' : 'default', opacity: dragMatchId && movingIdsFor(dragMatchId).includes(groupMatch.id) ? 0.4 : 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: gvis.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catMap.get(groupMatch.categoryId) ?? ''} · Gr.{groupMatch.groupLabel}</span>
-                            {gvis.label && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.08em', color: gvis.fg }}>{gvis.label}</span>}
-                          </div>
-                          <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{teamName(groupMatch.teamAId)}</div>
-                          <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{teamName(groupMatch.teamBId)}</div>
-                          {groupMatch.result && <div style={{ fontSize: 10, fontWeight: 800, marginTop: 1, color: gvis.fg }}>{scoreStr(groupMatch.result)}</div>}
+                        : { bg: '#7c3aed', fg: '#ffffff', sub: 'rgba(255,255,255,0.78)', label: '' };
+                    const bothKnown = !!bracketMatch.teamAId && !!bracketMatch.teamBId;
+                    const left = cellOf(bracketMatch.time) * CELL_W;
+                    return (
+                      <div
+                        key={bracketMatch.id}
+                        data-match-card
+                        data-match-id={bracketMatch.id}
+                        draggable={canManage && editingBracketId !== bracketMatch.id}
+                        onDragStart={e => { if (!canManage) return; e.dataTransfer.effectAllowed = 'move'; setDragMatchId(bracketMatch.id); }}
+                        onDragEnd={() => setDragMatchId(null)}
+                        onClick={e => {
+                          if (!canManage) return;
+                          e.stopPropagation();
+                          if (e.ctrlKey || e.metaKey) {
+                            setSelectedIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(bracketMatch.id)) next.delete(bracketMatch.id); else next.add(bracketMatch.id);
+                              return next;
+                            });
+                            setEditingBracketId(null);
+                          } else if (bothKnown && (!bracketMatch.result || canEditResults)) {
+                            setSelectedIds(new Set());
+                            setEditingBracketId(editingBracketId === bracketMatch.id ? null : bracketMatch.id);
+                          }
+                        }}
+                        style={{ position: 'absolute', left: left + Math.floor(CARD_GAP / 2), top: 4, width: cardW, height: COURT_H - 8, background: bvis.bg, color: bvis.fg, border: editingBracketId === bracketMatch.id ? '2px solid var(--neon)' : '1px solid rgba(0,0,0,0.12)', borderRadius: 4, outline: selectedIds.has(bracketMatch.id) ? '3px solid var(--neon)' : 'none', outlineOffset: -1, padding: '5px 8px', cursor: canManage ? 'grab' : 'default', opacity: dragMatchId && movingIdsFor(dragMatchId).includes(bracketMatch.id) ? 0.4 : 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1, boxSizing: 'border-box' }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: bvis.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catMap.get(bracketMatch.categoryId) ?? ''} · {bracketMatch.roundLabel}</span>
+                          {bvis.label && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.08em', color: bvis.fg }}>{bvis.label}</span>}
                         </div>
-                      )}
-                      {bracketMatch && bvis && (() => {
-                        const bothKnown = !!bracketMatch.teamAId && !!bracketMatch.teamBId;
-                        const bClickable = canManage && bothKnown && (!bracketMatch.result || canEditResults);
-                        return (
-                        <div
-                          onClick={() => bClickable && setEditingBracketId(editingBracketId === bracketMatch.id ? null : bracketMatch.id)}
-                          style={{ position: 'absolute', inset: 3, background: bvis.bg, color: bvis.fg, border: editingBracketId === bracketMatch.id ? '2px solid var(--neon)' : '1px solid rgba(0,0,0,0.12)', padding: '5px 8px', cursor: bClickable ? 'pointer' : 'default', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1 }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: bvis.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catMap.get(bracketMatch.categoryId) ?? ''} · {bracketMatch.roundLabel}</span>
-                            {bvis.label && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.08em', color: bvis.fg }}>{bvis.label}</span>}
-                          </div>
-                          <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bracketMatch.teamAId ? teamName(bracketMatch.teamAId) : (bracketMatch.placeholderA ?? 'Por definir')}</div>
-                          <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bracketMatch.teamBId ? teamName(bracketMatch.teamBId) : (bracketMatch.placeholderB ?? 'Por definir')}</div>
-                          {bracketMatch.result && <div style={{ fontSize: 10, fontWeight: 800, marginTop: 1, color: bvis.fg }}>{scoreStr(bracketMatch.result)}</div>}
-                        </div>
-                        );
-                      })()}
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))}
+                        <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bracketMatch.teamAId ? teamName(bracketMatch.teamAId) : (bracketMatch.placeholderA ?? 'Por definir')}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bracketMatch.teamBId ? teamName(bracketMatch.teamBId) : (bracketMatch.placeholderB ?? 'Por definir')}</div>
+                        {bracketMatch.result && <div style={{ fontSize: 10, fontWeight: 800, marginTop: 1, color: bvis.fg }}>{scoreStr(bracketMatch.result)}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -894,10 +1080,11 @@ function BracketTab({ tournament, canManage, canEditResults, onUpdate }: {
 
 // ── Main exported component ─────────────────────────────────────────────────────
 
-export function TournamentTabs({ tournament, canManage, canEditResults, onUpdate }: {
+export function TournamentTabs({ tournament, canManage, canEditResults, requesterId, onUpdate }: {
   tournament: PersonalizadoTournament;
   canManage: boolean;
   canEditResults?: boolean;
+  requesterId?: string;
   onUpdate: (t: PersonalizadoTournament) => void;
 }) {
   const [activeTab, setActiveTab] = useState<'calendario' | 'clasificacion' | 'bracket'>('calendario');
@@ -927,7 +1114,7 @@ export function TournamentTabs({ tournament, canManage, canEditResults, onUpdate
       </div>
 
       <div style={{ padding: '20px clamp(12px, 3vw, 24px) 28px' }}>
-        {activeTab === 'calendario' && <CourtCalendar tournament={tournament} canManage={canManage} canEditResults={editResults} onUpdate={onUpdate} />}
+        {activeTab === 'calendario' && <CourtCalendar tournament={tournament} canManage={canManage} canEditResults={editResults} requesterId={requesterId} onUpdate={onUpdate} />}
         {activeTab === 'clasificacion' && <StandingsView tournament={tournament} teamName={teamName} canManage={canManage} canEditResults={editResults} onUpdate={onUpdate} />}
         {activeTab === 'bracket' && <BracketTab tournament={tournament} canManage={canManage} canEditResults={editResults} onUpdate={onUpdate} />}
       </div>

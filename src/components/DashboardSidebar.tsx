@@ -13,6 +13,7 @@ import { authSignOut } from '@/lib/supabase';
 import BrandLogo from './BrandLogo';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getUserPlan, refreshVerifiedPlan, type PlanId } from '@/lib/plan-config';
+import { useTournamentNotificationCount } from '@/hooks/useTournamentNotifications';
 
 type Role = 'player' | 'club' | 'league' | 'federation' | 'super_admin';
 
@@ -77,6 +78,9 @@ export default function DashboardSidebar() {
   const [friendBadge,  setFriendBadge]  = useState(0);
   const [leagueBadge,  setLeagueBadge]  = useState(0);
   const [profileBadge, setProfileBadge] = useState(0);
+  const { count: tournamentBadge } = useTournamentNotificationCount(
+    user?.role === 'player' ? user.id : undefined
+  );
   const [mobileOpen,   setMobileOpen]   = useState(false);
   const [collapsed, setCollapsed] = useState(() =>
     typeof window !== 'undefined' ? localStorage.getItem('padelmgt_sidebar_collapsed') === 'true' : false
@@ -192,8 +196,9 @@ export default function DashboardSidebar() {
           const hasFriendBadge = item.href === '/dashboard/player/friends' && friendBadge > 0;
           const hasLeagueBadge = item.href === '/dashboard/player/leagues' && leagueBadge > 0;
           const hasProfileBadge = item.href === '/dashboard/player/profile' && profileBadge > 0;
-          const hasBadge = hasFriendBadge || hasLeagueBadge || hasProfileBadge;
-          const badgeCount = hasFriendBadge ? friendBadge : hasLeagueBadge ? leagueBadge : hasProfileBadge ? profileBadge : 0;
+          const hasTournamentBadge = item.href === '/dashboard/player/tournaments' && tournamentBadge > 0;
+          const hasBadge = hasFriendBadge || hasLeagueBadge || hasProfileBadge || hasTournamentBadge;
+          const badgeCount = hasFriendBadge ? friendBadge : hasLeagueBadge ? leagueBadge : hasProfileBadge ? profileBadge : hasTournamentBadge ? tournamentBadge : 0;
           return (
             <Link
               key={item.href}
@@ -242,6 +247,11 @@ export default function DashboardSidebar() {
               {!collapsed && hasProfileBadge && (
                 <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: '#ee0005', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
                   {profileBadge}
+                </span>
+              )}
+              {!collapsed && hasTournamentBadge && (
+                <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: '#ee0005', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                  {tournamentBadge}
                 </span>
               )}
             </Link>
