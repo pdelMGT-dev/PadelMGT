@@ -21,6 +21,7 @@ import {
   scheduleSignature,
   tournamentPlayerIds,
   createScheduleNotifications,
+  SCHEDULE_GAP_MIN,
   DEFAULT_CONTROL_CONFIG,
   type PersonalizadoTournament,
   type PersonalizadoMatch,
@@ -303,6 +304,9 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
   const [publishing, setPublishing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [dragMatchId, setDragMatchId] = useState<string | null>(null);
+  // Live drop target while dragging: which court row + 15-min cell the cursor is over. Drives the
+  // translucent "ghost" placeholders that preview exactly where the dragged card(s) will land.
+  const [dragOver, setDragOver] = useState<{ court: string; cell: number } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const suppressClick = useRef(false);
@@ -340,7 +344,12 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
   const matchDur = Math.max(GRID_MIN, cfg.schedule.matchDurationMin || 60);
   // A match block spans this many 15-min cells (rounded up so it never visually overlaps the next).
   const matchCells = Math.max(1, Math.ceil(matchDur / GRID_MIN));
-  const SPAN = matchCells * GRID_MIN; // minutes a match occupies on the grid (15-aligned)
+  const SPAN = matchCells * GRID_MIN; // minutes a match occupies on the grid (15-aligned) = card footprint
+  // One match starts this many cells/minutes after the previous on the same court: the card
+  // footprint plus a mandatory rest gap, so cascaded/moved matches keep ≥15 min between games.
+  const gapCells = Math.max(1, Math.round(SCHEDULE_GAP_MIN / GRID_MIN));
+  const PITCH_CELLS = matchCells + gapCells;
+  const PITCH = PITCH_CELLS * GRID_MIN;
 
   // Grid runs on whole-hour boundaries: floor(start) … ceil(end), extended to fit the latest
   // match on the active day plus a little headroom for dropping past the end.
@@ -500,18 +509,18 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
     for (const e of before) {
       const s = Math.max(e.startMin, cursor);
       updates.set(e.id, { day: activeDay, startMin: s, courtName });
-      cursor = s + SPAN;
+      cursor = s + PITCH;
     }
     const itemStart = Math.max(targetStart, cursor);
     updates.set(itemId, { day: activeDay, startMin: itemStart, courtName });
-    cursor = itemStart + SPAN;
+    cursor = itemStart + PITCH;
     for (const e of after) {
       const s = Math.max(e.startMin, cursor);
       updates.set(e.id, { day: activeDay, startMin: s, courtName });
-      cursor = s + SPAN;
+      cursor = s + PITCH;
     }
     applyPlacements(updates);
-    setDragMatchId(null);
+    endDrag();
   }
 
   // Drop MULTIPLE selected matches starting at a cell: fill 15-min-aligned free slots from the
@@ -525,7 +534,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
     const startCourtIdx = Math.max(0, courts.indexOf(courtName));
     const updates = new Map<string, { day: string; startMin: number; courtName: string }>();
     let mi = 0;
-    for (let cell = targetCell; mi < moving.length && cell < totalCells + moving.length * matchCells; cell += matchCells) {
+    for (let cell = targetCell; mi < moving.length && cell < totalCells + moving.length * PITCH_CELLS; cell += PITCH_CELLS) {
       const startMin = gridStartMin + cell * GRID_MIN;
       for (let ci = cell === targetCell ? startCourtIdx : 0; ci < courts.length && mi < moving.length; ci++) {
         if (overlaps(courts[ci], startMin)) continue;
@@ -535,7 +544,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
     }
     applyPlacements(updates);
     setSelectedIds(new Set());
-    setDragMatchId(null);
+    endDrag();
   }
 
   function handleDropOnCell(targetCell: number, courtName: string) {
@@ -558,16 +567,16 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
 
     const updates = new Map<string, { day: string; startMin: number; courtName: string }>();
     // Shift the day's existing matches forward by the number of rows the moved block occupies.
-    for (const e of existing) updates.set(e.id, { day, startMin: e.startMin + rowsNeeded * SPAN, courtName: e.courtName });
+    for (const e of existing) updates.set(e.id, { day, startMin: e.startMin + rowsNeeded * PITCH, courtName: e.courtName });
     // Place the moved matches first, from the start of the day.
     moving.forEach((e, i) => {
-      const startMin = gridStartMin + Math.floor(i / numCourts) * SPAN;
+      const startMin = gridStartMin + Math.floor(i / numCourts) * PITCH;
       updates.set(e.id, { day, startMin, courtName: courts[i % numCourts] });
     });
     applyPlacements(updates);
     setSelectedDay(day);
     setSelectedIds(new Set());
-    setDragMatchId(null);
+    endDrag();
   }
 
   function handleDropOnDay(day: string) {
@@ -581,6 +590,62 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
     const x = e.clientX - rect.left;
     return Math.max(0, Math.min(totalCells - 1, Math.round(x / CELL_W)));
   }
+
+  // Clear all drag state (dragged id + hover preview). Called on drop, drag end, or cancel.
+  function endDrag() { setDragMatchId(null); setDragOver(null); }
+
+  // Track the hovered court row + cell as the cursor moves, so the ghost preview follows it.
+  function handleRowDragOver(e: React.DragEvent, court: string) {
+    if (!dragMatchId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const cell = cellFromDrop(e);
+    setDragOver(prev => (prev && prev.court === court && prev.cell === cell) ? prev : { court, cell });
+  }
+
+  // Where a SINGLE dragged card will actually land on `court` if dropped at `targetCell`
+  // (mirrors dropSingleAtCell's cascade so the preview matches reality).
+  function previewSingle(targetCell: number, court: string): { court: string; cell: number }[] {
+    if (!dragMatchId) return [];
+    const targetStart = gridStartMin + targetCell * GRID_MIN;
+    const before = allEntries
+      .filter(en => en.day === activeDay && en.courtName === court && en.id !== dragMatchId && en.startMin + SPAN <= targetStart)
+      .sort((a, b) => a.startMin - b.startMin);
+    let cursor = gridStartMin;
+    for (const en of before) cursor = Math.max(en.startMin, cursor) + PITCH;
+    const itemStart = Math.max(targetStart, cursor);
+    return [{ court, cell: Math.round((itemStart - gridStartMin) / GRID_MIN) }];
+  }
+
+  // Where MULTIPLE selected cards will land starting at `targetCell`/`court` (mirrors dropMultiAtCell).
+  function previewMulti(movingIds: string[], targetCell: number, court: string): { court: string; cell: number }[] {
+    const movingSet = new Set(movingIds);
+    const count = allEntries.filter(en => movingSet.has(en.id)).length;
+    const occupied = allEntries.filter(en => en.day === activeDay && !movingSet.has(en.id));
+    const overlaps = (c: string, startMin: number) =>
+      occupied.some(en => en.courtName === c && startMin < en.startMin + SPAN && startMin + SPAN > en.startMin);
+    const startCourtIdx = Math.max(0, courts.indexOf(court));
+    const ghosts: { court: string; cell: number }[] = [];
+    let placed = 0;
+    for (let cell = targetCell; placed < count && cell < totalCells + count * PITCH_CELLS; cell += PITCH_CELLS) {
+      const startMin = gridStartMin + cell * GRID_MIN;
+      for (let ci = cell === targetCell ? startCourtIdx : 0; ci < courts.length && placed < count; ci++) {
+        if (overlaps(courts[ci], startMin)) continue;
+        ghosts.push({ court: courts[ci], cell });
+        placed++;
+      }
+    }
+    return ghosts;
+  }
+
+  // The ghost placeholders for the current hover (one per card that will land).
+  const ghosts: { court: string; cell: number }[] = (() => {
+    if (!dragMatchId || !dragOver) return [];
+    const movingIds = movingIdsFor(dragMatchId);
+    return movingIds.length <= 1
+      ? previewSingle(dragOver.cell, dragOver.court)
+      : previewMulti(movingIds, dragOver.cell, dragOver.court);
+  })();
 
   function updateMatch(matchId: string, patch: Partial<PersonalizadoMatch>) {
     const updated = matches.map(m => m.id === matchId ? { ...m, ...patch } : m);
@@ -708,7 +773,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
             <button
               key={d}
               onClick={() => setSelectedDay(d)}
-              onDragOver={e => { if (dragMatchId) e.preventDefault(); }}
+              onDragOver={e => { if (dragMatchId) { e.preventDefault(); if (dragOver) setDragOver(null); } }}
               onDrop={e => { e.preventDefault(); handleDropOnDay(d); }}
               title={fmtDayLong(d)}
               style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', border: dragMatchId ? '1px dashed var(--neon)' : '1px solid transparent', background: activeDay === d ? 'var(--black)' : 'var(--grey-100)', color: activeDay === d ? 'var(--neon)' : 'var(--grey-500)' }}
@@ -826,15 +891,24 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
               return (
                 <div
                   key={court}
-                  onDragOver={e => { if (dragMatchId) e.preventDefault(); }}
+                  onDragOver={e => handleRowDragOver(e, court)}
                   onDrop={e => { e.preventDefault(); if (dragMatchId) handleDropOnCell(cellFromDrop(e), court); }}
                   onClick={() => { if (suppressClick.current) return; if (selectedIds.size) setSelectedIds(new Set()); }}
                   style={{
                     position: 'relative', height: COURT_H, borderBottom: '1px solid var(--grey-100)',
                     backgroundImage: `repeating-linear-gradient(to right, var(--grey-100) 0, var(--grey-100) 1px, transparent 1px, transparent ${CELL_W}px), repeating-linear-gradient(to right, var(--grey-300) 0, var(--grey-300) 1px, transparent 1px, transparent ${CELL_W * 4}px)`,
-                    backgroundColor: dragMatchId ? 'rgba(59,130,246,0.04)' : 'transparent',
+                    backgroundColor: dragOver?.court === court ? 'rgba(214,255,0,0.07)' : 'transparent',
                   }}
                 >
+                  {/* Drop preview: translucent neon placeholders showing exactly where each card lands. */}
+                  {ghosts.filter(g => g.court === court).map((g, gi) => (
+                    <div key={`ghost-${gi}`} aria-hidden style={{
+                      position: 'absolute', left: g.cell * CELL_W + Math.floor(CARD_GAP / 2), top: 4,
+                      width: cardW, height: COURT_H - 8, borderRadius: 4, pointerEvents: 'none', zIndex: 1,
+                      border: '2px dashed var(--neon)', background: 'rgba(214,255,0,0.22)',
+                      boxShadow: '0 0 0 1px rgba(0,0,0,0.04)',
+                    }} />
+                  ))}
                   {rowGroup.map(groupMatch => {
                     const gvis = matchVisual(groupMatch);
                     const left = cellOf(groupMatch.time) * CELL_W;
@@ -845,7 +919,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
                         data-match-id={groupMatch.id}
                         draggable={canManage && editingId !== groupMatch.id}
                         onDragStart={e => { if (!canManage) return; e.dataTransfer.effectAllowed = 'move'; setDragMatchId(groupMatch.id); }}
-                        onDragEnd={() => setDragMatchId(null)}
+                        onDragEnd={endDrag}
                         onClick={e => {
                           if (!canManage) return;
                           e.stopPropagation();
@@ -888,7 +962,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
                         data-match-id={bracketMatch.id}
                         draggable={canManage && editingBracketId !== bracketMatch.id}
                         onDragStart={e => { if (!canManage) return; e.dataTransfer.effectAllowed = 'move'; setDragMatchId(bracketMatch.id); }}
-                        onDragEnd={() => setDragMatchId(null)}
+                        onDragEnd={endDrag}
                         onClick={e => {
                           if (!canManage) return;
                           e.stopPropagation();
