@@ -921,6 +921,20 @@ export function removePersonalizado(id: string): void {
 
 const GROUP_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
+// Calendar grid step and the mandatory rest between consecutive matches on the same court.
+// A match occupies its play span (rounded up to the grid step); the next match on that court
+// starts one full "pitch" later (play span + gap), so games never overlap and always keep ≥15min.
+export const SCHEDULE_GRID_MIN = 15;
+export const SCHEDULE_GAP_MIN = 15;
+/** Minutes a match visually occupies: its duration rounded up to the 15-min grid. */
+export function matchPlaySpan(matchDurationMin: number): number {
+  return Math.ceil(Math.max(SCHEDULE_GRID_MIN, matchDurationMin) / SCHEDULE_GRID_MIN) * SCHEDULE_GRID_MIN;
+}
+/** Minutes between the start of one match and the next on the same court (play span + rest gap). */
+export function matchPitch(matchDurationMin: number): number {
+  return matchPlaySpan(matchDurationMin) + SCHEDULE_GAP_MIN;
+}
+
 function fmtMinutes(total: number): string {
   const capped = Math.min(Math.max(total, 0), 23 * 60 + 59);
   const h = Math.floor(capped / 60), m = capped % 60;
@@ -1394,6 +1408,9 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
 
   // Schedule parameters
   const matchDur = Math.max(10, cfg.schedule.matchDurationMin || 50);
+  // Consecutive matches on a court start one "pitch" apart (play span + 15-min rest) so they
+  // never overlap on the grid and always keep a ≥15-min gap between games.
+  const pitch = matchPitch(matchDur);
   const lunchEnabled = cfg.schedule.lunchEnabled;
   const lunchStart = parseMinutes(cfg.schedule.lunchStart ?? '13:00');
   const lunchDur = cfg.schedule.lunchDurationMin ?? 0;
@@ -1402,9 +1419,10 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
 
   // Compute minimum days to fit all classification matches, reserving ≥1 day for elimination.
   // This prevents classification and elimination from sharing the same day.
-  const effectiveMinutesPerDay = Math.max(matchDur,
+  const effectiveMinutesPerDay = Math.max(pitch,
     (dayEndMinutes - dayStartMinutes) - (lunchEnabled ? lunchDur : 0));
-  const slotsPerDay = Math.max(1, Math.floor(effectiveMinutesPerDay / matchDur));
+  // The last slot of a day needs no trailing gap, so add one gap back before dividing by pitch.
+  const slotsPerDay = Math.max(1, Math.floor((effectiveMinutesPerDay + SCHEDULE_GAP_MIN) / pitch));
   const slotsNeeded = Math.ceil(totalPairs / Math.max(1, courts.length));
   const minDaysForCapacity = Math.max(1, Math.ceil(slotsNeeded / slotsPerDay));
   const minClassDays = days.length > 1
@@ -1465,7 +1483,7 @@ export function generateGroupSchedule(t: PersonalizadoTournament): Personalizado
           i++;
         }
       }
-      slotTime += matchDur;
+      slotTime += pitch;
       daySlotIndex++;
       if (daySlotIndex > 200) break; // safety
     }
@@ -1820,6 +1838,8 @@ export function scheduleAllBrackets(
   if (bracketDays.length === 0) return allBracketMatches;
 
   const matchDur = Math.max(10, cfg.schedule.matchDurationMin || 50);
+  // Same pitch as classification: play span + 15-min rest between consecutive matches.
+  const pitch = matchPitch(matchDur);
   const lunchEnabled = cfg.schedule.lunchEnabled;
   const lunchStart = parseMinutes(cfg.schedule.lunchStart ?? '13:00');
   const lunchDur = cfg.schedule.lunchDurationMin ?? 0;
@@ -1870,7 +1890,7 @@ export function scheduleAllBrackets(
   const totalAvailableMinutes = bracketDays.length * dayAvailableMinutes();
 
   // Compute each layer's needed minutes: ceil(layer.length / courts) slots × matchDur
-  const layerNeeded = layers.map(layer => Math.ceil(layer.length / courts.length) * matchDur);
+  const layerNeeded = layers.map(layer => Math.ceil(layer.length / courts.length) * pitch);
   const totalNeededMinutes = layerNeeded.reduce((s, v) => s + v, 0);
   const extraMinutes = totalAvailableMinutes - totalNeededMinutes;
   const gapMinutes = layers.length > 1 ? Math.max(0, Math.floor(extraMinutes / (layers.length - 1))) : 0;
@@ -1975,7 +1995,7 @@ export function scheduleAllBrackets(
         });
       }
 
-      curMins += matchDur;
+      curMins += pitch;
       curDaySlot++;
     }
 
