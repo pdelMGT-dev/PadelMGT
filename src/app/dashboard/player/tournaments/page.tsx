@@ -23,6 +23,7 @@ import { useToast } from '@/components/ToastProvider';
 import { SkeletonCard } from '@/components/Skeleton';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import CloneDialog from '@/components/CloneDialog';
+import { useTournamentNotifications } from '@/hooks/useTournamentNotifications';
 import { estimateEventDuration, matchDurationMinutes, formatDurationRange } from '@/lib/duration-estimate';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -168,6 +169,7 @@ export default function PlayerTournamentsPage() {
 
   // ── Current user ────────────────────────────────────────────────────────────
   const { user: currentUser } = useCurrentUser();
+  const { notifications: tournamentNotifs, markRead: markNotifsRead } = useTournamentNotifications(currentUser?.id);
 
   // ── My tournaments ──────────────────────────────────────────────────────────
   const [myTournaments, setMyTournaments] = useState<Tournament[]>([]);
@@ -2011,6 +2013,47 @@ export default function PlayerTournamentsPage() {
           </button>
         </div>
       </div>
+
+      {/* Notificaciones de calendarios actualizados */}
+      {tournamentNotifs.filter(n => !n.read).length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 10 }}>
+            Actualizaciones de calendario
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {tournamentNotifs.filter(n => !n.read).slice(0, 5).map(n => (
+              <div key={n.id} style={{
+                background: '#fff', border: '1px solid rgba(59,130,246,0.25)',
+                padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 16 }}>📅</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--black)' }}>{n.message}</div>
+                    <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 2 }}>
+                      {new Date(n.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => markNotifsRead([n.id])}
+                  style={{ fontSize: 10, padding: '4px 10px', cursor: 'pointer', border: '1px solid var(--grey-200)', background: 'transparent', color: 'var(--grey-500)', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}
+                >
+                  Marcar leída
+                </button>
+              </div>
+            ))}
+            {tournamentNotifs.filter(n => !n.read).length > 5 && (
+              <button
+                onClick={() => markNotifsRead(tournamentNotifs.filter(n => !n.read).map(n => n.id))}
+                style={{ fontSize: 11, padding: '8px', cursor: 'pointer', border: '1px solid var(--grey-200)', background: 'transparent', color: 'var(--grey-500)', fontWeight: 600, textAlign: 'center' }}
+              >
+                Marcar todas como leídas ({tournamentNotifs.filter(n => !n.read).length})
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Invitaciones Pendientes */}
       {pendingInvitations.length > 0 && (

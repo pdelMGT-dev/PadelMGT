@@ -2297,3 +2297,77 @@ export function setTeamStatusLocal(
   savePersonalizado({ ...t, teams });
   return { ok: true, promoted };
 }
+
+// ── Tournament notifications ──────────────────────────────────────────────────
+
+export interface TournamentNotification {
+  id: string;
+  playerId: string;
+  tournamentId: string;
+  type: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
+
+/**
+ * Insert one notification per player listed in playerIds.
+ * Silently ignores empty lists. Falls back gracefully on error.
+ */
+export async function createScheduleNotifications(
+  tournamentId: string,
+  playerIds: string[],
+  message: string,
+): Promise<void> {
+  const unique = [...new Set(playerIds.filter(Boolean))];
+  if (!unique.length || !isSupabaseConfigured || !supabase) return;
+  const rows = unique.map(pid => ({
+    player_id: pid,
+    tournament_id: tournamentId,
+    type: 'schedule_updated',
+    message,
+    read: false,
+  }));
+  await supabase.from('tournament_notifications').insert(rows).then(() => {/* ignore errors */});
+}
+
+/** Fetch unread notification count for a player. Returns 0 on error. */
+export async function getUnreadNotificationCount(playerId: string): Promise<number> {
+  if (!playerId || !isSupabaseConfigured || !supabase) return 0;
+  const { count } = await supabase
+    .from('tournament_notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('player_id', playerId)
+    .eq('read', false);
+  return count ?? 0;
+}
+
+/** Fetch unread notifications for a player (latest first, max 50). */
+export async function getPlayerNotifications(playerId: string): Promise<TournamentNotification[]> {
+  if (!playerId || !isSupabaseConfigured || !supabase) return [];
+  const { data } = await supabase
+    .from('tournament_notifications')
+    .select('*')
+    .eq('player_id', playerId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (!data) return [];
+  return (data as Record<string, unknown>[]).map(r => ({
+    id: r.id as string,
+    playerId: r.player_id as string,
+    tournamentId: r.tournament_id as string,
+    type: r.type as string,
+    message: r.message as string,
+    read: r.read as boolean,
+    createdAt: r.created_at as string,
+  }));
+}
+
+/** Mark a list of notification ids as read. */
+export async function markNotificationsRead(ids: string[]): Promise<void> {
+  if (!ids.length || !isSupabaseConfigured || !supabase) return;
+  await supabase
+    .from('tournament_notifications')
+    .update({ read: true })
+    .in('id', ids);
+}
