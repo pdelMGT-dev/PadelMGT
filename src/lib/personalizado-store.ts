@@ -168,6 +168,16 @@ export interface ControlPanelConfig {
   matches?: PersonalizadoMatch[];
   // generated elimination bracket, per category (filled by generateBracket)
   bracketMatches?: BracketMatch[];
+  // Published schedule snapshot. The working schedule (matches/bracketMatches above) is the
+  // organizer's private draft; only `published` is shown on the public live page and search.
+  // The organizer edits + "Guarda" the draft freely, then "Publica" to copy positions here and
+  // notify players. Results/status are read live (merged by id) on top of these positions.
+  published?: {
+    matches: PersonalizadoMatch[];
+    bracketMatches: BracketMatch[];
+    signature: string;     // signature of the published positions (see scheduleSignature)
+    publishedAt: string;   // ISO timestamp of the last publish
+  };
   // child tournament: enables per-category age validation at inscription
   isChildTournament?: boolean;
   // player ids that can co-manage the tournament (everything except delete + co-creator mgmt)
@@ -199,7 +209,9 @@ export const DEFAULT_CONTROL_CONFIG: ControlPanelConfig = {
     lunchEnabled: false,
     lunchStart: '13:00',
     lunchDurationMin: 60,
-    matchDurationMin: 50,
+    // 60 min per match → matches land on whole hours, aligning cleanly with the 15-min
+    // calendar grid (a match block spans 4 fifteen-minute cells).
+    matchDurationMin: 60,
   },
 };
 
@@ -2370,4 +2382,61 @@ export async function markNotificationsRead(ids: string[]): Promise<void> {
     .from('tournament_notifications')
     .update({ read: true })
     .in('id', ids);
+}
+
+// ── Schedule publishing ───────────────────────────────────────────────────────
+
+/**
+ * Stable signature of the schedule POSITIONS (day · time · court) for group + scheduled bracket
+ * matches. Used to detect "saved but not yet published" changes: when the draft signature differs
+ * from config.published.signature, there are unpublished schedule edits.
+ */
+export function scheduleSignature(
+  matches: PersonalizadoMatch[] = [],
+  bracketMatches: BracketMatch[] = [],
+): string {
+  const g = matches
+    .map(m => `${m.id}@${m.day}|${m.time}|${m.courtName}`)
+    .sort()
+    .join(';');
+  const b = bracketMatches
+    .filter(m => !!m.day && !!m.time && !!m.courtName)
+    .map(m => `${m.id}@${m.day}|${m.time}|${m.courtName}`)
+    .sort()
+    .join(';');
+  return `${g}#${b}`;
+}
+
+/** Player ids of every participant (both partners) across all teams — recipients of notifications. */
+export function tournamentPlayerIds(t: PersonalizadoTournament): string[] {
+  const ids: string[] = [];
+  for (const tm of t.teams) {
+    if (tm.player1Id) ids.push(tm.player1Id);
+    if (tm.player2Id) ids.push(tm.player2Id);
+  }
+  return [...new Set(ids)];
+}
+
+/**
+ * Build the PUBLIC view of a tournament: schedule positions come from the published snapshot,
+ * while results/status/team resolution are overlaid live (merged by match id) so scores update
+ * in real time without needing a re-publish. Falls back to the live draft when nothing has been
+ * published yet (keeps legacy tournaments working).
+ */
+export function publishedTournamentView(t: PersonalizadoTournament): PersonalizadoTournament {
+  const cfg = t.config;
+  if (!cfg?.published) return t;
+  const liveM = new Map((cfg.matches ?? []).map(m => [m.id, m]));
+  const liveB = new Map((cfg.bracketMatches ?? []).map(m => [m.id, m]));
+  const matches = cfg.published.matches.map(pm => {
+    const live = liveM.get(pm.id);
+    return live ? { ...pm, result: live.result, status: live.status } : pm;
+  });
+  const bracketMatches = cfg.published.bracketMatches.map(pm => {
+    const live = liveB.get(pm.id);
+    return live
+      ? { ...pm, result: live.result, status: live.status, teamAId: live.teamAId, teamBId: live.teamBId }
+      : pm;
+  });
+  return { ...t, config: { ...cfg, matches, bracketMatches } };
 }
