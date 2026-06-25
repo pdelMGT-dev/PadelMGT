@@ -231,6 +231,35 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
         </div>
       </div>
 
+      {/* ── EN VIVO: courts currently being played ── */}
+      {isLive && currentRound && (() => {
+        const activeCourts = currentRound.courts.filter(c => c.status !== 'completed');
+        if (activeCourts.length === 0) return null;
+        return (
+          <div style={{ background: '#16a34a', padding: '20px clamp(16px, 4vw, 48px)' }}>
+            <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fff' }}>En vivo ahora · Ronda {currentRound.num}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.75)', marginLeft: 4 }}>{activeCourts.length} {activeCourts.length === 1 ? 'cancha' : 'canchas'}</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 10 }}>
+                {activeCourts.map(court => (
+                  <div key={court.courtNum} style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.75)', marginBottom: 8 }}>Cancha {court.courtNum}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{court.pair1.map(pid => getName(pid)).join(' / ')}</div>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 600, textAlign: 'center' }}>vs</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{court.pair2.map(pid => getName(pid)).join(' / ')}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Body ── */}
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: `40px ${isDesktop ? '48px' : '16px'} 80px`, display: 'grid', gridTemplateColumns: isDesktop ? '1fr 320px' : '1fr', gap: 24, alignItems: 'start' }}>
 

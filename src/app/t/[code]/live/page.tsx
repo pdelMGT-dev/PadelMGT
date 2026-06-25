@@ -300,7 +300,17 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
       {/* ── Page body ────────────────────────────────────────────────────── */}
       <div style={{ width: '100%', margin: '0 auto', padding: 'clamp(16px, 3vw, 32px)', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
-        {/* ── Public calendar QR (top of the page) ─────────────────────── */}
+        {/* ── Live now (shown first so it's the first thing you see) ──── */}
+        {liveNow.length > 0 && (
+          <section>
+            <SectionTitle icon={<Zap size={15} fill="currentColor" style={{ color: 'var(--neon)' }} />} label="En vivo ahora" />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 10 }}>
+              {liveNow.map(m => <MatchCard key={m.id} match={m} teamMap={teamMap} catMap={catMap} isLive />)}
+            </div>
+          </section>
+        )}
+
+        {/* ── Public calendar QR ───────────────────────────────────────── */}
         <section>
           <div style={{ background: '#fff', borderRadius: 14, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ background: '#fff', padding: 6, border: '1px solid #eee', borderRadius: 10, flexShrink: 0 }}>
@@ -313,16 +323,6 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
             </div>
           </div>
         </section>
-
-        {/* ── Live now ─────────────────────────────────────────────────── */}
-        {liveNow.length > 0 && (
-          <section>
-            <SectionTitle icon={<Zap size={15} fill="currentColor" style={{ color: 'var(--neon)' }} />} label="En vivo ahora" />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 10 }}>
-              {liveNow.map(m => <MatchCard key={m.id} match={m} teamMap={teamMap} catMap={catMap} isLive />)}
-            </div>
-          </section>
-        )}
 
         {/* ── Search ──────────────────────────────────────────────────── */}
         <section>
