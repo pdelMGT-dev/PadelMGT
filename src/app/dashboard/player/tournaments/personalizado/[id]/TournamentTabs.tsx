@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import {
   CalendarDays, BarChart3, Trophy, Plus, Minus, Share2, RefreshCw,
   ChevronDown, ChevronRight, Play, GripVertical, Move, CheckCircle2,
-  Save, Send,
+  Save, Send, Radio,
 } from 'lucide-react';
 import {
   generateGroupSchedule,
@@ -1170,6 +1170,223 @@ function BracketTab({ tournament, canManage, canEditResults, onUpdate }: {
   );
 }
 
+// ── Score Live tab (live-scoring console) ────────────────────────────────────────
+// Per-event console for the creator/co-creators: lists the matches currently EN VIVO
+// (group + bracket) and lets them hop between games entering scores. Each edit broadcasts
+// (debounced via ScoreEntry) straight to the public page. Matches that are ready can be kicked
+// off from here without leaving for the calendar. Each game keeps its own independent score.
+
+type LiveItem = {
+  id: string;
+  kind: 'group' | 'bracket';
+  categoryId: string;
+  subLabel: string;        // "Grupo A" or the bracket round label
+  day?: string;
+  courtName?: string;
+  time?: string;
+  teamAId: string;
+  teamBId: string;
+  status: string;
+  result?: MatchResult;
+  liveScore?: { sets: { a: number | null; b: number | null }[] };
+  setsCount: number;
+};
+
+const liveScoreStr = (it: LiveItem): string => {
+  const active = (it.liveScore?.sets ?? []).filter(s => s.a != null || s.b != null);
+  return active.length ? active.map(s => `${s.a ?? '·'}-${s.b ?? '·'}`).join('  ') : '';
+};
+
+function ScoreLiveTab({ tournament, canManage, requesterId, teamName, onUpdate }: {
+  tournament: PersonalizadoTournament; canManage: boolean;
+  requesterId?: string; teamName: (id: string) => string;
+  onUpdate: (t: PersonalizadoTournament) => void;
+}) {
+  const { showToast } = useToast();
+  const cfg = tournament.config ?? DEFAULT_CONTROL_CONFIG;
+  const matches = useMemo(() => cfg.matches ?? [], [cfg.matches]);
+  const bracketMatches = useMemo(() => cfg.bracketMatches ?? [], [cfg.bracketMatches]);
+  const catMap = useMemo(() => new Map(tournament.categories.map(c => [c.id, c.name])), [tournament.categories]);
+  const setsCount = cfg.scoreQualification?.sets ?? 1;
+  const setsCountElim = cfg.scoreElimination?.sets ?? 1;
+
+  const [selId, setSelId] = useState<string | null>(null);
+  const [savingResultId, setSavingResultId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const items: LiveItem[] = useMemo(() => {
+    const g: LiveItem[] = matches.map(m => ({
+      id: m.id, kind: 'group', categoryId: m.categoryId, subLabel: `Grupo ${m.groupLabel}`,
+      day: m.day, courtName: m.courtName, time: m.time, teamAId: m.teamAId, teamBId: m.teamBId,
+      status: m.status, result: m.result, liveScore: m.liveScore, setsCount,
+    }));
+    const b: LiveItem[] = bracketMatches
+      .filter(m => m.teamAId && m.teamBId)
+      .map(m => ({
+        id: m.id, kind: 'bracket', categoryId: m.categoryId, subLabel: m.roundLabel,
+        day: m.day, courtName: m.courtName, time: m.time, teamAId: m.teamAId!, teamBId: m.teamBId!,
+        status: m.status, result: m.result, liveScore: m.liveScore, setsCount: setsCountElim,
+      }));
+    return [...g, ...b];
+  }, [matches, bracketMatches, setsCount, setsCountElim]);
+
+  const live = useMemo(() => items.filter(it => it.status === 'playing' && !it.result), [items]);
+  const ready = useMemo(
+    () => items
+      .filter(it => it.status !== 'playing' && !it.result)
+      .sort((a, b) => (a.day ?? '').localeCompare(b.day ?? '') || (a.time ?? '').localeCompare(b.time ?? '')),
+    [items],
+  );
+  const selected = items.find(it => it.id === selId && it.status === 'playing' && !it.result) ?? null;
+
+  async function persist(newCfg: ControlPanelConfig): Promise<boolean> {
+    onUpdate({ ...tournament, config: newCfg });
+    const res = await saveControlPanel({ id: tournament.id, categories: tournament.categories, config: newCfg, requesterId });
+    if (!res.ok) showToast(res.error ?? 'No se pudo guardar', 'error');
+    return res.ok;
+  }
+
+  // Mark a ready match as EN VIVO and select it for scoring.
+  async function startLive(it: LiveItem) {
+    setBusyId(it.id);
+    const newCfg: ControlPanelConfig = it.kind === 'group'
+      ? { ...cfg, matches: matches.map(m => m.id === it.id ? { ...m, status: 'playing' as const } : m) }
+      : { ...cfg, bracketMatches: bracketMatches.map(m => m.id === it.id ? { ...m, status: 'playing' as const } : m) };
+    await persist(newCfg);
+    setBusyId(null);
+    setSelId(it.id);
+  }
+
+  // Broadcast a partial score (debounced from ScoreEntry) so the public page sees it live.
+  async function liveUpdate(it: LiveItem, sets: { a: number | null; b: number | null }[]) {
+    const newCfg: ControlPanelConfig = it.kind === 'group'
+      ? { ...cfg, matches: matches.map(m => m.id === it.id ? { ...m, liveScore: { sets } } : m) }
+      : { ...cfg, bracketMatches: bracketMatches.map(m => m.id === it.id ? { ...m, liveScore: { sets } } : m) };
+    await persist(newCfg);
+  }
+
+  // Register the final result, clearing the live partial.
+  async function saveResult(it: LiveItem, result: MatchResult) {
+    setSavingResultId(it.id);
+    if (it.kind === 'group') {
+      const updated = matches.map(m => m.id === it.id ? { ...m, result, status: 'done' as const, liveScore: undefined } : m);
+      onUpdate({ ...tournament, config: { ...cfg, matches: updated } });
+      const res = await saveMatchResult({ tournamentId: tournament.id, matchId: it.id, result });
+      if (!res.ok) await persist({ ...cfg, matches: updated });
+    } else {
+      const resolved = applyBracketResult(bracketMatches, it.id, result);
+      const newBracket = resolved.map(m => m.id === it.id ? { ...m, liveScore: undefined } : m);
+      await persist({ ...cfg, bracketMatches: newBracket });
+    }
+    setSavingResultId(null);
+    setSelId(null);
+    showToast('Resultado guardado', 'success');
+  }
+
+  if (items.length === 0) {
+    return <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--grey-400)', fontSize: 14 }}>Generá el calendario primero para llevar el score en vivo.</div>;
+  }
+
+  const metaLine = (it: LiveItem) => [catMap.get(it.categoryId), it.subLabel, it.courtName, it.time].filter(Boolean).join(' · ');
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+          <Radio size={17} color="#16a34a" /> En Vivo
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#fff', background: '#16a34a', padding: '3px 9px', borderRadius: 999 }}>{live.length} jugando</span>
+        {!canManage && <span style={{ fontSize: 11, color: 'var(--grey-400)', fontStyle: 'italic' }}>Vista de solo lectura.</span>}
+      </div>
+
+      {/* Live matches — tap one to score it. Each game keeps its own independent score. */}
+      {live.length === 0 ? (
+        <div style={{ padding: '22px 16px', background: 'var(--grey-50, #fafafa)', border: '1px dashed var(--grey-200)', textAlign: 'center', color: 'var(--grey-400)', fontSize: 13, marginBottom: 18 }}>
+          No hay partidos en vivo. {canManage ? 'Arrancá uno desde "Listos para empezar".' : ''}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10, marginBottom: 18 }}>
+          {live.map(it => {
+            const isSel = selected?.id === it.id;
+            const score = liveScoreStr(it);
+            return (
+              <button
+                key={it.id}
+                onClick={() => canManage && setSelId(isSel ? null : it.id)}
+                style={{
+                  textAlign: 'left', cursor: canManage ? 'pointer' : 'default', padding: '11px 13px',
+                  background: '#16a34a', color: '#fff', border: 'none',
+                  outline: isSel ? '3px solid var(--neon)' : 'none', outlineOffset: -1, borderRadius: 6,
+                  boxShadow: '0 4px 14px rgba(22,163,74,0.28)', display: 'flex', flexDirection: 'column', gap: 5,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{metaLine(it)}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 7, fontWeight: 800, letterSpacing: '0.08em' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: 999, background: '#fff' }} /> EN VIVO
+                  </span>
+                </div>
+                {([it.teamAId, it.teamBId]).map((tid, i) => {
+                  const active = (it.liveScore?.sets ?? []).filter(s => s.a != null || s.b != null);
+                  return (
+                    <div key={tid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{teamName(tid)}</span>
+                      <span style={{ display: 'flex', gap: 6, fontVariantNumeric: 'tabular-nums', fontSize: 13, fontWeight: 800 }}>
+                        {active.map((s, j) => <span key={j} style={{ minWidth: 12, textAlign: 'center' }}>{(i === 0 ? s.a : s.b) ?? '·'}</span>)}
+                      </span>
+                    </div>
+                  );
+                })}
+                {!score && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.75)' }}>{canManage ? 'Tocá para cargar el marcador' : 'Sin marcador aún'}</div>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Score editor for the selected live match (reuses the standard ScoreEntry). */}
+      {canManage && selected && (
+        <div style={{ marginBottom: 22, padding: 18, background: '#fff', border: '2px solid #16a34a' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#fff', background: '#16a34a', padding: '3px 8px' }}>En Vivo</span>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>{metaLine(selected)}</span>
+            <button onClick={() => setSelId(null)} style={{ marginLeft: 'auto', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)' }}>Cerrar ✕</button>
+          </div>
+          <ScoreEntry
+            teamAId={selected.teamAId} teamBId={selected.teamBId}
+            teamAName={teamName(selected.teamAId)} teamBName={teamName(selected.teamBId)}
+            setsCount={selected.setsCount} saving={savingResultId === selected.id}
+            liveScore={selected.liveScore?.sets}
+            onPartialUpdate={(sets) => liveUpdate(selected, sets)}
+            onSave={(r) => saveResult(selected, r)} onCancel={() => setSelId(null)}
+          />
+        </div>
+      )}
+
+      {/* Ready-to-start matches: kick a game off without leaving the console. */}
+      {canManage && ready.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Listos para empezar</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {ready.slice(0, 8).map(it => (
+              <div key={it.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 12px', background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--grey-400)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{metaLine(it)}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--grey-700)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{teamName(it.teamAId)} <span style={{ color: 'var(--grey-300)' }}>vs</span> {teamName(it.teamBId)}</div>
+                </div>
+                <button onClick={() => startLive(it)} disabled={busyId === it.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 13px', background: '#16a34a', color: '#fff', border: 'none', cursor: busyId === it.id ? 'wait' : 'pointer', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  <Play size={13} /> {busyId === it.id ? '…' : 'En Vivo'}
+                </button>
+              </div>
+            ))}
+          </div>
+          {ready.length > 8 && <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 8, fontStyle: 'italic' }}>+{ready.length - 8} más en el calendario.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main exported component ─────────────────────────────────────────────────────
 
 export function TournamentTabs({ tournament, canManage, canEditResults, requesterId, onUpdate }: {
@@ -1179,14 +1396,23 @@ export function TournamentTabs({ tournament, canManage, canEditResults, requeste
   requesterId?: string;
   onUpdate: (t: PersonalizadoTournament) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'calendario' | 'clasificacion' | 'bracket'>('calendario');
+  const [activeTab, setActiveTab] = useState<'calendario' | 'envivo' | 'clasificacion' | 'bracket'>('calendario');
   const editResults = canEditResults ?? canManage;
 
   const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.id, t.player2Name ? `${t.player1Name} / ${t.player2Name}` : t.player1Name])), [tournament.teams]);
   const teamName = (id: string) => teamMap.get(id) ?? '—';
 
+  // Number of matches currently EN VIVO, shown as a badge on the live tab.
+  const liveCount = useMemo(() => {
+    const c = tournament.config;
+    if (!c) return 0;
+    return (c.matches ?? []).filter(m => m.status === 'playing' && !m.result).length
+      + (c.bracketMatches ?? []).filter(m => m.status === 'playing' && !m.result).length;
+  }, [tournament.config]);
+
   const tabs = [
     { key: 'calendario' as const, label: 'Calendario', Icon: CalendarDays },
+    { key: 'envivo' as const, label: 'En Vivo', Icon: Radio },
     { key: 'clasificacion' as const, label: 'Clasificación', Icon: BarChart3 },
     { key: 'bracket' as const, label: 'Bracket', Icon: Trophy },
   ];
@@ -1198,15 +1424,19 @@ export function TournamentTabs({ tournament, canManage, canEditResults, requeste
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '12px 8px', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', border: 'none', background: activeTab === key ? '#fff' : 'transparent', color: activeTab === key ? 'var(--black)' : 'rgba(214,255,0,0.7)' }}
+            style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '12px 8px', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', border: 'none', background: activeTab === key ? '#fff' : 'transparent', color: activeTab === key ? 'var(--black)' : 'rgba(214,255,0,0.7)', position: 'relative' }}
           >
             <Icon size={15} /> {label}
+            {key === 'envivo' && liveCount > 0 && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 16, height: 16, padding: '0 4px', borderRadius: 999, background: '#16a34a', color: '#fff', fontSize: 9, fontWeight: 800 }}>{liveCount}</span>
+            )}
           </button>
         ))}
       </div>
 
       <div style={{ padding: '20px clamp(12px, 3vw, 24px) 28px' }}>
         {activeTab === 'calendario' && <CourtCalendar tournament={tournament} canManage={canManage} canEditResults={editResults} requesterId={requesterId} onUpdate={onUpdate} />}
+        {activeTab === 'envivo' && <ScoreLiveTab tournament={tournament} canManage={canManage} requesterId={requesterId} teamName={teamName} onUpdate={onUpdate} />}
         {activeTab === 'clasificacion' && <StandingsView tournament={tournament} teamName={teamName} canManage={canManage} canEditResults={editResults} onUpdate={onUpdate} />}
         {activeTab === 'bracket' && <BracketTab tournament={tournament} canManage={canManage} canEditResults={editResults} onUpdate={onUpdate} />}
       </div>
