@@ -69,12 +69,21 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
     if (loading) setLoading(false);
   }, [code, loading]);
 
-  // Auto-refresh every 30 s
+  // Refresh faster while any match is in progress so the live score streams in near real time.
+  const liveCount = useMemo(() => {
+    const c = tournament?.config;
+    if (!c) return 0;
+    return (c.matches ?? []).filter(m => m.status === 'playing').length
+      + (c.bracketMatches ?? []).filter(m => m.status === 'playing').length;
+  }, [tournament]);
+  const refreshMs = liveCount > 0 ? 10_000 : 30_000;
+
+  // Auto-refresh: every 10 s while matches are live, 30 s otherwise.
   useEffect(() => {
     loadData();
-    const iv = setInterval(loadData, 30_000);
+    const iv = setInterval(loadData, refreshMs);
     return () => clearInterval(iv);
-  }, [loadData]);
+  }, [loadData, refreshMs]);
 
   // Tick the "hace Xs" counter
   useEffect(() => {
@@ -419,6 +428,10 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
                       const playing = m.status === 'playing';
                       const won = done && m.result?.winnerId === team.id;
                       const accent = isElim ? '#8b5cf6' : '#3b82f6';
+                      // Live partial score for a match in progress, shown next to the EN VIVO badge.
+                      const liveStr = playing
+                        ? (m.liveScore?.sets ?? []).filter(s => s.a != null || s.b != null).map(s => `${s.a ?? '·'}-${s.b ?? '·'}`).join(' ')
+                        : '';
                       return (
                         <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: '1px solid #f7f7f7', fontSize: 12 }}>
                           <div style={{ textAlign: 'center', minWidth: 46, flexShrink: 0 }}>
@@ -438,7 +451,10 @@ export default function PersonalizadoLivePage({ params }: { params: Promise<{ co
                             {done
                               ? <span style={{ fontSize: 11, fontWeight: 800, color: won ? '#16a34a' : '#ef4444' }}>{won ? 'Ganó' : 'Perdió'}{m.result ? ` · ${m.result.walkover ? 'W.O.' : m.result.sets.map(s => `${s.a}-${s.b}`).join(' ')}` : ''}</span>
                               : playing
-                                ? <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#16a34a', padding: '2px 7px', borderRadius: 100, letterSpacing: '0.06em' }}>EN VIVO</span>
+                                ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    {liveStr && <span style={{ fontSize: 12, fontWeight: 800, color: '#16a34a', fontVariantNumeric: 'tabular-nums' }}>{liveStr}</span>}
+                                    <span style={{ fontSize: 9, fontWeight: 800, color: '#fff', background: '#16a34a', padding: '2px 7px', borderRadius: 100, letterSpacing: '0.06em' }}>EN VIVO</span>
+                                  </span>
                                 : <span style={{ fontSize: 10, color: '#aaa' }}>Pautado</span>}
                           </div>
                         </div>
@@ -563,29 +579,53 @@ function MatchCard({
   const a = teamMap.get(match.teamAId ?? '');
   const b = teamMap.get(match.teamBId ?? '');
   const bm = match as BracketMatch;
+
+  // Live partial score: only the sets that already have a number entered for either team.
+  const activeSets = (match.liveScore?.sets ?? []).filter(s => s.a != null || s.b != null);
+
+  const GREEN = '#16a34a';
+  const teamRow = (name: string, dim: boolean, side: 'a' | 'b') => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ flex: 1, minWidth: 0, opacity: dim ? 0.45 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+      {isLive && activeSets.length > 0 && (
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          {activeSets.map((s, i) => {
+            const v = side === 'a' ? s.a : s.b;
+            return (
+              <span key={i} style={{ minWidth: 22, textAlign: 'center', fontSize: 17, fontWeight: 800, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
+                {v == null ? '·' : v}
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div style={{
-      background: isLive ? '#0a0a0a' : '#fff',
+      background: isLive ? GREEN : '#fff',
       borderRadius: 13,
       padding: '14px 16px',
-      boxShadow: isLive ? '0 0 0 2px var(--neon)' : '0 1px 4px rgba(0,0,0,0.07)',
+      boxShadow: isLive ? `0 0 0 2px ${GREEN}, 0 6px 18px rgba(22,163,74,0.35)` : '0 1px 4px rgba(0,0,0,0.07)',
       position: 'relative', overflow: 'hidden',
     }}>
       {isLive && (
-        <div style={{ position: 'absolute', top: 0, right: 0, background: 'var(--neon)', color: '#0a0a0a', fontSize: 9, fontWeight: 900, letterSpacing: '0.12em', padding: '3px 9px' }}>
+        <div style={{ position: 'absolute', top: 0, right: 0, background: '#fff', color: GREEN, fontSize: 9, fontWeight: 900, letterSpacing: '0.12em', padding: '3px 9px', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <span className="live-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: GREEN, display: 'inline-block' }} />
           EN VIVO
         </div>
       )}
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: isElim ? (isLive ? '#c084fc' : '#8b5cf6') : (isLive ? '#60a5fa' : '#3b82f6'), marginBottom: 7 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: isLive ? 'rgba(255,255,255,0.85)' : (isElim ? '#8b5cf6' : '#3b82f6'), marginBottom: 7 }}>
         {catMap.get(match.categoryId) ?? ''}
         {isElim ? ` · ${bm.roundLabel}` : ''}
         {' · '}{match.courtName}
       </div>
       <div style={{ fontWeight: 600, fontSize: 13, color: isLive ? '#fff' : '#111', lineHeight: 1.6 }}>
-        <div style={{ opacity: a ? 1 : 0.45 }}>{a ? teamName(a) : bm.placeholderA ?? 'Por definir'}</div>
-        <div style={{ opacity: b ? 1 : 0.45 }}>{b ? teamName(b) : bm.placeholderB ?? 'Por definir'}</div>
+        {teamRow(a ? teamName(a) : bm.placeholderA ?? 'Por definir', !a, 'a')}
+        {teamRow(b ? teamName(b) : bm.placeholderB ?? 'Por definir', !b, 'b')}
       </div>
-      <div style={{ marginTop: 8, fontSize: 11, color: isLive ? 'rgba(255,255,255,0.4)' : '#bbb' }}>{match.time}</div>
+      <div style={{ marginTop: 8, fontSize: 11, color: isLive ? 'rgba(255,255,255,0.55)' : '#bbb' }}>{match.time}</div>
     </div>
   );
 }
