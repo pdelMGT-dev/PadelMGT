@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { MatchResult, SetScore } from '@/lib/personalizado-store';
 
 /**
@@ -8,7 +8,7 @@ import type { MatchResult, SetScore } from '@/lib/personalizado-store';
  * (set count comes from the tournament's score config). Used from the calendar and the bracket.
  */
 export function ScoreEntry({
-  teamAId, teamBId, teamAName, teamBName, setsCount, result, saving, onSave, onCancel,
+  teamAId, teamBId, teamAName, teamBName, setsCount, result, saving, onSave, onCancel, onPartialUpdate, liveScore,
 }: {
   teamAId: string;
   teamBId: string;
@@ -19,19 +19,43 @@ export function ScoreEntry({
   saving: boolean;
   onSave: (result: MatchResult) => void;
   onCancel: () => void;
+  // Called (debounced) on every score edit so a live match can broadcast its partial score
+  // before a winner exists. Only wired for matches that are already 'playing'.
+  onPartialUpdate?: (sets: { a: number | null; b: number | null }[]) => void;
+  // Partial score already broadcast (re-seeds the inputs when reopening a live match w/o a result).
+  liveScore?: { a: number | null; b: number | null }[];
 }) {
   // Allow up to setsCount sets, but always render at least the configured number of columns.
   const cols = Math.max(1, setsCount);
   const seed = (): { a: string; b: string }[] => {
     const base = Array.from({ length: cols }, () => ({ a: '', b: '' }));
-    if (result) result.sets.forEach((s, i) => { if (i < cols) base[i] = { a: String(s.a), b: String(s.b) }; });
+    if (result) {
+      result.sets.forEach((s, i) => { if (i < cols) base[i] = { a: String(s.a), b: String(s.b) }; });
+    } else if (liveScore) {
+      liveScore.forEach((s, i) => { if (i < cols) base[i] = { a: s.a == null ? '' : String(s.a), b: s.b == null ? '' : String(s.b) }; });
+    }
     return base;
   };
   const [sets, setSets] = useState<{ a: string; b: string }[]>(seed);
   const [walkover, setWalkover] = useState<string>(result?.walkover ? result.winnerId : '');
 
-  const setVal = (idx: number, side: 'a' | 'b', val: string) =>
+  // Broadcast the partial score (debounced) as the organizer types, so the public live page can
+  // show it before a winner exists. Skips the initial mount so opening the editor doesn't write.
+  const touched = useRef(false);
+  useEffect(() => {
+    if (!onPartialUpdate || !touched.current) return;
+    const parsed = sets.map(s => ({
+      a: s.a === '' ? null : parseInt(s.a, 10),
+      b: s.b === '' ? null : parseInt(s.b, 10),
+    }));
+    const id = setTimeout(() => onPartialUpdate(parsed), 500);
+    return () => clearTimeout(id);
+  }, [sets, onPartialUpdate]);
+
+  const setVal = (idx: number, side: 'a' | 'b', val: string) => {
+    touched.current = true;
     setSets(prev => { const n = [...prev]; n[idx] = { ...n[idx], [side]: val.replace(/[^0-9]/g, '').slice(0, 2) }; return n; });
+  };
 
   function computeWinner(): string | null {
     if (walkover) return walkover;

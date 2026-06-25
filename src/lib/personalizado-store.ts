@@ -70,6 +70,12 @@ export interface MatchResult {
   walkover: boolean;  // true → forfeit rules applied; sets[] may be empty
 }
 
+/** Partial, in-progress score broadcast while a match is 'playing' (no winner required yet).
+ *  Cleared once the final `result` is recorded. Each cell is null until a number is entered. */
+export interface LiveScore {
+  sets: { a: number | null; b: number | null }[];
+}
+
 export interface PersonalizadoMatch {
   id: string;
   categoryId: string;
@@ -84,6 +90,7 @@ export interface PersonalizadoMatch {
   teamBId: string;
   status: 'scheduled' | 'playing' | 'done';
   result?: MatchResult;     // filled once an organizer enters the score
+  liveScore?: LiveScore;    // partial score shown live while status === 'playing'
 }
 
 export const BRACKET_ROUND_LABELS: Record<number, string> = {
@@ -112,6 +119,7 @@ export interface BracketMatch {
   courtName?: string;
   status: 'pending' | 'scheduled' | 'playing' | 'done';
   result?: MatchResult;
+  liveScore?: LiveScore;     // partial score shown live while status === 'playing'
 }
 
 export interface TeamStanding {
@@ -2450,12 +2458,12 @@ export function publishedTournamentView(t: PersonalizadoTournament): Personaliza
   const liveB = new Map((cfg.bracketMatches ?? []).map(m => [m.id, m]));
   const matches = cfg.published.matches.map(pm => {
     const live = liveM.get(pm.id);
-    return live ? { ...pm, result: live.result, status: live.status } : pm;
+    return live ? { ...pm, result: live.result, status: live.status, liveScore: live.liveScore } : pm;
   });
   const bracketMatches = cfg.published.bracketMatches.map(pm => {
     const live = liveB.get(pm.id);
     return live
-      ? { ...pm, result: live.result, status: live.status, teamAId: live.teamAId, teamBId: live.teamBId }
+      ? { ...pm, result: live.result, status: live.status, liveScore: live.liveScore, teamAId: live.teamAId, teamBId: live.teamBId }
       : pm;
   });
   return { ...t, config: { ...cfg, matches, bracketMatches } };

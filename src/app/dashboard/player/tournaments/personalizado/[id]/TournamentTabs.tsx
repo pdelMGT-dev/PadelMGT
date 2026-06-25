@@ -702,7 +702,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
 
   async function handleSaveResult(matchId: string, result: MatchResult) {
     setSavingResultId(matchId);
-    const updated = matches.map(m => m.id === matchId ? { ...m, result, status: 'done' as const } : m);
+    const updated = matches.map(m => m.id === matchId ? { ...m, result, status: 'done' as const, liveScore: undefined } : m);
     onUpdate({ ...tournament, config: { ...cfg, matches: updated } });
     const res = await saveMatchResult({ tournamentId: tournament.id, matchId, result });
     if (!res.ok) { await persist({ ...cfg, matches: updated }, false); } // ensure persisted even if endpoint differs
@@ -711,13 +711,27 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
     showToast('Resultado guardado', 'success');
   }
 
+  // Broadcast the partial score of a live group match (debounced from ScoreEntry). Saved straight
+  // to the live config so publishedTournamentView() merges it onto the public page in real time.
+  async function handleLiveScoreUpdate(matchId: string, sets: { a: number | null; b: number | null }[]) {
+    const updated = matches.map(m => m.id === matchId ? { ...m, liveScore: { sets } } : m);
+    await persist({ ...cfg, matches: updated });
+  }
+
   async function handleSaveBracketResult(matchId: string, result: MatchResult) {
     setSavingResultId(matchId);
-    const newBracket = applyBracketResult(cfg.bracketMatches ?? [], matchId, result);
+    const resolved = applyBracketResult(cfg.bracketMatches ?? [], matchId, result);
+    const newBracket = resolved.map(m => m.id === matchId ? { ...m, liveScore: undefined } : m);
     await persist({ ...cfg, bracketMatches: newBracket });
     setSavingResultId(null);
     setEditingBracketId(null);
     showToast('Resultado guardado', 'success');
+  }
+
+  // Same as handleLiveScoreUpdate but for an elimination (bracket) match.
+  async function handleBracketLiveScoreUpdate(matchId: string, sets: { a: number | null; b: number | null }[]) {
+    const updated = (cfg.bracketMatches ?? []).map(m => m.id === matchId ? { ...m, liveScore: { sets } } : m);
+    await persist({ ...cfg, bracketMatches: updated });
   }
 
   async function handleAddCourt() {
@@ -1056,6 +1070,8 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
                   teamAId={editing.teamAId} teamBId={editing.teamBId}
                   teamAName={teamName(editing.teamAId)} teamBName={teamName(editing.teamBId)}
                   setsCount={setsCount} result={editing.result} saving={savingResultId === editing.id}
+                  liveScore={editing.liveScore?.sets}
+                  onPartialUpdate={editing.status === 'playing' ? (sets) => handleLiveScoreUpdate(editing.id, sets) : undefined}
                   onSave={(r) => handleSaveResult(editing.id, r)} onCancel={() => setEditingId(null)}
                 />
               </>
@@ -1089,6 +1105,8 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
                 teamAId={bm.teamAId} teamBId={bm.teamBId}
                 teamAName={teamName(bm.teamAId)} teamBName={teamName(bm.teamBId)}
                 setsCount={setsCountElim} result={bm.result} saving={savingResultId === bm.id}
+                liveScore={bm.liveScore?.sets}
+                onPartialUpdate={bm.status === 'playing' ? (sets) => handleBracketLiveScoreUpdate(bm.id, sets) : undefined}
                 onSave={(r) => handleSaveBracketResult(bm.id, r)} onCancel={() => setEditingBracketId(null)}
               />
             )}
