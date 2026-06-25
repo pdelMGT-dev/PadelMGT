@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Bell } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bell, Trophy, Medal, XCircle, CalendarClock, CalendarDays } from 'lucide-react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import {
   useTournamentNotificationCount,
@@ -20,11 +21,24 @@ function timeAgo(iso: string): string {
   return `hace ${d} d`;
 }
 
+// Icon + accent per notification type.
+function notifVisual(type: string): { icon: React.ReactNode; color: string } {
+  switch (type) {
+    case 'qualified':  return { icon: <Medal size={15} />, color: '#16a34a' };
+    case 'advanced':   return { icon: <Trophy size={15} />, color: '#d6ff00' };
+    case 'eliminated': return { icon: <XCircle size={15} />, color: '#ef4444' };
+    case 'next_match': return { icon: <CalendarClock size={15} />, color: '#3b82f6' };
+    default:           return { icon: <CalendarDays size={15} />, color: 'var(--grey-400)' };
+  }
+}
+
 /**
- * Floating bell with an unread badge for tournament schedule notifications. Players see this on
- * every dashboard page; opening it shows the list and marks unread items as read.
+ * Floating bell with an unread badge for tournament notifications (schedule changes + progression:
+ * qualified / advanced / eliminated / next match). Players see this on every dashboard page;
+ * opening it shows the list, marks unread items as read, and lets them jump to the tournament.
  */
 export default function NotificationBell() {
+  const router = useRouter();
   const { user } = useCurrentUser();
   const { count, refresh } = useTournamentNotificationCount(user?.id);
   const { notifications, loading, load, markRead } = useTournamentNotifications(user?.id);
@@ -94,12 +108,28 @@ export default function NotificationBell() {
           ) : notifications.length === 0 ? (
             <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 13, color: 'var(--grey-400)' }}>No tenés notificaciones.</div>
           ) : (
-            notifications.map(n => (
-              <div key={n.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--grey-50, #f4f4f4)', background: n.read ? '#fff' : 'rgba(214,255,0,0.06)' }}>
-                <div style={{ fontSize: 13, color: 'var(--black)', lineHeight: 1.4 }}>{n.message}</div>
-                <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 4 }}>{timeAgo(n.createdAt)}</div>
-              </div>
-            ))
+            notifications.map(n => {
+              const v = notifVisual(n.type);
+              const clickable = !!n.link;
+              return (
+                <div
+                  key={n.id}
+                  onClick={clickable ? () => { setOpen(false); router.push(n.link!); } : undefined}
+                  style={{
+                    display: 'flex', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--grey-50, #f4f4f4)',
+                    background: n.read ? '#fff' : 'rgba(214,255,0,0.06)', cursor: clickable ? 'pointer' : 'default',
+                  }}
+                >
+                  <span style={{ flexShrink: 0, width: 26, height: 26, borderRadius: '50%', background: '#0a0a0a', color: v.color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                    {v.icon}
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, color: 'var(--black)', lineHeight: 1.4 }}>{n.message}</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 4 }}>{timeAgo(n.createdAt)}</div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       )}

@@ -17,7 +17,9 @@ import {
   computeQualifiedTable,
   saveControlPanel,
   saveMatchResult,
-  applyBracketResult,
+  applyGroupResultToConfig,
+  applyBracketResultToConfig,
+  createNotifications,
   scheduleSignature,
   tournamentPlayerIds,
   createScheduleNotifications,
@@ -147,6 +149,11 @@ function StandingsView({ tournament, teamName, canManage, canEditResults, onUpda
                         <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>Grupo {g.groupLabel}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span style={{ fontSize: 10, color: 'var(--grey-400)' }}>{doneCount}/{groupMatches.length} jugados</span>
+                          {!confirmed && allDone && (
+                            <span title="Los clasificados ya aparecen en el bracket como provisionales. Confirmá para bloquearlos." style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#b45309', background: 'rgba(180,83,9,0.1)', padding: '2px 7px', borderRadius: 999 }}>
+                              Provisional en bracket
+                            </span>
+                          )}
                           {confirmed ? (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#15803d' }}>
                               <CheckCircle2 size={12} /> Confirmado
@@ -702,13 +709,15 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
 
   async function handleSaveResult(matchId: string, result: MatchResult) {
     setSavingResultId(matchId);
-    const updated = matches.map(m => m.id === matchId ? { ...m, result, status: 'done' as const, liveScore: undefined } : m);
-    onUpdate({ ...tournament, config: { ...cfg, matches: updated } });
-    const res = await saveMatchResult({ tournamentId: tournament.id, matchId, result });
-    if (!res.ok) { await persist({ ...cfg, matches: updated }, false); } // ensure persisted even if endpoint differs
+    // Records the result, auto-releases settled groups' qualifiers to the bracket (provisional),
+    // and collects qualified/next-match notifications.
+    const { config: newCfg, items } = applyGroupResultToConfig(tournament, matchId, result);
+    await persist(newCfg, true);
+    void saveMatchResult({ tournamentId: tournament.id, matchId, result }); // keep the match-result table in sync
+    if (items.length) void createNotifications(tournament.id, 'tp', items);
     setSavingResultId(null);
     setEditingId(null);
-    showToast('Resultado guardado', 'success');
+    showToast(items.some(i => i.type === 'qualified') ? 'Resultado guardado — clasificados liberados al bracket' : 'Resultado guardado', 'success');
   }
 
   // Broadcast the partial score of a live group match (debounced from ScoreEntry). Saved straight
@@ -720,9 +729,9 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
 
   async function handleSaveBracketResult(matchId: string, result: MatchResult) {
     setSavingResultId(matchId);
-    const resolved = applyBracketResult(cfg.bracketMatches ?? [], matchId, result);
-    const newBracket = resolved.map(m => m.id === matchId ? { ...m, liveScore: undefined } : m);
-    await persist({ ...cfg, bracketMatches: newBracket });
+    const { config: newCfg, items } = applyBracketResultToConfig(tournament, matchId, result);
+    await persist(newCfg);
+    if (items.length) void createNotifications(tournament.id, 'tp', items);
     setSavingResultId(null);
     setEditingBracketId(null);
     showToast('Resultado guardado', 'success');
@@ -998,8 +1007,8 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
                           <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: bvis.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catMap.get(bracketMatch.categoryId) ?? ''} · {bracketMatch.roundLabel}</span>
                           {bvis.label && <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.08em', color: bvis.fg }}>{bvis.label}</span>}
                         </div>
-                        <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bracketMatch.teamAId ? teamName(bracketMatch.teamAId) : (bracketMatch.placeholderA ?? 'Por definir')}</div>
-                        <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bracketMatch.teamBId ? teamName(bracketMatch.teamBId) : (bracketMatch.placeholderB ?? 'Por definir')}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bracketMatch.teamAId ? teamName(bracketMatch.teamAId) : (bracketMatch.placeholderA ?? 'Por definir')}{bracketMatch.teamAId && bracketMatch.provisionalA && !bracketMatch.result && <span title="Clasificado provisional" style={{ color: '#fbbf24' }}> •</span>}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bracketMatch.teamBId ? teamName(bracketMatch.teamBId) : (bracketMatch.placeholderB ?? 'Por definir')}{bracketMatch.teamBId && bracketMatch.provisionalB && !bracketMatch.result && <span title="Clasificado provisional" style={{ color: '#fbbf24' }}> •</span>}</div>
                         {bracketMatch.result && <div style={{ fontSize: 10, fontWeight: 800, marginTop: 1, color: bvis.fg }}>{scoreStr(bracketMatch.result)}</div>}
                       </div>
                     );
@@ -1265,19 +1274,16 @@ function ScoreLiveTab({ tournament, canManage, requesterId, teamName, onUpdate }
     await persist(newCfg);
   }
 
-  // Register the final result, clearing the live partial.
+  // Register the final result, clearing the live partial. Mirrors the calendar/bracket save:
+  // group results auto-release settled qualifiers to the bracket; both fire progression notifications.
   async function saveResult(it: LiveItem, result: MatchResult) {
     setSavingResultId(it.id);
-    if (it.kind === 'group') {
-      const updated = matches.map(m => m.id === it.id ? { ...m, result, status: 'done' as const, liveScore: undefined } : m);
-      onUpdate({ ...tournament, config: { ...cfg, matches: updated } });
-      const res = await saveMatchResult({ tournamentId: tournament.id, matchId: it.id, result });
-      if (!res.ok) await persist({ ...cfg, matches: updated });
-    } else {
-      const resolved = applyBracketResult(bracketMatches, it.id, result);
-      const newBracket = resolved.map(m => m.id === it.id ? { ...m, liveScore: undefined } : m);
-      await persist({ ...cfg, bracketMatches: newBracket });
-    }
+    const { config: newCfg, items } = it.kind === 'group'
+      ? applyGroupResultToConfig(tournament, it.id, result)
+      : applyBracketResultToConfig(tournament, it.id, result);
+    await persist(newCfg);
+    if (it.kind === 'group') void saveMatchResult({ tournamentId: tournament.id, matchId: it.id, result });
+    if (items.length) void createNotifications(tournament.id, 'tp', items);
     setSavingResultId(null);
     setSelId(null);
     showToast('Resultado guardado', 'success');

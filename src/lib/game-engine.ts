@@ -166,6 +166,9 @@ export interface ActiveGame {
   createdAt?: string;         // ISO date when game was first created
   reorganizationRequested?: boolean;
   reorganizationRequestedAt?: string;
+  // dedup keys of progression notifications already sent (qualified/advanced/eliminated/next_match)
+  // so editing a bracket result never re-notifies the same players for the same event.
+  notifiedEvents?: string[];
   leagueId?: string;   // player-created league this game belongs to
   seasonId?: string;   // league season this game belongs to
   acceptsFamilyMembers?: boolean; // organizer allows guardians to register family members (minors)
