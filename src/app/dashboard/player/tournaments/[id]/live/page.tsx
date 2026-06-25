@@ -25,6 +25,11 @@ import {
 import KnockoutBracketView from '@/components/KnockoutBracketView';
 import WorldCupBracketView from '@/components/WorldCupBracketView';
 import MatchSetResult from '@/components/MatchSetResult';
+import {
+  classicAdvanceNotifications,
+  classicBracketNotifications,
+  createNotifications,
+} from '@/lib/tournament-notifications';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1161,9 +1166,13 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#854d0e' }}>¿Confirmar?</span>
                     <button onClick={() => {
-                      const updated = advanceGroupsToKnockout(t);
+                      const advanced = advanceGroupsToKnockout(t);
+                      // Notify qualified pairs (and their first bracket match) as the cuadro fills.
+                      const { items, notifiedEvents } = classicAdvanceNotifications(advanced);
+                      const updated = { ...advanced, notifiedEvents };
                       saveTournament(updated);
                       setTournament(updated);
+                      if (items.length) void createNotifications(updated.id, 'torneo', items);
                       setAdvanceConfirm(false);
                     }} style={{ padding: '7px 14px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
                       Sí
@@ -1367,9 +1376,13 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
               </div>
               {koBracketPhaseOpen && (() => {
                 const onScore = (roundIdx: number, matchIdx: number, s1: number, s2: number, sets?: Array<{ p1: number; p2: number }>, walkover?: boolean) => {
-                  const updated = updateKnockoutBracketMatch(t, roundIdx, matchIdx, s1, s2, sets, walkover);
+                  const scored = updateKnockoutBracketMatch(t, roundIdx, matchIdx, s1, s2, sets, walkover);
+                  // Notify winner (advanced/champion), loser (eliminated) and any newly-set next match.
+                  const { items, notifiedEvents } = classicBracketNotifications(scored, roundIdx, matchIdx);
+                  const updated = { ...scored, notifiedEvents };
                   saveTournament(updated);
                   setTournament(updated);
+                  if (items.length) void createNotifications(updated.id, 'torneo', items);
                   if (updated.status === 'finished') {
                     applyTournamentRankingResults(updated);
                     showToast('¡Torneo finalizado! Resultados guardados.', 'success');

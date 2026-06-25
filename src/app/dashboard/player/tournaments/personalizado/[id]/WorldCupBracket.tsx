@@ -63,13 +63,18 @@ function BracketCard({
   const clickable = canManage && !isSkeleton && bothKnown && (!done || editResults);
   const accent = done ? '#0a0a0a' : live ? '#16a34a' : '#3b82f6';
 
-  const side = (teamId?: string, placeholder?: string, which: 'a' | 'b' = 'a') => {
+  const side = (teamId?: string, placeholder?: string, which: 'a' | 'b' = 'a', prov = false) => {
     const isWinner = done && m.result!.winnerId === teamId;
     const name = teamId ? teamName(teamId) : (placeholder ?? 'Por definir');
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px', height: CARD_H / 2, borderBottom: which === 'a' ? '1px solid var(--grey-100)' : 'none' }}>
-        <span style={{ fontSize: 11.5, fontWeight: isWinner ? 800 : 600, color: teamId ? (isWinner ? 'var(--black)' : 'var(--grey-500)') : 'var(--grey-300)', fontStyle: teamId ? 'normal' : 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: CARD_W - 56 }}>
-          {name}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden' }}>
+          <span style={{ fontSize: 11.5, fontWeight: isWinner ? 800 : 600, color: teamId ? (prov ? '#b45309' : isWinner ? 'var(--black)' : 'var(--grey-500)') : 'var(--grey-300)', fontStyle: teamId ? 'normal' : 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: CARD_W - 70 }}>
+            {name}
+          </span>
+          {teamId && prov && !done && (
+            <span title="Clasificado provisional — confirmá el grupo para bloquear" style={{ flexShrink: 0, fontSize: 7, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', padding: '1px 4px', borderRadius: 3, background: 'rgba(180,83,9,0.12)', color: '#b45309' }}>Prov.</span>
+          )}
         </span>
         {done && !m.result!.walkover && (
           <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
@@ -91,8 +96,8 @@ function BracketCard({
       {(live || isThird) && (
         <span style={{ position: 'absolute', top: -8, left: 6, fontSize: 7, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '1px 5px', background: isThird ? '#b45309' : '#16a34a', color: '#fff' }}>{isThird ? '3er Puesto' : 'En vivo'}</span>
       )}
-      {side(m.teamAId, m.placeholderA, 'a')}
-      {side(m.teamBId, m.placeholderB, 'b')}
+      {side(m.teamAId, m.placeholderA, 'a', m.provisionalA)}
+      {side(m.teamBId, m.placeholderB, 'b', m.provisionalB)}
     </div>
   );
 }

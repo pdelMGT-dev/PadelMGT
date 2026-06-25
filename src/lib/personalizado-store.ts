@@ -113,6 +113,8 @@ export interface BracketMatch {
   placeholderB?: string;
   wildcardA?: boolean;       // true if teamA filled a balancing slot (not a direct group qualifier)
   wildcardB?: boolean;
+  provisionalA?: boolean;    // teamA was auto-revealed from a settled-but-not-yet-confirmed group
+  provisionalB?: boolean;    // (shown as "provisional" until the organizer confirms the group)
   day?: string;              // "YYYY-MM-DD" — scheduled day, once placed on the calendar
   time?: string;
   slot?: number;             // calendar time slot within the day (0-based, day-relative)
@@ -198,6 +200,14 @@ export interface ControlPanelConfig {
   // its results are read-only for co-creators (only the creator/SA may still adjust them, and
   // only before that team's elimination match starts).
   confirmedGroups?: string[];
+  // groups whose every group-stage match has a result (standings final) but that the organizer has
+  // not yet confirmed. Their qualifiers are auto-released to the bracket as "provisional" so the
+  // calendar/bracket fill in as teams classify; confirming locks them. Keys are `${categoryId}:${groupId}`.
+  provisionalGroups?: string[];
+  // dedup keys of progression notifications already sent (e.g. "qualified:teamId",
+  // "advanced:matchId:teamId", "eliminated:teamId", "next_match:matchId") so editing a result
+  // never re-notifies the same players for the same event.
+  notifiedEvents?: string[];
 }
 
 export const DEFAULT_CONTROL_CONFIG: ControlPanelConfig = {
@@ -1322,6 +1332,22 @@ export function isGroupConfirmed(
 }
 
 /**
+ * Keys (`${categoryId}:${groupId}`) of every group whose group-stage matches ALL have a result —
+ * i.e. its standings are final. These groups' qualifiers can be auto-released to the bracket as
+ * "provisional" (before the organizer confirms) so the calendar/bracket fill in as teams classify.
+ */
+export function settledGroups(tournament: PersonalizadoTournament): string[] {
+  const byGroup = new Map<string, { total: number; done: number }>();
+  for (const m of tournament.config?.matches ?? []) {
+    const key = `${m.categoryId}:${m.groupId}`;
+    const e = byGroup.get(key) ?? { total: 0, done: 0 };
+    e.total++; if (m.result) e.done++;
+    byGroup.set(key, e);
+  }
+  return [...byGroup.entries()].filter(([, e]) => e.total > 0 && e.done === e.total).map(([k]) => k);
+}
+
+/**
  * Fill round-0 bracket slots with the real qualified teams for every group that has been
  * confirmed; slots whose source group is not yet confirmed keep their position placeholder
  * ("1ero Grupo A") and no team id. Pure: returns a new bracketMatches array. Later rounds are
@@ -1331,28 +1357,40 @@ export function resolveBracketTeams(
   tournament: PersonalizadoTournament,
   confirmedGroups: string[],
   bracketMatches: BracketMatch[],
+  opts?: { provisionalGroups?: string[] },
 ): BracketMatch[] {
   const confirmed = new Set(confirmedGroups);
+  // Provisional groups are revealed too, but tagged so the UI can show them as not-yet-confirmed.
+  // A group that is both confirmed and provisional counts as confirmed (no provisional tag).
+  const provisional = new Set((opts?.provisionalGroups ?? []).filter(k => !confirmed.has(k)));
+  const reveal = new Set([...confirmed, ...provisional]);
   const srcCache = new Map<string, ReturnType<typeof bracketSlotSources>>();
   const standCache = new Map<string, TeamStanding[]>();
 
-  const reveal = (categoryId: string, src: BracketSlotSource | undefined): { teamId?: string; label: string } => {
-    if (!src || src.bye || !src.groupId || src.pos === undefined) return { teamId: undefined, label: src?.label ?? '—' };
-    if (!confirmed.has(`${categoryId}:${src.groupId}`)) return { teamId: undefined, label: src.label };
-    const ck = `${categoryId}:${src.groupId}`;
-    let st = standCache.get(ck);
-    if (!st) { st = calculateGroupStandings(tournament, categoryId, src.groupId); standCache.set(ck, st); }
-    return { teamId: st[src.pos - 1]?.teamId, label: src.label };
+  const revealSide = (categoryId: string, src: BracketSlotSource | undefined): { teamId?: string; label: string; prov: boolean } => {
+    if (!src || src.bye || !src.groupId || src.pos === undefined) return { teamId: undefined, label: src?.label ?? '—', prov: false };
+    const key = `${categoryId}:${src.groupId}`;
+    if (!reveal.has(key)) return { teamId: undefined, label: src.label, prov: false };
+    let st = standCache.get(key);
+    if (!st) { st = calculateGroupStandings(tournament, categoryId, src.groupId); standCache.set(key, st); }
+    return { teamId: st[src.pos - 1]?.teamId, label: src.label, prov: provisional.has(key) };
   };
 
   return bracketMatches.map(m => {
     if (m.round !== 0) return m;
+    // Never reshuffle a round-0 match that has already started or finished.
+    if (m.status === 'playing' || m.status === 'done' || m.result) return m;
     let info = srcCache.get(m.categoryId);
     if (info === undefined) { info = bracketSlotSources(tournament, m.categoryId); srcCache.set(m.categoryId, info); }
     if (!info) return m;
-    const a = reveal(m.categoryId, info.sources[m.slotIndex]);
-    const b = reveal(m.categoryId, info.sources[info.size - 1 - m.slotIndex]);
-    return { ...m, teamAId: a.teamId, teamBId: b.teamId, placeholderA: a.label, placeholderB: b.label };
+    const a = revealSide(m.categoryId, info.sources[m.slotIndex]);
+    const b = revealSide(m.categoryId, info.sources[info.size - 1 - m.slotIndex]);
+    return {
+      ...m,
+      teamAId: a.teamId, teamBId: b.teamId,
+      placeholderA: a.label, placeholderB: b.label,
+      provisionalA: a.prov, provisionalB: b.prov,
+    };
   });
 }
 
@@ -2346,6 +2384,7 @@ export interface TournamentNotification {
   tournamentId: string;
   type: string;
   message: string;
+  link?: string;
   read: boolean;
   createdAt: string;
 }
@@ -2369,6 +2408,254 @@ export async function createScheduleNotifications(
     read: false,
   }));
   await supabase.from('tournament_notifications').insert(rows).then(() => {/* ignore errors */});
+}
+
+// ── Progression notifications (qualified / advanced / eliminated / next match) ──
+
+export interface NotifItem {
+  playerId: string;
+  type: 'qualified' | 'advanced' | 'eliminated' | 'next_match';
+  message: string;
+  link?: string;
+}
+
+/**
+ * Insert a batch of progression notifications (one row per item). `product` distinguishes the
+ * source ('tp' | 'torneo') so the same table can serve both tournament products. Silently ignores
+ * empty lists and errors. The optional `link`/`product` columns are added in migration 014.
+ */
+export async function createNotifications(
+  tournamentId: string,
+  product: 'tp' | 'torneo',
+  items: NotifItem[],
+): Promise<void> {
+  if (!items.length || !isSupabaseConfigured || !supabase) return;
+  const rows = items
+    .filter(it => it.playerId)
+    .map(it => ({
+      player_id: it.playerId,
+      tournament_id: tournamentId,
+      product,
+      type: it.type,
+      message: it.message,
+      link: it.link ?? null,
+      read: false,
+    }));
+  if (!rows.length) return;
+  await supabase.from('tournament_notifications').insert(rows).then(() => {/* ignore errors */});
+}
+
+/** Both players' ids for a team (skips empties). */
+export function teamPlayerIdsFor(t: PersonalizadoTournament, teamId: string | undefined): string[] {
+  if (!teamId) return [];
+  const tm = t.teams.find(x => x.id === teamId);
+  if (!tm) return [];
+  return [tm.player1Id, tm.player2Id].filter((x): x is string => !!x);
+}
+
+/** Display label for a team ("Ana / Luis", or the single player's name). */
+export function teamLabel(t: PersonalizadoTournament, teamId: string | undefined): string {
+  if (!teamId) return 'Por definir';
+  const tm = t.teams.find(x => x.id === teamId);
+  if (!tm) return 'Por definir';
+  return tm.player2Name ? `${tm.player1Name} / ${tm.player2Name}` : tm.player1Name;
+}
+
+function catName(t: PersonalizadoTournament, categoryId: string): string {
+  return t.categories.find(c => c.id === categoryId)?.name ?? categoryId;
+}
+
+/**
+ * Diff two states of a TP tournament after a GROUP result was saved and emit:
+ *  - `qualified`  → players of every team that newly clinched a top-N spot in a settled group
+ *  - `next_match` → players of any bracket match that just gained BOTH opponents and a schedule
+ * Dedups against `next.config.notifiedEvents`. Returns the items plus the updated dedup key list
+ * (caller persists it into config.notifiedEvents).
+ */
+export function computeGroupProgressNotifications(
+  prev: PersonalizadoTournament,
+  next: PersonalizadoTournament,
+): { items: NotifItem[]; notifiedEvents: string[] } {
+  const sent = new Set(next.config?.notifiedEvents ?? prev.config?.notifiedEvents ?? []);
+  const items: NotifItem[] = [];
+  const link = `/dashboard/player/tournaments/personalizado/${next.id}`;
+
+  const prevSettled = new Set(settledGroups(prev));
+  const newlySettled = settledGroups(next).filter(k => !prevSettled.has(k));
+
+  for (const key of newlySettled) {
+    const [categoryId, groupId] = key.split(':');
+    const qN = next.config?.groups.find(g => g.categoryId === categoryId)?.qualifyPerGroup ?? 2;
+    const standings = calculateGroupStandings(next, categoryId, groupId);
+    standings.slice(0, qN).forEach((row, idx) => {
+      const dedup = `qualified:${row.teamId}`;
+      if (sent.has(dedup)) return;
+      sent.add(dedup);
+      for (const pid of teamPlayerIdsFor(next, row.teamId)) {
+        items.push({
+          playerId: pid, type: 'qualified', link,
+          message: `¡Clasificaste a la fase de eliminatorias de ${next.name} (${catName(next, categoryId)}) como ${ordinalEs(idx + 1)} de tu grupo!`,
+        });
+      }
+    });
+  }
+
+  // next_match: bracket matches that now have both teams + a scheduled slot.
+  const prevB = new Map((prev.config?.bracketMatches ?? []).map(m => [m.id, m]));
+  for (const m of next.config?.bracketMatches ?? []) {
+    if (!m.teamAId || !m.teamBId || !m.day || !m.time) continue;
+    const before = prevB.get(m.id);
+    const wasReady = before?.teamAId && before?.teamBId;
+    if (wasReady) continue;
+    const dedup = `next_match:${m.id}`;
+    if (sent.has(dedup)) continue;
+    sent.add(dedup);
+    const at = `${m.roundLabel} · ${fmtNotifDay(m.day)} ${m.time}${m.courtName ? ` · ${m.courtName}` : ''}`;
+    for (const [teamId, rivalId] of [[m.teamAId, m.teamBId], [m.teamBId, m.teamAId]] as const) {
+      for (const pid of teamPlayerIdsFor(next, teamId)) {
+        items.push({
+          playerId: pid, type: 'next_match', link,
+          message: `Tu próximo partido (${at}) es vs ${teamLabel(next, rivalId)}`,
+        });
+      }
+    }
+  }
+
+  return { items, notifiedEvents: [...sent] };
+}
+
+/**
+ * Diff two states of a TP tournament after a BRACKET result was saved and emit:
+ *  - `advanced`   → players of the winning team (with the round they reached)
+ *  - `eliminated` → players of the losing team (unless they drop into the 3rd-place match)
+ *  - `next_match` → players of whatever later match just gained both opponents
+ * Dedups against config.notifiedEvents. `playedMatchId` is the bracket match whose result was saved.
+ */
+export function computeBracketProgressNotifications(
+  prev: PersonalizadoTournament,
+  next: PersonalizadoTournament,
+  playedMatchId: string,
+): { items: NotifItem[]; notifiedEvents: string[] } {
+  const sent = new Set(next.config?.notifiedEvents ?? prev.config?.notifiedEvents ?? []);
+  const items: NotifItem[] = [];
+  const link = `/dashboard/player/tournaments/personalizado/${next.id}`;
+  const bracket = next.config?.bracketMatches ?? [];
+  const played = bracket.find(m => m.id === playedMatchId);
+  if (!played || !played.result || !played.teamAId || !played.teamBId) return { items, notifiedEvents: [...sent] };
+
+  const winnerId = played.result.winnerId;
+  const loserId = winnerId === played.teamAId ? played.teamBId : played.teamAId;
+  const catMatches = bracket.filter(m => m.categoryId === played.categoryId && m.roundLabel !== '3er Puesto');
+  const finalRoundIdx = Math.max(...catMatches.map(m => m.round));
+  const isFinal = played.round === finalRoundIdx && played.roundLabel !== '3er Puesto';
+  const isSemifinal = played.round === finalRoundIdx - 1 && finalRoundIdx >= 1 && played.roundLabel !== '3er Puesto';
+  const cat = catName(next, played.categoryId);
+
+  // Winner advanced (or won the title / 3rd place).
+  const wKey = `advanced:${played.id}:${winnerId}`;
+  if (!sent.has(wKey)) {
+    sent.add(wKey);
+    const msg = isFinal
+      ? `🏆 ¡Campeones de ${cat} en ${next.name}!`
+      : played.roundLabel === '3er Puesto'
+        ? `🥉 ¡Ganaron el 3er puesto de ${cat} en ${next.name}!`
+        : `¡Ganaron y avanzan a ${nextRoundLabel(played, finalRoundIdx)} en ${cat} (${next.name})!`;
+    for (const pid of teamPlayerIdsFor(next, winnerId)) items.push({ playerId: pid, type: 'advanced', message: msg, link });
+  }
+
+  // Loser eliminated — unless this is a semifinal (they go to the 3rd-place match).
+  if (!isSemifinal) {
+    const lKey = `eliminated:${played.id}:${loserId}`;
+    if (!sent.has(lKey)) {
+      sent.add(lKey);
+      const msg = played.roundLabel === '3er Puesto'
+        ? `Terminaron 4tos en ${cat} (${next.name}). ¡Gran torneo!`
+        : `Quedaron eliminados en ${played.roundLabel} de ${cat} (${next.name}). ¡Gracias por competir!`;
+      for (const pid of teamPlayerIdsFor(next, loserId)) items.push({ playerId: pid, type: 'eliminated', message: msg, link });
+    }
+  }
+
+  // next_match: any later match that now has both opponents set (winner propagated in).
+  const prevB = new Map((prev.config?.bracketMatches ?? []).map(m => [m.id, m]));
+  for (const m of bracket) {
+    if (m.id === played.id || !m.teamAId || !m.teamBId) continue;
+    const before = prevB.get(m.id);
+    if (before?.teamAId && before?.teamBId) continue;
+    const dedup = `next_match:${m.id}`;
+    if (sent.has(dedup)) continue;
+    sent.add(dedup);
+    const when = m.day && m.time ? ` (${m.roundLabel} · ${fmtNotifDay(m.day)} ${m.time}${m.courtName ? ` · ${m.courtName}` : ''})` : ` (${m.roundLabel})`;
+    for (const [teamId, rivalId] of [[m.teamAId, m.teamBId], [m.teamBId, m.teamAId]] as const) {
+      for (const pid of teamPlayerIdsFor(next, teamId)) {
+        items.push({ playerId: pid, type: 'next_match', message: `Tu próximo partido${when} es vs ${teamLabel(next, rivalId)}`, link });
+      }
+    }
+  }
+
+  return { items, notifiedEvents: [...sent] };
+}
+
+function nextRoundLabel(played: BracketMatch, finalRoundIdx: number): string {
+  const nextRound = played.round + 1;
+  if (nextRound > finalRoundIdx) return 'la Final';
+  const sizeAtNext = Math.pow(2, finalRoundIdx - nextRound + 1);
+  return BRACKET_ROUND_LABELS[sizeAtNext] ?? 'la siguiente ronda';
+}
+
+function fmtNotifDay(day: string): string {
+  try {
+    const d = new Date(`${day}T00:00:00`);
+    return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+  } catch { return day; }
+}
+
+/**
+ * Compute the new config after saving a GROUP result: records the result, re-resolves the bracket
+ * (auto-releasing settled groups' qualifiers as provisional), refreshes `provisionalGroups`, and
+ * returns the progression notifications to fire (qualified / next_match). Pure — caller persists.
+ */
+export function applyGroupResultToConfig(
+  tournament: PersonalizadoTournament,
+  matchId: string,
+  result: MatchResult,
+): { config: ControlPanelConfig; items: NotifItem[] } {
+  const cfg = tournament.config ?? DEFAULT_CONTROL_CONFIG;
+  const updatedMatches = (cfg.matches ?? []).map(m =>
+    m.id === matchId ? { ...m, result, status: 'done' as const, liveScore: undefined } : m,
+  );
+  const tmpT: PersonalizadoTournament = { ...tournament, config: { ...cfg, matches: updatedMatches } };
+  const provisionalGroups = settledGroups(tmpT);
+  const newBracket = resolveBracketTeams(
+    tmpT, cfg.confirmedGroups ?? [], cfg.bracketMatches ?? [], { provisionalGroups },
+  );
+  const nextT: PersonalizadoTournament = {
+    ...tournament,
+    config: { ...cfg, matches: updatedMatches, bracketMatches: newBracket, provisionalGroups },
+  };
+  const { items, notifiedEvents } = computeGroupProgressNotifications(tournament, nextT);
+  const config: ControlPanelConfig = {
+    ...cfg, matches: updatedMatches, bracketMatches: newBracket, provisionalGroups, notifiedEvents,
+  };
+  return { config, items };
+}
+
+/**
+ * Compute the new config after saving a BRACKET result: propagates the winner (and a semifinal
+ * loser into the 3rd-place match) and returns the progression notifications to fire
+ * (advanced / eliminated / next_match). Pure — caller persists.
+ */
+export function applyBracketResultToConfig(
+  tournament: PersonalizadoTournament,
+  matchId: string,
+  result: MatchResult,
+): { config: ControlPanelConfig; items: NotifItem[] } {
+  const cfg = tournament.config ?? DEFAULT_CONTROL_CONFIG;
+  const resolved = applyBracketResult(cfg.bracketMatches ?? [], matchId, result);
+  const newBracket = resolved.map(m => m.id === matchId ? { ...m, liveScore: undefined } : m);
+  const nextT: PersonalizadoTournament = { ...tournament, config: { ...cfg, bracketMatches: newBracket } };
+  const { items, notifiedEvents } = computeBracketProgressNotifications(tournament, nextT, matchId);
+  const config: ControlPanelConfig = { ...cfg, bracketMatches: newBracket, notifiedEvents };
+  return { config, items };
 }
 
 /** Fetch unread notification count for a player. Returns 0 on error. */
@@ -2398,6 +2685,7 @@ export async function getPlayerNotifications(playerId: string): Promise<Tourname
     tournamentId: r.tournament_id as string,
     type: r.type as string,
     message: r.message as string,
+    link: (r.link as string) ?? undefined,
     read: r.read as boolean,
     createdAt: r.created_at as string,
   }));
@@ -2463,7 +2751,10 @@ export function publishedTournamentView(t: PersonalizadoTournament): Personaliza
   const bracketMatches = cfg.published.bracketMatches.map(pm => {
     const live = liveB.get(pm.id);
     return live
-      ? { ...pm, result: live.result, status: live.status, liveScore: live.liveScore, teamAId: live.teamAId, teamBId: live.teamBId }
+      ? { ...pm, result: live.result, status: live.status, liveScore: live.liveScore,
+          teamAId: live.teamAId, teamBId: live.teamBId,
+          placeholderA: live.placeholderA, placeholderB: live.placeholderB,
+          provisionalA: live.provisionalA, provisionalB: live.provisionalB }
       : pm;
   });
   return { ...t, config: { ...cfg, matches, bracketMatches } };
