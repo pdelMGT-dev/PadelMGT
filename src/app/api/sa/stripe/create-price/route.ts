@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSARequest, saUnauthorized } from '@/lib/sa-session';
 
 export async function POST(request: NextRequest) {
+  if (!(await requireSARequest(request))) return saUnauthorized();
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeKey || stripeKey.startsWith('sk_test_...')) {
     return NextResponse.json({ error: 'Stripe no configurado. Agrega STRIPE_SECRET_KEY en Vercel.' }, { status: 503 });

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireSARequest, saUnauthorized } from '@/lib/sa-session';
 
 export async function GET(request: NextRequest) {
+  if (!(await requireSARequest(request))) return saUnauthorized();
   const planId = request.nextUrl.searchParams.get('planId');
   if (!planId) return NextResponse.json({ error: 'planId required' }, { status: 400 });
 

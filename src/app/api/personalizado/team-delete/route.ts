@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceClient } from '@/lib/supabase-server';
+import { serviceClient, getCallerPlayerIds } from '@/lib/supabase-server';
 import { requireSARequest } from '@/lib/sa-session';
 
 // personalizado_teams has RLS enabled with no DELETE policy for anon/authenticated,
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Solicitud no válida' }, { status: 400 });
   }
 
-  const { tournamentId, teamId, requesterId } = body;
+  const { tournamentId, teamId } = body;
   if (!tournamentId || !teamId) {
     return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
   }
@@ -23,8 +23,6 @@ export async function POST(request: NextRequest) {
   const isAdmin = !!(await requireSARequest(request));
 
   if (!isAdmin) {
-    if (!requesterId) return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
-
     const { data: row, error: rErr } = await svc
       .from('personalizado_tournaments')
       .select('creator_player_id, config')
@@ -33,10 +31,12 @@ export async function POST(request: NextRequest) {
     if (rErr) return NextResponse.json({ error: 'Error al leer el torneo' }, { status: 500 });
     if (!row) return NextResponse.json({ error: 'Torneo no encontrado' }, { status: 404 });
 
+    // Authorize against the verified session, not a client-supplied requesterId.
     const r = row as Record<string, unknown>;
     const creatorId = r.creator_player_id as string | null;
     const coCreatorIds = ((r.config as Record<string, unknown> | null)?.coCreatorIds as string[] | undefined) ?? [];
-    const canManage = creatorId === requesterId || coCreatorIds.includes(requesterId);
+    const callerIds = await getCallerPlayerIds(request);
+    const canManage = (!!creatorId && callerIds.includes(creatorId)) || coCreatorIds.some(cid => callerIds.includes(cid));
     if (!canManage) {
       return NextResponse.json({ error: 'No tenés permiso para eliminar este registro' }, { status: 403 });
     }

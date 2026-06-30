@@ -1,28 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceClient } from '@/lib/supabase-server';
+import { serviceClient, getCallerPlayerIds } from '@/lib/supabase-server';
 import { rowToTeam, type PersonalizadoCategory } from '@/lib/personalizado-store';
 
-// SOLO PARA PRUEBAS — eliminar este archivo antes del lanzamiento.
-//
-// Inserta equipos ficticios directamente (sin pasar por la validación de status),
-// para que el organizador pueda testear grupos, calendario y scores sin tener
-// que abrir inscripción real.
+// SOLO PARA PRUEBAS — inserta equipos ficticios para que el organizador pueda
+// testear grupos, calendario y scores sin abrir inscripción real.
+// Deshabilitado en producción para que no pueda contaminar torneos reales.
 
 export async function POST(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'No disponible' }, { status: 403 });
+  }
+
   const svc = serviceClient();
   if (!svc) return NextResponse.json({ error: 'Servicio no disponible' }, { status: 503 });
 
-  let body: { tournamentId?: string; categoryId?: string; count?: number; requesterId?: string };
+  let body: { tournamentId?: string; categoryId?: string; count?: number };
   try { body = await request.json(); } catch {
     return NextResponse.json({ error: 'Solicitud no válida' }, { status: 400 });
   }
 
-  const { tournamentId, categoryId, count = 4, requesterId } = body;
-  if (!tournamentId || !categoryId || !requesterId) {
+  const { tournamentId, categoryId, count = 4 } = body;
+  if (!tournamentId || !categoryId) {
     return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
   }
 
-  // Only the creator may seed.
+  // Only the creator may seed (verified session).
   const { data: trow, error: tErr } = await svc
     .from('personalizado_tournaments')
     .select('creator_player_id, categories')
@@ -30,7 +32,9 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
   if (tErr) return NextResponse.json({ error: 'Error al leer el torneo' }, { status: 500 });
   if (!trow) return NextResponse.json({ error: 'Torneo no encontrado' }, { status: 404 });
-  if ((trow as Record<string, unknown>).creator_player_id !== requesterId) {
+  const seedCreatorId = (trow as Record<string, unknown>).creator_player_id as string | null;
+  const callerIds = await getCallerPlayerIds(request);
+  if (!seedCreatorId || !callerIds.includes(seedCreatorId)) {
     return NextResponse.json({ error: 'Solo el creador puede usar el seed' }, { status: 403 });
   }
 

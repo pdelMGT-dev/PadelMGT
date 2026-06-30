@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceClient } from '@/lib/supabase-server';
+import { serviceClient, getServerUser } from '@/lib/supabase-server';
 
 /**
  * POST — direct lookup of a family member by their ID#.
@@ -12,6 +12,11 @@ import { serviceClient } from '@/lib/supabase-server';
 export async function POST(request: NextRequest) {
   const svc = serviceClient();
   if (!svc) return NextResponse.json({ ok: false, error: 'Servicio no disponible' }, { status: 503 });
+
+  // Authorize: only logged-in players may resolve a family member by ID#.
+  if (!(await getServerUser(request))) {
+    return NextResponse.json({ ok: false, error: 'No autorizado' }, { status: 401 });
+  }
 
   let body: { familyMemberId?: string };
   try {

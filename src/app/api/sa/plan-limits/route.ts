@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireSARequest, saUnauthorized } from '@/lib/sa-session';
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -9,6 +10,7 @@ function supabaseAdmin() {
 }
 
 export async function POST(request: NextRequest) {
+  if (!(await requireSARequest(request))) return saUnauthorized();
   const sb = supabaseAdmin();
   if (!sb) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
 

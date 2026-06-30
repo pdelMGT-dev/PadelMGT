@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceClient } from '@/lib/supabase-server';
+import { serviceClient, getCallerPlayerIds } from '@/lib/supabase-server';
+import { requireSARequest } from '@/lib/sa-session';
 import type { MatchResult } from '@/lib/personalizado-store';
 
 /**
@@ -23,13 +24,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
   }
 
-  // Verify the tournament exists so the FK constraint doesn't surprise us.
+  // Verify the tournament exists and authorize the writer: only the creator,
+  // a co-creator, or a SuperAdmin may enter results.
   const { data: trow } = await svc
     .from('personalizado_tournaments')
-    .select('id')
+    .select('id, creator_player_id, config')
     .eq('id', tournamentId)
     .maybeSingle();
   if (!trow) return NextResponse.json({ error: 'Torneo no encontrado' }, { status: 404 });
+
+  if (!(await requireSARequest(request))) {
+    const r = trow as Record<string, unknown>;
+    const creatorId = r.creator_player_id as string | null;
+    const coCreatorIds = ((r.config as Record<string, unknown> | null)?.coCreatorIds as string[] | undefined) ?? [];
+    const callerIds = await getCallerPlayerIds(request);
+    const canManage = (!!creatorId && callerIds.includes(creatorId)) || coCreatorIds.some(cid => callerIds.includes(cid));
+    if (!canManage) {
+      return NextResponse.json({ error: 'No tenés permiso para registrar resultados' }, { status: 403 });
+    }
+  }
 
   const { error } = await svc.from('personalizado_matches').upsert(
     {

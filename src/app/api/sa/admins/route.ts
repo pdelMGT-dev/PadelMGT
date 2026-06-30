@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySAToken, SA_COOKIE_NAME } from '@/lib/sa-session';
+import { hashPassword } from '@/lib/password';
 
 // Admin-users management — requires a valid signed SA token (httpOnly cookie).
 // The admin_users table has RLS locked to service_role, so all access goes
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     status: body.status ?? 'active',
     created_at: body.createdAt || new Date().toISOString(),
   };
-  if (body.password) row.password_hash = body.password;
+  if (body.password) row.password_hash = await hashPassword(body.password);
 
   const { error } = await db.from('admin_users').upsert(row);
   if (error) return NextResponse.json({ error: 'DB error' }, { status: 500 });

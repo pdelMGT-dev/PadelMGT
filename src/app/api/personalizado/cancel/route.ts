@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceClient } from '@/lib/supabase-server';
+import { serviceClient, getCallerPlayerIds } from '@/lib/supabase-server';
 
 const CANCELLABLE = ['draft', 'registration_open', 'configured'];
 
@@ -12,8 +12,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Solicitud no válida' }, { status: 400 });
   }
 
-  const { id, requesterId } = body;
-  if (!id || !requesterId) return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
+  const { id } = body;
+  if (!id) return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
 
   const { data: row, error: rErr } = await svc
     .from('personalizado_tournaments')
@@ -23,7 +23,10 @@ export async function POST(request: NextRequest) {
   if (rErr) return NextResponse.json({ error: 'Error al leer el torneo' }, { status: 500 });
   if (!row) return NextResponse.json({ error: 'Torneo no encontrado' }, { status: 404 });
 
-  if ((row as Record<string, unknown>).creator_player_id !== requesterId) {
+  // Authorize against the verified session, not a client-supplied requesterId.
+  const callerIds = await getCallerPlayerIds(request);
+  const creatorId = (row as Record<string, unknown>).creator_player_id as string | null;
+  if (!creatorId || !callerIds.includes(creatorId)) {
     return NextResponse.json({ error: 'Solo el creador puede cancelar el torneo' }, { status: 403 });
   }
 

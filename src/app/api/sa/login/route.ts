@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { signSAToken, SA_COOKIE_NAME } from '@/lib/sa-session';
 import { serviceClient } from '@/lib/supabase-server';
+import { verifyPassword, safeEqual } from '@/lib/password';
 
 // Simple in-memory rate limiter: max 10 attempts per 10 min per IP
 const attempts = new Map<string, { count: number; reset: number }>();
@@ -42,8 +43,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Server not configured' }, { status: 503 });
   }
 
-  // Check main superadmin credentials
-  if (email === adminEmail && password === adminPassword) {
+  // Check main superadmin credentials (timing-safe compare)
+  if (safeEqual(email, adminEmail) && safeEqual(password, adminPassword)) {
     const token = await signSAToken({ email, role: 'superadmin' });
     if (!token) return NextResponse.json({ error: 'Token error' }, { status: 500 });
     const res = NextResponse.json({ ok: true, role: 'superadmin' });
@@ -69,10 +70,10 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (data) {
-        // Sub-admins use plain password stored in admin_users (dev-friendly approach)
-        // In production: use bcrypt. For now compare directly.
+        // Sub-admin passwords are scrypt-hashed (legacy plaintext rows still
+        // verify via the util's backward-compat path).
         const storedPwd = (data as Record<string, unknown>).password_hash as string | undefined;
-        if (storedPwd && storedPwd === password) {
+        if (await verifyPassword(password, storedPwd)) {
           const token = await signSAToken({ email, role: data.role as string, subAdminId: data.id as string });
           if (!token) return NextResponse.json({ error: 'Token error' }, { status: 500 });
           const res = NextResponse.json({ ok: true, role: data.role });
