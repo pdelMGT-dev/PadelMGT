@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireSARequest, saUnauthorized } from '@/lib/sa-session';
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -30,7 +31,8 @@ function rowToPromo(row: Record<string, unknown>) {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!(await requireSARequest(request))) return saUnauthorized();
   const sb = supabaseAdmin();
   if (!sb) return NextResponse.json({ promos: [] });
 
@@ -44,6 +46,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  if (!(await requireSARequest(request))) return saUnauthorized();
   const sb = supabaseAdmin();
   if (!sb) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
 
@@ -78,6 +81,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  if (!(await requireSARequest(request))) return saUnauthorized();
   const sb = supabaseAdmin();
   if (!sb) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
 
@@ -108,6 +112,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!(await requireSARequest(request))) return saUnauthorized();
   const sb = supabaseAdmin();
   if (!sb) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
 

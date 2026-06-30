@@ -10,11 +10,16 @@ export interface SATokenPayload {
 }
 
 async function getSecretKey(): Promise<CryptoKey> {
-  const raw =
-    process.env.SA_SESSION_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.STRIPE_SECRET_KEY ||
-    'dev-fallback-secret-padelmgt-2026';
+  // Prefer a dedicated secret; the service-role key is an acceptable strong
+  // fallback. In production we REQUIRE one of these — never sign SA tokens with
+  // a hardcoded string, which would let anyone forge a superadmin cookie.
+  let raw = process.env.SA_SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!raw) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SA_SESSION_SECRET (or SUPABASE_SERVICE_ROLE_KEY) must be set in production');
+    }
+    raw = 'dev-fallback-secret-padelmgt-2026';
+  }
   const enc = new TextEncoder().encode(raw);
   return crypto.subtle.importKey('raw', enc, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceClient } from '@/lib/supabase-server';
+import { serviceClient, getCallerPlayerIds } from '@/lib/supabase-server';
 
 /**
  * POST — migrate a family member's tournament history to a real platform account.
@@ -26,6 +26,12 @@ export async function POST(request: NextRequest) {
   }
   if (!familyMemberId.startsWith('FM-')) {
     return NextResponse.json({ ok: false, error: 'ID# de familiar no válido' }, { status: 400 });
+  }
+
+  // Authorize: the caller may only migrate history INTO an account they control.
+  const callerIds = await getCallerPlayerIds(request);
+  if (!callerIds.includes(newPlayerId)) {
+    return NextResponse.json({ ok: false, error: 'No autorizado' }, { status: 403 });
   }
 
   let migrated = 0;

@@ -43,3 +43,29 @@ export async function getServerUser(
     return null;
   }
 }
+
+/**
+ * Resolve the set of player ids the verified caller controls. A player row is
+ * theirs if it is bound to their auth user (`user_id`) or — for SA-created /
+ * unclaimed rows — matches their confirmed auth email. Returns [] for anonymous
+ * callers. Use this for server-side authorization instead of trusting any
+ * player/requester id supplied in the request body.
+ */
+export async function getCallerPlayerIds(request: NextRequest): Promise<string[]> {
+  const user = await getServerUser(request);
+  if (!user) return [];
+  const db = serviceClient();
+  if (!db) return [];
+  const ids = new Set<string>();
+  try {
+    const { data: byUid } = await db.from('players').select('id').eq('user_id', user.id);
+    for (const r of byUid ?? []) ids.add((r as { id: string }).id);
+    if (user.email) {
+      const { data: byEmail } = await db.from('players').select('id').ilike('email', user.email);
+      for (const r of byEmail ?? []) ids.add((r as { id: string }).id);
+    }
+  } catch {
+    /* fall through with whatever resolved */
+  }
+  return [...ids];
+}

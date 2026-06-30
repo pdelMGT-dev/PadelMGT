@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceClient } from '@/lib/supabase-server';
+import { serviceClient, getCallerPlayerIds } from '@/lib/supabase-server';
+import { requireSARequest } from '@/lib/sa-session';
 import { rowToTeam, type PersonalizadoCategory } from '@/lib/personalizado-store';
 
 /**
@@ -22,6 +23,25 @@ export async function POST(request: NextRequest) {
   const VALID = ['pending', 'confirmed', 'rejected', 'waitlisted'];
   if (!tournamentId || !teamId || !status || !VALID.includes(status)) {
     return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
+  }
+
+  // Authorize before mutating: only the creator, a co-creator, or a SuperAdmin
+  // may change a team's status.
+  const { data: ownerRow } = await svc
+    .from('personalizado_tournaments')
+    .select('creator_player_id, config')
+    .eq('id', tournamentId)
+    .maybeSingle();
+  if (!ownerRow) return NextResponse.json({ error: 'Torneo no encontrado' }, { status: 404 });
+  if (!(await requireSARequest(request))) {
+    const r = ownerRow as Record<string, unknown>;
+    const creatorId = r.creator_player_id as string | null;
+    const coCreatorIds = ((r.config as Record<string, unknown> | null)?.coCreatorIds as string[] | undefined) ?? [];
+    const callerIds = await getCallerPlayerIds(request);
+    const canManage = (!!creatorId && callerIds.includes(creatorId)) || coCreatorIds.some(cid => callerIds.includes(cid));
+    if (!canManage) {
+      return NextResponse.json({ error: 'No tenés permiso para gestionar inscripciones' }, { status: 403 });
+    }
   }
 
   // Apply the status change and read back the affected team (need its category).

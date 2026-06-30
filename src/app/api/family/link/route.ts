@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceClient } from '@/lib/supabase-server';
+import { serviceClient, getCallerPlayerIds, getServerUser } from '@/lib/supabase-server';
 import { deriveInverseRelation, type RelationType, type FamilyLink } from '@/lib/family-store';
 
 /**
@@ -42,6 +42,12 @@ export async function POST(request: NextRequest) {
 
     if (!fromPlayerId || !fromPlayerName || !toPlayerEmail || !relationFromTo) {
       return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
+    }
+
+    // Authorize: the caller may only send link requests as themselves.
+    const callerIds = await getCallerPlayerIds(request);
+    if (!callerIds.includes(fromPlayerId)) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 
     // Look up the recipient player by email
@@ -129,6 +135,26 @@ export async function POST(request: NextRequest) {
     }
     if (response !== 'accepted' && response !== 'rejected') {
       return NextResponse.json({ error: 'Respuesta no válida' }, { status: 400 });
+    }
+
+    // Authorize: only the recipient of the link may accept/reject it.
+    const { data: linkRow, error: linkErr } = await svc
+      .from('family_links')
+      .select('to_player_id, to_player_email')
+      .eq('id', linkId)
+      .maybeSingle();
+    if (linkErr) return NextResponse.json({ error: 'Error al leer la solicitud' }, { status: 500 });
+    if (!linkRow) return NextResponse.json({ error: 'Solicitud no encontrada' }, { status: 404 });
+
+    const callerIds = await getCallerPlayerIds(request);
+    const caller = await getServerUser(request);
+    const toId = (linkRow as Record<string, unknown>).to_player_id as string | null;
+    const toEmail = ((linkRow as Record<string, unknown>).to_player_email as string | null)?.toLowerCase();
+    const isRecipient =
+      (!!toId && callerIds.includes(toId)) ||
+      (!!toEmail && (caller?.email ?? '').toLowerCase() === toEmail);
+    if (!isRecipient) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 
     const { error } = await svc

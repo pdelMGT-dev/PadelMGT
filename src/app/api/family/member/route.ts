@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceClient } from '@/lib/supabase-server';
+import { serviceClient, getCallerPlayerIds } from '@/lib/supabase-server';
 import type { FamilyMember } from '@/lib/family-store';
 
 /**
@@ -46,8 +46,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
   }
 
+  // Authorize: the caller may only manage family members they own.
+  const callerIds = await getCallerPlayerIds(request);
+  if (!callerIds.includes(ownerId)) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+  }
+
   if (action === 'create' || action === 'update') {
-    let memberToSave = { ...member };
+    // Bind the row to the authorized owner regardless of the body's member.ownerId.
+    let memberToSave = { ...member, ownerId };
 
     // If updating and email is newly set with invitationStatus === 'none', send invite
     if (action === 'update' && member.email && member.invitationStatus === 'none') {
@@ -99,6 +106,12 @@ export async function DELETE(request: NextRequest) {
   const { memberId, ownerId } = body;
   if (!memberId || !ownerId) {
     return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
+  }
+
+  // Authorize: the caller may only delete their own family members.
+  const callerIds = await getCallerPlayerIds(request);
+  if (!callerIds.includes(ownerId)) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
   }
 
   const { error } = await svc

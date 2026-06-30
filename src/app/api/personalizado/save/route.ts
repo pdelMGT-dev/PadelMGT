@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceClient } from '@/lib/supabase-server';
+import { serviceClient, getCallerPlayerIds } from '@/lib/supabase-server';
 import { rowToTeam, type PersonalizadoCategory } from '@/lib/personalizado-store';
 
 /**
@@ -31,10 +31,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Solicitud no válida' }, { status: 400 });
   }
 
-  const { id, categories, config, status, groupAssignments, date, time, requesterId } = body;
+  const { id, categories, config, status, groupAssignments, date, time } = body;
   if (!id) return NextResponse.json({ error: 'Falta el identificador del torneo' }, { status: 400 });
 
-  // 0) Authorize: only the creator or a listed co-creator may save the control panel.
+  // 0) Authorize against the VERIFIED session (never a client-supplied requesterId):
+  //    only the creator or a listed co-creator may save the control panel.
   const { data: ownerRow, error: ownerErr } = await svc
     .from('personalizado_tournaments')
     .select('creator_player_id, config')
@@ -45,12 +46,14 @@ export async function POST(request: NextRequest) {
   const creatorId = (ownerRow as Record<string, unknown>).creator_player_id as string | null;
   const existingConfig = ((ownerRow as Record<string, unknown>).config ?? {}) as { coCreatorIds?: string[] };
   const coCreatorIds = existingConfig.coCreatorIds ?? [];
-  const isManager = !!requesterId && (requesterId === creatorId || coCreatorIds.includes(requesterId));
+  const callerIds = await getCallerPlayerIds(request);
+  const isCreator = !!creatorId && callerIds.includes(creatorId);
+  const isManager = isCreator || coCreatorIds.some(cid => callerIds.includes(cid));
   if (!isManager) {
     return NextResponse.json({ error: 'No tienes permiso para gestionar este torneo' }, { status: 403 });
   }
   // Only the creator may change the co-creator list; ignore co-creator edits to it.
-  if (config && requesterId !== creatorId) {
+  if (config && !isCreator) {
     (config as { coCreatorIds?: string[] }).coCreatorIds = coCreatorIds;
   }
 
