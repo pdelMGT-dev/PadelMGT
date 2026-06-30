@@ -21,15 +21,42 @@ const inter = Inter({
   display: "swap",
 });
 
+const SITE_NAME = "PadelMGT";
+const SITE_TITLE = "PadelMGT — Crea. Juega. Rankea.";
+const SITE_DESCRIPTION =
+  "La plataforma para crear y gestionar torneos, ligas y clubes de pádel. Diseñada para Latinoamérica.";
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://padelmgt.com"),
-  title: "PadelMGT — Crea. Juega. Rankea.",
-  description: "La plataforma para crear y gestionar torneos, ligas y clubes de pádel. Diseñada para Latinoamérica.",
+  title: {
+    default: SITE_TITLE,
+    template: "%s · PadelMGT",
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    "pádel", "padel", "torneos de pádel", "ligas de pádel", "ranking de pádel",
+    "americano", "mexicano", "round robin", "world cup", "clubes de pádel", "LATAM",
+  ],
   manifest: "/manifest.json",
+  alternates: { canonical: "/" },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "PadelMGT",
+  },
+  openGraph: {
+    type: "website",
+    locale: "es_LA",
+    url: "https://padelmgt.com",
+    siteName: SITE_NAME,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
   },
   icons: {
     icon: [
