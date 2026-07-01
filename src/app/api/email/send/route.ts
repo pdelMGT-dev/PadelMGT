@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { DEFAULT_TEMPLATE_MAP, applyVars } from '@/lib/email-templates-defaults';
+import { rateLimitAllow, clientIp, EMAIL_SEND_RULE } from '@/lib/rate-limit';
 
 function supabaseAnon() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -56,19 +57,6 @@ function safeJoinUrl(raw: unknown): string {
   }
 }
 
-// Best-effort in-memory rate limit: 20 emails / 10 min per IP
-const ipCounts = new Map<string, { count: number; resetAt: number }>();
-function rateLimited(ip: string): boolean {
-  const now = Date.now();
-  const entry = ipCounts.get(ip);
-  if (!entry || entry.resetAt < now) {
-    ipCounts.set(ip, { count: 1, resetAt: now + 10 * 60 * 1000 });
-    return false;
-  }
-  entry.count++;
-  return entry.count > 20;
-}
-
 export async function POST(request: NextRequest) {
   const apiKey   = process.env.RESEND_API_KEY;
   const fromAddr = process.env.RESEND_FROM_EMAIL ?? 'PadelMGT <no-reply@padelmgt.com>';
@@ -90,8 +78,8 @@ export async function POST(request: NextRequest) {
     } catch { /* malformed origin — let it pass to validation below */ }
   }
 
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  if (rateLimited(ip)) {
+  // Shared (Upstash-backed) rate limit: 20 emails / 10 min per IP.
+  if (!(await rateLimitAllow(EMAIL_SEND_RULE, clientIp(request)))) {
     return NextResponse.json({ error: 'Rate limit' }, { status: 429 });
   }
 
