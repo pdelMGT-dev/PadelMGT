@@ -18,7 +18,7 @@ export function serviceClient(): SupabaseClient | null {
 /**
  * Verify the caller's Supabase Auth session from the request cookies and return
  * the authenticated user (or null). Uses the cookie-based SSR client, matching
- * the verification done in middleware.ts. Read-only: it does not mutate cookies.
+ * the verification done in proxy.ts. Read-only: it does not mutate cookies.
  */
 export async function getServerUser(
   request: NextRequest,
