@@ -11,6 +11,9 @@
   --court-blue-deep: #0a1638;
   --turf-green: #1eaa52;
 
+  /* Blue Spectrum — player dashboard accent */
+  --bs-light: #6fa3ff;
+
   /* Grays */
   --grey-50:  #FAFAFA;
   --grey-100: #F5F5F5;
@@ -430,6 +433,10 @@ html, body {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99;
 }
 .dash-sidebar-close { display: none !important; }
+
+/* Blue Spectrum — player dashboard */
+.dashboard-sidebar.bs-player { background: #0a1638; }
+.dash-mobile-bar.bs-player { background: #0a1638; border-bottom-color: rgba(111,163,255,0.12); }
 
 /* Collapsed sidebar — desktop only, managed via body class */
 body.sidebar-collapsed .dashboard-sidebar {

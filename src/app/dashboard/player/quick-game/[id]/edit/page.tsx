@@ -629,7 +629,7 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
 
         {/* Confirmed players info */}
         {confirmedPlayersCount > 0 && (
-          <div style={{ marginBottom: 16, padding: '12px 16px', background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.3)', fontSize: 12, color: 'var(--grey-500)', lineHeight: 1.6 }}>
+          <div style={{ marginBottom: 16, padding: '12px 16px', background: 'rgba(26,78,216,0.1)', border: '1px solid rgba(111,163,255,0.35)', fontSize: 12, color: 'var(--grey-500)', lineHeight: 1.6 }}>
             <strong>{confirmedPlayersCount}</strong> jugador{confirmedPlayersCount !== 1 ? 'es' : ''} ya confirmado{confirmedPlayersCount !== 1 ? 's' : ''}. No podés reducir el máximo por debajo de este número.
           </div>
         )}
@@ -789,7 +789,7 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {(['traditional', 'gold', 'silver', 'ipf'] as DeuceRule[]).map(rule => (
                     <button key={rule} onClick={() => setDeuceRule(rule)} style={{ padding: '12px 16px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 12, border: `1px solid ${deuceRule === rule ? 'var(--black)' : 'var(--grey-200)'}`, background: deuceRule === rule ? 'var(--grey-900)' : '#fff', color: deuceRule === rule ? '#fff' : 'var(--black)' }}>
-                      <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${deuceRule === rule ? 'var(--neon)' : 'var(--grey-300)'}`, background: deuceRule === rule ? 'var(--neon)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
+                      <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${deuceRule === rule ? 'var(--court-blue)' : 'var(--grey-300)'}`, background: deuceRule === rule ? 'var(--bs-light)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{DEUCE_LABEL[rule]}</div>
                         <div style={{ fontSize: 11, color: deuceRule === rule ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.5 }}>{DEUCE_DESC[rule]}</div>
@@ -821,7 +821,7 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
           <button onClick={() => setStep(4)} style={{ padding: '11px 24px', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, background: 'transparent', cursor: 'pointer', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>← Atrás</button>
           <button
             onClick={handleSubmit}
-            style={{ padding: '13px 36px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+            style={{ padding: '13px 36px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
           >
             GUARDAR CAMBIOS
           </button>

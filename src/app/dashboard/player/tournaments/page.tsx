@@ -898,7 +898,7 @@ export default function PlayerTournamentsPage() {
                 ] as const).map(o => (
                   <button key={o.v} onClick={() => setter(o.v)}
                     style={{ padding: '10px 14px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, border: `1px solid ${curVal === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: curVal === o.v ? '#111' : '#fff', color: curVal === o.v ? '#fff' : 'var(--black)' }}>
-                    <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${curVal === o.v ? 'var(--neon)' : 'var(--grey-300)'}`, background: curVal === o.v ? 'var(--neon)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
+                    <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${curVal === o.v ? 'var(--court-blue)' : 'var(--grey-300)'}`, background: curVal === o.v ? 'var(--bs-light)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{o.label}</div>
                       <div style={{ fontSize: 10, color: curVal === o.v ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.4 }}>{o.desc}</div>
@@ -974,7 +974,7 @@ export default function PlayerTournamentsPage() {
             );
             return (
               <>
-                <div style={{ padding: '12px 16px', background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.3)', marginBottom: 8, fontSize: 12, color: 'var(--black)' }}>
+                <div style={{ padding: '12px 16px', background: 'rgba(26,78,216,0.1)', border: '1px solid rgba(111,163,255,0.35)', marginBottom: 8, fontSize: 12, color: 'var(--black)' }}>
                   {isWC
                     ? <>El <strong>World Cup</strong> es por <strong>Parejas</strong>: fase de grupos (todos contra todos) seguida de un cuadro de eliminatorias estilo Mundial. Los jugadores se organizan en parejas antes de iniciar.</>
                     : <>Knockout siempre es por <strong>Parejas</strong>. Los jugadores se organizan en parejas antes de iniciar.</>}
@@ -1061,13 +1061,13 @@ export default function PlayerTournamentsPage() {
                       <div style={{ background: 'var(--black)', color: '#fff', padding: '16px 20px', marginBottom: needsBestOf ? 8 : 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                           <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, color: 'var(--neon)', lineHeight: 1 }}>{koPlayers}</div>
+                            <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, color: 'var(--bs-light)', lineHeight: 1 }}>{koPlayers}</div>
                             <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.5)', marginTop: 3 }}>Jugadores totales</div>
                           </div>
                           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', flex: 1 }}>
                             {tKONumGroups} grupos × {tKOTeamsPerGroup} equipos × 2 jugadores = <strong style={{ color: '#fff' }}>{koPlayers} jugadores</strong><br />
                             {totalQual} equipos clasifican → cuadro de {bracketSize}
-                            {needsBestOf && <span style={{ color: 'var(--neon)' }}> (+{bracketSize - totalQual} mejores no clasificados)</span>}
+                            {needsBestOf && <span style={{ color: 'var(--bs-light)' }}> (+{bracketSize - totalQual} mejores no clasificados)</span>}
                           </div>
                         </div>
                       </div>
@@ -1368,7 +1368,7 @@ export default function PlayerTournamentsPage() {
                       ]).map(o => (
                         <button key={o.v} onClick={() => setTDeuce(o.v)}
                           style={{ padding: '12px 16px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 12, border: `1px solid ${tDeuce === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tDeuce === o.v ? 'var(--grey-900, #111)' : '#fff', color: tDeuce === o.v ? '#fff' : 'var(--black)' }}>
-                          <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${tDeuce === o.v ? 'var(--neon, #d4f53c)' : 'var(--grey-300)'}`, background: tDeuce === o.v ? 'var(--neon, #d4f53c)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
+                          <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${tDeuce === o.v ? 'var(--court-blue)' : 'var(--grey-300)'}`, background: tDeuce === o.v ? 'var(--bs-light)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{o.label}</div>
                             <div style={{ fontSize: 11, color: tDeuce === o.v ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.5 }}>{o.desc}</div>
@@ -1456,7 +1456,7 @@ export default function PlayerTournamentsPage() {
                           ]).map(o => (
                             <button key={o.v} onClick={() => setTDeuce(o.v)}
                               style={{ padding: '10px 14px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, border: `1px solid ${tDeuce === o.v ? 'var(--black)' : 'var(--grey-200)'}`, background: tDeuce === o.v ? '#111' : '#fff', color: tDeuce === o.v ? '#fff' : 'var(--black)' }}>
-                              <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${tDeuce === o.v ? 'var(--neon)' : 'var(--grey-300)'}`, background: tDeuce === o.v ? 'var(--neon)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
+                              <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${tDeuce === o.v ? 'var(--court-blue)' : 'var(--grey-300)'}`, background: tDeuce === o.v ? 'var(--bs-light)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
                               <div>
                                 <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{o.label}</div>
                                 <div style={{ fontSize: 10, color: tDeuce === o.v ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.4 }}>{o.desc}</div>
@@ -1504,7 +1504,7 @@ export default function PlayerTournamentsPage() {
 
             {/* Confirmed players */}
             {tPlayers.map(p => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', marginBottom: 6, border: '1px solid var(--grey-200)', background: p.isCreator ? 'rgba(214,255,0,0.04)' : '#fff' }}>
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', marginBottom: 6, border: '1px solid var(--grey-200)', background: p.isCreator ? 'rgba(26,78,216,0.06)' : '#fff' }}>
                 <div style={{ width: 30, height: 30, borderRadius: '50%', background: p.isCreator ? 'var(--black)' : 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
                   {initials(p.name)}
                 </div>
@@ -1782,7 +1782,7 @@ export default function PlayerTournamentsPage() {
             <button
               onClick={handleCreateTournament}
               disabled={!canCreate}
-              style={{ padding: '13px 36px', background: canCreate ? 'var(--black)' : 'var(--grey-200)', color: canCreate ? 'var(--neon)' : 'var(--grey-400)', border: 'none', cursor: canCreate ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              style={{ padding: '13px 36px', background: canCreate ? 'var(--black)' : 'var(--grey-200)', color: canCreate ? 'var(--bs-light)' : 'var(--grey-400)', border: 'none', cursor: canCreate ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               CREAR TORNEO
             </button>
           </div>
@@ -1801,7 +1801,7 @@ export default function PlayerTournamentsPage() {
           </div>
 
           <div style={{ background: 'var(--black)', padding: '28px', color: '#fff', textAlign: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 700, marginBottom: 8 }}>Código del torneo</div>
+            <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--bs-light)', fontWeight: 700, marginBottom: 8 }}>Código del torneo</div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, letterSpacing: '0.08em', color: '#fff', marginBottom: 4 }}>{newTCode}</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>Compartí este código con los jugadores para que se inscriban</div>
 
@@ -1822,7 +1822,7 @@ export default function PlayerTournamentsPage() {
                   const url = newTShareUrl || `${window.location.origin}/t/${newTCode}`;
                   navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
                 }}
-                style={{ padding: '8px 16px', background: copied ? 'var(--turf-green)' : 'var(--neon)', color: 'var(--black)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
+                style={{ padding: '8px 16px', background: copied ? 'var(--turf-green)' : 'var(--bs-light)', color: copied ? '#fff' : 'var(--court-blue-deep)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
                 {copied ? '✓ Copiado' : 'Copiar link'}
               </button>
             </div>
@@ -1847,7 +1847,7 @@ export default function PlayerTournamentsPage() {
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link href={`/dashboard/player/tournaments/${newTId}`}
-              style={{ padding: '12px 24px', background: 'var(--black)', color: 'var(--neon)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', fontFamily: 'var(--font-display)' }}>
+              style={{ padding: '12px 24px', background: 'var(--black)', color: 'var(--bs-light)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', fontFamily: 'var(--font-display)' }}>
               Ir a Gestionar →
             </Link>
             <button onClick={() => { resetWizard(); setStep(1); }}
@@ -1907,7 +1907,7 @@ export default function PlayerTournamentsPage() {
     function roleBadge() {
       if (isCreator) {
         return (
-          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'var(--black)', color: 'var(--neon)' }}>
+          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'var(--black)', color: 'var(--bs-light)' }}>
             ORGANIZADOR
           </span>
         );
@@ -1989,7 +1989,7 @@ export default function PlayerTournamentsPage() {
             position: 'relative',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             padding: '13px 28px',
-            background: 'var(--neon)', border: 'none',
+            background: 'var(--court-blue)', border: 'none',
             color: 'var(--black)', textDecoration: 'none',
             fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700,
             textTransform: 'uppercase', letterSpacing: '0.04em',
@@ -1997,7 +1997,7 @@ export default function PlayerTournamentsPage() {
             + Torneo Personalizado
             <span style={{
               position: 'absolute', top: -10, right: -8,
-              background: 'var(--black)', color: 'var(--neon)',
+              background: 'var(--black)', color: 'var(--bs-light)',
               fontFamily: 'var(--font-sans, inherit)',
               fontSize: 9, fontWeight: 800, letterSpacing: '0.08em',
               padding: '3px 7px', whiteSpace: 'nowrap',
@@ -2008,7 +2008,7 @@ export default function PlayerTournamentsPage() {
           </Link>
           <button
             onClick={() => { resetWizard(); setView('wizard'); setStep(1); }}
-            style={{ padding: '13px 28px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            style={{ padding: '13px 28px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             + Crear Torneo
           </button>
         </div>
@@ -2234,7 +2234,7 @@ export default function PlayerTournamentsPage() {
                       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--grey-400)', fontWeight: 600 }}>equipos</div>
                     </div>
                     <Link href={`/dashboard/player/tournaments/personalizado/${pt.id}`}
-                      style={{ padding: '7px 16px', background: pt.status === 'live' ? 'var(--turf-green)' : 'var(--black)', color: pt.status === 'live' ? '#fff' : 'var(--neon)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}>
+                      style={{ padding: '7px 16px', background: pt.status === 'live' ? 'var(--turf-green)' : 'var(--black)', color: pt.status === 'live' ? '#fff' : 'var(--bs-light)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none', display: 'inline-block' }}>
                       {pt.status === 'live' ? 'EN VIVO →' : 'GESTIONAR'}
                     </Link>
                   </div>
@@ -2269,7 +2269,7 @@ export default function PlayerTournamentsPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: pt.status === 'live' ? 'var(--turf-green)' : pt.status === 'configured' ? '#f5a623' : pt.status === 'cancelled' ? '#b91c1c' : '#7c3aed' }}>{siLabel}</span>
                     <Link href={`/dashboard/player/tournaments/personalizado/${pt.id}`}
-                      style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--neon)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none' }}>
+                      style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--bs-light)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none' }}>
                       GESTIONAR
                     </Link>
                   </div>

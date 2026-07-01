@@ -374,7 +374,7 @@ export default function PlayerProfilePage() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {user.points !== undefined && (
               <span style={{
-                background: 'var(--neon)', color: 'var(--black)',
+                background: 'var(--court-blue)', color: '#fff',
                 fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: 700,
                 textTransform: 'uppercase', letterSpacing: '0.08em',
                 padding: '3px 10px',
@@ -543,7 +543,7 @@ export default function PlayerProfilePage() {
                   const statusColors: Record<string, string> = {
                     created: 'var(--grey-200)',
                     starting_soon: '#FDE68A',
-                    live: 'var(--neon)',
+                    live: 'var(--bs-light)',
                   };
                   const statusLabels: Record<string, string> = {
                     created: 'Inscripto',

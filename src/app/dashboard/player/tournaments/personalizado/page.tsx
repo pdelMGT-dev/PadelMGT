@@ -313,12 +313,12 @@ export default function PersonalizadoWizardPage() {
                         padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
                         border: `1px solid ${selected ? 'var(--black)' : 'var(--grey-200)'}`,
                         background: selected ? 'var(--black)' : 'transparent',
-                        color: selected ? 'var(--neon)' : 'var(--grey-600)',
+                        color: selected ? 'var(--bs-light)' : 'var(--grey-600)',
                         letterSpacing: '0.02em',
                       }}
                     >
                       {club.name}
-                      {club.city ? <span style={{ fontWeight: 400, color: selected ? 'rgba(214,255,0,0.7)' : 'var(--grey-400)', marginLeft: 5 }}>{club.city}</span> : null}
+                      {club.city ? <span style={{ fontWeight: 400, color: selected ? 'rgba(111,163,255,0.7)' : 'var(--grey-400)', marginLeft: 5 }}>{club.city}</span> : null}
                     </button>
                   );
                 })}
@@ -512,7 +512,7 @@ export default function PersonalizadoWizardPage() {
       </div>
 
       {/* Pricing */}
-      <div style={{ ...card, background: 'rgba(214,255,0,0.04)', borderColor: 'rgba(214,255,0,0.3)' }}>
+      <div style={{ ...card, background: 'rgba(26,78,216,0.06)', borderColor: 'rgba(111,163,255,0.35)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)' }}>Precio para abrir inscripción</div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, color: 'var(--black)' }}>${openPrice}</div>

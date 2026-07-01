@@ -171,7 +171,7 @@ function ScorePhaseEditor({ scoreType, value, onChange }: {
             return (
               <button key={o.v} type="button" onClick={() => onChange({ ...value, deuce: o.v })}
                 style={{ padding: '10px 14px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, border: `1px solid ${active ? 'var(--black)' : 'var(--grey-200)'}`, background: active ? '#111' : '#fff', color: active ? '#fff' : 'var(--black)' }}>
-                <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${active ? 'var(--neon)' : 'var(--grey-300)'}`, background: active ? 'var(--neon)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
+                <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${active ? 'var(--court-blue)' : 'var(--grey-300)'}`, background: active ? 'var(--court-blue)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{o.label}</div>
                   <div style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.4 }}>{o.desc}</div>
@@ -546,7 +546,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
             </div>
             <Link
               href={`/dashboard/player/tournaments/personalizado/${id}`}
-              style={{ display: 'inline-block', padding: '8px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--black)', color: 'var(--neon)', textDecoration: 'none' }}
+              style={{ display: 'inline-block', padding: '8px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--black)', color: 'var(--bs-light)', textDecoration: 'none' }}
             >
               Ir a las categorías →
             </Link>
@@ -753,7 +753,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
           {saving ? 'Guardando…' : 'Guardar configuración'}
         </button>
         <button type="button" onClick={() => handleSave(true)} disabled={saving}
-          style={{ padding: '12px 28px', border: 'none', background: 'var(--black)', color: 'var(--neon)', cursor: saving ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          style={{ padding: '12px 28px', border: 'none', background: 'var(--black)', color: 'var(--bs-light)', cursor: saving ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           {saving ? 'Guardando…' : 'Guardar y marcar configurado'}
         </button>
       </div>

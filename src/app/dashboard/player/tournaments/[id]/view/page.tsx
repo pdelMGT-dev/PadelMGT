@@ -303,7 +303,7 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
               display: 'flex', alignItems: 'center', gap: 12,
               padding: '10px 12px', marginBottom: 6,
               border: '1px solid var(--grey-200)',
-              background: p.isCreator ? 'rgba(214,255,0,0.04)' : '#fff',
+              background: p.isCreator ? 'rgba(26,78,216,0.06)' : '#fff',
             }}>
               <div style={{
                 width: 32, height: 32, borderRadius: '50%',
@@ -317,7 +317,7 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</div>
               </div>
               {p.isCreator && (
-                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: 'var(--black)', color: 'var(--neon)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: 'var(--black)', color: 'var(--bs-light)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                   CREADOR
                 </span>
               )}
@@ -423,7 +423,7 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
                     return (
                       <tr key={s.playerId} style={{
                         borderBottom: '1px solid var(--grey-100)',
-                        background: me ? 'rgba(214,255,0,0.06)' : 'transparent',
+                        background: me ? 'rgba(26,78,216,0.1)' : 'transparent',
                       }}>
                         <td style={{ padding: '8px', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, color: i === 0 ? 'var(--turf-green)' : 'var(--grey-400)' }}>
                           {i === 0 ? '🥇' : i + 1}

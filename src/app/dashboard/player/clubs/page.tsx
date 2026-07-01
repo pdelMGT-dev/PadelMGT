@@ -92,7 +92,7 @@ function ClubCard({
           <MiniStars value={ratingAvg ?? null} count={ratingCount ?? 0} />
         </div>
         {badge && (
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', background: 'var(--neon)', color: 'var(--black)', padding: '3px 8px', flexShrink: 0, textTransform: 'uppercase' }}>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', background: 'var(--court-blue)', color: '#fff', padding: '3px 8px', flexShrink: 0, textTransform: 'uppercase' }}>
             {badge}
           </span>
         )}
@@ -213,7 +213,7 @@ function ClubListRow({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--black)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {club.name}
-          {badge && <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 700, background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{badge}</span>}
+          {badge && <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 700, background: 'var(--court-blue)', color: '#fff', padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{badge}</span>}
         </div>
         <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 1 }}>
           {club.city}{club.country ? ` · ${club.country}` : ''} &nbsp;·&nbsp; {club.courts} canchas &nbsp;·&nbsp; {club.members} miembros
@@ -386,7 +386,7 @@ export default function PlayerClubsPage() {
     <div className="dash-page" style={{ padding: '40px 40px 80px' }}>
       {/* Toast */}
       {toast && (
-        <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none', borderLeft: '3px solid var(--neon)' }}>
+        <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none', borderLeft: '3px solid var(--court-blue)' }}>
           {toast}
         </div>
       )}

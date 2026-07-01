@@ -409,7 +409,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                       setCorrSent(true);
                       setShowCorrectionForm(false);
                     }}
-                    style={{ padding: '10px 24px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                    style={{ padding: '10px 24px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}
                   >
                     Enviar solicitud
                   </button>
@@ -460,7 +460,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
             Próximamente — La vista de gestión de rondas en tiempo real estará disponible aquí.
           </div>
           <Link href={`/dashboard/player/tournaments/${id}/live`}
-            style={{ padding: '11px 24px', background: 'var(--black)', color: 'var(--neon)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none' }}>
+            style={{ padding: '11px 24px', background: 'var(--black)', color: 'var(--bs-light)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', textDecoration: 'none' }}>
             Ir a Rondas →
           </Link>
         </div>
@@ -835,10 +835,10 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
 
         {/* All filled CTA */}
         {allFilled && (
-          <div style={{ padding: '14px 20px', background: 'rgba(214,255,0,0.08)', border: '2px solid var(--neon)', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ padding: '14px 20px', background: 'rgba(26,78,216,0.12)', border: '2px solid var(--court-blue)', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)' }}>¡Todos los cupos están ocupados!</span>
             <button onClick={handleStartTournament}
-              style={{ padding: '10px 22px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              style={{ padding: '10px 22px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               INICIAR TORNEO
             </button>
           </div>
@@ -1113,7 +1113,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                 Confirmados ({confirmedPlayers.length})
               </div>
               {confirmedPlayers.map(p => (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', marginBottom: 6, border: '1px solid var(--grey-200)', background: p.isCreator ? 'rgba(214,255,0,0.04)' : '#fff' }}>
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', marginBottom: 6, border: '1px solid var(--grey-200)', background: p.isCreator ? 'rgba(26,78,216,0.06)' : '#fff' }}>
                   <div style={{ width: 32, height: 32, borderRadius: '50%', background: p.isCreator ? 'var(--black)' : 'var(--turf-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
                     {initials(p.name)}
                   </div>
@@ -1123,7 +1123,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                   </div>
                   {p.isCreator && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: 'var(--black)', color: 'var(--neon)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CREADOR</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', background: 'var(--black)', color: 'var(--bs-light)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CREADOR</span>
                       {t.status !== 'live' && (
                         <button
                           onClick={handleCreatorLeaveAsPlayer}
@@ -1449,7 +1449,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                   <button
                     type="button"
                     onClick={() => setHideCompleteTeams(v => !v)}
-                    style={{ fontSize: 11, fontWeight: 700, color: hideCompleteTeams ? 'var(--black)' : 'var(--grey-500)', background: hideCompleteTeams ? 'var(--neon)' : 'var(--grey-100)', border: 'none', padding: '5px 14px', cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase' }}
+                    style={{ fontSize: 11, fontWeight: 700, color: hideCompleteTeams ? 'var(--black)' : 'var(--grey-500)', background: hideCompleteTeams ? 'var(--court-blue)' : 'var(--grey-100)', border: 'none', padding: '5px 14px', cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase' }}
                   >
                     {hideCompleteTeams ? '▶ Mostrar todos' : '◀ Colapsar completos'}
                   </button>
@@ -1658,7 +1658,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
           <button
             onClick={handleStartTournament}
             disabled={!canStart}
-            style={{ width: '100%', padding: '16px', background: canStart ? 'var(--black)' : 'var(--grey-200)', color: canStart ? 'var(--neon)' : 'var(--grey-400)', border: 'none', cursor: canStart ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            style={{ width: '100%', padding: '16px', background: canStart ? 'var(--black)' : 'var(--grey-200)', color: canStart ? 'var(--bs-light)' : 'var(--grey-400)', border: 'none', cursor: canStart ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             INICIAR TORNEO
           </button>
           {!canStart && (

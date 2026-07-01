@@ -122,7 +122,7 @@ function ResultForm({ matchId, teamAId, teamBId, result, teamName, saving, onSav
     letterSpacing: '0.06em', textTransform: 'uppercase',
     border: `1px solid ${walkover === tid ? 'var(--black)' : 'var(--grey-200)'}`,
     background: walkover === tid ? 'var(--black)' : 'transparent',
-    color: walkover === tid ? 'var(--neon)' : 'var(--grey-400)',
+    color: walkover === tid ? 'var(--bs-light)' : 'var(--grey-400)',
   });
 
   return (
@@ -176,7 +176,7 @@ function ResultForm({ matchId, teamAId, teamBId, result, teamName, saving, onSav
         <button disabled={!canSave || saving} onClick={handleSave}
           style={{
             fontSize: 11, padding: '6px 14px', border: 'none', cursor: canSave && !saving ? 'pointer' : 'not-allowed',
-            background: 'var(--black)', color: 'var(--neon)', fontWeight: 700,
+            background: 'var(--black)', color: 'var(--bs-light)', fontWeight: 700,
             letterSpacing: '0.08em', textTransform: 'uppercase', opacity: canSave && !saving ? 1 : 0.45,
           }}>
           {saving ? 'Guardando…' : 'Guardar'}
@@ -251,7 +251,7 @@ function MatchCard({
         width: 16, height: 16, border: `2px solid ${selected ? 'var(--black)' : 'var(--grey-200)'}`,
         background: selected ? 'var(--black)' : 'transparent',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 10, color: 'var(--neon)', fontWeight: 700,
+        fontSize: 10, color: 'var(--bs-light)', fontWeight: 700,
         pointerEvents: 'none',
       }}>
         {selected ? '✓' : ''}
@@ -938,7 +938,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     textTransform: 'uppercase', cursor: 'pointer',
     border: tab === t ? 'none' : '1px solid var(--grey-200)',
     background: tab === t ? 'var(--black)' : 'transparent',
-    color: tab === t ? 'var(--neon)' : 'var(--grey-400)',
+    color: tab === t ? 'var(--bs-light)' : 'var(--grey-400)',
   });
 
   return (
@@ -966,7 +966,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
         <button
           type="button" onClick={handleGenerate} disabled={working || assignedCount < 2}
           style={{
-            padding: '12px 22px', border: 'none', background: 'var(--black)', color: 'var(--neon)',
+            padding: '12px 22px', border: 'none', background: 'var(--black)', color: 'var(--bs-light)',
             cursor: working || assignedCount < 2 ? 'not-allowed' : 'pointer',
             opacity: assignedCount < 2 ? 0.5 : 1,
             fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
@@ -1180,7 +1180,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
                   <button type="button" onClick={() => handleGenerateBracket(cat.id)}
                     disabled={generatingBracketCat === cat.id || qualifiers.length < 2}
                     style={{
-                      padding: '8px 16px', border: 'none', background: 'var(--black)', color: 'var(--neon)',
+                      padding: '8px 16px', border: 'none', background: 'var(--black)', color: 'var(--bs-light)',
                       cursor: qualifiers.length < 2 ? 'not-allowed' : 'pointer', fontSize: 11, fontWeight: 700,
                       textTransform: 'uppercase', letterSpacing: '0.06em', opacity: qualifiers.length < 2 ? 0.5 : 1,
                     }}>
@@ -1233,11 +1233,11 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
           background: 'var(--black)', color: '#fff',
           padding: '14px clamp(16px, 4vw, 40px)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
-          borderTop: '2px solid var(--neon)',
+          borderTop: '2px solid var(--court-blue)',
           boxShadow: '0 -4px 24px rgba(0,0,0,0.25)',
         }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--neon)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--bs-light)' }}>
               Cambios sin guardar
             </div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
@@ -1262,7 +1262,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
               disabled={savingSchedule}
               style={{
                 padding: '10px 24px', border: 'none',
-                background: 'var(--neon)', color: 'var(--black)',
+                background: 'var(--bs-light)', color: 'var(--court-blue-deep)',
                 fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
                 cursor: savingSchedule ? 'wait' : 'pointer',
                 opacity: savingSchedule ? 0.7 : 1,

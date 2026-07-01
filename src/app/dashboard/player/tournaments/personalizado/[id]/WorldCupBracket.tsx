@@ -91,7 +91,7 @@ function BracketCard({
   return (
     <div
       onClick={() => clickable && setEditingId(editingId === m.id ? null : m.id)}
-      style={{ width: CARD_W, height: CARD_H, background: '#fff', border: `1px solid var(--grey-200)`, borderLeft: `3px solid ${accent}`, boxShadow: editingId === m.id ? '0 0 0 2px var(--neon)' : '0 1px 2px rgba(0,0,0,0.04)', cursor: clickable ? 'pointer' : 'default', position: 'relative' }}
+      style={{ width: CARD_W, height: CARD_H, background: '#fff', border: `1px solid var(--grey-200)`, borderLeft: `3px solid ${accent}`, boxShadow: editingId === m.id ? '0 0 0 2px var(--court-blue)' : '0 1px 2px rgba(0,0,0,0.04)', cursor: clickable ? 'pointer' : 'default', position: 'relative' }}
     >
       {(live || isThird) && (
         <span style={{ position: 'absolute', top: -8, left: 6, fontSize: 7, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '1px 5px', background: isThird ? '#b45309' : '#16a34a', color: '#fff' }}>{isThird ? '3er Puesto' : 'En vivo'}</span>
@@ -267,7 +267,7 @@ export function WorldCupBracket({
       {/* Manager actions */}
       {canManage && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 18 }}>
-          <button onClick={handleGenerate} disabled={generating} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', background: isSkeleton ? 'var(--black)' : '#fff', color: isSkeleton ? 'var(--neon)' : 'var(--grey-500)', border: isSkeleton ? 'none' : '1px solid var(--grey-200)', cursor: generating ? 'wait' : 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          <button onClick={handleGenerate} disabled={generating} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', background: isSkeleton ? 'var(--black)' : '#fff', color: isSkeleton ? 'var(--bs-light)' : 'var(--grey-500)', border: isSkeleton ? 'none' : '1px solid var(--grey-200)', cursor: generating ? 'wait' : 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             {isSkeleton ? <Trophy size={14} /> : <RefreshCw size={13} />}
             {generating ? 'Generando…' : isSkeleton ? 'Generar Bracket' : 'Regenerar Bracket'}
           </button>
@@ -310,7 +310,7 @@ export function WorldCupBracket({
             {/* Center stack, vertically centered against the side columns */}
             <div style={{ minHeight: colHeight, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, paddingTop: 8 }}>
               {/* Champion banner */}
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 22px', minWidth: FINAL_W, justifyContent: 'center', background: champion ? 'var(--black)' : 'var(--grey-100)', color: champion ? 'var(--neon)' : 'var(--grey-400)' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 22px', minWidth: FINAL_W, justifyContent: 'center', background: champion ? 'var(--black)' : 'var(--grey-100)', color: champion ? 'var(--bs-light)' : 'var(--grey-400)' }}>
                 <Trophy size={20} />
                 <div>
                   <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', opacity: 0.75 }}>Campeón</div>
@@ -341,7 +341,7 @@ export function WorldCupBracket({
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, marginTop: 12 }}>
                   {[
                     { pos: 2, id: runnerUp, h: 52, bg: '#cbd5e1', icon: <Medal size={16} color="#64748b" /> },
-                    { pos: 1, id: champion, h: 74, bg: 'var(--neon, #d6ff00)', icon: <Trophy size={18} color="var(--black)" /> },
+                    { pos: 1, id: champion, h: 74, bg: 'var(--court-blue)', icon: <Trophy size={18} color="#fff" /> },
                     { pos: 3, id: third, h: 40, bg: '#fcd9a8', icon: <Medal size={15} color="#b45309" /> },
                   ].map(p => (
                     <div key={p.pos} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: FINAL_W / 3 - 4 }}>

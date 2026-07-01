@@ -52,7 +52,7 @@ function fmtDayLong(day: string): string {
 
 // Match status → calendar colors. Blue = scheduled, Green = live, Black/neon = done.
 function matchVisual(m: { result?: unknown; status: string }) {
-  if (m.result || m.status === 'done') return { bg: '#0a0a0a', fg: 'var(--neon, #d6ff00)', sub: 'rgba(214,255,0,0.6)', label: 'FINAL', done: true, live: false };
+  if (m.result || m.status === 'done') return { bg: '#0a0a0a', fg: 'var(--bs-light)', sub: 'rgba(111,163,255,0.7)', label: 'FINAL', done: true, live: false };
   if (m.status === 'playing') return { bg: '#16a34a', fg: '#ffffff', sub: 'rgba(255,255,255,0.8)', label: 'EN VIVO', done: false, live: true };
   return { bg: '#3b82f6', fg: '#ffffff', sub: 'rgba(255,255,255,0.78)', label: '', done: false, live: false };
 }
@@ -124,7 +124,7 @@ function StandingsView({ tournament, teamName, canManage, canEditResults, onUpda
             {/* Category header (collapsible) */}
             <button
               onClick={() => setOpenCats(p => ({ ...p, [cat.categoryId]: !catOpen }))}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '12px 16px', background: catOpen ? 'var(--black)' : '#fff', color: catOpen ? 'var(--neon)' : 'var(--black)', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '12px 16px', background: catOpen ? 'var(--black)' : '#fff', color: catOpen ? 'var(--bs-light)' : 'var(--black)', border: 'none', cursor: 'pointer', textAlign: 'left' }}
             >
               {catOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{cat.categoryName}</span>
@@ -162,7 +162,7 @@ function StandingsView({ tournament, teamName, canManage, canEditResults, onUpda
                               )}
                             </span>
                           ) : canManage && allDone ? (
-                            <button onClick={() => setGroupConfirmed(cat.categoryId, g.groupId, true)} disabled={confirming === cKey} title="Libera los clasificados de este grupo al bracket y bloquea sus resultados para co-creadores" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '5px 10px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: confirming === cKey ? 'wait' : 'pointer' }}>
+                            <button onClick={() => setGroupConfirmed(cat.categoryId, g.groupId, true)} disabled={confirming === cKey} title="Libera los clasificados de este grupo al bracket y bloquea sus resultados para co-creadores" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '5px 10px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: confirming === cKey ? 'wait' : 'pointer' }}>
                               <CheckCircle2 size={12} /> {confirming === cKey ? 'Confirmando…' : 'Confirmar clasificación'}
                             </button>
                           ) : canManage && !allDone ? (
@@ -766,7 +766,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
           El calendario se genera desde el botón principal del torneo, una vez que todas las categorías tienen sus grupos formados.
         </div>
         {canManage && (
-          <button onClick={handleGenerate} disabled={generating} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 28px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: generating ? 'wait' : 'pointer', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          <button onClick={handleGenerate} disabled={generating} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 28px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: generating ? 'wait' : 'pointer', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             <CalendarDays size={16} /> {generating ? 'Generando…' : 'Generar Calendario'}
           </button>
         )}
@@ -785,7 +785,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
           position: 'fixed', zIndex: 200, pointerEvents: 'none',
           left: Math.min(marquee.x0, marquee.x1), top: Math.min(marquee.y0, marquee.y1),
           width: Math.abs(marquee.x1 - marquee.x0), height: Math.abs(marquee.y1 - marquee.y0),
-          background: 'rgba(214,255,0,0.12)', border: '1.5px solid var(--neon)',
+          background: 'rgba(26,78,216,0.15)', border: '1.5px solid var(--court-blue)',
         }} />
       )}
 
@@ -799,7 +799,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
               onDragOver={e => { if (dragMatchId) { e.preventDefault(); if (dragOver) setDragOver(null); } }}
               onDrop={e => { e.preventDefault(); handleDropOnDay(d); }}
               title={fmtDayLong(d)}
-              style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', border: dragMatchId ? '1px dashed var(--neon)' : '1px solid transparent', background: activeDay === d ? 'var(--black)' : 'var(--grey-100)', color: activeDay === d ? 'var(--neon)' : 'var(--grey-500)' }}
+              style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', border: dragMatchId ? '1px dashed var(--court-blue)' : '1px solid transparent', background: activeDay === d ? 'var(--black)' : 'var(--grey-100)', color: activeDay === d ? 'var(--bs-light)' : 'var(--grey-500)' }}
             >
               {fmtDay(d)}
             </button>
@@ -812,16 +812,16 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
             </button>
           )}
           {canManage && (
-            <button onClick={handleSave} disabled={!dirty || saving} title={dirty ? 'Guardar los cambios del calendario' : 'No hay cambios sin guardar'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: dirty && !saving ? 'pointer' : 'not-allowed', border: '1px solid var(--grey-200)', background: dirty ? 'var(--black)' : '#fff', color: dirty ? 'var(--neon)' : 'var(--grey-300)', opacity: saving ? 0.6 : 1 }}>
+            <button onClick={handleSave} disabled={!dirty || saving} title={dirty ? 'Guardar los cambios del calendario' : 'No hay cambios sin guardar'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: dirty && !saving ? 'pointer' : 'not-allowed', border: '1px solid var(--grey-200)', background: dirty ? 'var(--black)' : '#fff', color: dirty ? 'var(--bs-light)' : 'var(--grey-300)', opacity: saving ? 0.6 : 1 }}>
               <Save size={13} /> {saving ? 'Guardando…' : 'Guardar Calendario'}
             </button>
           )}
           {canManage && (
-            <button onClick={handlePublish} disabled={publishing || saving} title="Publica el calendario en la página pública y notifica a los jugadores" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: publishing ? 'wait' : 'pointer', border: 'none', background: unpublished ? 'var(--neon)' : 'var(--grey-100)', color: unpublished ? 'var(--black)' : 'var(--grey-400)' }}>
+            <button onClick={handlePublish} disabled={publishing || saving} title="Publica el calendario en la página pública y notifica a los jugadores" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: publishing ? 'wait' : 'pointer', border: 'none', background: unpublished ? 'var(--court-blue)' : 'var(--grey-100)', color: unpublished ? '#fff' : 'var(--grey-400)' }}>
               <Send size={13} /> {publishing ? 'Publicando…' : 'Publicar'}
             </button>
           )}
-          <button onClick={() => setShowShare(p => !p)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', border: '1px solid var(--grey-200)', background: showShare ? 'var(--black)' : '#fff', color: showShare ? 'var(--neon)' : 'var(--grey-500)' }}>
+          <button onClick={() => setShowShare(p => !p)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', border: '1px solid var(--grey-200)', background: showShare ? 'var(--black)' : '#fff', color: showShare ? 'var(--bs-light)' : 'var(--grey-500)' }}>
             <Share2 size={13} /> Compartir
           </button>
         </div>
@@ -837,7 +837,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
       )}
 
       {canManage && selectedIds.size > 0 && (
-        <div style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 12, background: 'var(--black)', color: 'var(--neon)', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
+        <div style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 12, background: 'var(--black)', color: 'var(--bs-light)', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
           <span>✓ {selectedIds.size} {selectedIds.size === 1 ? 'partido seleccionado' : 'partidos seleccionados'}</span>
           <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 400 }}>Arrastrá uno para mover todos · Esc para limpiar</span>
           <button onClick={() => setSelectedIds(new Set())} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6 }}>✕ Limpiar</button>
@@ -920,7 +920,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
                   style={{
                     position: 'relative', height: COURT_H, borderBottom: '1px solid var(--grey-100)',
                     backgroundImage: `repeating-linear-gradient(to right, var(--grey-100) 0, var(--grey-100) 1px, transparent 1px, transparent ${CELL_W}px), repeating-linear-gradient(to right, var(--grey-300) 0, var(--grey-300) 1px, transparent 1px, transparent ${CELL_W * 4}px)`,
-                    backgroundColor: dragOver?.court === court ? 'rgba(214,255,0,0.07)' : 'transparent',
+                    backgroundColor: dragOver?.court === court ? 'rgba(26,78,216,0.1)' : 'transparent',
                   }}
                 >
                   {/* Drop preview: translucent neon placeholders showing exactly where each card lands. */}
@@ -928,7 +928,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
                     <div key={`ghost-${gi}`} aria-hidden style={{
                       position: 'absolute', left: g.cell * CELL_W + Math.floor(CARD_GAP / 2), top: 4,
                       width: cardW, height: COURT_H - 8, borderRadius: 4, pointerEvents: 'none', zIndex: 1,
-                      border: '2px dashed var(--neon)', background: 'rgba(214,255,0,0.22)',
+                      border: '2px dashed var(--court-blue)', background: 'rgba(111,163,255,0.27)',
                       boxShadow: '0 0 0 1px rgba(0,0,0,0.04)',
                     }} />
                   ))}
@@ -958,7 +958,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
                             setEditingId(editingId === groupMatch.id ? null : groupMatch.id);
                           }
                         }}
-                        style={{ position: 'absolute', left: left + Math.floor(CARD_GAP / 2), top: 4, width: cardW, height: COURT_H - 8, background: gvis.bg, color: gvis.fg, border: editingId === groupMatch.id ? '2px solid var(--neon)' : '1px solid rgba(0,0,0,0.12)', borderRadius: 4, outline: selectedIds.has(groupMatch.id) ? '3px solid var(--neon)' : 'none', outlineOffset: -1, padding: '5px 8px', cursor: canManage ? 'grab' : 'default', opacity: dragMatchId && movingIdsFor(dragMatchId).includes(groupMatch.id) ? 0.4 : 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1, boxSizing: 'border-box' }}
+                        style={{ position: 'absolute', left: left + Math.floor(CARD_GAP / 2), top: 4, width: cardW, height: COURT_H - 8, background: gvis.bg, color: gvis.fg, border: editingId === groupMatch.id ? '2px solid var(--court-blue)' : '1px solid rgba(0,0,0,0.12)', borderRadius: 4, outline: selectedIds.has(groupMatch.id) ? '3px solid var(--court-blue)' : 'none', outlineOffset: -1, padding: '5px 8px', cursor: canManage ? 'grab' : 'default', opacity: dragMatchId && movingIdsFor(dragMatchId).includes(groupMatch.id) ? 0.4 : 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1, boxSizing: 'border-box' }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: gvis.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catMap.get(groupMatch.categoryId) ?? ''} · Gr.{groupMatch.groupLabel}</span>
@@ -1001,7 +1001,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
                             setEditingBracketId(editingBracketId === bracketMatch.id ? null : bracketMatch.id);
                           }
                         }}
-                        style={{ position: 'absolute', left: left + Math.floor(CARD_GAP / 2), top: 4, width: cardW, height: COURT_H - 8, background: bvis.bg, color: bvis.fg, border: editingBracketId === bracketMatch.id ? '2px solid var(--neon)' : '1px solid rgba(0,0,0,0.12)', borderRadius: 4, outline: selectedIds.has(bracketMatch.id) ? '3px solid var(--neon)' : 'none', outlineOffset: -1, padding: '5px 8px', cursor: canManage ? 'grab' : 'default', opacity: dragMatchId && movingIdsFor(dragMatchId).includes(bracketMatch.id) ? 0.4 : 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1, boxSizing: 'border-box' }}
+                        style={{ position: 'absolute', left: left + Math.floor(CARD_GAP / 2), top: 4, width: cardW, height: COURT_H - 8, background: bvis.bg, color: bvis.fg, border: editingBracketId === bracketMatch.id ? '2px solid var(--court-blue)' : '1px solid rgba(0,0,0,0.12)', borderRadius: 4, outline: selectedIds.has(bracketMatch.id) ? '3px solid var(--court-blue)' : 'none', outlineOffset: -1, padding: '5px 8px', cursor: canManage ? 'grab' : 'default', opacity: dragMatchId && movingIdsFor(dragMatchId).includes(bracketMatch.id) ? 0.4 : 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1, boxSizing: 'border-box' }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: bvis.sub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{catMap.get(bracketMatch.categoryId) ?? ''} · {bracketMatch.roundLabel}</span>
@@ -1158,7 +1158,7 @@ function BracketTab({ tournament, canManage, canEditResults, onUpdate }: {
       {tournament.categories.length > 1 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
           {tournament.categories.map(cat => (
-            <button key={cat.id} onClick={() => setSelectedCatId(cat.id)} style={{ padding: '7px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', border: 'none', background: selectedCatId === cat.id ? 'var(--black)' : 'var(--grey-100)', color: selectedCatId === cat.id ? 'var(--neon)' : 'var(--grey-500)' }}>
+            <button key={cat.id} onClick={() => setSelectedCatId(cat.id)} style={{ padding: '7px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', border: 'none', background: selectedCatId === cat.id ? 'var(--black)' : 'var(--grey-100)', color: selectedCatId === cat.id ? 'var(--bs-light)' : 'var(--grey-500)' }}>
               {cat.name}
             </button>
           ))}
@@ -1322,7 +1322,7 @@ function ScoreLiveTab({ tournament, canManage, requesterId, teamName, onUpdate }
                 style={{
                   textAlign: 'left', cursor: canManage ? 'pointer' : 'default', padding: '11px 13px',
                   background: '#16a34a', color: '#fff', border: 'none',
-                  outline: isSel ? '3px solid var(--neon)' : 'none', outlineOffset: -1, borderRadius: 6,
+                  outline: isSel ? '3px solid var(--court-blue)' : 'none', outlineOffset: -1, borderRadius: 6,
                   boxShadow: '0 4px 14px rgba(22,163,74,0.28)', display: 'flex', flexDirection: 'column', gap: 5,
                 }}
               >
@@ -1430,7 +1430,7 @@ export function TournamentTabs({ tournament, canManage, canEditResults, requeste
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '12px 8px', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', border: 'none', background: activeTab === key ? '#fff' : 'transparent', color: activeTab === key ? 'var(--black)' : 'rgba(214,255,0,0.7)', position: 'relative' }}
+            style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '12px 8px', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', border: 'none', background: activeTab === key ? '#fff' : 'transparent', color: activeTab === key ? 'var(--black)' : 'rgba(111,163,255,0.7)', position: 'relative' }}
           >
             <Icon size={15} /> {label}
             {key === 'envivo' && liveCount > 0 && (

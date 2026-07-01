@@ -161,7 +161,7 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
           {/* My team */}
           <div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Mi pareja</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: match.result === 'V' ? 'var(--neon)' : '#fff', marginBottom: 2 }}>Diego García</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: match.result === 'V' ? 'var(--bs-light)' : '#fff', marginBottom: 2 }}>Diego García</div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: 'rgba(255,255,255,0.7)' }}>{match.partner}</div>
           </div>
 
@@ -170,7 +170,7 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
               {match.sets.map((s, i) => (
                 <div key={i} style={{ textAlign: 'center' }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, lineHeight: 1, color: s.a > s.b ? 'var(--neon)' : 'rgba(255,255,255,0.4)' }}>{s.a}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, lineHeight: 1, color: s.a > s.b ? 'var(--bs-light)' : 'rgba(255,255,255,0.4)' }}>{s.a}</div>
                   <div style={{ height: 1, background: 'rgba(255,255,255,0.15)', margin: '4px 0' }} />
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 700, lineHeight: 1, color: s.b > s.a ? '#ff6b6b' : 'rgba(255,255,255,0.4)' }}>{s.b}</div>
                 </div>
@@ -192,7 +192,7 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
         {/* Points row */}
         <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Puntos obtenidos</span>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, color: match.pts !== '+0' ? 'var(--neon)' : 'var(--grey-400)' }}>{match.pts}</span>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, color: match.pts !== '+0' ? 'var(--bs-light)' : 'var(--grey-400)' }}>{match.pts}</span>
         </div>
       </div>
 
