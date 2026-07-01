@@ -4,6 +4,7 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import { getGameByCode, saveGame } from '@/lib/game-store';
+import { fetchGameByCode } from '@/lib/supabase';
 import type { ActiveGame, ScoreConfig, FixedPair } from '@/lib/game-engine';
 import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { getRankingHistoryForGame, type RankingEntry } from '@/lib/ranking-store';
@@ -92,6 +93,11 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
   const [snapJoinName, setSnapJoinName] = useState('');
   const [snapJoinSent, setSnapJoinSent] = useState(false);
   const [snapJoinError, setSnapJoinError] = useState('');
+  // Start in loading state when there's no local copy, so the first paint shows
+  // a spinner (not the "not found" screen) while the Supabase fetch runs.
+  const [sbLoading, setSbLoading] = useState(() =>
+    typeof window !== 'undefined' ? getGameByCode(code) === null : false
+  );
 
   useEffect(() => {
     // Keep full URL (with snap param) intact for QR re-sharing
@@ -107,9 +113,23 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
     }
   }, [code]);
 
+  // Fetch from Supabase when not in localStorage (cross-device share)
   useEffect(() => {
-    const load = () => {
-      const g = getGameByCode(code);
+    const local = getGameByCode(code);
+    if (local) return; // already have it
+    setSbLoading(true);
+    fetchGameByCode(code)
+      .then(raw => {
+        if (!raw) return;
+        const g = raw as unknown as ActiveGame;
+        saveGame(g); // cache locally for future loads
+        setGame(g);
+      })
+      .finally(() => setSbLoading(false));
+  }, [code]);
+
+  useEffect(() => {
+    const applyGame = (g: ActiveGame | null) => {
       setGame(g);
       if (g?.status === 'finished') setRankingEntries(getRankingHistoryForGame(g.id));
       if (currentUser && g) {
@@ -117,6 +137,20 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
         syncMyJoinRequestFromSupabase(g.id, currentUser.id)
           .then(req => setMyRequest(req))
           .catch(() => setMyRequest(getMyJoinRequest(g.id, currentUser.id)));
+      }
+    };
+    const load = () => {
+      const g = getGameByCode(code);
+      if (g) {
+        applyGame(g);
+      } else {
+        // Not local — fall back to Supabase so the link stays live cross-device
+        fetchGameByCode(code).then(raw => {
+          if (!raw) return;
+          const fresh = raw as unknown as ActiveGame;
+          saveGame(fresh);
+          applyGame(fresh);
+        });
       }
     };
     load();
@@ -245,16 +279,27 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
     );
   }
 
+  // ── Loading from Supabase (no local copy, no snapshot yet) ────────────────────
+  if (!game && sbLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0a0f1e', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-body)', gap: 16 }}>
+        <div style={{ width: 36, height: 36, border: '3px solid rgba(255,255,255,0.1)', borderTopColor: 'var(--neon)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Cargando juego…</div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   // ── Not found (no snapshot either) ───────────────────────────────────────────
   if (!game) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, fontFamily: 'var(--font-body)', textAlign: 'center' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, textTransform: 'uppercase', marginBottom: 12 }}>Juego no encontrado</div>
         <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 8, maxWidth: 380 }}>
-          El código <strong style={{ color: 'var(--black)' }}>{code}</strong> no corresponde a ningún juego en este dispositivo.
+          El código <strong style={{ color: 'var(--black)' }}>{code}</strong> no corresponde a ningún juego.
         </div>
         <div style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 28, maxWidth: 380, lineHeight: 1.6 }}>
-          Los juegos se almacenan localmente. Pedile al organizador que genere un nuevo QR desde su dispositivo para compartir la información correctamente.
+          Verificá que el código sea correcto, o pedile el link actualizado al organizador.
         </div>
         <Link href="/" style={{ fontSize: 12, fontWeight: 600, color: 'var(--black)', textDecoration: 'none' }}>← Volver al inicio</Link>
       </div>
