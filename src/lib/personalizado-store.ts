@@ -2390,6 +2390,24 @@ export interface TournamentNotification {
 }
 
 /**
+ * POST a batch of notifications to the service-role endpoint. Fire-and-forget:
+ * swallows network/errors so notification delivery never blocks the caller's
+ * score-save / schedule-update flow.
+ */
+async function postNotifications(
+  notifications: Array<Record<string, unknown>>,
+): Promise<void> {
+  if (typeof window === 'undefined' || notifications.length === 0) return;
+  try {
+    await fetch('/api/notifications/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notifications }),
+    });
+  } catch { /* ignore — notifications are best-effort */ }
+}
+
+/**
  * Insert one notification per player listed in playerIds.
  * Silently ignores empty lists. Falls back gracefully on error.
  */
@@ -2399,15 +2417,16 @@ export async function createScheduleNotifications(
   message: string,
 ): Promise<void> {
   const unique = [...new Set(playerIds.filter(Boolean))];
-  if (!unique.length || !isSupabaseConfigured || !supabase) return;
-  const rows = unique.map(pid => ({
-    player_id: pid,
-    tournament_id: tournamentId,
+  if (!unique.length) return;
+  const notifications = unique.map(pid => ({
+    playerId: pid,
+    tournamentId,
     type: 'schedule_updated',
     message,
-    read: false,
   }));
-  await supabase.from('tournament_notifications').insert(rows).then(() => {/* ignore errors */});
+  // Route through the service-role endpoint (anon writes on
+  // tournament_notifications are blocked by RLS). Fire-and-forget.
+  await postNotifications(notifications);
 }
 
 // ── Progression notifications (qualified / advanced / eliminated / next match) ──
@@ -2429,20 +2448,21 @@ export async function createNotifications(
   product: 'tp' | 'torneo',
   items: NotifItem[],
 ): Promise<void> {
-  if (!items.length || !isSupabaseConfigured || !supabase) return;
-  const rows = items
+  if (!items.length) return;
+  const notifications = items
     .filter(it => it.playerId)
     .map(it => ({
-      player_id: it.playerId,
-      tournament_id: tournamentId,
+      playerId: it.playerId,
+      tournamentId,
       product,
       type: it.type,
       message: it.message,
       link: it.link ?? null,
-      read: false,
     }));
-  if (!rows.length) return;
-  await supabase.from('tournament_notifications').insert(rows).then(() => {/* ignore errors */});
+  if (!notifications.length) return;
+  // Route through the service-role endpoint (anon writes on
+  // tournament_notifications are blocked by RLS). Fire-and-forget.
+  await postNotifications(notifications);
 }
 
 /** Both players' ids for a team (skips empties). */
