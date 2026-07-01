@@ -105,12 +105,14 @@ function PersonalizadoDetailDrawer({
   const statusCfg = P_STATUSES.find(s => s.value === tournament.status) ?? P_STATUSES[0];
 
   async function changeStatus(newStatus: PersonalizadoTournament['status']) {
-    if (!isSupabaseConfigured || !supabase) return;
     setSaving(true);
-    const patch: Record<string, unknown> = { status: newStatus, updated_at: new Date().toISOString() };
-    if (newStatus === 'cancelled' && tournament.status !== 'cancelled') patch.previous_status = tournament.status;
-    else if (newStatus !== 'cancelled') patch.previous_status = null;
-    await supabase.from('personalizado_tournaments').update(patch).eq('id', tournament.id);
+    // Route through the service-role endpoint (anon writes are blocked by RLS).
+    const res = await fetch('/api/personalizado/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: tournament.id, status: newStatus }),
+    }).catch(() => null);
+    if (!res || !res.ok) { setSaving(false); return; }
     const updated = { ...tournament, status: newStatus, previousStatus: newStatus === 'cancelled' ? tournament.status : undefined };
     setTournament(updated);
     onUpdated(updated);
@@ -118,8 +120,13 @@ function PersonalizadoDetailDrawer({
   }
 
   async function handleTeamStatus(teamId: string, newStatus: PersonalizadoTeam['status']) {
-    if (!isSupabaseConfigured || !supabase) return;
-    await supabase.from('personalizado_teams').update({ status: newStatus }).eq('id', teamId);
+    // Route through the service-role endpoint (anon writes are blocked by RLS).
+    const res = await fetch('/api/personalizado/team-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tournamentId: tournament.id, teamId, status: newStatus }),
+    }).catch(() => null);
+    if (!res || !res.ok) return;
     const updatedTeams = tournament.teams.map(t => t.id === teamId ? { ...t, status: newStatus } : t);
     const updated = { ...tournament, teams: updatedTeams };
     setTournament(updated);
