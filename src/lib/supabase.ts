@@ -155,19 +155,27 @@ function rowToJoinRequest(r: Record<string, unknown>): SupabaseJoinRequest {
   };
 }
 
-/** Push a new join request to Supabase (upsert to handle retries). */
+/** Push a new join request through the service-role endpoint (anon writes on
+ * join_requests are blocked by RLS). Open to guests. Fire-and-forget. */
 export async function submitJoinRequestToSupabase(req: SupabaseJoinRequest): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.from('join_requests').upsert({
-    id:           req.id,
-    entity_id:    req.entityId,
-    entity_type:  req.entityType,
-    player_id:    req.playerId,
-    player_name:  req.playerName,
-    player_email: req.playerEmail ?? null,
-    status:       'pending',
-  }, { onConflict: 'id' });
-  if (error) console.warn('[Supabase] submitJoinRequest:', error.message);
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch('/api/join-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        op: 'submit',
+        request: {
+          id:          req.id,
+          entityId:    req.entityId,
+          entityType:  req.entityType,
+          playerId:    req.playerId,
+          playerName:  req.playerName,
+          playerEmail: req.playerEmail ?? null,
+        },
+      }),
+    });
+  } catch { /* fire-and-forget */ }
 }
 
 /** Fetch all join requests for an entity (used by creator's management page). */
@@ -195,19 +203,28 @@ export async function fetchMyJoinRequestFromSupabase(entityId: string, playerId:
   return data ? rowToJoinRequest(data as Record<string, unknown>) : null;
 }
 
-/** Update status in Supabase (approve / reject). */
+/** Update status through the service-role endpoint (approve / reject). Only the
+ * organizer (or SA) is authorized server-side. Fire-and-forget. */
 export async function updateJoinRequestInSupabase(requestId: string, status: 'approved' | 'rejected'): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase
-    .from('join_requests')
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq('id', requestId);
-  if (error) console.warn('[Supabase] updateJoinRequest:', error.message);
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch('/api/join-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'update', requestId, status }),
+    });
+  } catch { /* fire-and-forget */ }
 }
 
-/** Delete a join request in Supabase (cancel). */
+/** Delete a join request through the service-role endpoint (cancel). The request
+ * owner or the organizer (or SA) is authorized server-side. Fire-and-forget. */
 export async function deleteJoinRequestFromSupabase(requestId: string): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.from('join_requests').delete().eq('id', requestId);
-  if (error) console.warn('[Supabase] deleteJoinRequest:', error.message);
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch('/api/join-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'delete', requestId }),
+    });
+  } catch { /* fire-and-forget */ }
 }

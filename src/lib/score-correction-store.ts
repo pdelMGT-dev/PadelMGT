@@ -148,27 +148,16 @@ export function mergeCorrectionsFromSupabase(remote: ScoreCorrectionRequest[]): 
 }
 
 async function syncCorrectionToSupabase(c: ScoreCorrectionRequest): Promise<void> {
-  if (!supabase) return;
+  if (typeof window === 'undefined') return;
+  // Route through the service-role endpoint (anon writes on score_corrections
+  // are blocked by RLS). Fire-and-forget: the localStorage copy is authoritative
+  // for the UI, so a failed sync never blocks the caller.
   try {
-    await supabase.from('score_corrections').upsert({
-      id: c.id,
-      entity_type: c.type,
-      entity_id: c.entityId,
-      entity_name: c.entityName,
-      round_num: c.roundNum,
-      court_num: c.courtNum,
-      requested_by: c.requestedBy,
-      requested_by_id: c.requestedById,
-      current_score: c.currentScore,
-      requested_score: c.requestedScore,
-      reason: c.reason,
-      status: c.status,
-      reviewed_by: c.reviewedBy ?? null,
-      reviewed_at: c.reviewedAt ?? null,
-      review_notes: c.reviewNotes ?? null,
-      affected_player_ids: c.affectedPlayerIds ?? null,
-      ranking_adjusted: c.rankingAdjusted ?? false,
-    }, { onConflict: 'id' });
+    await fetch('/api/score-corrections/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(c),
+    });
   } catch {
     // fire-and-forget
   }

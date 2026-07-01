@@ -16,8 +16,6 @@
 // The SA must APPROVE a suggestion before it ever becomes visible publicly —
 // the public /clubs page only shows clubs with status='active'.
 
-import { supabase } from './supabase';
-
 export interface ClubSuggestionInput {
   name: string;
   country: string;
@@ -67,37 +65,27 @@ function writeLocal(id: string, input: ClubSuggestionInput): void {
   }
 }
 
-/** Best-effort cross-device delivery to the SA via Supabase. */
+/** Best-effort cross-device delivery to the SA via the service-role endpoint
+ * (anon writes on the clubs table are blocked by RLS). Always creates a
+ * status='pending' row that the SA must approve. */
 async function writeSupabase(id: string, input: ClubSuggestionInput): Promise<void> {
-  if (!supabase) return;
-  const now = new Date().toISOString();
-  // Try the full row first (requires migration 008). If the extra columns are
-  // missing, fall back to the core columns so the suggestion still arrives.
-  const full = {
-    id,
-    name: input.name,
-    city: input.city,
-    country: input.country,
-    courts: input.courts || 0,
-    members: 0,
-    status: 'pending' as const,
-    plan: 'free' as const,
-    admin_email: input.contactEmail ?? null,
-    maps_url: input.website || null,
-    club_type: 'Sugerido por jugador',
-    source: 'player_suggestion',
-    joined_at: now,
-  };
-  let { error } = await supabase.from('clubs').upsert(full);
-  if (error) {
-    // Retry with only the columns guaranteed by the base schema.
-    const core = {
-      id, name: input.name, city: input.city, country: input.country,
-      courts: input.courts || 0, members: 0, status: 'pending' as const,
-      plan: 'free' as const, admin_email: input.contactEmail ?? null, joined_at: now,
-    };
-    ({ error } = await supabase.from('clubs').upsert(core));
-    if (error) console.warn('[club-suggestion] Supabase upsert failed:', error.message);
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch('/api/clubs/suggest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id,
+        name: input.name,
+        city: input.city,
+        country: input.country,
+        courts: input.courts || 0,
+        contactEmail: input.contactEmail ?? null,
+        website: input.website || null,
+      }),
+    });
+  } catch (err) {
+    console.warn('[club-suggestion] suggest endpoint failed:', err);
   }
 }
 

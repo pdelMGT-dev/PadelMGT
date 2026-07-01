@@ -106,13 +106,6 @@ export async function submitClubReview(input: {
   rating: number;
   comment?: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  if (!supabase) return { ok: false, error: 'Sin conexión' };
-
-  // Verify the caller has an active session and owns the playerId
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return { ok: false, error: 'Debés iniciar sesión para valorar este club.' };
-  if (session.user.id !== input.playerId) return { ok: false, error: 'Usuario no autorizado.' };
-
   const review: ClubReview = {
     clubId: input.clubId,
     playerId: input.playerId,
@@ -122,19 +115,31 @@ export async function submitClubReview(input: {
     createdAt: new Date().toISOString(),
   };
 
+  // Update the local cache immediately so the UI reflects the vote.
   mergeIntoLocal([review]);
 
+  // Persist through the service-role endpoint. It verifies the session and that
+  // the caller controls the playerId (anon writes on club_reviews are blocked
+  // by RLS). The local cache already holds the vote if the request fails.
   try {
-    const { error } = await supabase.from('club_reviews').upsert({
-      club_id: review.clubId,
-      player_id: review.playerId,
-      player_name: review.playerName,
-      rating: review.rating,
-      comment: review.comment ?? null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'club_id,player_id' });
-    if (error) return { ok: false, error: error.message };
-  } catch { /* offline — local cache already updated */ }
+    const res = await fetch('/api/club-reviews/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clubId: review.clubId,
+        playerId: review.playerId,
+        playerName: review.playerName,
+        rating: review.rating,
+        comment: review.comment ?? null,
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { ok: false, error: (data as { error?: string }).error ?? 'No se pudo guardar la valoración.' };
+    }
+  } catch {
+    return { ok: false, error: 'Sin conexión' };
+  }
 
   return { ok: true };
 }

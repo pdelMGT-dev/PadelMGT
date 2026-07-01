@@ -552,34 +552,31 @@ export async function getSAClubsFromSupabase(): Promise<SAClub[] | null> {
 }
 
 export async function upsertSAClubToSupabase(club: SAClub): Promise<void> {
-  if (!supabase) return;
-  const core = {
-    id: club.id, name: club.name, city: club.city, country: club.country,
-    courts: club.courts, members: club.members, status: club.status,
-    admin_email: club.adminEmail, plan: club.plan,
-    joined_at: club.joinedAt || new Date().toISOString(),
-  };
+  if (typeof window === 'undefined') return;
+  // Route through the SA-guarded service-role endpoint (anon writes on the clubs
+  // table are blocked by RLS).
   try {
-    // Try the richer row first (extra columns require migration 008). If those
-    // columns don't exist yet, fall back to the core columns so the write — and
-    // crucially, status changes like approvals — still persist to Supabase.
-    const full = {
-      ...core,
-      address: club.address || null,
-      club_type: club.clubType || null,
-      maps_url: club.mapsUrl || null,
-    };
-    let { error } = await supabase.from('clubs').upsert(full);
-    if (error) {
-      ({ error } = await supabase.from('clubs').upsert(core));
-      if (error) console.error('[Supabase] upsertClub error:', error.message);
-    }
-  } catch (err) { console.error('[Supabase] upsertClub exception:', err); }
+    await fetch('/api/sa/clubs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: club.id, name: club.name, city: club.city, country: club.country,
+        courts: club.courts, members: club.members, status: club.status,
+        adminEmail: club.adminEmail, plan: club.plan,
+        joinedAt: club.joinedAt || new Date().toISOString(),
+        address: club.address || null,
+        clubType: club.clubType || null,
+        mapsUrl: club.mapsUrl || null,
+      }),
+    });
+  } catch (err) { console.error('[SA clubs] upsert exception:', err); }
 }
 
 export async function deleteSAClubFromSupabase(id: string): Promise<void> {
-  if (!supabase) return;
-  try { await supabase.from('clubs').delete().eq('id', id); } catch { /* silent */ }
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch(`/api/sa/clubs?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+  } catch { /* silent */ }
 }
 
 // Admin users — go through the protected /api/sa/admins routes (signed SA
@@ -626,17 +623,24 @@ export async function seedPlayersToSupabase(): Promise<number> {
 }
 
 export async function seedClubsToSupabase(): Promise<number> {
-  if (!supabase) return 0;
+  if (typeof window === 'undefined') return 0;
   const clubs = getSAClubs();
   let count = 0;
+  // Route each write through the SA-guarded service-role endpoint.
   for (const c of clubs) {
-    const { error } = await supabase.from('clubs').upsert({
-      id: c.id, name: c.name, city: c.city, country: c.country,
-      courts: c.courts, members: c.members, status: c.status,
-      admin_email: c.adminEmail, plan: c.plan,
-      joined_at: c.joinedAt || new Date().toISOString(),
-    });
-    if (!error) count++;
+    try {
+      const res = await fetch('/api/sa/clubs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: c.id, name: c.name, city: c.city, country: c.country,
+          courts: c.courts, members: c.members, status: c.status,
+          adminEmail: c.adminEmail, plan: c.plan,
+          joinedAt: c.joinedAt || new Date().toISOString(),
+        }),
+      });
+      if (res.ok) count++;
+    } catch { /* skip failed row */ }
   }
   return count;
 }
