@@ -5,7 +5,7 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 // In the browser use the SSR cookie-based client so the auth session is
-// stored in cookies and the middleware / route handlers can verify it
+// stored in cookies and the proxy / route handlers can verify it
 // server-side. On the server (imports from API routes / RSC) fall back to a
 // plain client — server code should use supabase-server.ts for auth'd access.
 function makeClient(): SupabaseClient | null {
