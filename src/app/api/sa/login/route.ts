@@ -2,25 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { signSAToken, SA_COOKIE_NAME } from '@/lib/sa-session';
 import { serviceClient } from '@/lib/supabase-server';
 import { verifyPassword, safeEqual } from '@/lib/password';
-
-// Simple in-memory rate limiter: max 10 attempts per 10 min per IP
-const attempts = new Map<string, { count: number; reset: number }>();
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const record = attempts.get(ip);
-  if (!record || now > record.reset) {
-    attempts.set(ip, { count: 1, reset: now + 10 * 60 * 1000 });
-    return false;
-  }
-  if (record.count >= 10) return true;
-  record.count++;
-  return false;
-}
+import { rateLimitAllow, clientIp, SA_LOGIN_RULE } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  if (isRateLimited(ip)) {
+  // Shared (Upstash-backed) rate limit: 10 attempts / 10 min per IP.
+  if (!(await rateLimitAllow(SA_LOGIN_RULE, clientIp(request)))) {
     return NextResponse.json({ error: 'Too many attempts' }, { status: 429 });
   }
 
