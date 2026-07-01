@@ -132,6 +132,12 @@ entorno **Production**. Tras agregarlas, **Redeploy** (Deployments → ⋯ → R
 
 ## Fase 7 — Post-launch (deuda técnica, no bloquea)
 
+- [ ] **Rediseño mobile "Blue Spectrum"** (proyecto aparte, decidido post-launch 2026-07-01):
+      nueva paleta de 3 azules (`#0a1638 / #1a4ed8 / #6fa3ff`) + íconos sólidos, reemplaza la
+      identidad neon actual. **Solo existe como imagen/mockup** — no hay HTML fuente en el repo
+      (`design-mobile-concepts.html` es la versión neon, distinta). Alcance real: rediseñar TODAS
+      las pantallas del dashboard del jugador (`src/app/dashboard/player/**`), no solo el home,
+      para mantener coherencia. Estimar como sprint de diseño→implementación→QA, no como parche.
 - [ ] Datos legacy (quick-games / torneos clásicos): split-brain y links no cross-device — arreglar
       antes de promover esos formatos. Lanzar primero apoyado en **Torneo Personalizado**.
 - [ ] RLS restante: rutar escrituras client-side a endpoints service-role y luego restringir
