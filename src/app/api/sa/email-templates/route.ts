@@ -38,7 +38,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { type, name, description, subject, html_body, variables, is_active, updated_by } = body;
+  const { type, name, description, subject, html_body, variables, is_active, updated_by,
+          heading, body_text, cta_text, cta_url, image_url, logo_url } = body;
 
   if (!type || !subject || !html_body) {
     return NextResponse.json({ error: 'Faltan campos requeridos: type, subject, html_body' }, { status: 400 });
@@ -56,6 +57,12 @@ export async function POST(request: NextRequest) {
       is_active:   is_active ?? true,
       updated_by:  updated_by ?? null,
       updated_at:  new Date().toISOString(),
+      heading:     heading   ?? '',
+      body_text:   body_text ?? '',
+      cta_text:    cta_text  ?? '',
+      cta_url:     cta_url   ?? '',
+      image_url:   image_url ?? '',
+      logo_url:    logo_url  ?? '',
     }, { onConflict: 'type' })
     .select()
     .single();
