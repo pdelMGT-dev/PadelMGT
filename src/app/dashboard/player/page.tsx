@@ -163,17 +163,17 @@ export default function PlayerHomePage() {
 
       {/* Profile completion reminder (first login) */}
       {showProfileReminder && (
-        <div style={{ background: 'var(--neon)', padding: '16px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div style={{ background: 'var(--court-blue)', padding: '16px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, textTransform: 'uppercase', color: 'var(--black)', marginBottom: 2 }}>¡Bienvenido a PadelMGT! 🎾</div>
-            <div style={{ fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>Terminá de configurar tu perfil para sacar el máximo provecho de la plataforma.</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, textTransform: 'uppercase', color: '#fff', marginBottom: 2 }}>¡Bienvenido a PadelMGT! 🎾</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Terminá de configurar tu perfil para sacar el máximo provecho de la plataforma.</div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <Link href="/dashboard/player/profile" style={{ padding: '10px 20px', background: 'var(--black)', color: '#fff', fontSize: 12, fontWeight: 700, textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <Link href="/dashboard/player/profile" style={{ padding: '10px 20px', background: '#fff', color: 'var(--court-blue)', fontSize: 12, fontWeight: 700, textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Completar perfil →
             </Link>
             <button onClick={() => setShowProfileReminder(false)}
-              style={{ padding: '10px 14px', background: 'rgba(0,0,0,0.12)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: 'var(--black)' }}>
+              style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.15)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#fff' }}>
               ✕
             </button>
           </div>
@@ -207,7 +207,7 @@ export default function PlayerHomePage() {
                 {canFindPartner && (
                   <Link
                     href={`/inscripcion/${rt.tournamentCode}`}
-                    style={{ padding: '8px 16px', background: 'var(--black)', color: 'var(--neon)', fontSize: 12, fontWeight: 700, textDecoration: 'none', letterSpacing: '0.04em', textTransform: 'uppercase', flexShrink: 0 }}
+                    style={{ padding: '8px 16px', background: 'var(--court-blue)', color: '#fff', fontSize: 12, fontWeight: 700, textDecoration: 'none', letterSpacing: '0.04em', textTransform: 'uppercase', flexShrink: 0 }}
                   >
                     Buscar compañero/a →
                   </Link>
@@ -247,10 +247,10 @@ export default function PlayerHomePage() {
 
       {/* Invitaciones Pendientes */}
       {pendingInvitations.length > 0 && (
-        <div style={{ background: '#fff', border: '2px solid var(--neon)', marginBottom: 32 }}>
-          <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--grey-200)', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--black)' }}>
-            <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--neon)' }}>Invitaciones Pendientes</div>
-            <span style={{ fontSize: 11, background: 'var(--neon)', color: 'var(--black)', fontWeight: 800, padding: '2px 7px', lineHeight: 1.5 }}>{pendingInvitations.length}</span>
+        <div style={{ background: '#fff', border: '2px solid var(--court-blue)', marginBottom: 32 }}>
+          <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--grey-200)', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--court-blue-deep)' }}>
+            <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--bs-light)' }}>Invitaciones Pendientes</div>
+            <span style={{ fontSize: 11, background: 'var(--court-blue)', color: '#fff', fontWeight: 800, padding: '2px 7px', lineHeight: 1.5 }}>{pendingInvitations.length}</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {pendingInvitations.map((inv) => (
@@ -297,18 +297,18 @@ export default function PlayerHomePage() {
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,0.92) 100%)' }} />
         <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.2em', padding: '3px 10px', textTransform: 'uppercase' }}>NUEVO</span>
+            <span style={{ background: 'var(--bs-light)', color: 'var(--court-blue-deep)', fontSize: 9, fontWeight: 800, letterSpacing: '0.2em', padding: '3px 10px', textTransform: 'uppercase' }}>NUEVO</span>
             <span style={{ fontSize: 10, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase' }}>Torneo Personalizado</span>
           </div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 3vw, 34px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', color: '#fff', lineHeight: 1 }}>
-            TU TORNEO. <span style={{ color: 'var(--neon)' }}>TUS REGLAS.</span>
+            TU TORNEO. <span style={{ color: 'var(--bs-light)' }}>TUS REGLAS.</span>
           </div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 8, maxWidth: 480 }}>
             Formato 100% configurable, inscripción por link e inscripción de menores bajo tu cuenta.
           </div>
         </div>
         <div style={{ position: 'relative', display: 'flex', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
-          <Link href="/dashboard/player/tournaments?format=personalizado" style={{ padding: '11px 24px', background: 'var(--neon)', color: 'var(--black)', fontSize: 13, fontWeight: 800, textDecoration: 'none', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+          <Link href="/dashboard/player/tournaments?format=personalizado" style={{ padding: '11px 24px', background: 'var(--bs-light)', color: 'var(--court-blue-deep)', fontSize: 13, fontWeight: 800, textDecoration: 'none', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
             Crear torneo →
           </Link>
           <Link href="/dashboard/player/tournaments" style={{ padding: '11px 20px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
@@ -340,7 +340,7 @@ export default function PlayerHomePage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--black)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</span>
-                      {ev.isCreator && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--neon)', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.08em', flexShrink: 0 }}>CREADOR</span>}
+                      {ev.isCreator && <span style={{ fontSize: 9, background: 'var(--court-blue-deep)', color: 'var(--bs-light)', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.08em', flexShrink: 0 }}>CREADOR</span>}
                       <span style={{ fontSize: 9, background: 'var(--grey-100)', color: 'var(--grey-500)', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.06em', flexShrink: 0, textTransform: 'uppercase' }}>{typeLabel}</span>
                     </div>
                     <div className="player-event-date" style={{ fontSize: 12, color: 'var(--grey-400)' }}>{ev.date} · {ev.time} · {ev.club}, {ev.city}</div>
@@ -367,7 +367,7 @@ export default function PlayerHomePage() {
         {/* Próximo evento */}
         {nextEvent ? (
           <div style={{ background: 'var(--black)', padding: '32px' }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 700, marginBottom: 12 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--bs-light)', fontWeight: 700, marginBottom: 12 }}>
               {nextEvent.entityType === 'tournament' ? 'Próximo Torneo' : 'Próximo Juego Rápido'}
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: '#fff', marginBottom: 8 }}>{nextEvent.name}</div>
@@ -382,7 +382,7 @@ export default function PlayerHomePage() {
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <Link href={nextEvent.entityType === 'game' ? `/dashboard/player/quick-game/${nextEvent.id}` : `/dashboard/player/tournaments/${nextEvent.id}`}
-                className="btn btn-sm" style={{ background: 'var(--neon)', color: 'var(--black)', borderRadius: 0, fontWeight: 700 }}>Ver detalles</Link>
+                className="btn btn-sm" style={{ background: 'var(--bs-light)', color: 'var(--court-blue-deep)', borderRadius: 0, fontWeight: 700 }}>Ver detalles</Link>
               <Link href="/dashboard/player/calendar" className="btn btn-sm" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 0 }}>Mi calendario</Link>
             </div>
           </div>
@@ -391,7 +391,7 @@ export default function PlayerHomePage() {
             <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)', fontWeight: 700 }}>Sin eventos próximos</div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>No tenés torneos ni juegos programados.</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Link href="/dashboard/player/tournaments" className="btn btn-sm" style={{ background: 'var(--neon)', color: 'var(--black)', borderRadius: 0, fontWeight: 700 }}>Crear Torneo</Link>
+              <Link href="/dashboard/player/tournaments" className="btn btn-sm" style={{ background: 'var(--bs-light)', color: 'var(--court-blue-deep)', borderRadius: 0, fontWeight: 700 }}>Crear Torneo</Link>
               <Link href="/dashboard/player/quick-game" className="btn btn-sm" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', borderRadius: 0 }}>Juego Rápido</Link>
             </div>
           </div>

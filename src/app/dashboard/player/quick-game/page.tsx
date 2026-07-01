@@ -704,7 +704,7 @@ export default function QuickGamePage() {
           </div>
           <button
             onClick={() => setView('wizard')}
-            style={{ padding: '13px 28px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}
+            style={{ padding: '13px 28px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}
           >
             + Crear Nuevo Juego Rápido
           </button>
@@ -1272,7 +1272,7 @@ export default function QuickGamePage() {
         <div style={card}>
           <div style={secTitle}>Lista Provisional de Jugadores</div>
           {/* Creator row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', marginBottom: 6, background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', marginBottom: 6, background: 'rgba(26,78,216,0.1)', border: '1px solid rgba(111,163,255,0.35)' }}>
             <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
               {currentUser ? initials(currentUser.name) : 'YO'}
             </div>
@@ -1477,7 +1477,7 @@ export default function QuickGamePage() {
         )}
 
         {!canAddMore && (
-          <div style={{ padding: '11px 16px', background: 'rgba(214,255,0,0.06)', border: '1px solid rgba(214,255,0,0.3)', fontSize: 12, color: 'var(--grey-500)', marginBottom: 8 }}>
+          <div style={{ padding: '11px 16px', background: 'rgba(26,78,216,0.1)', border: '1px solid rgba(111,163,255,0.35)', fontSize: 12, color: 'var(--grey-500)', marginBottom: 8 }}>
             Alcanzaste el máximo de jugadores invitados ({maxPlayers - 1}). Aumentá el máximo para agregar más.
           </div>
         )}
@@ -1611,7 +1611,7 @@ export default function QuickGamePage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {(['traditional', 'gold', 'silver', 'ipf'] as DeuceRule[]).map(rule => (
                     <button key={rule} onClick={() => setDeuceRule(rule)} style={{ padding: '12px 16px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 12, border: `1px solid ${deuceRule === rule ? 'var(--black)' : 'var(--grey-200)'}`, background: deuceRule === rule ? 'var(--grey-900)' : '#fff', color: deuceRule === rule ? '#fff' : 'var(--black)' }}>
-                      <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${deuceRule === rule ? 'var(--neon)' : 'var(--grey-300)'}`, background: deuceRule === rule ? 'var(--neon)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
+                      <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${deuceRule === rule ? 'var(--court-blue)' : 'var(--grey-300)'}`, background: deuceRule === rule ? 'var(--bs-light)' : 'transparent', flexShrink: 0, marginTop: 2 }} />
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{DEUCE_LABEL[rule]}</div>
                         <div style={{ fontSize: 11, color: deuceRule === rule ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.5 }}>{DEUCE_DESC[rule]}</div>
@@ -1685,7 +1685,7 @@ export default function QuickGamePage() {
           <button onClick={() => setStep(4)} style={{ padding: '11px 24px', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, background: 'transparent', cursor: 'pointer', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>← Atrás</button>
           <button
             onClick={handleSubmit}
-            style={{ padding: '13px 36px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+            style={{ padding: '13px 36px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
           >
             CREAR JUEGO RÁPIDO
           </button>

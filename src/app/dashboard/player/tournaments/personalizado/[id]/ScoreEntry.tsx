@@ -96,7 +96,7 @@ export function ScoreEntry({
     fontSize: 10, padding: '5px 11px', cursor: 'pointer', fontWeight: 700, letterSpacing: '0.05em',
     textTransform: 'uppercase', border: `1px solid ${walkover === tid ? 'var(--black)' : 'var(--grey-200)'}`,
     background: walkover === tid ? 'var(--black)' : 'transparent',
-    color: walkover === tid ? 'var(--neon)' : 'var(--grey-400)',
+    color: walkover === tid ? 'var(--bs-light)' : 'var(--grey-400)',
   });
 
   return (
@@ -139,7 +139,7 @@ export function ScoreEntry({
       <div style={{ display: 'flex', gap: 8 }}>
         <button
           disabled={!canSave || saving} onClick={handleSave}
-          style={{ fontSize: 12, padding: '9px 22px', border: 'none', cursor: canSave && !saving ? 'pointer' : 'not-allowed', background: 'var(--black)', color: 'var(--neon)', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', opacity: canSave && !saving ? 1 : 0.4 }}>
+          style={{ fontSize: 12, padding: '9px 22px', border: 'none', cursor: canSave && !saving ? 'pointer' : 'not-allowed', background: 'var(--black)', color: 'var(--bs-light)', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', opacity: canSave && !saving ? 1 : 0.4 }}>
           {saving ? 'Guardando…' : 'Registrar Score'}
         </button>
         <button

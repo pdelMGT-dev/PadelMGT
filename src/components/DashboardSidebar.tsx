@@ -114,6 +114,7 @@ export default function DashboardSidebar() {
     : pathname.startsWith('/dashboard/federation')  ? 'federation'
     : 'player';
 
+  const isBS = activeRole === 'player';
   const isSuperAdmin = user?.role === 'super_admin';
   const [currentPlan, setCurrentPlan] = useState<PlanId>(() =>
     typeof window !== 'undefined' ? getUserPlan() : 'free'
@@ -210,10 +211,10 @@ export default function DashboardSidebar() {
                 padding: collapsed ? '13px 0' : '11px 20px',
                 justifyContent: collapsed ? 'center' : 'flex-start',
                 textDecoration: 'none',
-                color: isActive ? 'var(--neon)' : 'rgba(255,255,255,0.6)',
+                color: isActive ? (isBS ? 'var(--bs-light)' : 'var(--neon)') : 'rgba(255,255,255,0.6)',
                 fontWeight: isActive ? 600 : 400, fontSize: 13,
-                borderLeft: `3px solid ${isActive ? 'var(--neon)' : 'transparent'}`,
-                background: isActive ? 'rgba(214,255,0,0.05)' : 'transparent',
+                borderLeft: `3px solid ${isActive ? (isBS ? 'var(--court-blue)' : 'var(--neon)') : 'transparent'}`,
+                background: isActive ? (isBS ? 'rgba(26,78,216,0.1)' : 'rgba(214,255,0,0.05)') : 'transparent',
                 transition: 'all 0.12s', position: 'relative',
               }}
             >
@@ -263,10 +264,11 @@ export default function DashboardSidebar() {
           <div style={{ margin: '12px 12px 0' }}>
             <Link href="/pricing" style={{
               display: 'block', textDecoration: 'none', padding: '10px 14px',
-              background: 'rgba(214,255,0,0.08)', border: '1px solid rgba(214,255,0,0.2)',
+              background: isBS ? 'rgba(26,78,216,0.12)' : 'rgba(214,255,0,0.08)',
+              border: `1px solid ${isBS ? 'rgba(111,163,255,0.25)' : 'rgba(214,255,0,0.2)'}`,
               textAlign: 'center',
             }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--neon)', marginBottom: 2 }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, color: isBS ? 'var(--bs-light)' : 'var(--neon)', marginBottom: 2 }}>
                 ⚡ Jugador Pro
               </div>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>Sin límites desde $3/mes</div>
@@ -325,7 +327,7 @@ export default function DashboardSidebar() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{displaySub}</div>
                   {planBadge && (
-                    <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: currentPlan === 'infinity' ? '#a855f7' : 'var(--neon)', background: currentPlan === 'infinity' ? 'rgba(168,85,247,0.15)' : 'rgba(214,255,0,0.12)', padding: '2px 6px', border: `1px solid ${currentPlan === 'infinity' ? 'rgba(168,85,247,0.35)' : 'rgba(214,255,0,0.25)'}` }}>
+                    <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: currentPlan === 'infinity' ? '#a855f7' : (isBS ? 'var(--bs-light)' : 'var(--neon)'), background: currentPlan === 'infinity' ? 'rgba(168,85,247,0.15)' : (isBS ? 'rgba(26,78,216,0.15)' : 'rgba(214,255,0,0.12)'), padding: '2px 6px', border: `1px solid ${currentPlan === 'infinity' ? 'rgba(168,85,247,0.35)' : (isBS ? 'rgba(111,163,255,0.3)' : 'rgba(214,255,0,0.25)')}` }}>
                       {planBadge}
                     </span>
                   )}
@@ -344,7 +346,7 @@ export default function DashboardSidebar() {
   return (
     <>
       {/* Mobile top bar */}
-      <div className="dash-mobile-bar">
+      <div className={`dash-mobile-bar${isBS ? ' bs-player' : ''}`}>
         <Link href="/" className="logo" style={{ color: '#fff', textDecoration: 'none' }}>
           <BrandLogo variant="white" height={24} />
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>PadelMGT</span>
@@ -364,7 +366,7 @@ export default function DashboardSidebar() {
       )}
 
       {/* Sidebar */}
-      <aside className={`dashboard-sidebar${mobileOpen ? ' sidebar-open' : ''}`}>
+      <aside className={`dashboard-sidebar${mobileOpen ? ' sidebar-open' : ''}${isBS ? ' bs-player' : ''}`}>
         {/* Mobile close button */}
         <button
           className="dash-sidebar-close"

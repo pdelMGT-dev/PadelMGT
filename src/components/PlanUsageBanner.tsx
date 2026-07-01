@@ -40,7 +40,7 @@ function UsageBar({ label, used, limit, unit = '' }: { label: string; used: numb
   const atLimit = !unlimited && used >= limit;
   const nearLimit = !unlimited && pct >= 75;
 
-  const barColor = atLimit ? '#ef4444' : nearLimit ? '#f5a623' : 'var(--neon)';
+  const barColor = atLimit ? '#ef4444' : nearLimit ? '#f5a623' : 'var(--bs-light)';
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -191,12 +191,12 @@ export default function PlanUsageBanner({ role }: Props) {
     const isPro = plan === 'player_pro';
 
     return (
-      <div style={{ border: `1px solid ${isPro ? 'rgba(214,255,0,0.3)' : 'var(--grey-200)'}`, background: isPro ? 'rgba(214,255,0,0.04)' : '#fff', padding: '20px 24px', marginBottom: 32 }}>
+      <div style={{ border: `1px solid ${isPro ? 'rgba(26,78,216,0.3)' : 'var(--grey-200)'}`, background: isPro ? 'rgba(26,78,216,0.04)' : '#fff', padding: '20px 24px', marginBottom: 32 }}>
         {/* Header row */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isPro ? 16 : 20, flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Tu plan</span>
-            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 10px', background: tierColor, color: isPro ? 'var(--black)' : '#fff' }}>
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 10px', background: isPro ? 'var(--court-blue)' : tierColor, color: '#fff' }}>
               {meta.label}
             </span>
           </div>
@@ -232,7 +232,7 @@ export default function PlanUsageBanner({ role }: Props) {
             <span style={{ fontSize: 12, color: 'var(--grey-500)' }}>
               Jugador Pro: juegos ilimitados · hasta 32 jugadores · torneos ilimitados
             </span>
-            <Link href="/pricing" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--black)', textDecoration: 'none', padding: '8px 20px', background: 'var(--neon)', whiteSpace: 'nowrap' }}>
+            <Link href="/pricing" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fff', textDecoration: 'none', padding: '8px 20px', background: 'var(--court-blue)', whiteSpace: 'nowrap' }}>
               Activar Pro — $3/mes →
             </Link>
           </div>

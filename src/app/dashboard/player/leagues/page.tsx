@@ -95,7 +95,7 @@ export default function LeaguesPage() {
                           {league.name}
                         </span>
                         {isMine && (
-                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px' }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', background: 'var(--court-blue)', color: '#fff', padding: '2px 6px' }}>
                             Admin
                           </span>
                         )}

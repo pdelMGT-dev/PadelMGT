@@ -65,7 +65,7 @@ const STATUS_LABELS: Record<PersonalizadoTournament['status'], string> = {
   cancelled: 'CANCELADO',
 };
 const STATUS_COLORS: Record<PersonalizadoTournament['status'], string> = {
-  draft: 'rgba(0,0,0,0.12)', registration_open: 'rgba(214,255,0,0.15)',
+  draft: 'rgba(0,0,0,0.12)', registration_open: 'rgba(26,78,216,0.18)',
   configured: 'rgba(59,130,246,0.15)', live: 'rgba(34,197,94,0.15)', finished: 'rgba(156,163,175,0.15)',
   cancelled: 'rgba(220,38,38,0.08)',
 };
@@ -97,7 +97,7 @@ function PlayerSearchBox({
     <div style={{ marginBottom: 14 }}>
       <span style={lbl}>{label}</span>
       {selected ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', background: 'rgba(214,255,0,0.08)', border: '2px solid var(--black)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', background: 'rgba(26,78,216,0.12)', border: '2px solid var(--black)' }}>
           <div>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)' }}>{selected.name}</span>
             <span style={{ fontSize: 11, color: 'var(--grey-400)', marginLeft: 8 }}>{selected.shortId} · {selected.email}</span>
@@ -884,14 +884,14 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
           )}
           {/* Panel de Control — always available to the organizer (incl. Live, to extend dates/courts) */}
           {tournament.status !== 'cancelled' && (
-            <Link href={`/dashboard/player/tournaments/personalizado/${tournament.id}/control`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', textDecoration: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            <Link href={`/dashboard/player/tournaments/personalizado/${tournament.id}/control`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: 'pointer', textDecoration: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
               <Settings size={14} /> Panel de Control
             </Link>
           )}
           {(tournament.status === 'configured' || tournament.status === 'live') && (
             <button
               onClick={() => { setShowTabs(prev => !prev); if (!showTabs) setTimeout(() => document.getElementById('tournament-tabs-anchor')?.scrollIntoView({ behavior: 'smooth' }), 50); }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', background: showTabs ? 'var(--black)' : '#fff', color: showTabs ? 'var(--neon)' : 'var(--black)', border: showTabs ? 'none' : '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', background: showTabs ? 'var(--black)' : '#fff', color: showTabs ? 'var(--bs-light)' : 'var(--black)', border: showTabs ? 'none' : '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}
             >
               <CalendarDays size={14} /> {showTabs ? 'Ocultar Calendario' : 'Ver Calendario Completo'}
             </button>
@@ -945,7 +945,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   <button
                     key={cat.id}
                     onClick={() => handleResolveReview(team, cat.id)}
-                    style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', background: 'var(--black)', color: 'var(--neon)', border: 'none', whiteSpace: 'nowrap' }}
+                    style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', whiteSpace: 'nowrap' }}
                   >
                     → {cat.name}
                   </button>
@@ -988,7 +988,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         return (
           <div
             key={cat.id}
-            style={{ ...card, outline: isDragTarget ? '2px dashed var(--neon)' : 'none', transition: 'outline 0.1s' }}
+            style={{ ...card, outline: isDragTarget ? '2px dashed var(--court-blue)' : 'none', transition: 'outline 0.1s' }}
             onDragOver={(e) => { e.preventDefault(); setDropTargetId(cat.id); }}
             onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTargetId(null); }}
             onDrop={(e) => { e.preventDefault(); void handleDrop(cat.id); }}
@@ -1004,7 +1004,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--black)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     {cat.name}
                     {inGroups && (
-                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 7px', background: 'var(--black)', color: 'var(--neon)' }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 7px', background: 'var(--court-blue-deep)', color: 'var(--bs-light)' }}>
                         ⚙ Formación de Grupos
                       </span>
                     )}
@@ -1022,7 +1022,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   <button
                     onClick={(e) => { e.stopPropagation(); setCollapsedCats(prev => ({ ...prev, [cat.id]: false })); void setCategoryStage(cat.id, 'grupos'); }}
                     disabled={savingGroups}
-                    style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: savingGroups ? 'wait' : 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
+                    style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: savingGroups ? 'wait' : 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
                   >
                     ▶ Formar grupos
                   </button>
@@ -1039,7 +1039,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                 {tournament.status === 'registration_open' && !inGroups && !isAddingHere && (
                   <button
                     onClick={(e) => { e.stopPropagation(); resetAddForm(); setAddTeamCatId(cat.id); setCollapsedCats(prev => ({ ...prev, [cat.id]: false })); }}
-                    style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
+                    style={{ padding: '6px 14px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}
                   >
                     + Agregar equipo
                   </button>
@@ -1058,7 +1058,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 
             {/* Progress bar */}
             <div style={{ height: 6, background: 'var(--grey-100)', borderRadius: 3, overflow: 'hidden', marginBottom: collapsed ? 0 : 14 }}>
-              <div style={{ height: '100%', width: `${progress}%`, background: isFull ? 'var(--turf-green, #15803d)' : 'var(--neon, #d6ff00)', borderRadius: 3, transition: 'width 0.3s ease' }} />
+              <div style={{ height: '100%', width: `${progress}%`, background: isFull ? 'var(--turf-green, #15803d)' : 'var(--court-blue, #1a4ed8)', borderRadius: 3, transition: 'width 0.3s ease' }} />
             </div>
 
             {!collapsed && inGroups && (
@@ -1122,7 +1122,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   <button
                     onClick={() => handleAddTeam(cat.id)}
                     disabled={!selectedP1 || !selectedP2 || addingTeam}
-                    style={{ padding: '9px 20px', background: (!selectedP1 || !selectedP2) ? 'var(--grey-200)' : 'var(--black)', color: (!selectedP1 || !selectedP2) ? 'var(--grey-400)' : 'var(--neon)', border: 'none', cursor: (!selectedP1 || !selectedP2 || addingTeam) ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                    style={{ padding: '9px 20px', background: (!selectedP1 || !selectedP2) ? 'var(--grey-200)' : 'var(--black)', color: (!selectedP1 || !selectedP2) ? 'var(--grey-400)' : 'var(--bs-light)', border: 'none', cursor: (!selectedP1 || !selectedP2 || addingTeam) ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}
                   >
                     {addingTeam ? 'Agregando…' : 'Agregar Equipo'}
                   </button>
@@ -1179,7 +1179,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               <div style={{ marginTop: 4 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>
                   Inscriptos
-                  {draggedTeamId && <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--neon)', marginLeft: 8, background: 'var(--black)', padding: '1px 6px' }}>DROP AQUÍ</span>}
+                  {draggedTeamId && <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--bs-light)', marginLeft: 8, background: 'var(--court-blue-deep)', padding: '1px 6px' }}>DROP AQUÍ</span>}
                 </div>
                 {activeTeams.map((team) => (
                   <TeamRow
@@ -1266,7 +1266,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         const a = analyzeTournament(tournament, currentConfig());
         const hasCalendar = (tournament.config?.matches?.length ?? 0) > 0;
         return (
-          <div style={{ ...card, marginTop: 24, borderColor: a.allGroupsReady ? 'rgba(214,255,0,0.6)' : 'var(--grey-200)' }}>
+          <div style={{ ...card, marginTop: 24, borderColor: a.allGroupsReady ? 'rgba(26,78,216,0.7)' : 'var(--grey-200)' }}>
             <div style={secTitle}>Análisis del Torneo</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 16 }}>
               {[
@@ -1320,7 +1320,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                 <button
                   onClick={handleGenerateCalendar}
                   disabled={generatingCal || !a.allGroupsReady}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 26px', background: a.allGroupsReady ? 'var(--black)' : 'var(--grey-200)', color: a.allGroupsReady ? 'var(--neon)' : 'var(--grey-400)', border: 'none', cursor: generatingCal ? 'wait' : a.allGroupsReady ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 26px', background: a.allGroupsReady ? 'var(--black)' : 'var(--grey-200)', color: a.allGroupsReady ? 'var(--bs-light)' : 'var(--grey-400)', border: 'none', cursor: generatingCal ? 'wait' : a.allGroupsReady ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}
                 >
                   <CalendarDays size={16} />
                   {generatingCal ? 'Generando…' : hasCalendar ? 'Regenerar Calendario del Torneo' : 'Generar Calendario del Torneo'}
@@ -1349,7 +1349,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 
       {/* Open Registration CTA */}
       {tournament.status === 'draft' && (
-        <div style={{ ...card, background: 'rgba(214,255,0,0.04)', borderColor: 'rgba(214,255,0,0.3)', marginTop: 24 }}>
+        <div style={{ ...card, background: 'rgba(26,78,216,0.1)', borderColor: 'rgba(111,163,255,0.35)', marginTop: 24 }}>
           <div style={secTitle}>Abrir Inscripción</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
             <div style={{ flex: 1 }}>
@@ -1361,14 +1361,14 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   <span style={{ fontSize: 15, color: 'var(--grey-400)', textDecoration: 'line-through' }}>${openBasePrice}</span>
                 )}
                 {hasDiscount && (
-                  <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--neon)', color: 'var(--black)', padding: '3px 8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--court-blue)', color: '#fff', padding: '3px 8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     {openPromoBadge}
                   </span>
                 )}
               </div>
               <div style={{ fontSize: 13, color: 'var(--grey-400)', lineHeight: 1.6, maxWidth: 480 }}>Al pagar, se activará el registro público. Los participantes podrán inscribirse escaneando el código QR.</div>
             </div>
-            <button onClick={handleOpenRegistration} disabled={opening} style={{ padding: '13px 28px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: opening ? 'wait' : 'pointer', opacity: opening ? 0.6 : 1, fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
+            <button onClick={handleOpenRegistration} disabled={opening} style={{ padding: '13px 28px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: opening ? 'wait' : 'pointer', opacity: opening ? 0.6 : 1, fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
               {opening ? 'Redirigiendo…' : openPrice === 0 ? 'Abrir Inscripción — Gratis' : `Abrir Inscripción — $${openPrice}`}
             </button>
           </div>
@@ -1377,7 +1377,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
             {appliedCode ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-                <span style={{ fontFamily: 'monospace', fontWeight: 700, background: 'var(--black)', color: 'var(--neon)', padding: '4px 10px' }}>{appliedCode}</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 700, background: 'var(--court-blue-deep)', color: 'var(--bs-light)', padding: '4px 10px' }}>{appliedCode}</span>
                 <button onClick={clearPromoCode} style={{ background: 'none', border: 'none', color: 'var(--grey-400)', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Quitar</button>
               </div>
             ) : (
@@ -1420,7 +1420,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               <button
                 onClick={handleReactivateTournament}
                 disabled={reactivating}
-                style={{ padding: '9px 18px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: reactivating ? 'wait' : 'pointer', opacity: reactivating ? 0.6 : 1, fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}
+                style={{ padding: '9px 18px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: reactivating ? 'wait' : 'pointer', opacity: reactivating ? 0.6 : 1, fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}
               >
                 {reactivating ? 'Reactivando…' : '▶ Reactivar torneo'}
               </button>
@@ -1614,7 +1614,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               <button
                 onClick={handleReplacePartner}
                 disabled={!selectedNewPartner || replacing}
-                style={{ padding: '9px 22px', background: !selectedNewPartner ? 'var(--grey-300)' : 'var(--black)', color: !selectedNewPartner ? 'var(--grey-500)' : 'var(--neon)', border: 'none', cursor: (!selectedNewPartner || replacing) ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: replacing ? 0.6 : 1 }}
+                style={{ padding: '9px 22px', background: !selectedNewPartner ? 'var(--grey-300)' : 'var(--black)', color: !selectedNewPartner ? 'var(--grey-500)' : 'var(--bs-light)', border: 'none', cursor: (!selectedNewPartner || replacing) ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: replacing ? 0.6 : 1 }}
               >
                 {replacing ? 'Asignando…' : 'Asignar compañero/a'}
               </button>
@@ -1751,7 +1751,7 @@ function GroupFormation({
           <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>~{teamsPerGroup} equipos por grupo</span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={onRandom} disabled={saving} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: saving ? 'wait' : 'pointer' }}>🎲 Sortear al azar</button>
+          <button onClick={onRandom} disabled={saving} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: saving ? 'wait' : 'pointer' }}>🎲 Sortear al azar</button>
           <button onClick={onClear} disabled={saving} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: '#fff', color: 'var(--grey-500)', border: '1px solid var(--grey-200)', cursor: saving ? 'wait' : 'pointer' }}>✕ Limpiar</button>
         </div>
       </div>
@@ -1763,7 +1763,7 @@ function GroupFormation({
           onDragOver={(e) => { e.preventDefault(); onSetDropTarget(poolId); }}
           onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onSetDropTarget(null); }}
           onDrop={(e) => { e.preventDefault(); onDropTeam(null); }}
-          style={{ resize: 'horizontal', overflow: 'hidden', width: 240, minWidth: 180, maxWidth: 420, flexShrink: 0, minHeight: 90, padding: 8, border: `1px dashed ${dropTarget === poolId ? 'rgba(214,255,0,0.9)' : 'var(--grey-200)'}`, background: dropTarget === poolId ? 'rgba(214,255,0,0.06)' : 'var(--grey-50, #fafafa)' }}
+          style={{ resize: 'horizontal', overflow: 'hidden', width: 240, minWidth: 180, maxWidth: 420, flexShrink: 0, minHeight: 90, padding: 8, border: `1px dashed ${dropTarget === poolId ? 'rgba(111,163,255,0.9)' : 'var(--grey-200)'}`, background: dropTarget === poolId ? 'rgba(26,78,216,0.1)' : 'var(--grey-50, #fafafa)' }}
         >
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Sin grupo ({unassigned.length})</div>
           {unassigned.map(chip)}
@@ -1781,7 +1781,7 @@ function GroupFormation({
                 onDragOver={(e) => { e.preventDefault(); onSetDropTarget(gid); }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onSetDropTarget(null); }}
                 onDrop={(e) => { e.preventDefault(); onDropTeam(gid); }}
-                style={{ width: 160, flexShrink: 0, minHeight: 90, padding: 8, border: `1px solid ${isTarget ? 'var(--black)' : 'var(--grey-100)'}`, background: isTarget ? 'rgba(214,255,0,0.06)' : '#fff' }}
+                style={{ width: 160, flexShrink: 0, minHeight: 90, padding: 8, border: `1px solid ${isTarget ? 'var(--black)' : 'var(--grey-100)'}`, background: isTarget ? 'rgba(26,78,216,0.1)' : '#fff' }}
               >
                 <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 8 }}>
                   Grupo {groupLetters[i % groupLetters.length]} <span style={{ color: 'var(--grey-400)', fontWeight: 400 }}>({gTeams.length})</span>

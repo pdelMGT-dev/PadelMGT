@@ -664,7 +664,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', color: '#fff', lineHeight: 1.2 }}>{t.name}</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 3 }}>{t.date} · {t.club}, {t.city}</div>
           </div>
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--neon)', padding: '3px 10px', border: '1px solid var(--neon)', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--bs-light)', padding: '3px 10px', border: '1px solid var(--court-blue)', whiteSpace: 'nowrap' }}>
             FINALIZADO
           </span>
         </div>
@@ -808,7 +808,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                   const rowLabel = s.playerName;
                   const posIcon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1);
                   return (
-                    <tr key={s.playerId} style={{ borderBottom: '1px solid var(--grey-100)', background: isMe ? 'rgba(214,255,0,0.06)' : 'transparent' }}>
+                    <tr key={s.playerId} style={{ borderBottom: '1px solid var(--grey-100)', background: isMe ? 'rgba(26,78,216,0.1)' : 'transparent' }}>
                       <td style={{ ...tdC, fontFamily: 'var(--font-display)', fontWeight: 700 }}>{posIcon}</td>
                       <td style={{ ...tdL, fontWeight: isMe ? 700 : 500 }}>
                         {rowLabel}{isMe && <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--grey-400)' }}>(tú)</span>}
@@ -1158,7 +1158,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                 </div>
                 {allGroupMatchesDone && !advanceConfirm && (
                   <button onClick={() => setAdvanceConfirm(true)}
-                    style={{ padding: '9px 20px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    style={{ padding: '9px 20px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     Avanzar al Cuadro →
                   </button>
                 )}
@@ -1174,7 +1174,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                       setTournament(updated);
                       if (items.length) void createNotifications(updated.id, 'torneo', items);
                       setAdvanceConfirm(false);
-                    }} style={{ padding: '7px 14px', background: 'var(--black)', color: 'var(--neon)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
+                    }} style={{ padding: '7px 14px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
                       Sí
                     </button>
                     <button onClick={() => setAdvanceConfirm(false)}
@@ -1586,7 +1586,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                   {/* Pair 1 */}
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--grey-100)' }}>
                                     <div style={{ width: 60, flexShrink: 0 }}>
-                                      {courtWinner === 1 && <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
+                                      {courtWinner === 1 && <span style={{ background: 'var(--court-blue)', color: '#fff', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
                                     </div>
                                     <div style={{ flex: 1 }}>
                                       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', lineHeight: 1.3 }}>{pair1Label}</div>
@@ -1638,7 +1638,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                   {/* Pair 2 */}
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px' }}>
                                     <div style={{ width: 60, flexShrink: 0 }}>
-                                      {courtWinner === 2 && <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
+                                      {courtWinner === 2 && <span style={{ background: 'var(--court-blue)', color: '#fff', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
                                     </div>
                                     <div style={{ flex: 1 }}>
                                       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', lineHeight: 1.3 }}>{pair2Label}</div>
@@ -1843,7 +1843,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                           return (
                             <tr key={pair.pairIndex} style={{
                               borderBottom: '1px solid var(--grey-100)',
-                              background: isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
+                              background: isCreatorRow ? 'rgba(26,78,216,0.12)' : 'transparent',
                             }}>
                               <td style={{ ...tdCenter, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
                                 {i === 0 ? '🥇' : i + 1}
@@ -1872,7 +1872,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                           return (
                             <tr key={s.playerId} style={{
                               borderBottom: '1px solid var(--grey-100)',
-                              background: isMe ? 'rgba(26,78,216,0.07)' : isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
+                              background: isMe ? 'rgba(26,78,216,0.07)' : isCreatorRow ? 'rgba(26,78,216,0.12)' : 'transparent',
                               outline: isMe ? '2px solid rgba(26,78,216,0.2)' : undefined,
                             }}>
                               <td style={{ ...tdCenter, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
@@ -1922,7 +1922,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                         return (
                           <tr key={s.playerId} style={{
                             borderBottom: '1px solid var(--grey-100)',
-                            background: isMe ? 'rgba(26,78,216,0.07)' : isCreatorRow ? 'rgba(214,255,0,0.08)' : 'transparent',
+                            background: isMe ? 'rgba(26,78,216,0.07)' : isCreatorRow ? 'rgba(26,78,216,0.12)' : 'transparent',
                             outline: isMe ? '2px solid rgba(26,78,216,0.2)' : undefined,
                           }}>
                             <td style={{ ...tdCenter, fontFamily: 'var(--font-display)', fontWeight: 700 }}>

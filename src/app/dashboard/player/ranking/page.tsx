@@ -141,7 +141,7 @@ export default function PlayerRankingPage() {
     cursor: 'pointer',
     border: 'none',
     background: 'none',
-    borderBottom: activeTab === tab ? '2px solid var(--neon, #d6ff00)' : '2px solid transparent',
+    borderBottom: activeTab === tab ? '2px solid var(--court-blue)' : '2px solid transparent',
     color: activeTab === tab ? 'var(--black)' : 'var(--grey-400)',
     transition: 'color 0.15s',
     outline: 'none',
@@ -167,7 +167,7 @@ export default function PlayerRankingPage() {
           {/* Stats */}
           <div className="ranking-stats-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
             <div className="ranking-stat-cell" style={{ background: 'var(--black)', padding: '40px 36px' }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 700, marginBottom: 8 }}>Ranking General</div>
+              <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--bs-light)', fontWeight: 700, marginBottom: 8 }}>Ranking General</div>
               <div className="ranking-big-num" style={{ fontFamily: 'var(--font-display)', fontSize: 96, fontWeight: 600, letterSpacing: '-0.05em', color: hasData ? '#fff' : 'rgba(255,255,255,0.2)', lineHeight: 0.85, marginBottom: 12 }}>
                 {hasData && rank ? `#${rank}` : '—'}
               </div>
@@ -238,7 +238,7 @@ export default function PlayerRankingPage() {
                         gridTemplateColumns: '48px 1fr 80px 100px',
                         padding: '14px 20px',
                         borderBottom: idx < Math.min(allPlayers.length, 20) - 1 ? '1px solid var(--grey-100)' : 'none',
-                        background: isMe ? 'rgba(214,255,0,0.06)' : 'transparent',
+                        background: isMe ? 'rgba(26,78,216,0.1)' : 'transparent',
                         alignItems: 'center',
                       }}
                     >
@@ -252,7 +252,7 @@ export default function PlayerRankingPage() {
                         {isMe && (
                           <span style={{
                             fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
-                            color: 'var(--black)', background: 'var(--neon, #d6ff00)',
+                            color: '#fff', background: 'var(--court-blue)',
                             padding: '2px 6px', borderRadius: 2,
                           }}>TÚ</span>
                         )}
@@ -305,7 +305,7 @@ export default function PlayerRankingPage() {
                       gridTemplateColumns: '48px 1fr 100px',
                       padding: '14px 20px',
                       borderBottom: idx < friendsRanking.length - 1 ? '1px solid var(--grey-100)' : 'none',
-                      background: isMe ? 'rgba(214,255,0,0.06)' : 'transparent',
+                      background: isMe ? 'rgba(26,78,216,0.1)' : 'transparent',
                       alignItems: 'center',
                     }}
                   >
@@ -322,7 +322,7 @@ export default function PlayerRankingPage() {
                           fontWeight: 700,
                           letterSpacing: '0.1em',
                           color: 'var(--black)',
-                          background: 'var(--neon, #d6ff00)',
+                          background: 'var(--court-blue)',
                           padding: '2px 6px',
                           borderRadius: 2,
                         }}>
@@ -472,7 +472,7 @@ export default function PlayerRankingPage() {
                         gridTemplateColumns: '48px 1fr 100px',
                         padding: '14px 20px',
                         borderBottom: idx < snapshotData.length - 1 ? '1px solid var(--grey-100)' : 'none',
-                        background: isMe ? 'rgba(214,255,0,0.06)' : 'transparent',
+                        background: isMe ? 'rgba(26,78,216,0.1)' : 'transparent',
                         alignItems: 'center',
                       }}
                     >
@@ -489,7 +489,7 @@ export default function PlayerRankingPage() {
                             fontWeight: 700,
                             letterSpacing: '0.1em',
                             color: 'var(--black)',
-                            background: 'var(--neon, #d6ff00)',
+                            background: 'var(--court-blue)',
                             padding: '2px 6px',
                             borderRadius: 2,
                           }}>

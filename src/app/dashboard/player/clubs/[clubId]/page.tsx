@@ -158,7 +158,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ clubId: s
   return (
     <div className="dash-page" style={{ padding: '40px 40px 80px' }}>
       {toast && (
-        <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none', borderLeft: '3px solid var(--neon)' }}>
+        <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none', borderLeft: '3px solid var(--court-blue)' }}>
           {toast}
         </div>
       )}
@@ -189,7 +189,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ clubId: s
         <div style={{ flexShrink: 0 }}>
           {memberState ? (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <span style={{ fontSize: 12, color: 'var(--neon)', fontWeight: 700 }}>✓ Miembro</span>
+              <span style={{ fontSize: 12, color: 'var(--bs-light)', fontWeight: 700 }}>✓ Miembro</span>
               <button
                 onClick={handleLeave}
                 style={{ padding: '9px 18px', background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
@@ -200,7 +200,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ clubId: s
           ) : (
             <button
               onClick={handleJoin}
-              style={{ padding: '11px 28px', background: 'var(--neon)', color: 'var(--black)', border: 'none', fontSize: 13, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase' }}
+              style={{ padding: '11px 28px', background: 'var(--court-blue)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase' }}
             >
               Unirse →
             </button>

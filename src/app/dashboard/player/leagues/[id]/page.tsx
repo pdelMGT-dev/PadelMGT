@@ -279,7 +279,7 @@ export default function LeagueDetailPage() {
   const tabStyle = (t: Tab): React.CSSProperties => ({
     padding: '10px 18px', fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
     cursor: 'pointer', border: 'none', background: 'none',
-    borderBottom: tab === t ? '2px solid var(--neon, #d6ff00)' : '2px solid transparent',
+    borderBottom: tab === t ? '2px solid var(--court-blue)' : '2px solid transparent',
     color: tab === t ? 'var(--black)' : 'var(--grey-400)',
     transition: 'color 0.15s', outline: 'none', position: 'relative' as const, flexShrink: 0,
   });
@@ -298,12 +298,12 @@ export default function LeagueDetailPage() {
                 {league.name}
               </h1>
               {isCreator && (
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', background: 'var(--court-blue)', color: '#fff', padding: '2px 6px' }}>
                   Admin Principal
                 </span>
               )}
               {amAdmin && !isCreator && (
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', background: 'rgba(214,255,0,0.3)', color: 'var(--black)', padding: '2px 6px' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', background: 'rgba(111,163,255,0.35)', color: 'var(--black)', padding: '2px 6px' }}>
                   Co-admin
                 </span>
               )}
@@ -374,11 +374,11 @@ export default function LeagueDetailPage() {
               {standings.map((entry, idx) => {
                 const isMe = entry.playerId === user?.id;
                 return (
-                  <div key={entry.playerId} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 50px 50px 50px 50px 70px', padding: '12px 20px', borderBottom: idx < standings.length - 1 ? '1px solid var(--grey-100)' : 'none', background: isMe ? 'rgba(214,255,0,0.05)' : 'transparent', alignItems: 'center' }}>
+                  <div key={entry.playerId} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 50px 50px 50px 50px 70px', padding: '12px 20px', borderBottom: idx < standings.length - 1 ? '1px solid var(--grey-100)' : 'none', background: isMe ? 'rgba(26,78,216,0.1)' : 'transparent', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><RankMedal pos={idx + 1} /></div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 13, fontWeight: isMe ? 700 : 500, color: 'var(--black)' }}>{entry.playerName}</span>
-                      {isMe && <span style={{ fontSize: 9, fontWeight: 700, background: 'var(--neon)', color: 'var(--black)', padding: '2px 5px' }}>TÚ</span>}
+                      {isMe && <span style={{ fontSize: 9, fontWeight: 700, background: 'var(--court-blue)', color: '#fff', padding: '2px 5px' }}>TÚ</span>}
                     </div>
                     {[entry.played, entry.wins, entry.draws, entry.losses].map((v, i) => <div key={i} style={{ textAlign: 'right', fontSize: 12, color: 'var(--grey-600)' }}>{v}</div>)}
                     <div style={{ textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700, color: 'var(--black)' }}>{entry.points}</div>
@@ -424,11 +424,11 @@ export default function LeagueDetailPage() {
               <div key={member.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: idx < members.length - 1 ? '1px solid var(--grey-100)' : 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--black)' }}>{member.playerName}</span>
-                  {member.playerId === user?.id && <span style={{ fontSize: 9, fontWeight: 700, background: 'var(--neon)', color: 'var(--black)', padding: '2px 5px' }}>TÚ</span>}
+                  {member.playerId === user?.id && <span style={{ fontSize: 9, fontWeight: 700, background: 'var(--court-blue)', color: '#fff', padding: '2px 5px' }}>TÚ</span>}
                   {member.playerId === league.createdBy && <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Creador</span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', background: member.role === 'admin' ? 'rgba(214,255,0,0.15)' : 'var(--grey-50)', color: member.role === 'admin' ? 'var(--black)' : 'var(--grey-400)', border: `1px solid ${member.role === 'admin' ? 'rgba(214,255,0,0.4)' : 'var(--grey-200)'}` }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', background: member.role === 'admin' ? 'rgba(26,78,216,0.18)' : 'var(--grey-50)', color: member.role === 'admin' ? 'var(--black)' : 'var(--grey-400)', border: `1px solid ${member.role === 'admin' ? 'rgba(111,163,255,0.45)' : 'var(--grey-200)'}` }}>
                     {member.role === 'admin' ? 'Admin' : 'Miembro'}
                   </span>
                   {amAdmin && member.playerId !== league.createdBy && member.playerId !== user?.id && (
@@ -639,7 +639,7 @@ export default function LeagueDetailPage() {
                 <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--grey-100)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 13, color: 'var(--black)' }}>{m.playerName}</span>
-                    {m.playerId === league.createdBy && <span style={{ fontSize: 9, fontWeight: 700, background: 'var(--neon)', color: 'var(--black)', padding: '2px 5px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Admin Principal</span>}
+                    {m.playerId === league.createdBy && <span style={{ fontSize: 9, fontWeight: 700, background: 'var(--court-blue)', color: '#fff', padding: '2px 5px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Admin Principal</span>}
                   </div>
                   {isCreator && m.playerId !== league.createdBy && (
                     <button onClick={() => { updateMemberRole(id!, m.playerId, 'member'); reload(); }} style={{ fontSize: 11, color: 'var(--grey-500)', border: '1px solid var(--grey-200)', background: '#fff', padding: '4px 8px', cursor: 'pointer' }}>

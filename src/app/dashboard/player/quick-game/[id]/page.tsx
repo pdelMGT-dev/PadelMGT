@@ -958,7 +958,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                         <div style={{ fontSize: 13, fontWeight: isCreatorPair ? 700 : 500 }}>{label}</div>
                         {fp.name?.trim() && <div style={{ fontSize: 10, color: 'var(--grey-400)' }}>{fp.player1Name} / {fp.player2Name}</div>}
                       </div>
-                      {isCreatorPair && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--neon)', padding: '2px 6px', fontWeight: 700 }}>CREADOR</span>}
+                      {isCreatorPair && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--bs-light)', padding: '2px 6px', fontWeight: 700 }}>CREADOR</span>}
                     </div>
                   );
                 })}
@@ -974,7 +974,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                       {initials(p.name)}
                     </div>
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</span>
-                    {p.isCreator && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--neon)', padding: '2px 6px', fontWeight: 700 }}>CREADOR</span>}
+                    {p.isCreator && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--bs-light)', padding: '2px 6px', fontWeight: 700 }}>CREADOR</span>}
                   </div>
                 ))}
               </div>
@@ -1213,7 +1213,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                       {isPending && (
                         <Link
                           href={`/dashboard/player/quick-game/${game.id}/edit`}
-                          style={{ padding: '7px 16px', background: 'var(--black)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: 'var(--neon)', textDecoration: 'none', display: 'inline-block', letterSpacing: '0.05em' }}
+                          style={{ padding: '7px 16px', background: 'var(--black)', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', color: 'var(--bs-light)', textDecoration: 'none', display: 'inline-block', letterSpacing: '0.05em' }}
                         >
                           ✎ Editar parámetros
                         </Link>
@@ -1305,8 +1305,8 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                     {p.name}
-                    {isThisCreator && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--neon)', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.08em' }}>CREADOR</span>}
-                    {(game.coCreatorIds ?? []).includes(p.id) && <span style={{ fontSize: 9, background: 'var(--neon)', color: 'var(--black)', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.08em' }}>CO-CREADOR</span>}
+                    {isThisCreator && <span style={{ fontSize: 9, background: 'var(--black)', color: 'var(--bs-light)', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.08em' }}>CREADOR</span>}
+                    {(game.coCreatorIds ?? []).includes(p.id) && <span style={{ fontSize: 9, background: 'var(--court-blue)', color: '#fff', padding: '2px 6px', fontWeight: 700, letterSpacing: '0.08em' }}>CO-CREADOR</span>}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p.email ?? ''}</div>
                 </div>
@@ -1473,7 +1473,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                         const isCo = game.coCreatorIds?.includes(p.id);
                         return (
                           <button key={p.id} onClick={() => handleToggleCoCreator(p.id)}
-                            style={{ padding: '7px 14px', border: '1px solid', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase', background: isCo ? 'var(--neon)' : '#fff', color: isCo ? 'var(--black)' : 'var(--grey-400)', borderColor: isCo ? 'var(--neon)' : 'var(--grey-200)' }}>
+                            style={{ padding: '7px 14px', border: '1px solid', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase', background: isCo ? 'var(--court-blue)' : '#fff', color: isCo ? '#fff' : 'var(--grey-400)', borderColor: isCo ? 'var(--court-blue)' : 'var(--grey-200)' }}>
                             {p.name} {isCo ? '★' : '+'}
                           </button>
                         );
@@ -1726,7 +1726,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         <div style={{ ...cardStyle, background: canStart ? 'var(--black)' : '#fff' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <div>
-              <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: canStart ? 'var(--neon)' : 'var(--grey-400)', marginBottom: 8 }}>
+              <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: canStart ? 'var(--bs-light)' : 'var(--grey-400)', marginBottom: 8 }}>
                 Iniciar Juego
               </div>
               {!allConfirmed && (
@@ -1751,8 +1751,8 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               style={{
                 padding: '14px 32px', border: 'none', fontSize: 13, fontWeight: 800,
                 letterSpacing: '0.08em', textTransform: 'uppercase', cursor: canStart ? 'pointer' : 'not-allowed',
-                background: canStart ? 'var(--neon)' : 'var(--grey-200)',
-                color: canStart ? 'var(--black)' : 'var(--grey-400)',
+                background: canStart ? 'var(--court-blue)' : 'var(--grey-200)',
+                color: canStart ? '#fff' : 'var(--grey-400)',
                 flexShrink: 0,
               }}
             >
@@ -1799,7 +1799,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               {hasMoreRounds && (
                 <button
                   onClick={handleNextRound}
-                  style={{ padding: '13px 32px', background: 'var(--black)', color: 'var(--neon)', border: 'none', fontSize: 13, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+                  style={{ padding: '13px 32px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', fontSize: 13, fontWeight: 800, cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}
                 >
                   Continuar Siguiente Ronda →
                 </button>
@@ -1849,7 +1849,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                     {/* Pair A */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: isMobile ? '10px 12px' : '14px 20px', borderBottom: '1px solid var(--grey-100)' }}>
                       <div style={{ width: 64, flexShrink: 0 }}>
-                        {winner === 1 && <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
+                        {winner === 1 && <span style={{ background: 'var(--court-blue)', color: '#fff', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 10, color: 'var(--grey-400)', marginBottom: 2 }}>Pareja A</div>
@@ -1882,7 +1882,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                     {/* Pair B */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: isMobile ? '10px 12px' : '14px 20px' }}>
                       <div style={{ width: 64, flexShrink: 0 }}>
-                        {winner === 2 && <span style={{ background: 'var(--neon)', color: 'var(--black)', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
+                        {winner === 2 && <span style={{ background: 'var(--court-blue)', color: '#fff', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 6px', whiteSpace: 'nowrap' }}>Ganador</span>}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 10, color: 'var(--grey-400)', marginBottom: 2 }}>Pareja B</div>
