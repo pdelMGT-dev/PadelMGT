@@ -4,7 +4,6 @@ import type {
   ActiveGame,
   GamePlayer,
   ScoreConfig,
-  GameFormat,
   PairType,
 } from './game-engine';
 import {
@@ -46,10 +45,6 @@ function randomDigits(n: number): string {
 
 function generateQuickCode(): string {
   return `JR-${new Date().getFullYear()}-${randomDigits(4)}`;
-}
-
-function generateTournamentCode(): string {
-  return `T-${new Date().getFullYear()}-${randomDigits(4)}`;
 }
 
 function generateId(): string {
@@ -222,42 +217,3 @@ export function cloneQuickGame(
   return game;
 }
 
-export function createTournament(params: {
-  name: string;
-  date: string;
-  time: string;
-  club: string;
-  city: string;
-  format: GameFormat;
-  pairType: PairType;
-  mixto: boolean;
-  scoreConfig: ScoreConfig;
-  maxPlayers: number;
-  courts: number;
-  players: GamePlayer[];
-}): ActiveGame {
-  const game: ActiveGame = {
-    id: generateId(),
-    code: generateTournamentCode(),
-    name: params.name,
-    format: params.format,
-    status: 'created',
-    createdAt: new Date().toISOString(),
-    date: params.date,
-    time: params.time,
-    club: params.club,
-    city: params.city,
-    pairType: params.pairType,
-    mixto: params.mixto,
-    scoreConfig: params.scoreConfig,
-    maxPlayers: params.maxPlayers,
-    courts: params.courts,
-    players: params.players,
-    invitedPlayers: [],
-    rounds: [],
-    currentRound: 0,
-    standings: [],
-  };
-  saveGame(game);
-  return game;
-}

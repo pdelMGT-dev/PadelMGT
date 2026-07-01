@@ -105,6 +105,18 @@ export async function fetchTournamentsByCreator(creatorPlayerId: string) {
   return (data ?? []).map((r: Record<string, unknown>) => r.data as Record<string, unknown>).filter(Boolean);
 }
 
+/** Fetch a single quick game by its short code from the data JSONB column. */
+export async function fetchGameByCode(code: string) {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('quick_games')
+    .select('data')
+    .filter('data->>code', 'eq', code)
+    .maybeSingle();
+  if (error) { console.warn('[Supabase] fetchGameByCode:', error.message); return null; }
+  return data ? (data.data as Record<string, unknown>) : null;
+}
+
 /** Fetch all quick games created by a player (by their string player ID). */
 export async function fetchGamesByCreator(creatorPlayerId: string) {
   if (!supabase) return null;
