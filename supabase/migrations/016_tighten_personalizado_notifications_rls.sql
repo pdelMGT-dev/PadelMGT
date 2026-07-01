@@ -5,8 +5,10 @@
 --
 --   personalizado_tournaments  → /api/personalizado/{save,status,cancel,reactivate,delete}
 --   personalizado_teams        → /api/personalizado/{register,team-status,team-delete,accept-invitation,save}
---   personalizado_matches      → /api/personalizado/{match-result,save,seed}
 --   tournament_notifications   → /api/notifications/create
+--
+-- (personalizado_matches has no dedicated table — matches live in the
+--  tournament's config JSONB — so there is nothing to tighten there.)
 --
 -- service_role bypasses RLS, so those API paths keep working after we drop the
 -- permissive anon/authenticated INSERT/UPDATE policies below. Public SELECT
@@ -25,10 +27,6 @@ DROP POLICY IF EXISTS "personalizado_tournaments_update" ON public.personalizado
 -- ── personalizado_teams ──────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "personalizado_teams_insert" ON public.personalizado_teams;
 DROP POLICY IF EXISTS "personalizado_teams_update" ON public.personalizado_teams;
-
--- ── personalizado_matches ────────────────────────────────────────────────────
-DROP POLICY IF EXISTS "personalizado_matches_insert" ON public.personalizado_matches;
-DROP POLICY IF EXISTS "personalizado_matches_update" ON public.personalizado_matches;
 
 -- ── tournament_notifications ─────────────────────────────────────────────────
 DROP POLICY IF EXISTS "tournament_notifications_insert" ON public.tournament_notifications;
