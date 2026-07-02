@@ -499,6 +499,16 @@ body.bs-mobile-active .bs-page {
   padding: 16px 14px 24px !important;
   margin: 0 !important;
 }
+/* Catch-all for detail pages that use an inline-padded root div (no wrapper
+   class): the page root is the direct child of .dashboard-main, so trim its
+   wasteful desktop side/top padding and clamp it to the viewport. Only paddings
+   are touched (not a full reset), keeping full-bleed headers intact. */
+body.bs-mobile-active .dashboard-main > div {
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+  padding-top: 18px !important;
+  max-width: 100% !important;
+}
 
 /* (2) Collapse fixed multi-column grids to a single column. The home page's
    `1fr 320px` split (.player-split-grid) is the confirmed offender; the
@@ -525,15 +535,24 @@ body.bs-mobile-active .bs-scroll-x {
 /* (3) Wide data tables scroll horizontally within their own container. Turning
    the table into a block box makes it its own horizontal scroller; nowrap keeps
    the columns from collapsing so header and body stay aligned. */
-body.bs-mobile-active .rank-table {
+body.bs-mobile-active .rank-table,
+body.bs-mobile-active .player-dashboard-page table,
+body.bs-mobile-active .bs-page table,
+body.bs-mobile-active .dash-page table {
   display: block !important;
   max-width: 100% !important;
   overflow-x: auto !important;
   -webkit-overflow-scrolling: touch;
   white-space: nowrap;
 }
-body.bs-mobile-active .rank-table::-webkit-scrollbar { height: 4px; }
-body.bs-mobile-active .rank-table::-webkit-scrollbar-thumb {
+body.bs-mobile-active .rank-table::-webkit-scrollbar,
+body.bs-mobile-active .bs-page table::-webkit-scrollbar,
+body.bs-mobile-active .dash-page table::-webkit-scrollbar,
+body.bs-mobile-active .player-dashboard-page table::-webkit-scrollbar { height: 4px; }
+body.bs-mobile-active .rank-table::-webkit-scrollbar-thumb,
+body.bs-mobile-active .bs-page table::-webkit-scrollbar-thumb,
+body.bs-mobile-active .dash-page table::-webkit-scrollbar-thumb,
+body.bs-mobile-active .player-dashboard-page table::-webkit-scrollbar-thumb {
   background: var(--grey-300); border-radius: 2px;
 }
 
