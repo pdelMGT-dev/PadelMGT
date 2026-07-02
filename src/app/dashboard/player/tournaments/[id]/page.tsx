@@ -237,7 +237,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   // ── Guard: loading ────────────────────────────────────────────────────────
   if (tournament === undefined) {
     return (
-      <div style={{ padding: '80px 40px', textAlign: 'center', color: 'var(--grey-400)' }}>
+      <div className="bs-page" style={{ padding: '80px 40px', textAlign: 'center', color: 'var(--grey-400)' }}>
         Cargando...
       </div>
     );
@@ -246,7 +246,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   // ── Guard: not found ──────────────────────────────────────────────────────
   if (tournament === null) {
     return (
-      <div style={{ padding: '80px 40px', maxWidth: 500, textAlign: 'center' }}>
+      <div className="bs-page" style={{ padding: '80px 40px', maxWidth: 500, textAlign: 'center' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, textTransform: 'uppercase', marginBottom: 12 }}>
           Torneo no encontrado
         </div>
@@ -268,7 +268,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   // ── Guard: no access ──────────────────────────────────────────────────────
   if (currentUser != null && !hasAccess) {
     return (
-      <div style={{ padding: '80px 40px', maxWidth: 500, textAlign: 'center' }}>
+      <div className="bs-page" style={{ padding: '80px 40px', maxWidth: 500, textAlign: 'center' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, textTransform: 'uppercase', marginBottom: 12 }}>
           No tienes acceso
         </div>
@@ -289,7 +289,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
     const effectiveStatus = isCancelled ? 'cancelled' : tournament.status;
     const si = statusInfo(effectiveStatus);
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 720 }}>
+      <div className="bs-page" style={{ padding: '40px 40px 80px', maxWidth: 720 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, paddingBottom: 20, borderBottom: '1px solid var(--grey-100)' }}>
           <Link href="/dashboard/player/tournaments"
             style={{ fontSize: 12, color: 'var(--grey-500)', textDecoration: 'none', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -297,7 +297,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
           </Link>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)' }}>PADELMGT</div>
         </div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 12px' }}>
+        <h1 className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 12px' }}>
           {tournament.name}
         </h1>
         <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', background: si.bg, color: si.color, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
@@ -438,7 +438,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   // ── Live state placeholder ────────────────────────────────────────────────
   if (tournament.status === 'live') {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 720 }}>
+      <div className="bs-page" style={{ padding: '40px 40px 80px', maxWidth: 720 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, paddingBottom: 20, borderBottom: '1px solid var(--grey-100)' }}>
           <Link href="/dashboard/player/tournaments"
             style={{ fontSize: 12, color: 'var(--grey-500)', textDecoration: 'none', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -446,7 +446,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
           </Link>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-400)' }}>PADELMGT</div>
         </div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 12px' }}>
+        <h1 className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 12px' }}>
           {tournament.name}
         </h1>
         <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', background: 'rgba(0,180,0,0.1)', color: 'var(--turf-green)', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'inline-block', marginBottom: 32 }}>
@@ -788,10 +788,10 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '0 0 80px', maxWidth: 800, margin: '0 auto' }}>
+    <div className="bs-page" style={{ padding: '0 0 80px', maxWidth: 800, margin: '0 auto' }}>
 
       {/* ── Top bar ── */}
-      <div style={{
+      <div className="bs-actions-row" style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         padding: '16px 40px', borderBottom: '1px solid var(--grey-100)',
         background: '#fff', position: 'sticky', top: 0, zIndex: 10,
@@ -810,7 +810,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
             Cancelar Torneo
           </button>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="bs-actions-buttons" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 700 }}>¿Seguro?</span>
             <button onClick={handleCancelTournament}
               style={{ padding: '7px 14px', background: '#dc2626', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>
@@ -835,7 +835,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
 
         {/* All filled CTA */}
         {allFilled && (
-          <div style={{ padding: '14px 20px', background: 'rgba(26,78,216,0.12)', border: '2px solid var(--court-blue)', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="bs-actions-row" style={{ padding: '14px 20px', background: 'rgba(26,78,216,0.12)', border: '2px solid var(--court-blue)', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)' }}>¡Todos los cupos están ocupados!</span>
             <button onClick={handleStartTournament}
               style={{ padding: '10px 22px', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -852,7 +852,9 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 4 }}>Compartir Torneo</div>
-              <div style={{ fontSize: 12, color: 'var(--black)', marginBottom: 8, wordBreak: 'break-all', fontFamily: 'monospace' }}>{shareUrl}</div>
+              {/* Display a clean short URL; the full shareUrl (with the embedded
+                  snapshot payload) is still what gets copied/QR'd. */}
+              <div style={{ fontSize: 12, color: 'var(--black)', marginBottom: 8, wordBreak: 'break-all', fontFamily: 'monospace' }}>{`padelmgt.com/t/${tournament?.code ?? ''}`}</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <button onClick={() => { navigator.clipboard.writeText(shareUrl).catch(() => {}); }} style={{ padding: '6px 14px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}>
                   Copiar link
@@ -942,7 +944,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                 </>
               ) : (
                 <div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                  <div className="bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={lbl}>Nombre</label>
                       <input type="text" value={editName} onChange={e => setEditName(e.target.value)} style={inp} />
@@ -1050,7 +1052,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: 10 }}>
+                  <div className="bs-actions-buttons" style={{ display: 'flex', gap: 10 }}>
                     <button onClick={handleSaveEdit}
                       style={{ padding: '10px 22px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                       Guardar
@@ -1092,7 +1094,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
 
           {/* Creator not playing — organizer-only banner */}
           {isCreator && !confirmedPlayers.some(p => p.id === currentUser?.id) && t.status !== 'live' && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', marginBottom: 12, background: 'rgba(124,58,237,0.05)', border: '1px dashed #7c3aed' }}>
+            <div className="bs-actions-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', marginBottom: 12, background: 'rgba(124,58,237,0.05)', border: '1px dashed #7c3aed' }}>
               <div>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Solo organizando</span>
                 <span style={{ fontSize: 11, color: 'var(--grey-500)', marginLeft: 8 }}>No estás inscrito como jugador</span>
@@ -1442,7 +1444,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
 
               {/* Collapse toggle */}
               {completePairs.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div className="bs-actions-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <span style={{ fontSize: 11, color: 'var(--grey-500)' }}>
                     {completePairs.length} equipo{completePairs.length !== 1 ? 's' : ''} completo{completePairs.length !== 1 ? 's' : ''}
                   </span>
@@ -1536,7 +1538,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
               </div>
 
               {/* Save draft + status */}
-              <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+              <div className="bs-actions-row" style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                 <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
                   {completePairs.length} equipo{completePairs.length !== 1 ? 's' : ''} completo{completePairs.length !== 1 ? 's' : ''} · {unassigned.length} jugador{unassigned.length !== 1 ? 'es' : ''} sin equipo
                   {unassigned.length > 0 && ' — los sin equipo se excluyen al iniciar'}
@@ -1588,7 +1590,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
           )}
 
           {eligibleCoCreators.length > 0 && (
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div className="bs-actions-buttons" style={{ display: 'flex', gap: 10 }}>
               <select
                 value={coCreatorDropdown}
                 onChange={e => setCoCreatorDropdown(e.target.value)}
@@ -1641,7 +1643,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
               <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626', marginBottom: 12 }}>
                 ¿Seguro? Esta acción no se puede deshacer.
               </div>
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div className="bs-actions-buttons" style={{ display: 'flex', gap: 10 }}>
                 <button onClick={handleCancelTournament}
                   style={{ padding: '10px 20px', background: '#dc2626', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Sí, cancelar el torneo
@@ -1679,7 +1681,9 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 360, width: '90%' }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 16 }}>Compartir Torneo</div>
             <QRCodeSVG value={shareUrl} size={200} />
-            <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 16, wordBreak: 'break-all', textAlign: 'center', maxWidth: 280 }}>{shareUrl}</div>
+            {/* Display a clean short URL; the QR still encodes the full shareUrl
+                (with the embedded snapshot payload). */}
+            <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 16, wordBreak: 'break-all', textAlign: 'center', maxWidth: 280 }}>{`padelmgt.com/t/${tournament?.code ?? ''}`}</div>
             <button onClick={() => setShowQR(false)} style={{ marginTop: 20, padding: '10px 28px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cerrar</button>
           </div>
         </div>

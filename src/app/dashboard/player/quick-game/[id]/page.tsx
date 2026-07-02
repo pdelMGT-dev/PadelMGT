@@ -862,7 +862,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   if (!canManage) {
     return (
-      <div style={{ padding: `${isMobile ? '16px' : '40px'} ${isMobile ? '16px' : '40px'} 80px`, maxWidth: 1100, margin: '0 auto' }}>
+      <div className="bs-page" style={{ padding: `${isMobile ? '16px' : '40px'} ${isMobile ? '16px' : '40px'} 80px`, maxWidth: 1100, margin: '0 auto' }}>
         {toast && (
           <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none' }}>
             {toast}
@@ -988,7 +988,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   // ── CREATOR VIEW ──────────────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: `${isMobile ? '16px' : '40px'} ${isMobile ? '16px' : '40px'} 80px`, maxWidth: 1100, margin: '0 auto' }}>
+    <div className="bs-page" style={{ padding: `${isMobile ? '16px' : '40px'} ${isMobile ? '16px' : '40px'} 80px`, maxWidth: 1100, margin: '0 auto' }}>
       {/* Toast */}
       {toast && (
         <div style={{ position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)', background: 'var(--black)', color: '#fff', padding: '12px 24px', fontSize: 13, fontWeight: 600, zIndex: 9999, pointerEvents: 'none' }}>
@@ -1139,7 +1139,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         {editOpen ? (
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, textTransform: 'uppercase', marginBottom: 20 }}>Editar Juego</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div className="bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={lbl}>Nombre</label>
                 <input style={inp} value={editName} onChange={e => setEditName(e.target.value)} />
@@ -1161,7 +1161,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                 <input style={inp} value={editCity} onChange={e => setEditCity(e.target.value)} />
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div className="bs-actions-buttons" style={{ display: 'flex', gap: 10 }}>
               <button onClick={handleSaveEdits} style={{ padding: '10px 24px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                 Guardar
               </button>
@@ -1179,7 +1179,9 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 4 }}>Compartir Juego</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', marginBottom: 6, wordBreak: 'break-all' }}>{shareUrl || `padelmgt.com/quick-game/${game.code}`}</div>
+                {/* Display a clean short URL; the full shareUrl (with the embedded
+                    snapshot payload) is still what gets copied/QR'd below. */}
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--black)', marginBottom: 6, wordBreak: 'break-all' }}>{`padelmgt.com/quick-game/${game.code}`}</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button
                     onClick={() => {
@@ -1198,18 +1200,18 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
+            <div className="bs-actions-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--black)', marginBottom: 6 }}>{game.name}</div>
                 <div style={{ fontSize: 13, color: 'var(--grey-500)', marginBottom: 4 }}>
                   {game.date} · {game.time} · {game.club}, {game.city}
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
+              <div className="bs-actions-row" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
                 {statusBadge(game.status)}
                 {!isCancelled && !isFinished && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                  <div className="bs-actions-row" style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+                    <div className="bs-actions-buttons" style={{ display: 'flex', gap: 8 }}>
                       {isPending && (
                         <Link
                           href={`/dashboard/player/quick-game/${game.id}/edit`}
@@ -1280,7 +1282,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
           {/* Creator not playing — organizer-only banner */}
           {isCreator && !game.players.some(p => p.id === currentUser?.id) && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', marginBottom: 12, background: 'rgba(124,58,237,0.05)', border: '1px dashed #7c3aed' }}>
+            <div className="bs-actions-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', marginBottom: 12, background: 'rgba(124,58,237,0.05)', border: '1px dashed #7c3aed' }}>
               <div>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Solo organizando</span>
                 <span style={{ fontSize: 11, color: 'var(--grey-500)', marginLeft: 8 }}>No estás inscrito como jugador</span>
@@ -1724,7 +1726,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       {/* ── SECTION C: Iniciar Juego ──────────────────────────────────────── */}
       {isPending && (
         <div style={{ ...cardStyle, background: canStart ? 'var(--black)' : '#fff' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div className="bs-actions-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <div>
               <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: canStart ? 'var(--bs-light)' : 'var(--grey-400)', marginBottom: 8 }}>
                 Iniciar Juego
@@ -1766,7 +1768,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       {isLive && (
         <div style={cardStyle}>
           {/* Round header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
+          <div className="bs-actions-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
             <div>
               <div style={{ ...secTitle, marginBottom: 4 }}>
                 Juego En Vivo — Ronda {game.currentRound} de {game.rounds.length}
@@ -1779,7 +1781,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               )}
             </div>
             {/* Compact round pills */}
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {game.rounds.map(r => (
                 <div key={r.num} style={{
                   width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1795,7 +1797,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
           {/* Action buttons — shown prominently when round is complete */}
           {currentRoundComplete && (
-            <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', padding: '16px 20px', background: gameComplete ? '#fff5f5' : '#f0fdf4', border: `1px solid ${gameComplete ? '#fca5a5' : '#86efac'}` }}>
+            <div className="bs-actions-buttons" style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', padding: '16px 20px', background: gameComplete ? '#fff5f5' : '#f0fdf4', border: `1px solid ${gameComplete ? '#fca5a5' : '#86efac'}` }}>
               {hasMoreRounds && (
                 <button
                   onClick={handleNextRound}
@@ -2217,7 +2219,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
           )}
 
           {/* Share / history actions */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div className="bs-actions-buttons" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <button
               onClick={() => setShowQR(true)}
               style={{ padding: '12px 24px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}

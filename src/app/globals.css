@@ -535,6 +535,11 @@ body.bs-mobile-active .bs-scroll-x {
 /* (3) Wide data tables scroll horizontally within their own container. Turning
    the table into a block box makes it its own horizontal scroller; nowrap keeps
    the columns from collapsing so header and body stay aligned. */
+/* Targets EVERY table inside the mobile shell's content area — not just pages
+   with a specific wrapper class. This closes a real gap: detail pages (e.g. a
+   live classic tournament) render their root as a bare inline-styled div with
+   none of the four classes below, so their tables were never being caught. */
+body.bs-mobile-active .dashboard-main table,
 body.bs-mobile-active .rank-table,
 body.bs-mobile-active .player-dashboard-page table,
 body.bs-mobile-active .bs-page table,
@@ -545,15 +550,57 @@ body.bs-mobile-active .dash-page table {
   -webkit-overflow-scrolling: touch;
   white-space: nowrap;
 }
+body.bs-mobile-active .dashboard-main table::-webkit-scrollbar,
 body.bs-mobile-active .rank-table::-webkit-scrollbar,
 body.bs-mobile-active .bs-page table::-webkit-scrollbar,
 body.bs-mobile-active .dash-page table::-webkit-scrollbar,
 body.bs-mobile-active .player-dashboard-page table::-webkit-scrollbar { height: 4px; }
+body.bs-mobile-active .dashboard-main table::-webkit-scrollbar-thumb,
 body.bs-mobile-active .rank-table::-webkit-scrollbar-thumb,
 body.bs-mobile-active .bs-page table::-webkit-scrollbar-thumb,
 body.bs-mobile-active .dash-page table::-webkit-scrollbar-thumb,
 body.bs-mobile-active .player-dashboard-page table::-webkit-scrollbar-thumb {
   background: var(--grey-300); border-radius: 2px;
+}
+
+/* (4) Force 16px on every form field. Below 16px, iOS/Android auto-zoom the
+   whole viewport on focus to make the text legible — that's the "permite
+   hacer zoom" the user sees while typing, not an intentional gesture. This is
+   the standard fix; form text renders slightly larger than surrounding UI
+   text on mobile, which is expected/normal in native-feeling mobile apps. */
+body.bs-mobile-active input,
+body.bs-mobile-active textarea,
+body.bs-mobile-active select {
+  font-size: 16px !important;
+}
+
+/* "Title + action buttons" header rows (e.g. a game/tournament name next to
+   Editar/Cancelar buttons) are built for desktop as a single side-by-side row
+   and get crushed at phone widths. Add class `bs-actions-row` to the outer
+   row and `bs-actions-buttons` to the inner button-group div to stack them:
+   title on top (full width), buttons below in an evenly-sized, wrapping row. */
+body.bs-mobile-active .bs-actions-row {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  flex-wrap: wrap !important;
+  gap: 12px !important;
+}
+body.bs-mobile-active .bs-actions-buttons {
+  flex-wrap: wrap !important;
+  width: 100% !important;
+}
+body.bs-mobile-active .bs-actions-buttons > * {
+  flex: 1 1 auto !important;
+  text-align: center !important;
+}
+
+/* ── Keyboard open: hide the fixed header + tab bar so the input isn't fought
+   over by the on-screen keyboard (fixed-position elements detach/float
+   incorrectly on mobile browsers once the keyboard opens). PlayerMobileNav
+   toggles this class via document-level focusin/focusout listeners. ── */
+body.bs-keyboard-open .bs-mobilehead,
+body.bs-keyboard-open .bs-tabbar {
+  display: none !important;
 }
 
 /* ── Top app bar ── */

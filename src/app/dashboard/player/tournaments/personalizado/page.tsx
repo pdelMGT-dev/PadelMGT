@@ -223,7 +223,7 @@ export default function PersonalizadoWizardPage() {
       <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>
         Nuevo Torneo Personalizado
       </div>
-      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(26px, 5vw, 36px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0, marginBottom: 6 }}>
+      <h1 className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(26px, 5vw, 36px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0, marginBottom: 6 }}>
         TORNEO PERSONALIZADO
       </h1>
       <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>
@@ -235,7 +235,7 @@ export default function PersonalizadoWizardPage() {
   // ── STEP 1: Info Básica ────────────────────────────────────────────────────
   if (step === 1) {
     return (
-      <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
+      <div className="bs-page" style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
         {pageHeader}
         <WizardSteps current={1} />
 
@@ -360,13 +360,13 @@ export default function PersonalizadoWizardPage() {
   // ── STEP 2: Categorías ─────────────────────────────────────────────────────
   if (step === 2) {
     return (
-      <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
+      <div className="bs-page" style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
         {pageHeader}
         <WizardSteps current={2} />
 
         {categories.map((cat, idx) => (
           <div key={cat.id} style={{ ...card, position: 'relative' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
+            <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
               <div style={{ ...secTitle, marginBottom: 0, paddingBottom: 0, borderBottom: 'none' }}>
                 Categoría {idx + 1}
               </div>
@@ -413,7 +413,7 @@ export default function PersonalizadoWizardPage() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 14, alignItems: 'end' }}>
+            <div className="bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 14, alignItems: 'end' }}>
               <div>
                 <label style={lbl}>Máx. equipos</label>
                 <select value={cat.maxTeams} onChange={e => updateCategory(idx, { maxTeams: Number(e.target.value) })} style={sel}>
@@ -450,7 +450,7 @@ export default function PersonalizadoWizardPage() {
 
   // ── STEP 3: Resumen ────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
+    <div className="bs-page" style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 960, margin: '0 auto' }}>
       {pageHeader}
       <WizardSteps current={3} />
 

@@ -351,10 +351,10 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
     if (markConfigured) router.push(`/dashboard/player/tournaments/personalizado/${id}`);
   }
 
-  if (loading) return <div style={{ padding: 40, color: 'var(--grey-400)', fontSize: 14 }}>Cargando…</div>;
+  if (loading) return <div className="bs-page" style={{ padding: 40, color: 'var(--grey-400)', fontSize: 14 }}>Cargando…</div>;
   if (tournament && accessDenied) {
     return (
-      <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 1000, margin: '0 auto' }}>
+      <div className="bs-page" style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 1000, margin: '0 auto' }}>
         <Link href={`/dashboard/player/tournaments`} style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Mis Torneos</Link>
         <div style={{ ...card, textAlign: 'center', padding: '48px 24px' }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
@@ -368,7 +368,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   }
   if (!tournament) {
     return (
-      <div style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 1000, margin: '0 auto' }}>
+      <div className="bs-page" style={{ padding: '40px clamp(16px, 4vw, 40px) 80px', maxWidth: 1000, margin: '0 auto' }}>
         <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--grey-500)' }}>Torneo no encontrado.</div>
       </div>
     );
@@ -391,7 +391,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
   );
 
   return (
-    <div style={{ padding: '40px clamp(16px, 4vw, 40px) 120px', maxWidth: 1000, margin: '0 auto' }}>
+    <div className="bs-page" style={{ padding: '40px clamp(16px, 4vw, 40px) 120px', maxWidth: 1000, margin: '0 auto' }}>
       <Link
         href={`/dashboard/player/tournaments/personalizado/${id}`}
         style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20 }}
@@ -403,7 +403,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>
           Panel de Control
         </div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(24px, 5vw, 34px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
+        <h1 className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(24px, 5vw, 34px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
           {tournament.name}
         </h1>
       </div>
@@ -650,7 +650,7 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
                   {(config.coCreatorIds ?? []).map(pid => {
                     const p = getPlayer(pid);
                     return (
-                      <div key={pid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 12px', border: '1px solid var(--grey-100)' }}>
+                      <div key={pid} className="bs-actions-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 12px', border: '1px solid var(--grey-100)' }}>
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 600 }}>{p?.name ?? pid}</div>
                           <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{p?.shortId ?? p?.email ?? pid}</div>

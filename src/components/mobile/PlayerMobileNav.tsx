@@ -54,6 +54,29 @@ export default function PlayerMobileNav() {
   // Close the (+) sheet on navigation.
   useEffect(() => { setFabOpen(false); }, [pathname]);
 
+  // Hide the fixed header + tab bar while a form field is focused. Mobile
+  // browsers detach position:fixed elements oddly once the on-screen keyboard
+  // opens (they can float mid-screen instead of staying pinned); hiding them
+  // for the duration of typing avoids that and gives the form full height.
+  useEffect(() => {
+    if (!isPlayer || !isMobile) return;
+    const isFormField = (el: EventTarget | null): boolean =>
+      el instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+    const onFocusIn = (e: FocusEvent) => {
+      if (isFormField(e.target)) document.body.classList.add('bs-keyboard-open');
+    };
+    const onFocusOut = (e: FocusEvent) => {
+      if (isFormField(e.target)) document.body.classList.remove('bs-keyboard-open');
+    };
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+      document.body.classList.remove('bs-keyboard-open');
+    };
+  }, [isPlayer, isMobile]);
+
   if (!isPlayer || !isMobile) return null;
 
   const photoUrl = (user as { photoUrl?: string } | null)?.photoUrl;

@@ -150,7 +150,7 @@ function NavBtns({
   disabled?: boolean;
 }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28 }}>
+    <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28 }}>
       {onBack
         ? <button onClick={onBack} style={{ padding: '11px 24px', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, background: 'transparent', cursor: 'pointer', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>← Atrás</button>
         : <div />}
@@ -380,7 +380,7 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
 
   if (loading) {
     return (
-      <div style={{ padding: '80px 40px', textAlign: 'center' }}>
+      <div className="bs-page" style={{ padding: '80px 40px', textAlign: 'center' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, color: 'var(--grey-400)', textTransform: 'uppercase' }}>Cargando...</div>
       </div>
     );
@@ -388,7 +388,7 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
 
   if (!game) {
     return (
-      <div style={{ padding: '80px 40px', maxWidth: 640 }}>
+      <div className="bs-page" style={{ padding: '80px 40px', maxWidth: 640 }}>
         <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '40px', textAlign: 'center' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>Juego no encontrado</div>
           <p style={{ fontSize: 13, color: 'var(--grey-400)', margin: '0 0 20px' }}>No se encontró el juego con ID: {id}</p>
@@ -402,7 +402,7 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
 
   if (blocked) {
     return (
-      <div style={{ padding: '80px 40px', maxWidth: 640 }}>
+      <div className="bs-page" style={{ padding: '80px 40px', maxWidth: 640 }}>
         <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '40px', textAlign: 'center' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, textTransform: 'uppercase', color: '#dc2626', marginBottom: 12 }}>
             Edición no disponible
@@ -421,7 +421,7 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
   // ── Shared header (defined inline as JSX, not as nested component to avoid hook issues) ──
 
   const editHeader = (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, paddingBottom: 20, borderBottom: '1px solid var(--grey-100)' }}>
+    <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, paddingBottom: 20, borderBottom: '1px solid var(--grey-100)' }}>
       <div>
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 4 }}>Editar Juego</div>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 8px' }}>EDITAR JUEGO RÁPIDO</h1>
@@ -445,10 +445,10 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
 
   if (step === 1) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+      <div className="bs-page" style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
         {editHeader}
         <Steps current={1} />
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 24px' }}>Información Básica</h2>
+        <h2 className="bs-h2" style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 24px' }}>Información Básica</h2>
 
         {/* Name */}
         <div style={card}>
@@ -466,7 +466,7 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
         {/* Date & time */}
         <div style={card}>
           <div style={secTitle}>Fecha y hora</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div>
               <label style={lbl}>Fecha *</label>
               <input type="date" value={date} min={today()} onChange={e => setDate(e.target.value)} style={inp} />
@@ -597,10 +597,10 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
       { key: 'advanced',     desc: 'Alto nivel competitivo. Selección aleatoria en Intercambio.' },
     ];
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+      <div className="bs-page" style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
         {editHeader}
         <Steps current={2} />
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Nivel de Juego</h2>
+        <h2 className="bs-h2" style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Nivel de Juego</h2>
         <p style={{ color: 'var(--grey-400)', fontSize: 13, margin: '0 0 24px' }}>Define el nivel requerido para participar.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {options.map(({ key, desc }) => (
@@ -621,10 +621,10 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
 
   if (step === 3) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 680 }}>
+      <div className="bs-page" style={{ padding: '40px 40px 80px', maxWidth: 680 }}>
         {editHeader}
         <Steps current={3} />
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Jugadores</h2>
+        <h2 className="bs-h2" style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Jugadores</h2>
         <p style={{ color: 'var(--grey-400)', fontSize: 13, margin: '0 0 24px' }}>Ajustá la cantidad máxima de jugadores.</p>
 
         {/* Confirmed players info */}
@@ -667,13 +667,13 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
 
   if (step === 4) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+      <div className="bs-page" style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
         {editHeader}
         <Steps current={4} />
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Tipo de Pareja</h2>
+        <h2 className="bs-h2" style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Tipo de Pareja</h2>
         <p style={{ color: 'var(--grey-400)', fontSize: 13, margin: '0 0 24px' }}>¿Las parejas son fijas o rotan durante el juego?</p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+        <div className="bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
           {([
             { key: 'exchange' as PairType, title: 'Intercambio de Pareja', desc: 'El sistema rota los compañeros automáticamente en cada ronda según el ranking.' },
             { key: 'fixed'    as PairType, title: 'Pareja Fija',           desc: 'El creador asigna las parejas manualmente desde la gestión del juego. Los equipos se mantienen todo el juego.' },
@@ -710,17 +710,17 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
 
   if (step === 5) {
     return (
-      <div style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
+      <div className="bs-page" style={{ padding: '40px 40px 80px', maxWidth: 640 }}>
         {editHeader}
         <Steps current={5} />
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Configuración del Juego</h2>
+        <h2 className="bs-h2" style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>Configuración del Juego</h2>
         <p style={{ color: 'var(--grey-400)', fontSize: 13, margin: '0 0 24px' }}>Definí las canchas disponibles y el sistema de puntaje.</p>
 
         {/* Courts */}
         <div style={card}>
           <div style={secTitle}>Canchas disponibles</div>
           <label style={lbl}>¿Cuántas canchas disponibles?</label>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
             {[1, 2, 3, 4, 5].map(n => (
               <button key={n} onClick={() => setCourts(n)}
                 style={{ width: 52, height: 48, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${courts === n ? 'var(--black)' : 'var(--grey-200)'}`, background: courts === n ? 'var(--black)' : '#fff', color: courts === n ? '#fff' : 'var(--black)' }}>
@@ -734,7 +734,7 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
         {/* Score type */}
         <div style={card}>
           <div style={secTitle}>Tipo de score</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+          <div className="bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
             {([
               { key: 'traditional' as ScoreType, title: 'Tradicional', desc: '0, 15, 30, 40 — conteo clásico de pádel/tenis con games y sets.' },
               { key: 'points'      as ScoreType, title: 'Por Puntos',  desc: 'Puntos simples hasta un objetivo definido.' },
@@ -817,7 +817,7 @@ export default function EditQuickGamePage({ params }: { params: Promise<{ id: st
         </div>
 
         {/* Submit */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28 }}>
+        <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28 }}>
           <button onClick={() => setStep(4)} style={{ padding: '11px 24px', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, background: 'transparent', cursor: 'pointer', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>← Atrás</button>
           <button
             onClick={handleSubmit}
