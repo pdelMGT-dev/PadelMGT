@@ -243,10 +243,10 @@ export default function PlayerMatchesPage() {
   }
 
   return (
-    <div style={{ padding: '40px 40px 80px' }}>
+    <div className="bs-page" style={{ padding: '40px 40px 80px' }}>
       <div style={{ marginBottom: 32 }}>
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Historial completo</div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS JUEGOS</h1>
+        <h1 className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS JUEGOS</h1>
       </div>
 
       {/* Summary stats */}

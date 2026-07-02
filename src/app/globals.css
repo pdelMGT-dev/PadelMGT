@@ -510,7 +510,8 @@ body.bs-mobile-active .bs-stack-mobile {
 
 /* Heading down-scale hooks: add bs-h1 / bs-h2 to oversized page titles so they
    shrink on the mobile shell (they keep their inline desktop size otherwise). */
-body.bs-mobile-active .bs-h1 { font-size: 28px !important; line-height: 1.02 !important; }
+body.bs-mobile-active .bs-h1,
+body.bs-mobile-active .dash-h1 { font-size: 28px !important; line-height: 1.02 !important; }
 body.bs-mobile-active .bs-h2 { font-size: 19px !important; }
 
 /* Wrap any wide block (tables, chart rows) in .bs-scroll-x so it scrolls inside

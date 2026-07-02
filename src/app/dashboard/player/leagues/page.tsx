@@ -34,12 +34,12 @@ export default function LeaguesPage() {
   }, [user]);
 
   return (
-    <div style={{ padding: '40px 32px 80px', maxWidth: 900, margin: '0 auto' }}>
+    <div className="bs-page" style={{ padding: '40px 32px 80px', maxWidth: 900, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40 }}>
         <div>
           <div style={{ ...lbl, marginBottom: 6 }}>Competencias</div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
+          <h1 className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
             MIS LIGAS
           </h1>
         </div>
