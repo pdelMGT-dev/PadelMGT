@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { Trophy, Zap, BarChart3, Building2, Shield, Users, CalendarDays, User } from 'lucide-react';
 import { getAllGames, getGame, saveGame } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
 import {
@@ -144,11 +145,54 @@ export default function PlayerHomePage() {
         </div>
       )}
 
+      {/* ── Mobile hero (Blue Spectrum) ── */}
+      <div className="bs-mobile-only">
+        <div className="bs-hero">
+          <div className="bs-hero-label">
+            Mi resumen · {new Date().toLocaleDateString('es-ES', { month: 'long' }).toUpperCase()}
+          </div>
+          <div className="bs-hero-name">{currentUser ? currentUser.name.split(' ')[0] : 'Jugador'}</div>
+          <div className="bs-tiles">
+            <div className="bs-tile">
+              <div className="bs-tile-value">{eventsPlayed}</div>
+              <div className="bs-tile-label">Torneos</div>
+            </div>
+            <div className="bs-tile">
+              <div className="bs-tile-value">{totalWins}</div>
+              <div className="bs-tile-label">Victorias</div>
+            </div>
+            <div className="bs-tile">
+              <div className="bs-tile-value">{(playerData?.rankingPoints ?? 0).toLocaleString()}</div>
+              <div className="bs-tile-label">Puntos</div>
+            </div>
+          </div>
+        </div>
+        <div className="bs-sheet">
+          <div className="bs-quick">
+            {[
+              { href: '/dashboard/player/tournaments', label: 'Torneos',    Icon: Trophy },
+              { href: '/dashboard/player/quick-game',  label: 'Juegos',     Icon: Zap },
+              { href: '/dashboard/player/ranking',     label: 'Ranking',    Icon: BarChart3 },
+              { href: '/dashboard/player/clubs',       label: 'Clubes',     Icon: Building2 },
+              { href: '/dashboard/player/leagues',     label: 'Ligas',      Icon: Shield },
+              { href: '/dashboard/player/friends',     label: 'Amigos',     Icon: Users },
+              { href: '/dashboard/player/calendar',    label: 'Calendario', Icon: CalendarDays },
+              { href: '/dashboard/player/profile',     label: 'Perfil',     Icon: User },
+            ].map(({ href, label, Icon }) => (
+              <Link key={href} href={href} className="bs-quick-item">
+                <Icon size={20} />
+                <span>{label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Plan usage banner */}
       <PlanUsageBanner role="player" />
 
-      {/* Header */}
-      <div style={{ marginBottom: 40 }}>
+      {/* Header (desktop) */}
+      <div className="bs-desktop-only" style={{ marginBottom: 40 }}>
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Bienvenido de vuelta</div>
         <h1 className="player-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', lineHeight: 0.95, margin: 0 }}>
           HOLA,<br /><span style={{ color: 'var(--court-blue)' }}>{currentUser ? currentUser.name.split(' ')[0].toUpperCase() : 'JUGADOR'}.</span>
@@ -270,8 +314,8 @@ export default function PlayerHomePage() {
         </div>
       )}
 
-      {/* Stats */}
-      <div className="player-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
+      {/* Stats (desktop — mobile shows them in the hero tiles) */}
+      <div className="player-stats-grid bs-desktop-only" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--grey-200)', marginBottom: 32 }}>
         {(() => {
           const pts = playerData?.rankingPoints ?? 0;
           const rankPos = playerData?.ranking ?? null;

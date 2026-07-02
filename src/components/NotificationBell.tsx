@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Bell, Trophy, Medal, XCircle, CalendarClock, CalendarDays } from 'lucide-react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import {
@@ -37,8 +37,10 @@ function notifVisual(type: string): { icon: React.ReactNode; color: string } {
  * qualified / advanced / eliminated / next match). Players see this on every dashboard page;
  * opening it shows the list, marks unread items as read, and lets them jump to the tournament.
  */
-export default function NotificationBell() {
+export default function NotificationBell({ inline = false }: { inline?: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const isPlayer = pathname?.startsWith('/dashboard/player') ?? false;
   const { user } = useCurrentUser();
   const { count, refresh } = useTournamentNotificationCount(user?.id);
   const { notifications, loading, load, markRead } = useTournamentNotifications(user?.id);
@@ -72,14 +74,25 @@ export default function NotificationBell() {
   // Don't render for logged-out visitors.
   if (!user?.id) return null;
 
+  // Blue Spectrum styling for the player role; classic black/neon elsewhere.
+  const bellBg   = isPlayer ? '#1a4ed8' : '#0a0a0a';
+  const bellIcon = isPlayer ? '#fff' : 'var(--neon)';
+
   return (
-    <div ref={ref} style={{ position: 'fixed', top: 14, right: 18, zIndex: 1000 }}>
+    <div
+      ref={ref}
+      className={inline ? 'nb-inline' : 'nb-floating'}
+      style={inline
+        ? { position: 'relative', zIndex: 1000 }
+        : { position: 'fixed', top: 14, right: 18, zIndex: 1000 }}
+    >
       <button
         onClick={toggle}
         aria-label="Notificaciones"
         style={{
           position: 'relative', width: 40, height: 40, borderRadius: '50%',
-          background: '#0a0a0a', color: 'var(--neon)', border: '1px solid rgba(255,255,255,0.1)',
+          background: bellBg, color: bellIcon,
+          border: isPlayer ? '1px solid rgba(111,163,255,0.4)' : '1px solid rgba(255,255,255,0.1)',
           cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
         }}
