@@ -438,6 +438,150 @@ html, body {
 .dashboard-sidebar.bs-player { background: #0a1638; }
 .dash-mobile-bar.bs-player { background: #0a1638; border-bottom-color: rgba(111,163,255,0.12); }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   Blue Spectrum MOBILE SHELL — player role, phones + tablet portrait.
+   Activated by body.bs-mobile-active (toggled in PlayerMobileNav via matchMedia).
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* These frame elements only mount on the mobile shell; keep them hidden until
+   the body class confirms the mobile-player context (avoids any SSR flash). */
+.bs-mobilehead, .bs-tabbar, .bs-actionsheet, .bs-sheet-backdrop { display: none; }
+
+body.bs-mobile-active .bs-mobilehead { display: flex; }
+body.bs-mobile-active .bs-tabbar { display: flex; }
+body.bs-mobile-active .bs-actionsheet { display: flex; }
+body.bs-mobile-active .bs-sheet-backdrop { display: block; }
+
+/* Reflow the dashboard: hide the desktop sidebar + old hamburger bar, drop the
+   left margin, and pad for the fixed header (top) and tab bar (bottom). */
+body.bs-mobile-active .dashboard-sidebar,
+body.bs-mobile-active .dash-mobile-bar,
+body.bs-mobile-active .dash-backdrop,
+body.bs-mobile-active .sidebar-edge-toggle,
+body.bs-mobile-active .nb-floating { display: none !important; }
+
+body.bs-mobile-active .dashboard-main {
+  margin-left: 0 !important;
+  padding-top: 54px !important;
+  padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* Tighten the generous desktop page padding + heading sizes on phones.
+   !important is required to beat the pages' inline styles. */
+body.bs-mobile-active .player-dashboard-page { padding: 16px 14px 24px !important; }
+body.bs-mobile-active .player-h1 { font-size: 30px !important; }
+body.bs-mobile-active .player-stats-grid { grid-template-columns: 1fr 1fr !important; }
+body.bs-mobile-active .player-stats-value { font-size: 34px !important; }
+
+/* ── Top app bar ── */
+.bs-mobilehead {
+  position: fixed; top: 0; left: 0; right: 0; height: 54px; z-index: 145;
+  background: #0a1638; border-bottom: 1px solid rgba(111,163,255,0.14);
+  align-items: center; justify-content: space-between;
+  padding: 0 16px; box-sizing: border-box;
+}
+.bs-mobilehead-logo { display: flex; align-items: center; text-decoration: none; }
+.bs-mobilehead-actions { display: flex; align-items: center; gap: 12px; }
+.bs-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: var(--court-blue); color: #fff; text-decoration: none;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 12px; font-weight: 700;
+  border: 1px solid rgba(111,163,255,0.4); overflow: hidden;
+}
+.bs-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ── Bottom tab bar ── */
+.bs-tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 145;
+  height: calc(64px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: #fff; border-top: 1px solid var(--grey-200);
+  align-items: center; justify-content: space-around;
+  box-shadow: 0 -2px 14px rgba(10,22,56,0.06);
+}
+.bs-tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  text-decoration: none; color: var(--grey-400); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.02em; padding: 8px 0; -webkit-tap-highlight-color: transparent;
+}
+.bs-tab.active { color: var(--court-blue); }
+.bs-tab.active svg { stroke-width: 2.4; }
+
+/* Raised (+) button in the center of the tab bar */
+.bs-fab {
+  flex-shrink: 0; width: 52px; height: 52px; margin-top: -22px; border-radius: 50%;
+  background: var(--court-blue); color: #fff; border: 3px solid #fff;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  box-shadow: 0 6px 16px rgba(26,78,216,0.4); transition: transform 0.18s ease;
+}
+.bs-fab.open { transform: rotate(45deg); }
+
+/* ── (+) action sheet ── */
+.bs-sheet-backdrop { position: fixed; inset: 0; background: rgba(10,22,56,0.45); z-index: 149; }
+.bs-actionsheet {
+  position: fixed; left: 0; right: 0; z-index: 150;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  flex-direction: column; background: #fff;
+  border-radius: 18px 18px 0 0; padding: 8px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 28px rgba(10,22,56,0.18);
+}
+.bs-actionsheet-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 8px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--grey-400);
+}
+.bs-actionsheet-head button { background: none; border: none; color: var(--grey-400); cursor: pointer; padding: 4px; }
+.bs-actionsheet-item {
+  display: flex; align-items: center; gap: 14px; padding: 15px 12px;
+  text-decoration: none; color: var(--black); font-size: 15px; font-weight: 600;
+  border-radius: 12px;
+}
+.bs-actionsheet-item:active { background: rgba(26,78,216,0.08); }
+.bs-actionsheet-item svg { color: var(--court-blue); flex-shrink: 0; }
+
+/* Show/hide helpers for content that differs between the mobile shell and the
+   desktop layout. */
+.bs-mobile-only { display: none; }
+body.bs-mobile-active .bs-mobile-only { display: block; }
+body.bs-mobile-active .bs-desktop-only { display: none !important; }
+
+/* ── Inicio hero (mobile) ── */
+.bs-hero {
+  margin: -16px -14px 0;               /* bleed to screen edges under the fixed header */
+  background: linear-gradient(180deg, #0a1638 0%, #0d1b45 100%);
+  padding: 18px 18px 20px; color: #fff;
+}
+.bs-hero-label { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--bs-light); font-weight: 700; }
+.bs-hero-name {
+  font-family: var(--font-display); font-size: 26px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: -0.01em; margin: 4px 0 16px; line-height: 1;
+}
+.bs-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.bs-tile {
+  background: rgba(111,163,255,0.1); border: 1px solid rgba(111,163,255,0.18);
+  border-radius: 14px; padding: 12px 10px; text-align: center;
+}
+.bs-tile-value { font-family: var(--font-display); font-size: 24px; font-weight: 700; color: var(--bs-light); line-height: 1; }
+.bs-tile-label { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.55); font-weight: 700; margin-top: 5px; }
+
+/* ── Inicio white sheet + quick actions (mobile) ── */
+.bs-sheet {
+  background: #fff; border-radius: 20px 20px 0 0; margin: -14px -14px 0;
+  padding: 20px 14px 4px; position: relative;
+}
+.bs-quick {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px;
+}
+.bs-quick-item {
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  text-decoration: none; color: var(--court-blue-deep);
+  background: rgba(26,78,216,0.06); border: 1px solid rgba(26,78,216,0.1);
+  border-radius: 14px; padding: 14px 4px 10px;
+}
+.bs-quick-item svg { color: var(--court-blue); }
+.bs-quick-item span { font-size: 10px; font-weight: 700; color: var(--grey-600); }
+
 /* Collapsed sidebar — desktop only, managed via body class */
 body.sidebar-collapsed .dashboard-sidebar {
   width: 64px;
