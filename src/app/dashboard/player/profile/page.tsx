@@ -344,7 +344,7 @@ export default function PlayerProfilePage() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="dash-page" style={{ padding: '40px 40px 80px' }}>
+    <div className="dash-page bs-page" style={{ padding: '40px 40px 80px' }}>
 
       {/* ------------------------------------------------------------------ */}
       {/* 1. Profile Header                                                   */}
@@ -359,7 +359,7 @@ export default function PlayerProfilePage() {
 
         {/* Info */}
         <div style={{ flex: 1 }}>
-          <div style={{
+          <div className="bs-h1" style={{
             fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700,
             textTransform: 'uppercase', color: '#fff', lineHeight: 1.1, marginBottom: 6,
           }}>
@@ -742,7 +742,7 @@ export default function PlayerProfilePage() {
             <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--grey-500)', marginBottom: 20, lineHeight: 1.6 }}>
               Si tu familiar ya tiene cuenta en PadelMGT, podés enviarle una solicitud de vínculo. Recibirá un email para aceptar.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12, alignItems: 'flex-end' }}>
+            <div className="bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12, alignItems: 'flex-end' }}>
               <div>
                 <label style={lbl}>Email del familiar</label>
                 <input
@@ -1111,7 +1111,7 @@ export default function PlayerProfilePage() {
             <div style={{ ...lbl, fontSize: 12, marginBottom: 20 }}>Información Personal</div>
 
             {/* Row 1: Name + Email */}
-            <div className="profile-form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div className="profile-form-row bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={lbl}>Nombre</label>
                 <input style={inp} value={fName} onChange={e => setFName(e.target.value)} placeholder="Tu nombre" />
@@ -1123,7 +1123,7 @@ export default function PlayerProfilePage() {
             </div>
 
             {/* Row 2: Phone + Nationality */}
-            <div className="profile-form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div className="profile-form-row bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={lbl}>Teléfono</label>
                 <input style={inp} value={fPhone} onChange={e => setFPhone(e.target.value)} placeholder="+34 600 000 000" />
@@ -1161,7 +1161,7 @@ export default function PlayerProfilePage() {
             </div>
 
             {/* Row 3: Sex + Birth Date */}
-            <div className="profile-form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="profile-form-row bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
                 <label style={lbl}>Sexo</label>
                 <div style={{ display: 'flex', gap: 8 }}>

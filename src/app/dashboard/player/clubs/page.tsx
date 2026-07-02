@@ -395,7 +395,7 @@ export default function PlayerClubsPage() {
       <div style={{ marginBottom: 32, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Membresías activas</div>
-          <h1 className="dash-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS CLUBES</h1>
+          <h1 className="dash-h1 bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS CLUBES</h1>
         </div>
         {/* View toggle */}
         <div style={{ display: 'flex', border: '1px solid var(--grey-200)', overflow: 'hidden' }}>

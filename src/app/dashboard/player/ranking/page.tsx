@@ -151,7 +151,7 @@ export default function PlayerRankingPage() {
     <div className="dash-page" style={{ padding: '40px 32px 80px', maxWidth: 900, margin: '0 auto' }}>
       <div style={{ marginBottom: 32 }}>
         <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Posición actual</div>
-        <h1 className="dash-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MI RANKING</h1>
+        <h1 className="dash-h1 bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MI RANKING</h1>
       </div>
 
       {/* Tabs */}
@@ -219,6 +219,7 @@ export default function PlayerRankingPage() {
           {allPlayers.length > 0 && (
             <div style={{ marginTop: 32 }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 12 }}>Top 20 — Ranking Global</div>
+              <div className="bs-scroll-x">
               <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
                 {/* Table header */}
                 <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr 80px 100px', padding: '12px 20px', borderBottom: '1px solid var(--grey-200)', background: 'var(--grey-50)' }}>
@@ -264,6 +265,7 @@ export default function PlayerRankingPage() {
                     </div>
                   );
                 })}
+              </div>
               </div>
             </div>
           )}

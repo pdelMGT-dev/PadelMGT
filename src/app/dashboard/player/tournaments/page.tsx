@@ -654,7 +654,7 @@ export default function PlayerTournamentsPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 20, borderBottom: '1px solid var(--grey-100)' }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 4 }}>Nuevo Torneo</div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>CREAR TORNEO</h1>
+          <h1 className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>CREAR TORNEO</h1>
         </div>
         <button onClick={() => { resetWizard(); setView('dashboard'); }} style={{ padding: '9px 18px', border: '1px solid var(--grey-200)', fontSize: 11, fontWeight: 600, background: 'transparent', cursor: 'pointer', color: 'var(--grey-500)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           ← Mis Torneos
@@ -665,7 +665,7 @@ export default function PlayerTournamentsPage() {
     // ── STEP 1: Información Básica ─────────────────────────────────────────
     if (step === 1) {
       return (
-        <div style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
+        <div className="bs-page" style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
           {wizardHeader}
           <WizardSteps current={1} />
 
@@ -843,14 +843,14 @@ export default function PlayerTournamentsPage() {
       const fmtFunctional = tFormat ? FORMAT_INFO[tFormat].functional : false;
 
       return (
-        <div style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
+        <div className="bs-page" style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
           {wizardHeader}
           <WizardSteps current={2} />
 
           {/* Card 1: Formato */}
           <div style={card}>
             <div style={secTitle}>Formato del torneo</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            <div className="bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               {(Object.keys(FORMAT_INFO) as FormatKey[]).map(fk => {
                 const f = FORMAT_INFO[fk];
                 const active = tFormat === fk;
@@ -1020,7 +1020,7 @@ export default function PlayerTournamentsPage() {
                           </div>
                         </div>
                       ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
+                      <div className="bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
                         <div>
                           <label style={lbl}>Número de grupos</label>
                           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
@@ -1092,7 +1092,7 @@ export default function PlayerTournamentsPage() {
                     ))}
                   </div>
                   {tKOHasGroups ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                    <div className="bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                       <div style={{ borderRight: '1px solid var(--grey-100)', paddingRight: 20 }}>
                         <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--grey-100)' }}>Fase I — Grupos</div>
                         {tScoreType === 'traditional'
@@ -1484,7 +1484,7 @@ export default function PlayerTournamentsPage() {
       const canCreate = tPlayers.length >= 1 && (!needsPairs || tPairsLocked);
 
       return (
-        <div style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
+        <div className="bs-page" style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
           {wizardHeader}
           <WizardSteps current={3} />
 
@@ -1793,10 +1793,10 @@ export default function PlayerTournamentsPage() {
     // ── STEP 99: Éxito ─────────────────────────────────────────────────────
     if (step === 99) {
       return (
-        <div style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
+        <div className="bs-page" style={{ padding: '40px 40px 80px', maxWidth: 960, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', padding: '40px 0 24px' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 56, color: 'var(--turf-green)', marginBottom: 12 }}>✓</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', marginBottom: 8 }}>¡TORNEO CREADO!</div>
+            <div className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', marginBottom: 8 }}>¡TORNEO CREADO!</div>
             <div style={{ fontSize: 13, color: 'var(--grey-400)', marginBottom: 32 }}>Tu torneo fue generado y está listo para inscribir jugadores.</div>
           </div>
 
@@ -1977,12 +1977,12 @@ export default function PlayerTournamentsPage() {
   }
 
   return (
-    <div style={{ padding: '40px 40px 80px' }}>
+    <div className="bs-page" style={{ padding: '40px 40px 80px' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 32, flexWrap: 'wrap', gap: 16 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Mi historial</div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS TORNEOS</h1>
+          <h1 className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MIS TORNEOS</h1>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <Link href="/dashboard/player/tournaments/personalizado" style={{

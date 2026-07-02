@@ -306,11 +306,11 @@ export default function PlayerCalendarPage() {
   const weekKeys = Object.keys(byWeek).sort();
 
   return (
-    <div style={{ padding: '40px 40px 80px' }}>
+    <div className="bs-page" style={{ padding: '40px 40px 80px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>Próximas fechas</div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MI CALENDARIO</h1>
+          <h1 className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>MI CALENDARIO</h1>
         </div>
         {/* View mode toggle */}
         <div style={{ display: 'flex', gap: 1, background: 'var(--grey-200)' }}>
