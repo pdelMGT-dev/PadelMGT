@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Trophy, Zap, BarChart3, Building2, Shield, Users, CalendarDays, User } from 'lucide-react';
+import { Trophy, Zap, BarChart3, Building2, Shield, Users, CalendarDays, User, Share2 } from 'lucide-react';
 import { getAllGames, getGame, saveGame } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
 import {
@@ -54,6 +54,20 @@ export default function PlayerHomePage() {
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 3500);
+  }
+
+  // Share the player's ID: native share sheet on mobile (WhatsApp, etc.),
+  // falling back to copying it to the clipboard.
+  async function shareMyId() {
+    const id = currentUser?.shortId;
+    if (!id) return;
+    const message = `Agregame en PadelMGT con mi ID: ${id}`;
+    const nav = navigator as Navigator & { share?: (data: { title?: string; text?: string }) => Promise<void> };
+    if (typeof nav.share === 'function') {
+      try { await nav.share({ title: 'PadelMGT', text: message }); return; } catch { /* cancelled */ return; }
+    }
+    try { await navigator.clipboard.writeText(id); showToast('ID copiado ✓'); }
+    catch { showToast(`Tu ID: ${id}`); }
   }
 
   useEffect(() => {
@@ -152,6 +166,13 @@ export default function PlayerHomePage() {
             Mi resumen · {new Date().toLocaleDateString('es-ES', { month: 'long' }).toUpperCase()}
           </div>
           <div className="bs-hero-name">{currentUser ? currentUser.name.split(' ')[0] : 'Jugador'}</div>
+          {currentUser?.shortId && (
+            <button type="button" className="bs-hero-id" onClick={shareMyId}>
+              <span className="bs-hero-id-label">Tu ID</span>
+              <span className="bs-hero-id-code">{currentUser.shortId}</span>
+              <Share2 size={13} />
+            </button>
+          )}
           <div className="bs-tiles">
             <div className="bs-tile">
               <div className="bs-tile-value">{eventsPlayed}</div>

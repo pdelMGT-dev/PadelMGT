@@ -597,8 +597,18 @@ body.bs-mobile-active .bs-desktop-only { display: none !important; }
 .bs-hero-label { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--bs-light); font-weight: 700; }
 .bs-hero-name {
   font-family: var(--font-display); font-size: 26px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: -0.01em; margin: 4px 0 16px; line-height: 1;
+  text-transform: uppercase; letter-spacing: -0.01em; margin: 4px 0 10px; line-height: 1;
 }
+.bs-hero-id {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0 0 16px;
+  padding: 6px 12px; border-radius: 20px;
+  background: rgba(111,163,255,0.12); border: 1px solid rgba(111,163,255,0.28);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.bs-hero-id:active { background: rgba(111,163,255,0.2); }
+.bs-hero-id-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+.bs-hero-id-code { font-family: monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: #fff; }
+.bs-hero-id svg { color: var(--bs-light); }
 .bs-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .bs-tile {
   background: rgba(111,163,255,0.1); border: 1px solid rgba(111,163,255,0.18);
