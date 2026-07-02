@@ -145,9 +145,9 @@ function StandingsView({ tournament, teamName, canManage, canEditResults, onUpda
                   const cKey = `${cat.categoryId}:${g.groupId}`;
                   return (
                     <div key={g.groupId} style={{ marginBottom: 16, border: confirmed ? '1px solid rgba(34,197,94,0.4)' : '1px solid var(--grey-100)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '8px 12px', background: confirmed ? 'rgba(34,197,94,0.06)' : 'var(--grey-50, #fafafa)', flexWrap: 'wrap' }}>
+                      <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '8px 12px', background: confirmed ? 'rgba(34,197,94,0.06)' : 'var(--grey-50, #fafafa)', flexWrap: 'wrap' }}>
                         <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>Grupo {g.groupLabel}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className="bs-actions-buttons" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span style={{ fontSize: 10, color: 'var(--grey-400)' }}>{doneCount}/{groupMatches.length} jugados</span>
                           {!confirmed && allDone && (
                             <span title="Los clasificados ya aparecen en el bracket como provisionales. Confirmá para bloquearlos." style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#b45309', background: 'rgba(180,83,9,0.1)', padding: '2px 7px', borderRadius: 999 }}>
@@ -1375,7 +1375,7 @@ function ScoreLiveTab({ tournament, canManage, requesterId, teamName, onUpdate }
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Listos para empezar</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {ready.slice(0, 8).map(it => (
-              <div key={it.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 12px', background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6 }}>
+              <div key={it.id} className="bs-actions-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 12px', background: '#fff', border: '1px solid var(--grey-200)', borderRadius: 6 }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--grey-400)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{metaLine(it)}</div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--grey-700)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{teamName(it.teamAId)} <span style={{ color: 'var(--grey-300)' }}>vs</span> {teamName(it.teamBId)}</div>

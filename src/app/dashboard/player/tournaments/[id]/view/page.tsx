@@ -81,7 +81,7 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
   // ── Guard: loading ────────────────────────────────────────────────────────
   if (tournament === undefined) {
     return (
-      <div style={{ padding: '80px 40px', textAlign: 'center', color: 'var(--grey-400)' }}>
+      <div className="bs-page" style={{ padding: '80px 40px', textAlign: 'center', color: 'var(--grey-400)' }}>
         Cargando...
       </div>
     );
@@ -90,7 +90,7 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
   // ── Guard: not found ──────────────────────────────────────────────────────
   if (tournament === null) {
     return (
-      <div style={{ padding: '80px 40px', maxWidth: 500, textAlign: 'center', margin: '0 auto' }}>
+      <div className="bs-page" style={{ padding: '80px 40px', maxWidth: 500, textAlign: 'center', margin: '0 auto' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, textTransform: 'uppercase', marginBottom: 12 }}>
           Torneo no encontrado
         </div>
@@ -177,13 +177,13 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
   const invStatus = myInvitedEntry?.status ?? (isConfirmedPlayer ? 'accepted' : null);
 
   return (
-    <div style={{ padding: '0 0 80px', maxWidth: 800, margin: '0 auto' }}>
+    <div className="bs-page" style={{ padding: '0 0 80px', maxWidth: 800, margin: '0 auto' }}>
 
       {/* ── Top bar ── */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         padding: '16px 40px', borderBottom: '1px solid var(--grey-100)',
-        background: '#fff', position: 'sticky', top: 0, zIndex: 10,
+        background: '#fff', position: 'sticky', top: 0, zIndex: 10, flexWrap: 'wrap', gap: 8,
       }}>
         <Link href="/dashboard/player/tournaments"
           style={{ fontSize: 12, color: 'var(--grey-500)', textDecoration: 'none', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -235,7 +235,7 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
           <>
             {/* Pending invitation */}
             {myInvitation && invStatus === 'pending' && (
-              <div style={{
+              <div className="bs-actions-row" style={{
                 padding: '16px 20px', background: '#fef9c3', border: '2px solid #fde047',
                 color: '#854d0e', marginBottom: 20, display: 'flex',
                 justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
@@ -243,7 +243,7 @@ export default function ViewTorneoPage({ params }: { params: Promise<{ id: strin
                 <span style={{ fontSize: 14, fontWeight: 700 }}>
                   Tienes una invitación pendiente
                 </span>
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div className="bs-actions-buttons" style={{ display: 'flex', gap: 10 }}>
                   <button
                     onClick={handleAccept}
                     disabled={respondingId !== null}

@@ -902,10 +902,10 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
     showToast('Resultado guardado', 'success');
   }, [tournament, showToast]);
 
-  if (loading) return <div style={{ padding: 40, color: 'var(--grey-400)', fontSize: 14 }}>Cargando…</div>;
+  if (loading) return <div className="bs-page" style={{ padding: 40, color: 'var(--grey-400)', fontSize: 14 }}>Cargando…</div>;
   if (tournament && accessDenied) {
     return (
-      <div style={{ padding: '40px clamp(16px,4vw,40px)', maxWidth: 1000, margin: '0 auto' }}>
+      <div className="bs-page" style={{ padding: '40px clamp(16px,4vw,40px)', maxWidth: 1000, margin: '0 auto' }}>
         <Link href={`/dashboard/player/tournaments`} style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Mis Torneos</Link>
         <div style={{ ...card, textAlign: 'center', padding: '48px 24px' }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
@@ -919,7 +919,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   }
   if (!tournament) {
     return (
-      <div style={{ padding: '40px clamp(16px,4vw,40px)', maxWidth: 1000, margin: '0 auto' }}>
+      <div className="bs-page" style={{ padding: '40px clamp(16px,4vw,40px)', maxWidth: 1000, margin: '0 auto' }}>
         <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--grey-500)' }}>Torneo no encontrado.</div>
       </div>
     );
@@ -943,6 +943,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
 
   return (
     <div
+      className="bs-page"
       style={{ padding: '40px clamp(16px, 4vw, 40px) 120px', maxWidth: 1000, margin: '0 auto' }}
       onDragEnd={() => setDraggingMatchId(null)}
     >
@@ -954,12 +955,12 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
       </Link>
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
+      <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 6 }}>
             Calendario · Posiciones · Bracket
           </div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(24px, 5vw, 34px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
+          <h1 className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(24px, 5vw, 34px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
             {tournament.name}
           </h1>
         </div>
@@ -978,7 +979,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
 
       {/* Organización de grupos */}
       <div style={card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
+        <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
           <span style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
             Organización de Grupos
           </span>
@@ -1000,9 +1001,9 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
             const unassigned = catTeams.filter(t => !t.groupId || !groupIds.includes(t.groupId));
             return (
               <div key={cat.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div style={{ fontSize: 13, fontWeight: 700 }}>{cat.name} <span style={{ color: 'var(--grey-400)', fontWeight: 400 }}>· {catTeams.length} equipos</span></div>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div className="bs-actions-buttons" style={{ display: 'flex', gap: 8 }}>
                     <button type="button" onClick={() => autoDistribute(cat.id, groupIds)}
                       style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       Distribuir automáticamente
@@ -1175,7 +1176,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
 
             return (
               <div key={cat.id} style={card}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
+                <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--grey-100)' }}>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, textTransform: 'uppercase' }}>{cat.name}</div>
                   <button type="button" onClick={() => handleGenerateBracket(cat.id)}
                     disabled={generatingBracketCat === cat.id || qualifiers.length < 2}
@@ -1228,7 +1229,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
 
       {/* Sticky save bar — only visible when there are pending calendar changes */}
       {hasPendingChanges && (
-        <div style={{
+        <div className="bs-actions-row" style={{
           position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
           background: 'var(--black)', color: '#fff',
           padding: '14px clamp(16px, 4vw, 40px)',
@@ -1244,7 +1245,7 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
               Los participantes serán notificados al guardar
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div className="bs-actions-buttons" style={{ display: 'flex', gap: 10 }}>
             <button
               onClick={handleDiscardChanges}
               disabled={savingSchedule}

@@ -34,6 +34,7 @@ import {
 import { TournamentTabs } from './TournamentTabs';
 import { Settings, CalendarDays, Download } from 'lucide-react';
 import { sendPersonalizadoStatusEmail } from '@/lib/email';
+import { applyPersonalizadoRankingResults } from '@/lib/ranking-store';
 import { searchPlayers, type RegisteredPlayer } from '@/lib/player-store';
 import { useToast } from '@/components/ToastProvider';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -275,6 +276,16 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   useEffect(() => {
     fetchPersonalizadoPricing().then(setPricingConfig).catch(() => {});
   }, []);
+
+  // Award ranking points once the tournament is finished. Idempotent (dedups
+  // internally by tournament id), so it's safe to run on every load — the
+  // organizer/co-creator viewing this page is what triggers the calculation,
+  // mirroring how classic tournaments/quick games apply ranking on finish.
+  useEffect(() => {
+    if (tournament?.status === 'finished') {
+      applyPersonalizadoRankingResults(tournament);
+    }
+  }, [tournament]);
 
   // Access guard: this is the organizer management view — creator or co-creators only.
   const accessDenied = !!tournament && !canManagePersonalizado(tournament, currentUser?.id);
@@ -823,11 +834,11 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
     URL.revokeObjectURL(url);
   }
 
-  if (loading) return <div style={{ padding: '40px', color: 'var(--grey-400)', fontSize: 14 }}>Cargando…</div>;
+  if (loading) return <div className="bs-page" style={{ padding: '40px', color: 'var(--grey-400)', fontSize: 14 }}>Cargando…</div>;
 
   if (tournament && accessDenied) {
     return (
-      <div style={{ padding: '40px clamp(16px, 4vw, 48px) 80px' }}>
+      <div className="bs-page" style={{ padding: '40px clamp(16px, 4vw, 48px) 80px' }}>
         <Link href="/dashboard/player/tournaments" style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Mis Torneos</Link>
         <div style={{ ...card, textAlign: 'center', padding: '48px 24px' }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
@@ -842,7 +853,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
 
   if (!tournament) {
     return (
-      <div style={{ padding: '40px clamp(16px, 4vw, 48px) 80px' }}>
+      <div className="bs-page" style={{ padding: '40px clamp(16px, 4vw, 48px) 80px' }}>
         <Link href="/dashboard/player/tournaments" style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Mis Torneos</Link>
         <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--grey-500)' }}>Torneo no encontrado.</div>
       </div>
@@ -857,7 +868,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   const openPromoBadge = appliedCode || autoPreview.appliedPromo?.displayBadge || 'PROMO';
 
   return (
-    <div style={{ padding: '40px clamp(16px, 4vw, 48px) 80px' }}>
+    <div className="bs-page" style={{ padding: '40px clamp(16px, 4vw, 48px) 80px' }}>
       {/* Back */}
       <Link href="/dashboard/player/tournaments" style={{ fontSize: 11, color: 'var(--grey-400)', textDecoration: 'none', letterSpacing: '0.08em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 24 }}>← Mis Torneos</Link>
 
@@ -865,7 +876,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
       <div style={{ marginBottom: 32, display: 'flex', gap: 24, justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
        <div style={{ flex: 1, minWidth: 280 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(26px, 5vw, 36px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>{tournament.name}</h1>
+          <h1 className="bs-h1" style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(26px, 5vw, 36px)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>{tournament.name}</h1>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '4px 10px', background: STATUS_COLORS[tournament.status], color: STATUS_TEXT_COLORS[tournament.status], border: '1px solid currentColor' }}>
             {STATUS_LABELS[tournament.status]}
           </span>
@@ -928,6 +939,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               draggable
               onDragStart={(e) => { setDraggedTeamId(team.id); e.dataTransfer.effectAllowed = 'move'; }}
               onDragEnd={() => { setDraggedTeamId(null); setDropTargetId(null); }}
+              className="bs-actions-row"
               style={{ padding: '10px 12px', border: `1px solid ${draggedTeamId === team.id ? 'var(--black)' : 'rgba(234,179,8,0.3)'}`, background: '#fff', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, flexWrap: 'wrap', gap: 6, cursor: 'grab', opacity: draggedTeamId === team.id ? 0.5 : 1 }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -940,7 +952,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div className="bs-actions-buttons" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {tournament.categories.map(cat => (
                   <button
                     key={cat.id}
@@ -996,6 +1008,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
             {/* Category header — clickable to collapse/expand */}
             <div
               onClick={() => toggleCat(cat.id)}
+              className="bs-actions-row"
               style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8, cursor: 'pointer', userSelect: 'none' }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -1012,7 +1025,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                   <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{GENDER_LABELS[cat.gender]} · Parejas</div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div className="bs-actions-buttons" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: isFull ? 'var(--turf-green, #15803d)' : 'var(--black)', textAlign: 'right' }}>
                   {enrolled} / {cat.maxTeams} inscritos{waiting > 0 ? ` · ${waiting} en espera` : ''}
                   {inGroups && <span style={{ display: 'block', fontSize: 10, fontWeight: 600, color: '#854d0e', marginTop: 2 }}>Inscripción cerrada</span>}
@@ -1351,7 +1364,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
       {tournament.status === 'draft' && (
         <div style={{ ...card, background: 'rgba(26,78,216,0.1)', borderColor: 'rgba(111,163,255,0.35)', marginTop: 24 }}>
           <div style={secTitle}>Abrir Inscripción</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
+          <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--black)' }}>
@@ -1740,7 +1753,7 @@ function GroupFormation({
   return (
     <div style={{ marginTop: 4 }}>
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+      <div className="bs-actions-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>Grupos:</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1750,7 +1763,7 @@ function GroupFormation({
           </div>
           <span style={{ fontSize: 11, color: 'var(--grey-400)' }}>~{teamsPerGroup} equipos por grupo</span>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="bs-actions-buttons" style={{ display: 'flex', gap: 8 }}>
           <button onClick={onRandom} disabled={saving} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', cursor: saving ? 'wait' : 'pointer' }}>🎲 Sortear al azar</button>
           <button onClick={onClear} disabled={saving} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', background: '#fff', color: 'var(--grey-500)', border: '1px solid var(--grey-200)', cursor: saving ? 'wait' : 'pointer' }}>✕ Limpiar</button>
         </div>
@@ -1836,6 +1849,7 @@ function TeamRow({
       draggable={canManage}
       onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart?.(); }}
       onDragEnd={onDragEnd}
+      className="bs-actions-row"
       style={{ padding: '9px 12px', border: `1px solid ${borderColor}`, background: bgColor, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: 13, flexWrap: 'wrap', gap: 6, opacity: isDragging ? 0.4 : 1, cursor: canManage ? 'grab' : 'default' }}
     >
       {canManage && <span style={{ color: 'var(--grey-300)', fontSize: 16, flexShrink: 0, lineHeight: 1, marginTop: 2 }}>⠿</span>}
@@ -1873,7 +1887,7 @@ function TeamRow({
           </div>
         )}
       </div>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+      <div className="bs-actions-buttons" style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
         {/* Status badge */}
         {!isReview && (
           <span style={{

@@ -111,7 +111,7 @@ function PodiumSection({ standings, fixedPairs }: { standings: Standing[], fixed
   }
 
   return (
-    <div style={{ background: 'var(--black)', padding: '40px 24px 0', marginBottom: 0 }}>
+    <div className="bs-page" style={{ background: 'var(--black)', padding: '40px 24px 0', marginBottom: 0 }}>
       <div style={{
         fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase',
         color: 'rgba(255,255,255,0.4)', fontWeight: 700, textAlign: 'center', marginBottom: 32
@@ -119,7 +119,9 @@ function PodiumSection({ standings, fixedPairs }: { standings: Standing[], fixed
         🏆 TORNEO FINALIZADO — RESULTADOS
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 2 }}>
+      {/* Podium: 3 fixed-width (140px) columns — wider than a phone screen, so it
+          scrolls horizontally inside its own box rather than dragging the page. */}
+      <div className="bs-scroll-x" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 2 }}>
         {order.map(i => {
           const s = top3[i];
           if (!s) return <div key={i} style={{ width: 140 }} />;
@@ -653,7 +655,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     const tdL: React.CSSProperties = { padding: '7px 8px', textAlign: 'left', fontSize: 12 };
 
     return (
-      <div style={{ paddingBottom: 80, background: 'var(--grey-50)', minHeight: '100vh' }}>
+      <div className="bs-page" style={{ paddingBottom: 80, background: 'var(--grey-50)', minHeight: '100vh' }}>
 
         {/* ── Tournament name header ── */}
         <div style={{ background: 'var(--black)', padding: '14px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -683,7 +685,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
               <span style={{ fontSize: 12, color: 'var(--grey-400)', transform: infoOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
             </button>
             {infoOpen && (
-              <div style={{ padding: '0 20px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+              <div className="bs-stack-mobile" style={{ padding: '0 20px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                 <div>
                   {[
                     ['Formato', FORMAT_LABEL[t.format] ?? t.format],
@@ -863,10 +865,13 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     <div>
 
       {/* ── Sticky top bar ── */}
+      {/* Not stacked via bs-actions-row: this bar is position:sticky and stays on
+          screen while scoring — stacking it to 3 rows would permanently eat
+          vertical space. Instead it just wraps + gets tighter side padding. */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         padding: '14px 32px', background: 'var(--black)', color: '#fff',
-        position: 'sticky', top: 0, zIndex: 20, gap: 16,
+        position: 'sticky', top: 0, zIndex: 20, gap: 12, flexWrap: 'wrap',
       }}>
         <Link href={`/dashboard/player/tournaments/${id}`}
           style={{ fontSize: 12, color: 'var(--grey-300)', textDecoration: 'none', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
@@ -907,7 +912,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
       <div>
 
       {/* ── Main column ── */}
-      <div style={{
+      <div className="bs-page" style={{
         maxWidth: 1400,
         margin: '0 auto',
         padding: '24px 32px',
@@ -942,7 +947,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
           {/* 3-column grid — collapsible */}
           {infoOpen && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginTop: 8 }}>
+            <div className="bs-stack-mobile" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginTop: 8 }}>
 
               {/* Col 1: Detalles del torneo */}
               <div style={card}>
@@ -1145,7 +1150,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
               {(koGroupPhaseOpen && groupPhaseActive) && (
               <div style={{ marginBottom: 0 }}>
               {/* Section header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div>
                   <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
                     Fase I — Grupos
@@ -1163,7 +1168,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                   </button>
                 )}
                 {advanceConfirm && (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div className="bs-actions-buttons" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#854d0e' }}>¿Confirmar?</span>
                     <button onClick={() => {
                       const advanced = advanceGroupsToKnockout(t);
@@ -1428,7 +1433,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
         {/* ── RONDAS ── */}
         {!isKO && <div style={{ marginBottom: 32 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div className="bs-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--grey-400)' }}>
             Rondas
           </div>
@@ -1687,7 +1692,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                                   </div>
                                   {/* Save button — shown only in explicit edit mode */}
                                   {isInEditMode && (
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 18px', borderTop: '1px solid var(--grey-100)', gap: 8 }}>
+                                    <div className="bs-actions-buttons" style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 18px', borderTop: '1px solid var(--grey-100)', gap: 8 }}>
                                       <button
                                         onClick={() => { setEditingCourts(prev => { const next = new Set(prev); next.delete(key); return next; }); }}
                                         style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)', background: 'transparent', border: '1px solid var(--grey-300)', padding: '6px 14px', cursor: 'pointer' }}>
@@ -1724,7 +1729,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
                     {/* Action banner: only on active round when complete, hidden when finished */}
                     {!isFinished && isActive && roundDone && (
-                      <div style={{
+                      <div className="bs-actions-row" style={{
                         padding: '18px 20px',
                         background: 'rgba(34,197,94,0.08)',
                         border: 'none',
@@ -1746,7 +1751,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                               FINALIZAR TORNEO
                             </button>
                           ) : (
-                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                            <div className="bs-actions-buttons" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                               <button onClick={handleNextRound}
                                 style={{ padding: '12px 24px', background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                                 SIGUIENTE RONDA →
