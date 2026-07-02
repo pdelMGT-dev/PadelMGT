@@ -153,10 +153,10 @@ export async function POST(request: NextRequest) {
       console.log('[Stripe] Subscription cancelled:', sub['id']);
 
       if (sb && email) {
-        await sb.from('subscriptions')
+        const { error: cancelErr } = await sb.from('subscriptions')
           .update({ status: 'canceled', updated_at: new Date().toISOString() })
-          .eq('stripe_subscription_id', sub['id'])
-          .catch(err => console.warn('[Supabase] subscription cancel failed:', err));
+          .eq('stripe_subscription_id', sub['id']);
+        if (cancelErr) console.warn('[Supabase] subscription cancel failed:', cancelErr.message);
 
         const { data: player } = await sb.from('players')
           .select('id, custom_fields')
@@ -184,10 +184,10 @@ export async function POST(request: NextRequest) {
       console.error('[Stripe] Payment failed for:', email, 'invoice:', invoice['id']);
 
       if (sb && email) {
-        await sb.from('subscriptions')
+        const { error: pastDueErr } = await sb.from('subscriptions')
           .update({ status: 'past_due', updated_at: new Date().toISOString() })
-          .eq('email', email.toLowerCase())
-          .catch(err => console.warn('[Supabase] subscription past_due update failed:', err));
+          .eq('email', email.toLowerCase());
+        if (pastDueErr) console.warn('[Supabase] subscription past_due update failed:', pastDueErr.message);
       }
       break;
     }
