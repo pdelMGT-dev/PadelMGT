@@ -183,7 +183,7 @@ export default function PlansPage() {
       .catch(() => setLoadingPromos(false));
   }, [tab]);
 
-  const syncFromStripe = useCallback(async () => {
+  const loadStripeComparison = useCallback(async () => {
     setStripeSync(s => ({ ...s, status: 'syncing', message: 'Consultando Stripe...' }));
     try {
       const res = await fetch('/api/stripe/prices');
@@ -194,15 +194,63 @@ export default function PlansPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as Record<string, { monthly?: number; annual?: number }>;
       setStripePrices(data);
-      setStripeSync({ status: 'ok', message: 'Precios sincronizados desde Stripe', lastSync: new Date().toISOString() });
+      setStripeSync({ status: 'ok', message: 'Precios de Stripe cargados', lastSync: new Date().toISOString() });
     } catch {
       setStripeSync({ status: 'error', message: 'Error conectando con Stripe. Verificá la configuración.', lastSync: null });
     }
   }, []);
 
   useEffect(() => {
-    syncFromStripe();
-  }, [syncFromStripe]);
+    loadStripeComparison();
+  }, [loadStripeComparison]);
+
+  // Push SA's current plan board to Stripe: creates/updates Products and
+  // (idempotently) Prices for every active plan, then re-applies the
+  // resulting Price IDs onto the local plan board and refreshes the
+  // comparison view.
+  async function pushPlansToStripe() {
+    setStripeSync(s => ({ ...s, status: 'syncing', message: 'Sincronizando planes con Stripe...' }));
+    try {
+      const res = await fetch('/api/sa/stripe/sync-plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plans }),
+      });
+      const json = await res.json() as {
+        ok?: boolean; error?: string;
+        results?: Array<{ planId: string; monthlyPriceId?: string; annualPriceId?: string; skipped?: boolean }>;
+      };
+      if (res.status === 503) {
+        setStripeSync({ status: 'unconfigured', message: json.error ?? 'Stripe no configurado — configurá STRIPE_SECRET_KEY en Vercel.', lastSync: null });
+        return;
+      }
+      if (!res.ok || !json.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+
+      let updatedCount = 0;
+      for (const r of json.results ?? []) {
+        if (r.skipped) continue;
+        const patch: Partial<SubscriptionPlan> = {};
+        if (r.monthlyPriceId) patch.stripePriceIdMonthly = r.monthlyPriceId;
+        if (r.annualPriceId) patch.stripePriceIdAnnual = r.annualPriceId;
+        if (Object.keys(patch).length > 0) {
+          updatePlan(r.planId as SubscriptionPlan['id'], patch);
+          updatedCount++;
+        }
+      }
+      setPlans(getPlans());
+
+      try {
+        const cmpRes = await fetch('/api/stripe/prices');
+        if (cmpRes.ok) setStripePrices(await cmpRes.json());
+      } catch { /* comparison refresh is best-effort */ }
+
+      setStripeSync({ status: 'ok', message: `${updatedCount} plan(es) sincronizados con Stripe`, lastSync: new Date().toISOString() });
+      toast(`${updatedCount} plan(es) sincronizados con Stripe ✓`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      setStripeSync({ status: 'error', message: `Error sincronizando con Stripe: ${message}`, lastSync: null });
+    }
+  }
 
   async function publishPlans() {
     setPublishing(true);
@@ -480,14 +528,18 @@ export default function PlansPage() {
         ? JSON.stringify({ id: editingPromo!.id, updates: promoForm })
         : JSON.stringify({ promo: promoForm });
       const res = await fetch('/api/sa/promos', { method, headers: { 'Content-Type': 'application/json' }, body });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null) as { error?: string } | null;
+        throw new Error(errBody?.error ?? `HTTP ${res.status}`);
+      }
       toast(isEdit ? 'Promoción actualizada' : 'Promoción creada');
       setShowCreatePromo(false);
       setEditingPromo(null);
       const data = await fetch('/api/sa/promos').then(r => r.json()) as { promos?: PromoCodeExtended[] };
       setPromos(data.promos ?? []);
-    } catch {
-      toast('Error al guardar la promoción', false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      toast(`Error al guardar la promoción: ${message}`, false);
     }
   }
 
@@ -693,11 +745,12 @@ export default function PlansPage() {
             </div>
           </div>
           <button
-            onClick={syncFromStripe}
+            onClick={pushPlansToStripe}
             disabled={stripeSync.status === 'syncing'}
+            title="Crea/actualiza los planes activos en Stripe con los precios y datos actuales de este panel"
             style={{ padding: '6px 16px', border: '1px solid var(--grey-200)', background: '#fff', cursor: stripeSync.status === 'syncing' ? 'wait' : 'pointer', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-600)' }}
           >
-            {stripeSync.status === 'syncing' ? 'Sincronizando...' : 'Sincronizar'}
+            {stripeSync.status === 'syncing' ? 'Sincronizando...' : 'Sincronizar con Stripe'}
           </button>
         </div>
       )}
@@ -1454,15 +1507,9 @@ export default function PlansPage() {
                 <div>
                   <label style={lbl}>Plan a desbloquear</label>
                   <select style={{ ...inp }} value={promoForm.unlockPlan ?? 'player_pro'} onChange={e => setPromoForm(f => ({ ...f, unlockPlan: e.target.value }))}>
-                    <option value="free">Free</option>
-                    <option value="player_pro">Player Pro</option>
-                    <option value="liga_free">Liga Free</option>
-                    <option value="liga_basic">Liga Basic</option>
-                    <option value="liga_pro">Liga Pro</option>
-                    <option value="liga_unlimited">Liga Unlimited</option>
-                    <option value="club_starter">Club Starter</option>
-                    <option value="club_pro">Club Pro</option>
-                    <option value="club_liga">Club + Liga</option>
+                    {plans.filter(p => p.isActive).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
