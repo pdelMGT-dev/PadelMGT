@@ -2711,13 +2711,18 @@ export async function getPlayerNotifications(playerId: string): Promise<Tourname
   }));
 }
 
-/** Mark a list of notification ids as read. */
+/** Mark a list of notification ids as read. Goes through a service-role
+ *  endpoint because RLS blocks client UPDATEs on tournament_notifications
+ *  (a direct client update silently affects zero rows). */
 export async function markNotificationsRead(ids: string[]): Promise<void> {
-  if (!ids.length || !isSupabaseConfigured || !supabase) return;
-  await supabase
-    .from('tournament_notifications')
-    .update({ read: true })
-    .in('id', ids);
+  if (!ids.length || typeof window === 'undefined') return;
+  try {
+    await fetch('/api/notifications/mark-read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+  } catch { /* best-effort; local state already reflects the change */ }
 }
 
 // ── Schedule publishing ───────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ import { SkeletonCard } from '@/components/Skeleton';
 import { useToast } from '@/components/ToastProvider';
 import { getTournament, saveTournament } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
-import { applyTournamentRankingResults } from '@/lib/ranking-store';
+import { applyTournamentRankingResults, getTournamentRankingPreview } from '@/lib/ranking-store';
 import {
   updateMatchScore,
   startNextRound,
@@ -629,18 +629,9 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
   if (isFinished) {
     const finalStandings = calculateStandings(t);
 
-    const rankingDeltas = finalStandings.map(s => {
-      const wins = s.wins;
-      const draws = s.draws ?? 0;
-      const losses = s.losses ?? (s.played - wins - draws);
-      const delta = wins * 3 + draws * 1 + losses * (-1);
-      return {
-        playerId: s.playerId,
-        playerName: s.playerName,
-        delta,
-        result: (delta > 0 ? 'win' : delta < 0 ? 'loss' : 'draw') as 'win' | 'loss' | 'draw',
-      };
-    }).sort((a, b) => b.delta - a.delta);
+    // Ranking deltas count group + bracket matches (same source as the actual
+    // crediting), so knockout-decided tournaments no longer show 0 for everyone.
+    const rankingDeltas = getTournamentRankingPreview(t);
 
     const secLabel: React.CSSProperties = {
       fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
