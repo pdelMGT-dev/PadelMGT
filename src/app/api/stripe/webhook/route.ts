@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const PRICE_TO_PLAN: Record<string, string> = {
-  [process.env.STRIPE_PRICE_PLAYER_PRO_MONTHLY  ?? '']: 'player_pro',
-  [process.env.STRIPE_PRICE_PLAYER_PRO_YEARLY   ?? '']: 'player_pro',
+  [process.env.STRIPE_PRICE_PLAYER_BASIC_MONTHLY     ?? '']: 'player_basic',
+  [process.env.STRIPE_PRICE_PLAYER_BASIC_YEARLY      ?? '']: 'player_basic',
+  [process.env.STRIPE_PRICE_PLAYER_PRO_MONTHLY       ?? '']: 'player_pro',
+  [process.env.STRIPE_PRICE_PLAYER_PRO_YEARLY        ?? '']: 'player_pro',
+  [process.env.STRIPE_PRICE_PLAYER_UNLIMITED_MONTHLY ?? '']: 'player_unlimited',
+  [process.env.STRIPE_PRICE_PLAYER_UNLIMITED_YEARLY  ?? '']: 'player_unlimited',
   [process.env.STRIPE_PRICE_LIGA_BASIC_MONTHLY  ?? '']: 'liga_basic',
   [process.env.STRIPE_PRICE_LIGA_PRO_MONTHLY    ?? '']: 'liga_pro',
   [process.env.STRIPE_PRICE_LIGA_UNLIMITED_MONTHLY ?? '']: 'liga_unlimited',
@@ -18,8 +22,12 @@ function derivePlanFromPriceId(priceId: string): string {
 
 // Normalize billing-variant plan IDs to their base plan for DB storage
 const PLAN_NORMALIZE: Record<string, string> = {
-  player_pro_year:     'player_pro',
-  player_pro_monthly:  'player_pro',
+  player_basic_year:     'player_basic',
+  player_basic_monthly:  'player_basic',
+  player_pro_year:       'player_pro',
+  player_pro_monthly:    'player_pro',
+  player_unlimited_year: 'player_unlimited',
+  player_unlimited_monthly: 'player_unlimited',
   liga_basic_yearly:   'liga_basic',
   liga_pro_yearly:     'liga_pro',
   liga_unlimited_yearly: 'liga_unlimited',

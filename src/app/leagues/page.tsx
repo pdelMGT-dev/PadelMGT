@@ -155,7 +155,7 @@ export default function LeaguesPage() {
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 8px', lineHeight: 0.95 }}>¿TIENES UNA LIGA?</h3>
             <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 15, margin: 0 }}>Gestiona temporadas largas, ascensos y descensos con tabla automática.</p>
           </div>
-          <Link href="/signup?role=league_organizer" className="btn btn-on-dark btn-lg" style={{ flexShrink: 0 }}>Crear Liga</Link>
+          <Link href="/signup?role=player" className="btn btn-on-dark btn-lg" style={{ flexShrink: 0 }}>Crear Liga</Link>
         </div>
       </section>
     </div>

@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSARequest, saUnauthorized } from '@/lib/sa-session';
 
 const PRICE_ENV_VARS: Array<{ planId: string; label: string; envVar: string }> = [
-  { planId: 'player_pro',      label: 'Player Pro — mensual', envVar: 'STRIPE_PRICE_PLAYER_PRO_MONTHLY' },
-  { planId: 'player_pro_year', label: 'Player Pro — anual',   envVar: 'STRIPE_PRICE_PLAYER_PRO_YEARLY' },
-  { planId: 'liga_basic',      label: 'Liga Basic',           envVar: 'STRIPE_PRICE_LIGA_BASIC_MONTHLY' },
-  { planId: 'liga_pro',        label: 'Liga Pro',             envVar: 'STRIPE_PRICE_LIGA_PRO_MONTHLY' },
-  { planId: 'liga_unlimited',  label: 'Liga Unlimited',       envVar: 'STRIPE_PRICE_LIGA_UNLIMITED_MONTHLY' },
-  { planId: 'club_starter',    label: 'Club Starter',         envVar: 'STRIPE_PRICE_CLUB_STARTER_MONTHLY' },
-  { planId: 'club_pro',        label: 'Club Pro',             envVar: 'STRIPE_PRICE_CLUB_PRO_MONTHLY' },
-  { planId: 'club_liga',       label: 'Club + Liga',          envVar: 'STRIPE_PRICE_CLUB_LIGA_MONTHLY' },
+  { planId: 'player_basic',          label: 'Player Basic — mensual',     envVar: 'STRIPE_PRICE_PLAYER_BASIC_MONTHLY' },
+  { planId: 'player_basic_year',     label: 'Player Basic — anual',       envVar: 'STRIPE_PRICE_PLAYER_BASIC_YEARLY' },
+  { planId: 'player_pro',            label: 'Player Pro — mensual',       envVar: 'STRIPE_PRICE_PLAYER_PRO_MONTHLY' },
+  { planId: 'player_pro_year',       label: 'Player Pro — anual',         envVar: 'STRIPE_PRICE_PLAYER_PRO_YEARLY' },
+  { planId: 'player_unlimited',      label: 'Player Ilimitado — mensual', envVar: 'STRIPE_PRICE_PLAYER_UNLIMITED_MONTHLY' },
+  { planId: 'player_unlimited_year', label: 'Player Ilimitado — anual',   envVar: 'STRIPE_PRICE_PLAYER_UNLIMITED_YEARLY' },
 ];
 
 // SA-only. Never returns secret values — only presence/shape checks and a real

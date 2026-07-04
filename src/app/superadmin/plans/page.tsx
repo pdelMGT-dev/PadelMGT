@@ -96,9 +96,10 @@ const DEFAULT_PLAN_LIMITS: PlanLimits = {
   maxGamesPerMonth: 3,
   maxPlayersPerTournament: 16,
   maxTournamentsPerMonth: 1,
-  maxLeaguePlayers: 20,
+  maxActiveLeagues: 1,
+  maxLeaguePlayers: 8,
   maxActiveTournaments: 1,
-  rankingTier: 'none' as const,
+  rankingTier: 'basic' as const,
   hasCategories: false,
   maxSeasonHistory: 0,
   maxCourts: 0,
@@ -594,7 +595,9 @@ export default function PlansPage() {
     function setField<K extends keyof PlanLimits>(key: K, val: PlanLimits[K]) {
       onChange({ ...limits, [key]: val });
     }
-    const isLiga = group === 'liga';
+    // The unified player plan governs leagues too, so player plans show the
+    // league block as well (not just the legacy liga_* group).
+    const showLeague = group === 'player' || group === 'liga';
     const isClub = group === 'club';
     return (
       <div style={{ marginTop: 8 }}>
@@ -622,27 +625,36 @@ export default function PlansPage() {
             <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 2 }}>(-1 = ilimitado)</div>
           </div>
         </div>
-        {isLiga && (
+        {showLeague && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+            <div style={{ gridColumn: '1 / -1', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--grey-100)' }}>
+              Ligas (este plan gobierna las ligas que el jugador crea)
+            </div>
             <div>
-              <label style={lbl}>Jugadores en la liga</label>
+              <label style={lbl}>Ligas activas</label>
+              <input style={inp} type="number" value={limits.maxActiveLeagues} onChange={e => setField('maxActiveLeagues', Number(e.target.value))} />
+              <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 2 }}>(-1 = ilimitado)</div>
+            </div>
+            <div>
+              <label style={lbl}>Jugadores por liga</label>
               <input style={inp} type="number" value={limits.maxLeaguePlayers} onChange={e => setField('maxLeaguePlayers', Number(e.target.value))} />
+              <div style={{ fontSize: 10, color: 'var(--grey-400)', marginTop: 2 }}>(-1 = ilimitado)</div>
             </div>
             <div>
               <label style={lbl}>Torneos activos simultáneos</label>
               <input style={inp} type="number" value={limits.maxActiveTournaments} onChange={e => setField('maxActiveTournaments', Number(e.target.value))} />
             </div>
             <div>
-              <label style={lbl}>Ranking tier</label>
+              <label style={lbl}>Clasificación (ranking tier)</label>
               <select
                 style={{ ...inp }}
                 value={limits.rankingTier}
                 onChange={e => setField('rankingTier', e.target.value as PlanLimits['rankingTier'])}
               >
-                <option value="none">none</option>
-                <option value="basic">basic</option>
-                <option value="advanced">advanced</option>
-                <option value="full">full</option>
+                <option value="none">Sin clasificación</option>
+                <option value="basic">Básica (pos + puntos)</option>
+                <option value="advanced">Completa (+ J/G/E/P)</option>
+                <option value="full">Avanzada (+ %V / diferencial)</option>
               </select>
             </div>
             <div>

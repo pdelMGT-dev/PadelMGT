@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Map plan IDs to env var names
+// Map plan IDs to env var names. The player ladder (basic/pro/unlimited, each
+// monthly + yearly) is the active offering; legacy liga/club/fed kept for compat.
 const PRICE_ENV_MAP: Record<string, string> = {
-  player_pro:       'STRIPE_PRICE_PLAYER_PRO_MONTHLY',
-  player_pro_year:  'STRIPE_PRICE_PLAYER_PRO_YEARLY',
+  player_basic:          'STRIPE_PRICE_PLAYER_BASIC_MONTHLY',
+  player_basic_year:     'STRIPE_PRICE_PLAYER_BASIC_YEARLY',
+  player_pro:            'STRIPE_PRICE_PLAYER_PRO_MONTHLY',
+  player_pro_year:       'STRIPE_PRICE_PLAYER_PRO_YEARLY',
+  player_unlimited:      'STRIPE_PRICE_PLAYER_UNLIMITED_MONTHLY',
+  player_unlimited_year: 'STRIPE_PRICE_PLAYER_UNLIMITED_YEARLY',
   liga_basic:       'STRIPE_PRICE_LIGA_BASIC_MONTHLY',
   liga_pro:         'STRIPE_PRICE_LIGA_PRO_MONTHLY',
   liga_unlimited:   'STRIPE_PRICE_LIGA_UNLIMITED_MONTHLY',
@@ -15,8 +20,12 @@ const PRICE_ENV_MAP: Record<string, string> = {
 };
 
 const DASHBOARD_REDIRECT: Record<string, string> = {
-  player_pro:      '/dashboard/player?subscription=success',
-  player_pro_year: '/dashboard/player?subscription=success',
+  player_basic:          '/dashboard/player?subscription=success',
+  player_basic_year:     '/dashboard/player?subscription=success',
+  player_pro:            '/dashboard/player?subscription=success',
+  player_pro_year:       '/dashboard/player?subscription=success',
+  player_unlimited:      '/dashboard/player?subscription=success',
+  player_unlimited_year: '/dashboard/player?subscription=success',
   liga_basic:      '/dashboard/league?subscription=success',
   liga_pro:        '/dashboard/league?subscription=success',
   liga_unlimited:  '/dashboard/league?subscription=success',
@@ -28,7 +37,10 @@ const DASHBOARD_REDIRECT: Record<string, string> = {
 };
 
 const TRIAL_DAYS: Record<string, number> = {
-  player_pro: 0, player_pro_year: 0,   // no trial for individual players
+  // No trial for individual player plans.
+  player_basic: 0, player_basic_year: 0,
+  player_pro: 0, player_pro_year: 0,
+  player_unlimited: 0, player_unlimited_year: 0,
   liga_basic: 14, liga_pro: 14, liga_unlimited: 14,
   club_starter: 14, club_pro: 14, club_liga: 14,
   fed_basic: 30, fed_pro: 30,

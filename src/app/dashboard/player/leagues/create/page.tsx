@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { createPlayerLeague, createLeagueSeason } from '@/lib/player-league-store';
+import { createPlayerLeague, createLeagueSeason, getAllPlayerLeagues } from '@/lib/player-league-store';
+import { checkLeagueCreateGate } from '@/lib/plan-config';
 
 const inp: React.CSSProperties = {
   width: '100%', padding: '10px 12px', fontSize: 13,
@@ -55,6 +56,14 @@ export default function CreateLeaguePage() {
     if (!name.trim()) { setError('El nombre de la liga es obligatorio.'); return; }
     if (addSeason && !seasonName.trim()) { setError('El nombre de la temporada es obligatorio.'); return; }
     if (addSeason && endDate <= startDate) { setError('La fecha de fin debe ser posterior a la de inicio.'); return; }
+
+    // Plan gate: the creator's plan caps how many leagues they can run.
+    const myLeagueCount = getAllPlayerLeagues().filter(l => l.createdBy === user.id).length;
+    const gate = checkLeagueCreateGate(user.id, myLeagueCount);
+    if (!gate.allowed && gate.reason === 'active_leagues') {
+      setError(`Tu plan permite ${gate.limit} liga${gate.limit === 1 ? '' : 's'} activa${gate.limit === 1 ? '' : 's'} (ya tenés ${gate.used}). Actualizá tu plan para crear más.`);
+      return;
+    }
 
     setSaving(true);
     const league = createPlayerLeague({
