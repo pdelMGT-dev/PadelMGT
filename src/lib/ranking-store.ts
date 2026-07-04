@@ -108,47 +108,117 @@ export function applyGameRankingResults(game: ActiveGame, leagueId?: string): Ra
 }
 
 /**
- * Apply tournament final standings to ranking and persist entries.
+ * Per-player win/draw/loss record for a classic tournament, counting BOTH the
+ * group / round-robin matches (rounds[].courts[]) AND the knockout bracket
+ * (bracket.rounds[].matches[]). calculateStandings only reads the former, so a
+ * tournament decided in the bracket (or a pure-knockout one) would otherwise
+ * credit zero ranking to everyone. Records are keyed per player id, so both
+ * members of a pair are credited (not just player1).
+ */
+interface PlayerRankRecord { playerId: string; playerName: string; wins: number; draws: number; losses: number; }
+
+export function computeTournamentRankRecords(game: ActiveGame): PlayerRankRecord[] {
+  const rec = new Map<string, PlayerRankRecord>();
+  const nameOf = (pid: string): string => game.players.find(p => p.id === pid)?.name ?? '';
+  const ensure = (pid: string): PlayerRankRecord => {
+    let r = rec.get(pid);
+    if (!r) { r = { playerId: pid, playerName: nameOf(pid), wins: 0, draws: 0, losses: 0 }; rec.set(pid, r); }
+    return r;
+  };
+
+  // Group / round-robin courts.
+  for (const round of game.rounds ?? []) {
+    for (const court of round.courts) {
+      if (court.status !== 'completed' || court.pair1Score === null || court.pair2Score === null) continue;
+      const s1 = court.pair1Score, s2 = court.pair2Score;
+      const res: 'A' | 'B' | 'D' = s1 > s2 ? 'A' : s2 > s1 ? 'B' : 'D';
+      for (const pid of court.pair1) { const r = ensure(pid); if (res === 'A') r.wins++; else if (res === 'B') r.losses++; else r.draws++; }
+      for (const pid of court.pair2) { const r = ensure(pid); if (res === 'B') r.wins++; else if (res === 'A') r.losses++; else r.draws++; }
+    }
+  }
+
+  // Knockout bracket — the winner array holds the winning pair's player ids.
+  for (const round of game.bracket?.rounds ?? []) {
+    for (const m of round.matches) {
+      if (m.status !== 'completed' || !m.winner?.length || !m.pair1 || !m.pair2) continue;
+      const winners = new Set(m.winner);
+      const loserPair = m.pair1.every(id => winners.has(id)) ? m.pair2 : m.pair1;
+      for (const pid of m.winner) ensure(pid).wins++;
+      for (const pid of loserPair) ensure(pid).losses++;
+    }
+  }
+
+  return [...rec.values()];
+}
+
+/** Ranking preview rows (delta + result) for the finished-tournament view,
+ *  using the same records + global config as the actual crediting. */
+export function getTournamentRankingPreview(game: ActiveGame): Array<{ playerId: string; playerName: string; delta: number; result: RankingResult }> {
+  const cfg = getGlobalRankingConfig();
+  return computeTournamentRankRecords(game)
+    .filter(r => r.wins + r.draws + r.losses > 0)
+    .map(r => {
+      const delta = r.wins * cfg.pointsWin + r.draws * cfg.pointsDraw + r.losses * cfg.pointsLoss;
+      return { playerId: r.playerId, playerName: r.playerName, delta, result: (delta > 0 ? 'win' : delta < 0 ? 'loss' : 'draw') as RankingResult };
+    })
+    .sort((a, b) => b.delta - a.delta);
+}
+
+/**
+ * Apply tournament results to ranking and persist entries. Counts group +
+ * bracket matches (via computeTournamentRankRecords) and credits every player.
+ * Auto-recomputes: if this tournament was already processed but the stored
+ * entries no longer match a fresh calculation (e.g. a pre-fix run that credited
+ * zero because the bracket was ignored), the old entries are reversed and
+ * replaced. Otherwise it's a no-op, so it stays safe to call on every load.
  */
 export function applyTournamentRankingResults(tournament: Tournament, leagueId?: string): RankingEntry[] {
-  const all = _store.load();
-  const created: RankingEntry[] = [];
-
-  if (all.some((e) => e.gameId === tournament.id)) return [];
-
-  const standings = calculateStandings(tournament);
   const cfg = getGlobalRankingConfig();
+  const records = computeTournamentRankRecords(tournament).filter(r => r.wins + r.draws + r.losses > 0);
 
-  for (const standing of standings) {
-    const player = tournament.players.find((p) => p.id === standing.playerId);
-    if (!player) continue;
+  // Fresh per-player delta from the combined group + bracket record.
+  const fresh = new Map<string, { delta: number; result: RankingResult; name: string }>();
+  for (const r of records) {
+    const delta = r.wins * cfg.pointsWin + r.draws * cfg.pointsDraw + r.losses * cfg.pointsLoss;
+    fresh.set(r.playerId, { delta, result: delta > 0 ? 'win' : delta < 0 ? 'loss' : 'draw', name: r.playerName });
+  }
 
-    const wins = standing.wins;
-    const draws = standing.draws ?? 0;
-    const losses = standing.losses ?? (standing.played - wins - draws);
-    const delta = wins * cfg.pointsWin + draws * cfg.pointsDraw + losses * cfg.pointsLoss;
-    const result: RankingResult = delta > 0 ? 'win' : delta < 0 ? 'loss' : 'draw';
+  let all = _store.load();
+  const existing = all.filter(e => e.gameId === tournament.id);
 
-    const current = getPlayerCurrentPoints(player.id);
-    const newTotal = Math.max(0, current + delta);
+  if (existing.length > 0) {
+    // Already processed — recompute only if the stored entries are stale.
+    const storedDelta = new Map(existing.map(e => [e.playerId, e.delta]));
+    let stale = existing.length !== fresh.size;
+    if (!stale) for (const [pid, f] of fresh) { if ((storedDelta.get(pid) ?? null) !== f.delta) { stale = true; break; } }
+    if (!stale) return [];
+    // Reverse the old point effect and drop the old entries before re-applying.
+    for (const e of existing) updatePlayerRankingPoints(e.playerId, -e.delta);
+    all = all.filter(e => e.gameId !== tournament.id);
+    _store.persist(all);
+    all = _store.load();
+  }
 
+  const created: RankingEntry[] = [];
+  for (const [playerId, f] of fresh) {
+    const current = getPlayerCurrentPoints(playerId);
+    const newTotal = Math.max(0, current + f.delta);
     const entry: RankingEntry = {
       id: generateId(),
       gameId: tournament.id,
       gameName: tournament.name,
       gameDate: tournament.date,
-      playerId: player.id,
-      playerName: player.name,
-      result,
-      delta,
+      playerId,
+      playerName: f.name,
+      result: f.result,
+      delta: f.delta,
       newTotal,
       createdAt: new Date().toISOString(),
       ...(leagueId ? { leagueId } : {}),
     };
-
     all.push(entry);
     created.push(entry);
-    updatePlayerRankingPoints(player.id, delta);
+    updatePlayerRankingPoints(playerId, f.delta);
   }
 
   _store.persist(all);
