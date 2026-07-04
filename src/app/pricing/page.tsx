@@ -340,6 +340,27 @@ export default function PricingPage() {
   const [pm, setPm] = useState<PlanMap>({});
   const [promos, setPromos] = useState<ActivePromo[]>([]);
   const [appliedCode, setAppliedCode] = useState('');
+  const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
+
+  // Build a paid player-tier card's props, respecting the monthly/annual toggle.
+  function paidCard(id: string, fb: { name: string; monthly: number; annual: number; desc: string; features: string[]; highlight?: boolean; badge?: string }) {
+    const p = pm[id];
+    const feats = p?.features.filter(f => f.included).map(f => f.text);
+    const monthly = p?.priceMonthly ?? fb.monthly;
+    const annual = p?.priceAnnual ?? fb.annual;
+    return {
+      name: p?.name ?? fb.name,
+      role: 'Jugador',
+      price: billing === 'monthly' ? `$${monthly}` : `$${annual}`,
+      period: billing === 'monthly' ? '/mes' : '/año',
+      desc: p?.description ?? fb.desc,
+      features: feats?.length ? feats : fb.features,
+      planId: billing === 'monthly' ? id : `${id}_year`,
+      highlight: p ? p.isFeatured : fb.highlight,
+      badge: fb.badge,
+      couponCode: appliedCode,
+    };
+  }
 
   useEffect(() => {
     fetch('/api/plans')
@@ -386,66 +407,48 @@ export default function PricingPage() {
       <section style={{ padding: '72px 48px 96px' }}>
         <div style={{ maxWidth: 1440, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 80 }}>
 
-          {/* ── JUGADORES ───────────────────────────────────────────────────── */}
+          {/* ── PLANES DE JUGADOR (unificados: juegos + torneos + ligas) ─────── */}
           <div>
-            <SectionHeader emoji="🎾" title="Jugadores" sub="Para jugadores que quieren rankear, crear partidos y torneos con sus amigos." />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 2, background: 'var(--grey-200)' }}>
+            <SectionHeader emoji="🎾" title="Planes" sub="Un solo plan para todo: juegos rápidos, torneos y tus propias ligas. Cuanto más alto el plan, más grande podés jugar." />
+
+            {/* Billing toggle */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
+              <div style={{ display: 'inline-flex', border: '1px solid var(--grey-200)', background: '#fff' }}>
+                {([['monthly', 'Mensual'], ['annual', 'Anual · 20% off']] as const).map(([val, label]) => (
+                  <button key={val} onClick={() => setBilling(val)}
+                    style={{ padding: '10px 22px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                      background: billing === val ? 'var(--black)' : 'transparent', color: billing === val ? 'var(--neon)' : 'var(--grey-500)' }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 2, background: 'var(--grey-200)' }}>
               <PlanCard
                 {...px('free', pm, { price: '$0', period: 'para siempre', name: 'Free',
                   desc: 'Empieza gratis. Sin tarjeta de crédito.',
-                  features: ['3 Juegos Rápidos por mes','Hasta 8 jugadores por JR','1 torneo por mes','Hasta 16 jugadores por torneo','Ranking personal','Invitaciones por QR'] })}
+                  features: ['3 juegos rápidos por mes','Hasta 8 jugadores por juego','1 torneo por mes (hasta 8)','1 liga activa (hasta 8 jugadores)','Clasificación básica','Invitaciones por QR'] })}
                 role="Jugador" cta="Crear cuenta gratis" href="/signup?role=player"
                 couponCode={appliedCode}
               />
               <PlanCard
-                {...px('player_pro', pm, { price: '$3', period: '/mes', name: 'Pro', highlight: true,
+                {...paidCard('player_basic', { name: 'Player Basic', monthly: 3, annual: 28.80,
+                  desc: 'Para jugar más seguido y organizar tu liga.',
+                  features: ['Hasta 10 juegos/mes','Hasta 12 jugadores por juego','3 torneos/mes (hasta 16)','3 ligas activas (hasta 16 jugadores)','Clasificación completa','Soporte por email'] })}
+                cta="Activar Basic"
+              />
+              <PlanCard
+                {...paidCard('player_pro', { name: 'Player Pro', monthly: 5, annual: 48, highlight: true, badge: 'Más popular',
                   desc: 'Para el jugador que organiza 2-3 veces por semana.',
-                  features: ['Juegos Rápidos ilimitados','Hasta 32 jugadores por JR','Torneos ilimitados','Hasta 64 jugadores por torneo','Ranking + historial completo','Estadísticas avanzadas'] })}
-                role="Jugador" badge="Más popular" cta="Activar Pro" planId="player_pro"
-                couponCode={appliedCode}
+                  features: ['Juegos ilimitados','Hasta 24 jugadores por juego','5 torneos/mes (hasta 64)','10 ligas activas (hasta 32 jugadores)','Clasificación avanzada + categorías','Estadísticas avanzadas'] })}
+                cta="Activar Pro"
               />
               <PlanCard
-                name={pm['player_pro'] ? `${pm['player_pro'].name} Anual` : 'Pro Anual'}
-                price={pm['player_pro']?.priceAnnual ? `$${pm['player_pro'].priceAnnual}` : '$25'}
-                period="/año · $2.08/mes" role="Jugador"
-                desc={pm['player_pro'] ? `Ahorrá pagando ${pm['player_pro'].name} por adelantado (30% descuento).` : 'Ahorrá 30% pagando por adelantado.'}
-                features={['Todo lo de Pro mensual','Facturación anual (30% ahorro)','Sin compromiso mensual']}
-                cta="Activar Pro Anual" planId="player_pro_year" couponCode={appliedCode}
-              />
-            </div>
-          </div>
-
-          {/* ── LIGAS ────────────────────────────────────────────────────────── */}
-          <div>
-            <SectionHeader emoji="🏆" title="Ligas y Organizadores" sub="Para organizar circuitos, ligas privadas o torneos recurrentes con Ranking Independiente." />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 2, background: 'var(--grey-200)' }}>
-              <PlanCard
-                {...px('liga_free', pm, { price: '$0', period: 'para siempre', name: 'Free',
-                  desc: 'Para ligas vecinales o grupos pequeños.',
-                  features: ['Hasta 30 jugadores','2 torneos activos','Ranking básico','1 categoría'] })}
-                role="Liga" cta="Empezar gratis" href="/signup?role=league_organizer"
-                couponCode={appliedCode}
-              />
-              <PlanCard
-                {...px('liga_basic', pm, { price: '$9', period: '/mes', name: 'Básico',
-                  desc: 'Para la liga del club o circuito local.',
-                  features: ['Hasta 100 jugadores','Torneos ilimitados','Ranking independiente','Historial de temporadas'] })}
-                role="Liga" cta="Activar Básico" planId="liga_basic"
-                couponCode={appliedCode}
-              />
-              <PlanCard
-                {...px('liga_pro', pm, { price: '$19', period: '/mes', name: 'Pro', highlight: true,
-                  desc: 'Para circuitos regionales serios.',
-                  features: ['Hasta 500 jugadores','Multi-categoría y género','Ranking con puntos propios','Reportes por temporada','Soporte prioritario'] })}
-                role="Liga" badge="Recomendado" cta="Activar Pro" planId="liga_pro"
-                couponCode={appliedCode}
-              />
-              <PlanCard
-                {...px('liga_unlimited', pm, { price: '$39', period: '/mes', name: 'Ilimitado',
-                  desc: 'Para circuitos nacionales o multi-sede.',
-                  features: ['Jugadores ilimitados','White-label básico','API read-only','Estadísticas avanzadas','Exportar datos (CSV)'] })}
-                role="Liga" cta="Activar Ilimitado" planId="liga_unlimited"
-                couponCode={appliedCode}
+                {...paidCard('player_unlimited', { name: 'Player Ilimitado', monthly: 10, annual: 96,
+                  desc: 'Sin límites. Para los que viven el pádel.',
+                  features: ['Juegos ilimitados','Hasta 32 jugadores por juego','Torneos ilimitados','Ligas ilimitadas (jugadores ilimitados)','Clasificación avanzada + categorías','Estadísticas avanzadas'] })}
+                cta="Activar Ilimitado"
               />
             </div>
           </div>
@@ -518,34 +521,35 @@ export default function PricingPage() {
               COMPARAR TODOS LOS PLANES
             </h2>
             <div style={{ border: '1px solid var(--grey-200)', overflowX: 'auto' }}>
-              <table className="rank-table" style={{ minWidth: 700 }}>
+              <table className="rank-table" style={{ minWidth: 720 }}>
                 <thead>
                   <tr>
                     <th style={{ paddingLeft: 24, width: '28%' }}>Funcionalidad</th>
-                    <th style={{ textAlign: 'center' }}>Jugador Free</th>
-                    <th style={{ textAlign: 'center', background: 'var(--black)', color: 'var(--neon)' }}>Jugador Pro</th>
-                    <th style={{ textAlign: 'center' }}>Liga Pro</th>
+                    <th style={{ textAlign: 'center' }}>Free</th>
+                    <th style={{ textAlign: 'center' }}>Basic</th>
+                    <th style={{ textAlign: 'center', background: 'var(--black)', color: 'var(--neon)' }}>Pro</th>
+                    <th style={{ textAlign: 'center' }}>Ilimitado</th>
                   </tr>
                 </thead>
                 <tbody>
                   {[
-                    { f: 'Juegos Rápidos',         vs: ['3/mes', '∞', '∞'] },
-                    { f: 'Jug. por JR',             vs: ['8', '32', '∞'] },
-                    { f: 'Torneos/mes',             vs: ['1', '∞', '∞'] },
-                    { f: 'Jug. por torneo',         vs: ['16', '64', '∞'] },
-                    { f: 'Ranking personal',        vs: ['✓', '✓', '✓'] },
-                    { f: 'Ranking independiente',   vs: ['–', '–', '✓'] },
-                    { f: 'Gestión de miembros',     vs: ['–', '–', '500'] },
-                    { f: 'Multi-categoría',         vs: ['–', '–', '✓'] },
-                    { f: 'White-label',             vs: ['–', '–', '–'] },
-                    { f: 'API access',              vs: ['–', '–', 'read'] },
+                    { f: 'Juegos por mes',       vs: ['3', '10', '∞', '∞'] },
+                    { f: 'Jug. por juego',        vs: ['8', '12', '24', '32'] },
+                    { f: 'Torneos por mes',       vs: ['1', '3', '5', '∞'] },
+                    { f: 'Jug. por torneo',       vs: ['8', '16', '64', '∞'] },
+                    { f: 'Ligas activas',         vs: ['1', '3', '10', '∞'] },
+                    { f: 'Jugadores por liga',    vs: ['8', '16', '32', '∞'] },
+                    { f: 'Clasificación',         vs: ['Básica', 'Completa', 'Avanzada', 'Avanzada'] },
+                    { f: 'Categorías',            vs: ['–', '–', '✓', '✓'] },
+                    { f: 'Estadísticas avanzadas',vs: ['–', '–', '✓', '✓'] },
+                    { f: 'Soporte por email',     vs: ['–', '✓', '✓', '✓'] },
                   ].map(row => (
                     <tr key={row.f}>
                       <td style={{ paddingLeft: 24, fontWeight: 500, color: 'var(--black)', fontSize: 13 }}>{row.f}</td>
                       {row.vs.map((v, i) => (
                         <td key={i} style={{
                           textAlign: 'center', fontSize: 13,
-                          background: i === 1 ? 'rgba(0,0,0,0.025)' : undefined,
+                          background: i === 2 ? 'rgba(0,0,0,0.025)' : undefined,
                           fontFamily: v === '✓' || v === '–' ? undefined : 'var(--font-display)',
                           fontWeight: v !== '–' ? 600 : 400,
                           color: v === '✓' ? 'var(--turf-green)' : v === '–' ? 'var(--grey-300)' : 'var(--black)',

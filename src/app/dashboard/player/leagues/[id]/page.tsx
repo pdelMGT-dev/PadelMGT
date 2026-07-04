@@ -34,6 +34,7 @@ import {
 import { getAllGames } from '@/lib/game-store';
 import { searchPlayers } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
+import { checkLeagueMemberGate, getLimitsForLeagueOwner } from '@/lib/plan-config';
 
 type Tab = 'ranking' | 'members' | 'seasons' | 'requests' | 'config';
 
@@ -182,7 +183,14 @@ export default function LeagueDetailPage() {
 
   // Members tab
   function handleAddMember(player: RegisteredPlayer) {
-    if (!id) return;
+    if (!id || !league) return;
+    // "Dueño gobierna": the league's player cap comes from the CREATOR's plan.
+    const gate = checkLeagueMemberGate(league.createdBy, members.length);
+    if (!gate.allowed && gate.reason === 'players_per_league') {
+      setMemberMsg(`El plan del creador permite ${gate.limit} jugadores en esta liga — alcanzaste el límite.`);
+      setTimeout(() => setMemberMsg(''), 4000);
+      return;
+    }
     addLeagueMember({ leagueId: id, playerId: player.id, playerName: player.name });
     setMemberSearch(''); setMemberResults([]);
     setMemberMsg(`${player.name} agregado.`);
@@ -219,6 +227,15 @@ export default function LeagueDetailPage() {
   // Requests tab
   function handleReviewRequest(reqId: string, status: 'approved' | 'rejected') {
     if (!user) return;
+    // Approving adds a member — gate against the creator's plan cap.
+    if (status === 'approved' && league) {
+      const gate = checkLeagueMemberGate(league.createdBy, members.length);
+      if (!gate.allowed && gate.reason === 'players_per_league') {
+        setReqMsg(`El plan del creador permite ${gate.limit} jugadores — alcanzaste el límite. Actualizá el plan para aceptar más.`);
+        setTimeout(() => setReqMsg(''), 4000);
+        return;
+      }
+    }
     reviewJoinRequest(reqId, status, user.id);
     reload();
     setReqMsg(status === 'approved' ? 'Solicitud aprobada — jugador agregado.' : 'Solicitud rechazada.');
@@ -275,6 +292,32 @@ export default function LeagueDetailPage() {
   })() : '';
   const publicUrl = leagueCode ? `${origin}/l/${leagueCode}?${shareParams}` : '';
   const selectedSeasonObj = selectedSid ? getLeagueSeason(selectedSid) : null;
+
+  // Classification tier ("dueño gobierna"): the standings detail a league shows
+  // is set by its CREATOR's plan. basic → básica (pos + pts), advanced →
+  // completa (+ J/G/E/P), full → avanzada (+ %V / diferencial).
+  const classTier: 'basica' | 'completa' | 'avanzada' = (() => {
+    const t = league ? getLimitsForLeagueOwner(league.createdBy).rankingTier : 'basic';
+    if (t === 'full') return 'avanzada';
+    if (t === 'advanced') return 'completa';
+    return 'basica';
+  })();
+  const rankGridCols =
+    classTier === 'basica'   ? '48px 1fr 70px'
+    : classTier === 'completa' ? '48px 1fr 50px 50px 50px 50px 70px'
+    :                            '48px 1fr 50px 50px 50px 50px 58px 58px 70px';
+  const rankHeaders =
+    classTier === 'basica'   ? ['#', 'Jugador', 'PTS']
+    : classTier === 'completa' ? ['#', 'Jugador', 'J', 'G', 'E', 'P', 'PTS']
+    :                            ['#', 'Jugador', 'J', 'G', 'E', 'P', '%V', 'DIF', 'PTS'];
+  function rankStatCells(entry: LeagueStandingEntry): (string | number)[] {
+    if (classTier === 'basica') return [];
+    const base: (string | number)[] = [entry.played, entry.wins, entry.draws, entry.losses];
+    if (classTier === 'completa') return base;
+    const winPct = entry.played > 0 ? Math.round((entry.wins / entry.played) * 100) : 0;
+    const dif = entry.wins - entry.losses;
+    return [...base, `${winPct}%`, dif > 0 ? `+${dif}` : `${dif}`];
+  }
 
   const tabStyle = (t: Tab): React.CSSProperties => ({
     padding: '10px 18px', fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -365,27 +408,33 @@ export default function LeagueDetailPage() {
               <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>Al crear un Juego Rápido o Torneo, seleccioná esta liga para que los resultados cuenten aquí.</div>
             </div>
           ) : (
-            <div style={{ background: '#fff', border: '1px solid var(--grey-200)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr 50px 50px 50px 50px 70px', padding: '10px 20px', borderBottom: '1px solid var(--grey-200)', background: 'var(--grey-50)' }}>
-                {['#', 'Jugador', 'J', 'G', 'E', 'P', 'PTS'].map(h => (
-                  <div key={h} style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', textAlign: h === 'Jugador' ? 'left' : 'right' }}>{h}</div>
+            <>
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)', overflowX: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: rankGridCols, padding: '10px 20px', borderBottom: '1px solid var(--grey-200)', background: 'var(--grey-50)', minWidth: classTier === 'avanzada' ? 560 : undefined }}>
+                {rankHeaders.map((h, i) => (
+                  <div key={i} style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', textAlign: h === 'Jugador' ? 'left' : 'right' }}>{h}</div>
                 ))}
               </div>
               {standings.map((entry, idx) => {
                 const isMe = entry.playerId === user?.id;
                 return (
-                  <div key={entry.playerId} style={{ display: 'grid', gridTemplateColumns: '48px 1fr 50px 50px 50px 50px 70px', padding: '12px 20px', borderBottom: idx < standings.length - 1 ? '1px solid var(--grey-100)' : 'none', background: isMe ? 'rgba(26,78,216,0.1)' : 'transparent', alignItems: 'center' }}>
+                  <div key={entry.playerId} style={{ display: 'grid', gridTemplateColumns: rankGridCols, padding: '12px 20px', borderBottom: idx < standings.length - 1 ? '1px solid var(--grey-100)' : 'none', background: isMe ? 'rgba(26,78,216,0.1)' : 'transparent', alignItems: 'center', minWidth: classTier === 'avanzada' ? 560 : undefined }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><RankMedal pos={idx + 1} /></div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 13, fontWeight: isMe ? 700 : 500, color: 'var(--black)' }}>{entry.playerName}</span>
                       {isMe && <span style={{ fontSize: 9, fontWeight: 700, background: 'var(--court-blue)', color: '#fff', padding: '2px 5px' }}>TÚ</span>}
                     </div>
-                    {[entry.played, entry.wins, entry.draws, entry.losses].map((v, i) => <div key={i} style={{ textAlign: 'right', fontSize: 12, color: 'var(--grey-600)' }}>{v}</div>)}
+                    {rankStatCells(entry).map((v, i) => <div key={i} style={{ textAlign: 'right', fontSize: 12, color: 'var(--grey-600)' }}>{v}</div>)}
                     <div style={{ textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700, color: 'var(--black)' }}>{entry.points}</div>
                   </div>
                 );
               })}
             </div>
+            <div style={{ marginTop: 10, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>
+              Clasificación {classTier === 'basica' ? 'básica' : classTier === 'completa' ? 'completa' : 'avanzada'}
+              {classTier !== 'avanzada' && ' — subí de plan para ver más detalle'}
+            </div>
+            </>
           )}
         </>
       )}

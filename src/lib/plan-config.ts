@@ -3,16 +3,22 @@ import { getAllPlayers } from './player-store';
 
 export type PlanId =
   | 'free'
-  | 'player_pro'
+  | 'player_basic' | 'player_pro' | 'player_unlimited'
   | 'liga_free' | 'liga_basic' | 'liga_pro' | 'liga_unlimited'
   | 'club_starter' | 'club_pro' | 'club_liga'
   | 'fed_basic' | 'fed_pro'
   | 'infinity';
 
 // ── Stripe plan ID → PlanId mapping ─────────────────────────────────────────
+// Unified player ladder: one plan governs games, tournaments AND leagues.
 export const STRIPE_PLAN_MAP: Record<string, PlanId> = {
-  player_pro:       'player_pro',
-  player_pro_year:  'player_pro',
+  player_basic:          'player_basic',
+  player_basic_year:     'player_basic',
+  player_pro:            'player_pro',
+  player_pro_year:       'player_pro',
+  player_unlimited:      'player_unlimited',
+  player_unlimited_year: 'player_unlimited',
+  // Legacy liga_* plans kept for backward compat with any existing records.
   liga_basic:       'liga_basic',
   liga_pro:         'liga_pro',
   liga_unlimited:   'liga_unlimited',
@@ -30,7 +36,8 @@ export interface PlanLimits {
   maxGamesPerMonth: number;
   maxPlayersPerTournament: number;
   maxTournamentsPerMonth: number;
-  // Liga-level
+  // Liga-level — a player's plan governs the leagues THEY create ("dueño gobierna")
+  maxActiveLeagues: number;
   maxLeaguePlayers: number;
   maxActiveTournaments: number;
   rankingTier: 'none' | 'basic' | 'advanced' | 'full';
@@ -43,65 +50,79 @@ export interface PlanLimits {
 }
 
 // ── Default limits (hardcoded fallback when Supabase unavailable) ─────────────
+// The player ladder (free/basic/pro/unlimited) governs games, tournaments AND
+// leagues in a single plan. rankingTier drives the standings classification the
+// league shows: basic → básica, advanced → completa, full → avanzada.
 export const DEFAULT_LIMITS: Record<string, PlanLimits> = {
   free: {
-    maxPlayersPerGame: 8, maxGamesPerMonth: 3, maxPlayersPerTournament: 16, maxTournamentsPerMonth: 1,
-    maxLeaguePlayers: 20, maxActiveTournaments: 1, rankingTier: 'none', hasCategories: false, maxSeasonHistory: 0,
+    maxPlayersPerGame: 8, maxGamesPerMonth: 3, maxPlayersPerTournament: 8, maxTournamentsPerMonth: 1,
+    maxActiveLeagues: 1, maxLeaguePlayers: 8, maxActiveTournaments: 1, rankingTier: 'basic', hasCategories: false, maxSeasonHistory: 0,
+    maxCourts: 0, canCustomizePage: false, clubMaxTournamentsPerMonth: 0,
+  },
+  player_basic: {
+    maxPlayersPerGame: 12, maxGamesPerMonth: 10, maxPlayersPerTournament: 16, maxTournamentsPerMonth: 3,
+    maxActiveLeagues: 3, maxLeaguePlayers: 16, maxActiveTournaments: 3, rankingTier: 'advanced', hasCategories: false, maxSeasonHistory: 1,
     maxCourts: 0, canCustomizePage: false, clubMaxTournamentsPerMonth: 0,
   },
   player_pro: {
-    maxPlayersPerGame: 32, maxGamesPerMonth: -1, maxPlayersPerTournament: 64, maxTournamentsPerMonth: -1,
-    maxLeaguePlayers: 50, maxActiveTournaments: 3, rankingTier: 'basic', hasCategories: false, maxSeasonHistory: 1,
+    maxPlayersPerGame: 24, maxGamesPerMonth: -1, maxPlayersPerTournament: 64, maxTournamentsPerMonth: 5,
+    maxActiveLeagues: 10, maxLeaguePlayers: 32, maxActiveTournaments: 5, rankingTier: 'full', hasCategories: true, maxSeasonHistory: 3,
     maxCourts: 0, canCustomizePage: false, clubMaxTournamentsPerMonth: 0,
   },
+  player_unlimited: {
+    maxPlayersPerGame: 32, maxGamesPerMonth: -1, maxPlayersPerTournament: -1, maxTournamentsPerMonth: -1,
+    maxActiveLeagues: -1, maxLeaguePlayers: -1, maxActiveTournaments: -1, rankingTier: 'full', hasCategories: true, maxSeasonHistory: -1,
+    maxCourts: 0, canCustomizePage: false, clubMaxTournamentsPerMonth: 0,
+  },
+  // Legacy liga_* plans — retained for backward compat only (no longer sold).
   liga_free: {
     maxPlayersPerGame: 8, maxGamesPerMonth: 3, maxPlayersPerTournament: 16, maxTournamentsPerMonth: 1,
-    maxLeaguePlayers: 20, maxActiveTournaments: 1, rankingTier: 'none', hasCategories: false, maxSeasonHistory: 0,
+    maxActiveLeagues: 1, maxLeaguePlayers: 20, maxActiveTournaments: 1, rankingTier: 'basic', hasCategories: false, maxSeasonHistory: 0,
     maxCourts: 0, canCustomizePage: false, clubMaxTournamentsPerMonth: 0,
   },
   liga_basic: {
     maxPlayersPerGame: 32, maxGamesPerMonth: -1, maxPlayersPerTournament: 64, maxTournamentsPerMonth: -1,
-    maxLeaguePlayers: 50, maxActiveTournaments: 3, rankingTier: 'basic', hasCategories: false, maxSeasonHistory: 1,
+    maxActiveLeagues: 3, maxLeaguePlayers: 50, maxActiveTournaments: 3, rankingTier: 'advanced', hasCategories: false, maxSeasonHistory: 1,
     maxCourts: 0, canCustomizePage: false, clubMaxTournamentsPerMonth: 0,
   },
   liga_pro: {
     maxPlayersPerGame: 32, maxGamesPerMonth: -1, maxPlayersPerTournament: 64, maxTournamentsPerMonth: -1,
-    maxLeaguePlayers: 200, maxActiveTournaments: 10, rankingTier: 'advanced', hasCategories: true, maxSeasonHistory: 3,
+    maxActiveLeagues: 10, maxLeaguePlayers: 200, maxActiveTournaments: 10, rankingTier: 'full', hasCategories: true, maxSeasonHistory: 3,
     maxCourts: 0, canCustomizePage: false, clubMaxTournamentsPerMonth: 0,
   },
   liga_unlimited: {
     maxPlayersPerGame: -1, maxGamesPerMonth: -1, maxPlayersPerTournament: -1, maxTournamentsPerMonth: -1,
-    maxLeaguePlayers: -1, maxActiveTournaments: -1, rankingTier: 'full', hasCategories: true, maxSeasonHistory: -1,
+    maxActiveLeagues: -1, maxLeaguePlayers: -1, maxActiveTournaments: -1, rankingTier: 'full', hasCategories: true, maxSeasonHistory: -1,
     maxCourts: 0, canCustomizePage: false, clubMaxTournamentsPerMonth: 0,
   },
   club_starter: {
     maxPlayersPerGame: 32, maxGamesPerMonth: -1, maxPlayersPerTournament: 64, maxTournamentsPerMonth: -1,
-    maxLeaguePlayers: 0, maxActiveTournaments: 0, rankingTier: 'none', hasCategories: false, maxSeasonHistory: 0,
+    maxActiveLeagues: 0, maxLeaguePlayers: 0, maxActiveTournaments: 0, rankingTier: 'none', hasCategories: false, maxSeasonHistory: 0,
     maxCourts: 3, canCustomizePage: false, clubMaxTournamentsPerMonth: 1,
   },
   club_pro: {
     maxPlayersPerGame: 32, maxGamesPerMonth: -1, maxPlayersPerTournament: 64, maxTournamentsPerMonth: -1,
-    maxLeaguePlayers: 0, maxActiveTournaments: 0, rankingTier: 'none', hasCategories: false, maxSeasonHistory: 0,
+    maxActiveLeagues: 0, maxLeaguePlayers: 0, maxActiveTournaments: 0, rankingTier: 'none', hasCategories: false, maxSeasonHistory: 0,
     maxCourts: 10, canCustomizePage: true, clubMaxTournamentsPerMonth: 5,
   },
   club_liga: {
     maxPlayersPerGame: -1, maxGamesPerMonth: -1, maxPlayersPerTournament: -1, maxTournamentsPerMonth: -1,
-    maxLeaguePlayers: 200, maxActiveTournaments: 10, rankingTier: 'advanced', hasCategories: true, maxSeasonHistory: 3,
+    maxActiveLeagues: -1, maxLeaguePlayers: 200, maxActiveTournaments: 10, rankingTier: 'full', hasCategories: true, maxSeasonHistory: 3,
     maxCourts: -1, canCustomizePage: true, clubMaxTournamentsPerMonth: -1,
   },
   fed_basic: {
     maxPlayersPerGame: -1, maxGamesPerMonth: -1, maxPlayersPerTournament: -1, maxTournamentsPerMonth: -1,
-    maxLeaguePlayers: -1, maxActiveTournaments: -1, rankingTier: 'full', hasCategories: true, maxSeasonHistory: -1,
+    maxActiveLeagues: -1, maxLeaguePlayers: -1, maxActiveTournaments: -1, rankingTier: 'full', hasCategories: true, maxSeasonHistory: -1,
     maxCourts: -1, canCustomizePage: true, clubMaxTournamentsPerMonth: -1,
   },
   fed_pro: {
     maxPlayersPerGame: -1, maxGamesPerMonth: -1, maxPlayersPerTournament: -1, maxTournamentsPerMonth: -1,
-    maxLeaguePlayers: -1, maxActiveTournaments: -1, rankingTier: 'full', hasCategories: true, maxSeasonHistory: -1,
+    maxActiveLeagues: -1, maxLeaguePlayers: -1, maxActiveTournaments: -1, rankingTier: 'full', hasCategories: true, maxSeasonHistory: -1,
     maxCourts: -1, canCustomizePage: true, clubMaxTournamentsPerMonth: -1,
   },
   infinity: {
     maxPlayersPerGame: -1, maxGamesPerMonth: -1, maxPlayersPerTournament: -1, maxTournamentsPerMonth: -1,
-    maxLeaguePlayers: -1, maxActiveTournaments: -1, rankingTier: 'full', hasCategories: true, maxSeasonHistory: -1,
+    maxActiveLeagues: -1, maxLeaguePlayers: -1, maxActiveTournaments: -1, rankingTier: 'full', hasCategories: true, maxSeasonHistory: -1,
     maxCourts: -1, canCustomizePage: true, clubMaxTournamentsPerMonth: -1,
   },
 };
@@ -264,7 +285,9 @@ export type GateResult =
   | { allowed: false; reason: 'players_per_game'; limit: number }
   | { allowed: false; reason: 'games_per_month'; limit: number; used: number }
   | { allowed: false; reason: 'players_per_tournament'; limit: number }
-  | { allowed: false; reason: 'tournaments_per_month'; limit: number; used: number };
+  | { allowed: false; reason: 'tournaments_per_month'; limit: number; used: number }
+  | { allowed: false; reason: 'active_leagues'; limit: number; used: number }
+  | { allowed: false; reason: 'players_per_league'; limit: number };
 
 export function checkGameGate(maxPlayers: number): GateResult {
   const plan = getUserPlan();
@@ -289,6 +312,47 @@ export function checkTournamentGate(maxPlayers: number): GateResult {
     const used = readUsage().tournaments;
     if (used >= lim.maxTournamentsPerMonth) return { allowed: false, reason: 'tournaments_per_month', limit: lim.maxTournamentsPerMonth, used };
   }
+  return { allowed: true };
+}
+
+// ── League gates ("dueño gobierna": a league's caps come from its CREATOR) ────
+
+/** Resolve a specific player's plan (used for the league creator, who may not
+ *  be the current user — e.g. a co-admin approving a join request). */
+export function getPlanForPlayerId(playerId: string): PlanId {
+  try {
+    const p = getAllPlayers().find(pl => pl.id === playerId);
+    return (p?.plan as PlanId) ?? 'free';
+  } catch { return 'free'; }
+}
+
+/** Full limits for a given plan id (public wrapper over the internal resolver). */
+export function getLimitsForPlanId(planId: string): PlanLimits {
+  return getLimitsForPlan(planId);
+}
+
+/** Limits that govern a league, taken from its creator's plan. */
+export function getLimitsForLeagueOwner(creatorId: string): PlanLimits {
+  return getLimitsForPlan(getPlanForPlayerId(creatorId));
+}
+
+/** Can `creatorId` open one more league given how many they already run? */
+export function checkLeagueCreateGate(creatorId: string, currentActiveLeagues: number): GateResult {
+  const plan = getPlanForPlayerId(creatorId);
+  if (plan === 'fed_pro' || plan === 'fed_basic' || plan === 'infinity') return { allowed: true };
+  const lim = getLimitsForPlan(plan);
+  if (lim.maxActiveLeagues !== -1 && currentActiveLeagues >= lim.maxActiveLeagues)
+    return { allowed: false, reason: 'active_leagues', limit: lim.maxActiveLeagues, used: currentActiveLeagues };
+  return { allowed: true };
+}
+
+/** Can one more member join a league whose creator is `creatorId`? */
+export function checkLeagueMemberGate(creatorId: string, currentMemberCount: number): GateResult {
+  const plan = getPlanForPlayerId(creatorId);
+  if (plan === 'fed_pro' || plan === 'fed_basic' || plan === 'infinity') return { allowed: true };
+  const lim = getLimitsForPlan(plan);
+  if (lim.maxLeaguePlayers !== -1 && currentMemberCount >= lim.maxLeaguePlayers)
+    return { allowed: false, reason: 'players_per_league', limit: lim.maxLeaguePlayers };
   return { allowed: true };
 }
 
