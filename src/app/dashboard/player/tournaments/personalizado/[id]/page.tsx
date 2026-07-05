@@ -928,6 +928,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
           onDragOver={(e) => { e.preventDefault(); setDropTargetId('UNASSIGNED'); }}
           onDragLeave={() => setDropTargetId(null)}
           onDrop={(e) => { e.preventDefault(); void handleDrop(null); }}
+          onClick={() => { if (draggedTeamId) void handleDrop(null); }}
         >
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#92400e', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             ⚠ Sin categoría
@@ -939,8 +940,9 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
               draggable
               onDragStart={(e) => { setDraggedTeamId(team.id); e.dataTransfer.effectAllowed = 'move'; }}
               onDragEnd={() => { setDraggedTeamId(null); setDropTargetId(null); }}
+              onClick={(e) => { e.stopPropagation(); setDraggedTeamId(prev => prev === team.id ? null : team.id); }}
               className="bs-actions-row"
-              style={{ padding: '10px 12px', border: `1px solid ${draggedTeamId === team.id ? 'var(--black)' : 'rgba(234,179,8,0.3)'}`, background: '#fff', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, flexWrap: 'wrap', gap: 6, cursor: 'grab', opacity: draggedTeamId === team.id ? 0.5 : 1 }}
+              style={{ padding: '10px 12px', border: `1px solid ${draggedTeamId === team.id ? 'var(--court-blue)' : 'rgba(234,179,8,0.3)'}`, background: draggedTeamId === team.id ? 'rgba(26,78,216,0.06)' : '#fff', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, flexWrap: 'wrap', gap: 6, cursor: 'pointer' }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ color: 'var(--grey-300)', fontSize: 16 }}>⠿</span>
@@ -956,14 +958,14 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
                 {tournament.categories.map(cat => (
                   <button
                     key={cat.id}
-                    onClick={() => handleResolveReview(team, cat.id)}
+                    onClick={(e) => { e.stopPropagation(); handleResolveReview(team, cat.id); }}
                     style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', background: 'var(--black)', color: 'var(--bs-light)', border: 'none', whiteSpace: 'nowrap' }}
                   >
                     → {cat.name}
                   </button>
                 ))}
                 <button
-                  onClick={() => void handleRemoveTeam(team.id)}
+                  onClick={(e) => { e.stopPropagation(); void handleRemoveTeam(team.id); }}
                   disabled={removingTeamId === team.id}
                   style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: removingTeamId === team.id ? 'wait' : 'pointer', background: 'rgba(220,38,38,0.08)', color: '#b91c1c', border: '1px solid rgba(220,38,38,0.3)', whiteSpace: 'nowrap', opacity: removingTeamId === team.id ? 0.6 : 1 }}
                 >
@@ -1000,10 +1002,11 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
         return (
           <div
             key={cat.id}
-            style={{ ...card, outline: isDragTarget ? '2px dashed var(--court-blue)' : 'none', transition: 'outline 0.1s' }}
+            style={{ ...card, outline: isDragTarget || draggedTeamId ? '2px dashed var(--court-blue)' : 'none', transition: 'outline 0.1s' }}
             onDragOver={(e) => { e.preventDefault(); setDropTargetId(cat.id); }}
             onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTargetId(null); }}
             onDrop={(e) => { e.preventDefault(); void handleDrop(cat.id); }}
+            onClick={() => { if (draggedTeamId) void handleDrop(cat.id); }}
           >
             {/* Category header — clickable to collapse/expand */}
             <div
@@ -1740,7 +1743,12 @@ function GroupFormation({
       draggable
       onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(t.id); }}
       onDragEnd={onDragEnd}
-      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', marginBottom: 4, border: '1px solid var(--grey-100)', background: dragTeamId === t.id ? 'var(--grey-50)' : '#fff', cursor: 'grab', fontSize: 11, opacity: dragTeamId === t.id ? 0.4 : 1 }}
+      onClick={(e) => {
+        // Tap-to-select (touch devices get no HTML5 drag events)
+        e.stopPropagation();
+        if (dragTeamId === t.id) onDragEnd(); else onDragStart(t.id);
+      }}
+      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', marginBottom: 4, border: `1px solid ${dragTeamId === t.id ? 'var(--court-blue)' : 'var(--grey-100)'}`, background: dragTeamId === t.id ? 'rgba(26,78,216,0.08)' : '#fff', cursor: 'pointer', fontSize: 11 }}
     >
       <span style={{ color: 'var(--grey-300)', fontSize: 14 }}>⠿</span>
       <div>
@@ -1769,14 +1777,16 @@ function GroupFormation({
         </div>
       </div>
 
-      {/* Columns: pool (resizable) + groups (flex, left-aligned) */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+      {/* Columns: pool (resizable) + groups (flex, left-aligned). Wraps so the
+          board fits phone-width screens instead of overflowing sideways. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-start' }}>
         {/* Pool — resizable by dragging the right edge */}
         <div
           onDragOver={(e) => { e.preventDefault(); onSetDropTarget(poolId); }}
           onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onSetDropTarget(null); }}
           onDrop={(e) => { e.preventDefault(); onDropTeam(null); }}
-          style={{ resize: 'horizontal', overflow: 'hidden', width: 240, minWidth: 180, maxWidth: 420, flexShrink: 0, minHeight: 90, padding: 8, border: `1px dashed ${dropTarget === poolId ? 'rgba(111,163,255,0.9)' : 'var(--grey-200)'}`, background: dropTarget === poolId ? 'rgba(26,78,216,0.1)' : 'var(--grey-50, #fafafa)' }}
+          onClick={() => { if (dragTeamId) onDropTeam(null); }}
+          style={{ resize: 'horizontal', overflow: 'hidden', width: 240, minWidth: 180, maxWidth: 420, flexShrink: 0, minHeight: 90, padding: 8, border: `1px dashed ${dropTarget === poolId || dragTeamId ? 'rgba(111,163,255,0.9)' : 'var(--grey-200)'}`, background: dropTarget === poolId ? 'rgba(26,78,216,0.1)' : 'var(--grey-50, #fafafa)', cursor: dragTeamId ? 'pointer' : 'default' }}
         >
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 8 }}>Sin grupo ({unassigned.length})</div>
           {unassigned.map(chip)}
@@ -1794,7 +1804,8 @@ function GroupFormation({
                 onDragOver={(e) => { e.preventDefault(); onSetDropTarget(gid); }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onSetDropTarget(null); }}
                 onDrop={(e) => { e.preventDefault(); onDropTeam(gid); }}
-                style={{ width: 160, flexShrink: 0, minHeight: 90, padding: 8, border: `1px solid ${isTarget ? 'var(--black)' : 'var(--grey-100)'}`, background: isTarget ? 'rgba(26,78,216,0.1)' : '#fff' }}
+                onClick={() => { if (dragTeamId) onDropTeam(gid); }}
+                style={{ width: 160, flexShrink: 0, minHeight: 90, padding: 8, border: `1px solid ${isTarget ? 'var(--black)' : dragTeamId ? 'var(--court-blue)' : 'var(--grey-100)'}`, background: isTarget ? 'rgba(26,78,216,0.1)' : '#fff', cursor: dragTeamId ? 'pointer' : 'default' }}
               >
                 <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--black)', marginBottom: 8 }}>
                   Grupo {groupLetters[i % groupLetters.length]} <span style={{ color: 'var(--grey-400)', fontWeight: 400 }}>({gTeams.length})</span>
@@ -1814,8 +1825,10 @@ function GroupFormation({
         </div>
       )}
 
-      <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 12 }}>
-        Arrastrá los equipos entre grupos o usá &ldquo;Sortear al azar&rdquo;. Los cambios se guardan automáticamente.
+      <div style={{ fontSize: 11, color: dragTeamId ? 'var(--court-blue)' : 'var(--grey-400)', marginTop: 12, fontWeight: dragTeamId ? 600 : 400 }}>
+        {dragTeamId
+          ? 'Equipo seleccionado — tocá el grupo de destino (o "Sin grupo" para quitarlo).'
+          : 'Tocá un equipo y luego su grupo de destino (en computadora también podés arrastrar), o usá "Sortear al azar". Los cambios se guardan automáticamente.'}
       </div>
     </div>
   );
@@ -1852,7 +1865,13 @@ function TeamRow({
       className="bs-actions-row"
       style={{ padding: '9px 12px', border: `1px solid ${borderColor}`, background: bgColor, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: 13, flexWrap: 'wrap', gap: 6, opacity: isDragging ? 0.4 : 1, cursor: canManage ? 'grab' : 'default' }}
     >
-      {canManage && <span style={{ color: 'var(--grey-300)', fontSize: 16, flexShrink: 0, lineHeight: 1, marginTop: 2 }}>⠿</span>}
+      {canManage && (
+        <span
+          onClick={(e) => { e.stopPropagation(); if (isDragging) onDragEnd?.(); else onDragStart?.(); }}
+          title={isDragging ? 'Cancelar selección' : 'Seleccionar para mover'}
+          style={{ color: isDragging ? 'var(--court-blue)' : 'var(--grey-300)', fontSize: 16, flexShrink: 0, lineHeight: 1, marginTop: 2, cursor: 'pointer', padding: '2px 4px' }}
+        >⠿</span>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
         {/* Player 1 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

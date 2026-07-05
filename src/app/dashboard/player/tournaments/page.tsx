@@ -1692,17 +1692,29 @@ export default function PlayerTournamentsPage() {
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', minHeight: 48, padding: '8px', background: 'var(--grey-50)', border: `2px dashed ${tDropOver === 'pool' ? 'var(--black)' : 'var(--grey-200)'}` }}
                     onDragOver={e => { e.preventDefault(); setTDropOver('pool'); }}
                     onDragLeave={() => setTDropOver(null)}
-                    onDrop={() => handleDrop('pool')}>
+                    onDrop={() => handleDrop('pool')}
+                    onClick={() => { if (tDragId && tDragSource && tDragSource !== 'pool') handleDrop('pool'); }}>
                     {poolPlayers.map(p => (
                       <div key={p.id}
                         draggable
                         onDragStart={() => { setTDragId(p.id); setTDragSource('pool'); }}
                         onDragEnd={() => { setTDragId(null); setTDragSource(null); setTDropOver(null); }}
-                        style={{ padding: '6px 12px', background: tDragId === p.id ? 'var(--grey-200)' : 'var(--black)', color: '#fff', cursor: 'grab', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        onClick={e => {
+                          // Tap-to-select (mobile has no HTML5 drag events)
+                          e.stopPropagation();
+                          if (tDragId === p.id) { setTDragId(null); setTDragSource(null); }
+                          else { setTDragId(p.id); setTDragSource('pool'); }
+                        }}
+                        style={{ padding: '6px 12px', background: tDragId === p.id ? 'var(--court-blue)' : 'var(--black)', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, outline: tDragId === p.id ? '2px solid var(--court-blue)' : 'none', outlineOffset: 2 }}>
                         {initials(p.name)} {p.name}
                       </div>
                     ))}
                   </div>
+                  {tDragId && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: 'var(--court-blue)', fontWeight: 600 }}>
+                      Jugador seleccionado — tocá un lugar de pareja para colocarlo.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1719,10 +1731,11 @@ export default function PlayerTournamentsPage() {
                       const dropKey = `${pIdx}-${slot}`;
                       return (
                         <div key={slot}
-                          style={{ flex: 1, minHeight: 44, padding: '8px 12px', border: `2px dashed ${tDropOver === dropKey ? 'var(--black)' : playerId ? 'var(--grey-200)' : 'var(--grey-100)'}`, background: playerId ? '#fff' : 'var(--grey-50)', display: 'flex', alignItems: 'center', gap: 8 }}
+                          style={{ flex: 1, minHeight: 44, padding: '8px 12px', border: `2px dashed ${tDropOver === dropKey ? 'var(--black)' : tDragId && !playerId ? 'var(--court-blue)' : playerId ? 'var(--grey-200)' : 'var(--grey-100)'}`, background: playerId ? '#fff' : tDragId ? 'rgba(26,78,216,0.05)' : 'var(--grey-50)', display: 'flex', alignItems: 'center', gap: 8, cursor: tDragId ? 'pointer' : 'default' }}
                           onDragOver={e => { e.preventDefault(); setTDropOver(dropKey); }}
                           onDragLeave={() => setTDropOver(null)}
-                          onDrop={() => handleDrop(dropKey)}>
+                          onDrop={() => handleDrop(dropKey)}
+                          onClick={() => { if (tDragId && tDragId !== playerId) handleDrop(dropKey); }}>
                           {playerId ? (
                             <>
                               <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--court-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
@@ -1732,11 +1745,16 @@ export default function PlayerTournamentsPage() {
                                 draggable
                                 onDragStart={() => { setTDragId(playerId); setTDragSource(dropKey); }}
                                 onDragEnd={() => { setTDragId(null); setTDragSource(null); setTDropOver(null); }}
-                                style={{ flex: 1, fontSize: 13, fontWeight: 600, cursor: 'grab' }}>{playerName}</span>
-                              <button onClick={() => removeFromPair(pIdx, slot)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-300)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  if (tDragId === playerId) { setTDragId(null); setTDragSource(null); }
+                                  else { setTDragId(playerId); setTDragSource(dropKey); }
+                                }}
+                                style={{ flex: 1, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: tDragId === playerId ? 'var(--court-blue)' : undefined }}>{playerName}</span>
+                              <button onClick={e => { e.stopPropagation(); removeFromPair(pIdx, slot); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-300)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
                             </>
                           ) : (
-                            <span style={{ fontSize: 11, color: 'var(--grey-300)' }}>Arrastrar jugador aquí</span>
+                            <span style={{ fontSize: 11, color: tDragId ? 'var(--court-blue)' : 'var(--grey-300)' }}>{tDragId ? 'Tocá para colocar aquí' : 'Tocá un jugador y luego aquí'}</span>
                           )}
                         </div>
                       );

@@ -794,9 +794,13 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   // ── Drag & Drop for pair builder ──────────────────────────────────────────
 
-  function handlePairDrop(targetKey: string) {
-    if (!dragId || !dragSource || !game) return;
-    const player = game.players.find(p => p.id === dragId);
+  function handlePairDrop(targetKey: string, explicitId?: string, explicitSource?: string) {
+    // Explicit id/source let tap-based callers act in the same event without
+    // waiting for a state round-trip (drag callers keep using the state).
+    const effId = explicitId ?? dragId;
+    const effSource = explicitSource ?? dragSource;
+    if (!effId || !effSource || !game) return;
+    const player = game.players.find(p => p.id === effId);
     if (!player) return;
 
     function slotFields(key: string): { idx: number; field: 'player1Id' | 'player2Id'; nameField: 'player1Name' | 'player2Name' } | null {
@@ -814,7 +818,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       const displaced = tgt ? (next[tgt.idx]?.[tgt.field] ?? '') : '';
 
       // 2. Remove dragged player from source
-      const src = slotFields(dragSource);
+      const src = slotFields(effSource);
       if (src && next[src.idx]) {
         next[src.idx] = { ...next[src.idx], [src.field]: '', [src.nameField]: '' };
       }
@@ -1588,7 +1592,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               return (
                 <div>
                   <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 16 }}>
-                    Arrastrá los jugadores del pool a cada pareja. Podés intercambiar jugadores arrastrando entre slots.
+                    Tocá un jugador para seleccionarlo y después tocá el lugar de la pareja donde va. (En computadora también podés arrastrar.)
                   </p>
 
                   {/* Pool */}
@@ -1596,6 +1600,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                     onDragOver={e => { e.preventDefault(); setDropOver('pool'); }}
                     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOver(null); }}
                     onDrop={e => { e.preventDefault(); if (dragSource !== 'pool') handlePairDrop('pool'); setDropOver(null); }}
+                    onClick={() => { if (dragId && dragSource && dragSource !== 'pool') handlePairDrop('pool'); }}
                     style={{
                       minHeight: 56, padding: '10px 12px', marginBottom: 20,
                       border: `2px dashed ${dropOver === 'pool' ? 'var(--turf-green)' : 'var(--grey-200)'}`,
@@ -1612,7 +1617,12 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                         draggable
                         onDragStart={() => { setDragId(p.id); setDragSource('pool'); }}
                         onDragEnd={() => { setDragId(null); setDragSource(null); setDropOver(null); }}
-                        style={chipStyle(dragId === p.id && dragSource === 'pool')}
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (dragId === p.id) { setDragId(null); setDragSource(null); }
+                          else { setDragId(p.id); setDragSource('pool'); }
+                        }}
+                        style={{ ...chipStyle(dragId === p.id && dragSource === 'pool'), cursor: 'pointer', ...(dragId === p.id ? { outline: '2px solid var(--court-blue)', outlineOffset: 2 } : {}) }}
                       >
                         <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700 }}>
                           {initials(p.name)}
@@ -1640,28 +1650,33 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                             onDragOver={e => { e.preventDefault(); setDropOver(s1key); }}
                             onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOver(null); }}
                             onDrop={e => { e.preventDefault(); handlePairDrop(s1key); }}
-                            style={dropZoneStyle(s1key, !!p1)}
+                            onClick={() => { if (dragId && dragId !== p1?.id) handlePairDrop(s1key); }}
+                            style={{ ...dropZoneStyle(s1key, !!p1), cursor: dragId ? 'pointer' : 'default' }}
                           >
                             {p1 ? (
                               <div
                                 draggable
                                 onDragStart={() => { setDragId(p1.id); setDragSource(s1key); }}
                                 onDragEnd={() => { setDragId(null); setDragSource(null); setDropOver(null); }}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'grab', flex: 1, color: '#fff', userSelect: 'none' }}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  if (dragId === p1.id) { setDragId(null); setDragSource(null); }
+                                  else { setDragId(p1.id); setDragSource(s1key); }
+                                }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flex: 1, color: '#fff', userSelect: 'none', ...(dragId === p1.id ? { outline: '2px solid var(--court-blue)', outlineOffset: 2 } : {}) }}
                               >
                                 <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>
                                   {initials(p1.name)}
                                 </div>
                                 <span style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p1.name}</span>
                                 <button
-                                  onClick={() => handlePairDrop('pool')}
-                                  onMouseDown={e => { setDragId(p1.id); setDragSource(s1key); e.stopPropagation(); }}
+                                  onClick={e => { e.stopPropagation(); handlePairDrop('pool', p1.id, s1key); }}
                                   style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
                                   title="Quitar"
                                 >✕</button>
                               </div>
                             ) : (
-                              <span style={{ fontSize: 11, color: 'var(--grey-300)', fontStyle: 'italic' }}>Soltá aquí</span>
+                              <span style={{ fontSize: 11, color: dragId ? 'var(--court-blue)' : 'var(--grey-300)', fontStyle: 'italic' }}>{dragId ? 'Tocá aquí' : 'Vacío'}</span>
                             )}
                           </div>
 
@@ -1672,28 +1687,33 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                             onDragOver={e => { e.preventDefault(); setDropOver(s2key); }}
                             onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOver(null); }}
                             onDrop={e => { e.preventDefault(); handlePairDrop(s2key); }}
-                            style={dropZoneStyle(s2key, !!p2)}
+                            onClick={() => { if (dragId && dragId !== p2?.id) handlePairDrop(s2key); }}
+                            style={{ ...dropZoneStyle(s2key, !!p2), cursor: dragId ? 'pointer' : 'default' }}
                           >
                             {p2 ? (
                               <div
                                 draggable
                                 onDragStart={() => { setDragId(p2.id); setDragSource(s2key); }}
                                 onDragEnd={() => { setDragId(null); setDragSource(null); setDropOver(null); }}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'grab', flex: 1, color: '#fff', userSelect: 'none' }}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  if (dragId === p2.id) { setDragId(null); setDragSource(null); }
+                                  else { setDragId(p2.id); setDragSource(s2key); }
+                                }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flex: 1, color: '#fff', userSelect: 'none', ...(dragId === p2.id ? { outline: '2px solid var(--court-blue)', outlineOffset: 2 } : {}) }}
                               >
                                 <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>
                                   {initials(p2.name)}
                                 </div>
                                 <span style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p2.name}</span>
                                 <button
-                                  onClick={() => { setDragId(p2.id); setDragSource(s2key); handlePairDrop('pool'); }}
-                                  onMouseDown={e => { setDragId(p2.id); setDragSource(s2key); e.stopPropagation(); }}
+                                  onClick={e => { e.stopPropagation(); handlePairDrop('pool', p2.id, s2key); }}
                                   style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
                                   title="Quitar"
                                 >✕</button>
                               </div>
                             ) : (
-                              <span style={{ fontSize: 11, color: 'var(--grey-300)', fontStyle: 'italic' }}>Soltá aquí</span>
+                              <span style={{ fontSize: 11, color: dragId ? 'var(--court-blue)' : 'var(--grey-300)', fontStyle: 'italic' }}>{dragId ? 'Tocá aquí' : 'Vacío'}</span>
                             )}
                           </div>
                         </div>

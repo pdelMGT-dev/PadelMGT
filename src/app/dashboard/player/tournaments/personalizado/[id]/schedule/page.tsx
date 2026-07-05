@@ -443,9 +443,9 @@ function BracketMatchCard({ match, teamName, editingId, savingId, onEdit, onSave
 
 // ── Drag & drop group assignment ───────────────────────────────────────────────
 
-function DropColumn({ title, accent, count, capacity, onDrop, children }: {
+function DropColumn({ title, accent, count, capacity, onDrop, tapActive, children }: {
   title: string; accent: string; count: number; capacity?: number;
-  onDrop: () => void; children: React.ReactNode;
+  onDrop: () => void; tapActive?: boolean; children: React.ReactNode;
 }) {
   const [over, setOver] = useState(false);
   return (
@@ -453,10 +453,12 @@ function DropColumn({ title, accent, count, capacity, onDrop, children }: {
       onDragOver={e => { e.preventDefault(); setOver(true); }}
       onDragLeave={() => setOver(false)}
       onDrop={e => { e.preventDefault(); setOver(false); onDrop(); }}
+      onClick={() => { if (tapActive) onDrop(); }}
       style={{
-        border: `1px solid ${over ? accent : 'var(--grey-200)'}`,
+        border: `1px solid ${over || tapActive ? accent : 'var(--grey-200)'}`,
         background: over ? 'rgba(34,197,94,0.04)' : '#fff', padding: 10, minHeight: 90,
         boxShadow: over ? `inset 0 0 0 1px ${accent}` : 'none',
+        cursor: tapActive ? 'pointer' : 'default',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -470,14 +472,18 @@ function DropColumn({ title, accent, count, capacity, onDrop, children }: {
   );
 }
 
-function TeamChip({ team, onDragStart }: { team: PersonalizadoTeam; onDragStart: () => void }) {
+function TeamChip({ team, onDragStart, selected, onToggle }: {
+  team: PersonalizadoTeam; onDragStart: () => void; selected?: boolean; onToggle?: () => void;
+}) {
   return (
     <div
       draggable
       onDragStart={onDragStart}
+      onClick={e => { e.stopPropagation(); onToggle?.(); }}
       style={{
-        padding: '7px 9px', border: '1px solid var(--grey-200)', background: 'var(--grey-50, #fafafa)',
-        cursor: 'grab', fontSize: 12, lineHeight: 1.3,
+        padding: '7px 9px', border: `1px solid ${selected ? 'var(--court-blue, #1a4ed8)' : 'var(--grey-200)'}`,
+        background: selected ? 'rgba(26,78,216,0.08)' : 'var(--grey-50, #fafafa)',
+        cursor: 'pointer', fontSize: 12, lineHeight: 1.3,
       }}
     >
       <div style={{ fontWeight: 600 }}>{team.player1Name}</div>
@@ -793,15 +799,24 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
   function handleDropOnDay(targetDay: string) {
     if (!draggingMatchId) return;
     const idsToMove = selectedMatchIds.size > 0 ? [...selectedMatchIds] : [draggingMatchId];
+    moveMatchesToDay(idsToMove, targetDay);
+    setDraggingMatchId(null);
+  }
 
+  function moveMatchesToDay(idsToMove: string[], targetDay: string) {
     setLocalMatches(prev => {
       const base = prev ?? (tournament?.config?.matches ?? []);
       return base.map(m =>
         idsToMove.includes(m.id) ? { ...m, day: targetDay } : m
       );
     });
+  }
 
-    setDraggingMatchId(null);
+  /** Touch path: move the current tap-selection to a day (no drag needed). */
+  function moveSelectionToDay(targetDay: string) {
+    if (selectedMatchIds.size === 0) return;
+    moveMatchesToDay([...selectedMatchIds], targetDay);
+    setSelectedMatchIds(new Set());
   }
 
   function handleToggleSelect(matchId: string) {
@@ -1017,10 +1032,12 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
                   <DropColumn
                     title="Sin asignar" accent="var(--grey-300)" count={unassigned.length}
+                    tapActive={!!dragTeam}
                     onDrop={() => { if (dragTeam) { assignTeamToGroup(dragTeam, null); setDragTeam(null); } }}
                   >
                     {unassigned.map(t => (
-                      <TeamChip key={t.id} team={t} onDragStart={() => setDragTeam(t.id)} />
+                      <TeamChip key={t.id} team={t} onDragStart={() => setDragTeam(t.id)}
+                        selected={dragTeam === t.id} onToggle={() => setDragTeam(prev => prev === t.id ? null : t.id)} />
                     ))}
                   </DropColumn>
                   {groupIds.map((gid, i) => {
@@ -1029,10 +1046,12 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
                       <DropColumn
                         key={gid} title={`Grupo ${GROUP_LETTERS[i % GROUP_LETTERS.length]}`} accent="var(--turf-green)"
                         count={members.length} capacity={teamsPerGroup}
+                        tapActive={!!dragTeam}
                         onDrop={() => { if (dragTeam) { assignTeamToGroup(dragTeam, gid); setDragTeam(null); } }}
                       >
                         {members.map(t => (
-                          <TeamChip key={t.id} team={t} onDragStart={() => setDragTeam(t.id)} />
+                          <TeamChip key={t.id} team={t} onDragStart={() => setDragTeam(t.id)}
+                            selected={dragTeam === t.id} onToggle={() => setDragTeam(prev => prev === t.id ? null : t.id)} />
                         ))}
                       </DropColumn>
                     );
@@ -1095,14 +1114,22 @@ export default function SchedulePage({ params }: { params: Promise<{ id: string 
                 style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff', color: 'var(--grey-500)', fontWeight: 600 }}>
                 Limpiar
               </button>
-              <span style={{ color: 'var(--grey-400)', fontSize: 10 }}>
-                Arrastra cualquier seleccionado a otro día para moverlos
-              </span>
+              {days.length > 1 && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ color: 'var(--grey-500)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Mover a:</span>
+                  {days.map(d => (
+                    <button key={d} onClick={() => moveSelectionToDay(d)}
+                      style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer', border: 'none', background: 'var(--black)', color: 'var(--bs-light, #fff)', fontWeight: 700, textTransform: 'uppercase' }}>
+                      {fmtDay(d)}
+                    </button>
+                  ))}
+                </span>
+              )}
             </>
           )}
           {selectedMatchIds.size === 0 && (
             <span style={{ color: 'var(--grey-400)', fontSize: 10 }}>
-              Haz clic en una tarjeta para seleccionarla, luego arrástrala a otro día
+              Tocá una tarjeta para seleccionarla y usá &quot;Mover a&quot; para cambiarla de día (en computadora también podés arrastrarla)
             </span>
           )}
         </div>
