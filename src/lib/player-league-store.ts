@@ -259,6 +259,55 @@ export function importLeagueJoinRequests(incoming: LeagueJoinRequest[]): void {
   if (dirty) requestStore.persist(Array.from(byId.values()));
 }
 
+/**
+ * One-time local migration when a device's session id changes to the canonical
+ * server-assigned id (login self-heal). Rewrites every reference to the old id
+ * in the league stores so backfill/sync attribute leagues correctly.
+ */
+export function migrateLocalPlayerId(oldId: string, newId: string): void {
+  if (typeof window === 'undefined' || !oldId || !newId || oldId === newId) return;
+  const leagues = leagueStore.load();
+  let dirty = false;
+  const migratedLeagues = leagues.map(l => {
+    if (l.createdBy !== oldId) return l;
+    dirty = true;
+    return { ...l, createdBy: newId };
+  });
+  if (dirty) leagueStore.persist(migratedLeagues);
+
+  const members = memberStore.load();
+  let mDirty = false;
+  const migratedMembers = members.map(m => {
+    if (m.playerId !== oldId) return m;
+    mDirty = true;
+    return { ...m, playerId: newId };
+  });
+  if (mDirty) memberStore.persist(migratedMembers);
+
+  const requests = requestStore.load();
+  let rDirty = false;
+  const migratedRequests = requests.map(r => {
+    if (r.playerId !== oldId) return r;
+    rDirty = true;
+    return { ...r, playerId: newId };
+  });
+  if (rDirty) requestStore.persist(migratedRequests);
+
+  // Tournaments and quick games embed the player id deeply (creatorId,
+  // players[], standings[]…). A JSON-token replace rewrites only complete
+  // string values equal to oldId (the quotes in JSON.stringify(oldId) prevent
+  // partial/substring matches).
+  for (const key of ['padelmgt_tournaments', 'padelmgt_games']) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const token = JSON.stringify(oldId);
+      if (!raw.includes(token)) continue;
+      localStorage.setItem(key, raw.split(token).join(JSON.stringify(newId)));
+    } catch { /* ignore malformed store */ }
+  }
+}
+
 // Migration: ensure every league has required fields
 
 function migrateLeagues(leagues: PlayerLeague[]): PlayerLeague[] {
@@ -491,7 +540,12 @@ export function createLeagueJoinRequest(params: {
 }): LeagueJoinRequest {
   const all = requestStore.load();
   const existing = all.find(r => r.leagueId === params.leagueId && r.playerId === params.playerId);
-  if (existing) return existing;
+  if (existing) {
+    // Re-push pending requests: an earlier attempt may have never reached
+    // Supabase (old bundle / offline), and the upsert is idempotent.
+    if (existing.status === 'pending') syncJoinRequestToSupabase(existing).catch(() => {});
+    return existing;
+  }
   const req: LeagueJoinRequest = {
     id: genId(),
     leagueId: params.leagueId,

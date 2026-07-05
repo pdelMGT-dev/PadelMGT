@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { createQuickGame, getAllGames, cloneQuickGame } from '@/lib/game-store';
+import { syncUserGames } from '@/lib/supabase-sync';
 import CloneDialog from '@/components/CloneDialog';
 import { checkGameGate, incrementUsage, getPlayerLimits } from '@/lib/plan-config';
 import { createInvitation, getPendingInvitationsForPlayer, respondToInvitation, getInvitationsForPlayer } from '@/lib/invitation-store';
@@ -236,6 +237,8 @@ export default function QuickGamePage() {
   useEffect(() => {
     reloadGames();
     if (!currentUser) return;
+    // Pull fresh server copies (edits from other devices) and re-render.
+    syncUserGames(currentUser.id).then(reloadGames).catch(() => {});
     // load player's clubs from membership store
     const memberships = getPlayerClubs(currentUser.id);
     setMyClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));

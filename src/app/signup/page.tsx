@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { registerPlayer, type PlayerSex } from '@/lib/player-store';
+import { registerPlayerServerFirst, type PlayerSex } from '@/lib/player-store';
 import { sanitizeText, isValidEmail } from '@/lib/sanitize';
 import { authSignUp } from '@/lib/supabase';
 import BrandLogo from '@/components/BrandLogo';
@@ -77,7 +77,9 @@ function SignupForm() {
     const emailRedirectTo = `${window.location.origin}/auth/callback`;
     const { data: authData, error: authError } = await authSignUp(
       cleanEmail, password,
-      { padelmgt_role: signupRole },
+      // Profile data lives in auth metadata too, so a login can self-heal a
+      // missing player row with the real name/country/sex.
+      { padelmgt_role: signupRole, padelmgt_name: cleanName, padelmgt_country: country, padelmgt_sex: sex },
       emailRedirectTo,
     );
     if (authError) {
@@ -94,8 +96,8 @@ function SignupForm() {
     }
     const authUserId = authData?.user?.id;
 
-    // 2. Create player record
-    const player = registerPlayer({ name: cleanName, email: cleanEmail, country, sex, authUserId });
+    // 2. Create the player record SERVER-SIDE (id assigned by Supabase).
+    const { player } = await registerPlayerServerFirst({ name: cleanName, email: cleanEmail, country, sex, authUserId });
     if (!player) {
       setError('Ya existe una cuenta con ese email.');
       setLoading(false);

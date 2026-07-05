@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
   // NOTE: `plan` is intentionally NOT accepted from the client — plan changes
   // only happen via the Stripe webhook (service role) or the SA back-office.
-  const { id, name, email, phone, city, country, sex, level, rankingPoints, shortId, authUserId, nationality } = body as Record<string, string | number | undefined>;
+  const { id, name, email, phone, city, country, sex, level, rankingPoints, shortId, authUserId, nationality, description, birthDate, photoUrl } = body as Record<string, string | number | undefined>;
 
   if (!id || !email) return NextResponse.json({ error: 'Missing id or email' }, { status: 400 });
 
@@ -74,6 +74,12 @@ export async function POST(request: NextRequest) {
       shortId,
       ...(sex   ? { sex }   : {}),
       ...(level ? { level } : {}),
+      // Profile fields round-trip through custom_fields so edits made on one
+      // device show up on every other device.
+      ...(description !== undefined ? { description: String(description) } : {}),
+      ...(birthDate   !== undefined ? { birthDate: String(birthDate) }     : {}),
+      // photoUrl may be a base64 data URL (uploads are capped at 2 MB client-side)
+      ...(photoUrl    !== undefined ? { photoUrl: String(photoUrl) }       : {}),
       profileCompleted: 'true',
     },
     updated_at: new Date().toISOString(),

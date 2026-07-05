@@ -37,6 +37,9 @@ export interface RegisteredPlayer {
   level?: import('./level-config').PlayerLevel;
   /** Photo URL (Supabase Storage or external URL). */
   photoUrl?: string;
+  phone?: string;
+  description?: string;
+  birthDate?: string;
   ranking: number;
   rankingPoints: number;
   profileCompleted?: boolean;
@@ -108,7 +111,42 @@ export interface RegisterParams {
   authUserId?: string;
 }
 
-/** Register a new player. Returns the player or null if email already taken. */
+/**
+ * Server-first registration: the id/shortId are assigned by Supabase via
+ * /api/player/register (idempotent by email), so they can never collide
+ * across devices. The result is cached locally. Falls back to the legacy
+ * local-only path when the server is unreachable (dev without Supabase).
+ */
+export async function registerPlayerServerFirst(
+  params: RegisterParams,
+): Promise<{ player: RegisteredPlayer | null; existed: boolean; offline: boolean }> {
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch('/api/player/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const p = json.player as RegisteredPlayer;
+        // Cache locally, replacing any stale row with the same email or id.
+        const all = _store.load().filter(x =>
+          x.id !== p.id && x.email.toLowerCase() !== p.email.toLowerCase());
+        _store.persist([...all, { ...p, authUserId: params.authUserId }]);
+        return { player: p, existed: !!json.existed, offline: false };
+      }
+      if (res.status === 400 || res.status === 403) {
+        return { player: null, existed: false, offline: false };
+      }
+      // 5xx → fall through to the local fallback
+    } catch { /* network error → local fallback */ }
+  }
+  return { player: registerPlayer(params), existed: false, offline: true };
+}
+
+/** @deprecated Local-only registration; ids may collide across devices.
+ * Kept solely as the offline fallback for registerPlayerServerFirst. */
 export function registerPlayer(params: RegisterParams): RegisteredPlayer | null {
   const all = _store.load();
   if (all.some(p => p.email.toLowerCase() === params.email.toLowerCase())) return null;
