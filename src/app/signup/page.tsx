@@ -70,11 +70,15 @@ function SignupForm() {
 
     setLoading(true);
 
-    // 1. Register in Supabase Auth
-    let authUserId: string | undefined;
+    // 1. Register in Supabase Auth.
+    // Always stamp the role in user metadata so the email-confirmation callback
+    // can route the user to the right dashboard, and set emailRedirectTo so the
+    // confirmation link lands back in the app (which auto-signs them in).
+    const emailRedirectTo = `${window.location.origin}/auth/callback`;
     const { data: authData, error: authError } = await authSignUp(
       cleanEmail, password,
-      signupRole !== 'player' ? { padelmgt_role: signupRole } : undefined,
+      { padelmgt_role: signupRole },
+      emailRedirectTo,
     );
     if (authError) {
       const msg = authError.message?.toLowerCase() ?? '';
@@ -88,7 +92,7 @@ function SignupForm() {
       setLoading(false);
       return;
     }
-    authUserId = authData?.user?.id;
+    const authUserId = authData?.user?.id;
 
     // 2. Create player record
     const player = registerPlayer({ name: cleanName, email: cleanEmail, country, sex, authUserId });
@@ -142,10 +146,10 @@ function SignupForm() {
               ¡Cuenta creada!
             </h1>
             <p style={{ fontSize: 14, color: 'var(--grey-500)', margin: '0 0 8px', lineHeight: 1.6 }}>
-              Revisá tu bandeja de entrada en <strong>{email}</strong> para confirmar tu cuenta.
+              Revisá tu bandeja de entrada en <strong>{email}</strong> y hacé clic en el enlace para confirmar tu cuenta.
             </p>
             <p style={{ fontSize: 13, color: 'var(--grey-400)', margin: '0 0 32px' }}>
-              Una vez confirmado el email, podés iniciar sesión.
+              Al confirmar, entrarás automáticamente a la plataforma.
             </p>
             <Link href="/login" className="btn btn-primary" style={{ display: 'inline-block', padding: '14px 32px', fontSize: 14, textDecoration: 'none', borderRadius: 0 }}>
               Ir a iniciar sesión →

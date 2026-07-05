@@ -1,28 +1,57 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { getSAStats, getSAClubs, saveSAClubs, upsertSAClubToSupabase, type SAStats, type SAClub } from '@/lib/superadmin-data';
+import {
+  getSAPlayersFromSupabase, getSAClubsFromSupabase, getSATournamentsFromSupabase,
+  saveSAClubs, upsertSAClubToSupabase,
+  type SAClub, type SAPlayer, type SATournament,
+} from '@/lib/superadmin-data';
+import { fetchCorrectionsFromSupabase } from '@/lib/score-correction-store';
 
-const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
-const PLAYER_GROWTH = [42, 58, 71, 89, 104, 127].map((v, i) => ({ mes: MONTHS[i], jugadores: v }));
-const TORNEOS_MES = [1, 2, 3, 2, 4, 3].map((v, i) => ({ mes: MONTHS[i], torneos: v }));
+const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-const ACTIVITY_FEED = [
-  { text: 'Carlos Rodríguez se registró como nuevo jugador', time: 'Hace 5 min' },
-  { text: 'Club Padel Madrid solicitó aprobación', time: 'Hace 18 min' },
-  { text: 'Open Barcelona Padel ha comenzado', time: 'Hace 1 h' },
-  { text: 'Lucía Fernández completó su perfil', time: 'Hace 2 h' },
-  { text: 'Nueva solicitud de corrección de score en Torneo Primavera', time: 'Hace 3 h' },
-  { text: 'Pablo López fue bloqueado por comportamiento inapropiado', time: 'Hace 4 h' },
-  { text: 'Costa Padel Alicante actualizó información del club', time: 'Hace 6 h' },
-  { text: 'Juego rápido en Madrid finalizado — 8 jugadores', time: 'Hace 8 h' },
-  { text: 'Ana Sánchez cambió su ranking a 820 pts', time: 'Hace 10 h' },
-  { text: 'Copa Valencia programada para el 5 de Junio', time: 'Hace 12 h' },
-];
+// Parse a 'YYYY-MM-DD' (or ISO) string into {year, month} without timezone drift.
+function ymOf(dateStr: string): { year: number; month: number } | null {
+  if (!dateStr) return null;
+  const m = /^(\d{4})-(\d{2})/.exec(dateStr);
+  if (!m) return null;
+  return { year: Number(m[1]), month: Number(m[2]) - 1 };
+}
+
+// Build the last N month buckets ending on the current month.
+function lastNMonths(n: number): { year: number; month: number; label: string }[] {
+  const now = new Date();
+  const out: { year: number; month: number; label: string }[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push({ year: d.getFullYear(), month: d.getMonth(), label: MONTH_LABELS[d.getMonth()] });
+  }
+  return out;
+}
+
+// Day-granularity relative time in Spanish for date-only strings.
+function relativeDay(dateStr: string): string {
+  const ym = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+  if (!ym) return '';
+  const then = new Date(Number(ym[1]), Number(ym[2]) - 1, Number(ym[3]));
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((today.getTime() - then.getTime()) / 86400000);
+  if (diffDays <= 0) return 'Hoy';
+  if (diffDays === 1) return 'Ayer';
+  if (diffDays < 30) return `Hace ${diffDays} días`;
+  const months = Math.floor(diffDays / 30);
+  if (months === 1) return 'Hace 1 mes';
+  if (months < 12) return `Hace ${months} meses`;
+  const years = Math.floor(months / 12);
+  return years === 1 ? 'Hace 1 año' : `Hace ${years} años`;
+}
+
+interface ActivityItem { text: string; time: string; sortKey: string }
 
 function KPICard({
   label, value, sub, highlight,
@@ -86,21 +115,36 @@ function fmtMoney(cents: number, currency = 'usd'): string {
 }
 
 export default function SuperAdminDashboard() {
-  const [stats, setStats] = useState<SAStats | null>(null);
-  const [pendingClubs, setPendingClubs] = useState<SAClub[]>([]);
+  const [players, setPlayers] = useState<SAPlayer[]>([]);
+  const [clubs, setClubs] = useState<SAClub[]>([]);
+  const [tournaments, setTournaments] = useState<SATournament[]>([]);
+  const [pendingScoreCount, setPendingScoreCount] = useState(0);
+  const [loaded, setLoaded] = useState(false);
   const [toasts, setToasts] = useState<Array<{ id: number; msg: string }>>([]);
   const [stripeData, setStripeData] = useState<StripeSummary | null>(null);
   const [showStripeDetail, setShowStripeDetail] = useState(false);
   const today = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   useEffect(() => {
-    setStats(getSAStats());
-    const clubs = getSAClubs();
-    setPendingClubs(clubs.filter(c => c.status === 'pending'));
+    let alive = true;
+    Promise.all([
+      getSAPlayersFromSupabase(),
+      getSAClubsFromSupabase(),
+      getSATournamentsFromSupabase(),
+      fetchCorrectionsFromSupabase().catch(() => []),
+    ]).then(([sbPlayers, sbClubs, sbTournaments, corrections]) => {
+      if (!alive) return;
+      setPlayers(sbPlayers ?? []);
+      setClubs(sbClubs ?? []);
+      setTournaments(sbTournaments ?? []);
+      setPendingScoreCount((corrections ?? []).filter(c => c.status === 'pending').length);
+      setLoaded(true);
+    });
     fetch('/api/superadmin/stripe/summary')
       .then(r => r.json())
-      .then((d: StripeSummary) => setStripeData(d))
-      .catch(() => setStripeData({ connected: false }));
+      .then((d: StripeSummary) => { if (alive) setStripeData(d); })
+      .catch(() => { if (alive) setStripeData({ connected: false }); });
+    return () => { alive = false; };
   }, []);
 
   function toast(msg: string) {
@@ -110,22 +154,90 @@ export default function SuperAdminDashboard() {
   }
 
   function handleClubAction(clubId: string, action: 'active' | 'rejected') {
-    const all = getSAClubs();
-    const updated = all.map(c => c.id === clubId ? { ...c, status: action } : c);
+    const updated = clubs.map(c => c.id === clubId ? { ...c, status: action } : c);
+    setClubs(updated);
     saveSAClubs(updated);
     const changed = updated.find(c => c.id === clubId);
     if (changed) upsertSAClubToSupabase(changed);
-    setPendingClubs(updated.filter(c => c.status === 'pending'));
     toast(action === 'active' ? 'Club aprobado correctamente' : 'Club rechazado');
   }
 
-  if (!stats) {
+  // ── Real metrics derived from Supabase data ──────────────────────────────────
+  const now = new Date();
+  const thisY = now.getFullYear(), thisM = now.getMonth();
+  const lastM = thisM === 0 ? 11 : thisM - 1;
+  const lastMY = thisM === 0 ? thisY - 1 : thisY;
+
+  const activeClubs = clubs.filter(c => c.status === 'active');
+  const pendingClubs = clubs.filter(c => c.status === 'pending');
+
+  const newPlayersThisMonth = players.filter(p => {
+    const ym = ymOf(p.joinedAt);
+    return ym && ym.year === thisY && ym.month === thisM;
+  }).length;
+
+  const tournamentsThisMonth = tournaments.filter(t => {
+    const ym = ymOf(t.date);
+    return ym && ym.year === thisY && ym.month === thisM;
+  }).length;
+  const tournamentsLastMonth = tournaments.filter(t => {
+    const ym = ymOf(t.date);
+    return ym && ym.year === lastMY && ym.month === lastM;
+  }).length;
+  const tourDiff = tournamentsThisMonth - tournamentsLastMonth;
+
+  const pendingTotal = pendingClubs.length + pendingScoreCount;
+
+  // Player-growth chart: cumulative registrations at the end of each of the last 6 months.
+  const playerGrowth = useMemo(() => {
+    const buckets = lastNMonths(6);
+    return buckets.map(b => {
+      const cumulative = players.filter(p => {
+        const ym = ymOf(p.joinedAt);
+        return ym && (ym.year < b.year || (ym.year === b.year && ym.month <= b.month));
+      }).length;
+      return { mes: b.label, jugadores: cumulative };
+    });
+  }, [players]);
+
+  // Tournaments-per-month chart over the last 6 months.
+  const tournamentsPerMonth = useMemo(() => {
+    const buckets = lastNMonths(6);
+    return buckets.map(b => {
+      const count = tournaments.filter(t => {
+        const ym = ymOf(t.date);
+        return ym && ym.year === b.year && ym.month === b.month;
+      }).length;
+      return { mes: b.label, torneos: count };
+    });
+  }, [tournaments]);
+
+  // Real activity feed: recent registrations, club requests and tournaments.
+  const activityFeed = useMemo<ActivityItem[]>(() => {
+    const items: ActivityItem[] = [];
+    for (const p of players) {
+      if (!p.joinedAt) continue;
+      items.push({ text: `${p.name} se registró como nuevo jugador`, time: relativeDay(p.joinedAt), sortKey: p.joinedAt });
+    }
+    for (const c of clubs) {
+      if (!c.joinedAt) continue;
+      const verb = c.status === 'pending' ? 'solicitó aprobación'
+        : c.status === 'active' ? 'se unió a la plataforma'
+        : 'actualizó su estado';
+      items.push({ text: `${c.name} ${verb}`, time: relativeDay(c.joinedAt), sortKey: c.joinedAt });
+    }
+    for (const t of tournaments) {
+      if (!t.date) continue;
+      items.push({ text: `Torneo "${t.name}" programado`, time: relativeDay(t.date), sortKey: t.date });
+    }
+    return items.sort((a, b) => b.sortKey.localeCompare(a.sortKey)).slice(0, 10);
+  }, [players, clubs, tournaments]);
+
+  if (!loaded) {
     return (
       <div style={{ padding: 40, color: 'var(--grey-400)', fontSize: 14 }}>Cargando...</div>
     );
   }
-
-  const tourDiff = stats.tournamentsThisMonth - stats.tournamentsLastMonth;
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1400, fontFamily: 'var(--font-body)' }}>
@@ -165,30 +277,30 @@ export default function SuperAdminDashboard() {
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
         <KPICard
           label="Jugadores Registrados"
-          value={stats.totalPlayers}
-          sub={`+${stats.growthPercent}% este mes`}
+          value={players.length}
+          sub={newPlayersThisMonth > 0 ? `+${newPlayersThisMonth} este mes` : 'Sin altas este mes'}
         />
         <KPICard
           label="Clubes Activos"
-          value={stats.totalClubs}
-          sub={`${stats.pendingClubRequests} pendiente${stats.pendingClubRequests !== 1 ? 's' : ''}`}
+          value={activeClubs.length}
+          sub={`${pendingClubs.length} pendiente${pendingClubs.length !== 1 ? 's' : ''}`}
         />
         <KPICard
           label="Torneos este Mes"
-          value={stats.tournamentsThisMonth}
+          value={tournamentsThisMonth}
           sub={`${tourDiff >= 0 ? '▲' : '▼'} ${Math.abs(tourDiff)} vs mes anterior`}
         />
         <KPICard
           label="Solicitudes Pendientes"
-          value={stats.pendingClubRequests + stats.pendingScoreRequests}
+          value={pendingTotal}
           sub="Clubes + score"
-          highlight={stats.pendingClubRequests + stats.pendingScoreRequests > 0}
+          highlight={pendingTotal > 0}
         />
       </div>
 
       {/* KPI Row 2 */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
-        {/* NPS */}
+        {/* Active subscriptions (live from Stripe) */}
         <div style={{
           background: '#fff',
           border: '1px solid var(--grey-200)',
@@ -198,17 +310,19 @@ export default function SuperAdminDashboard() {
           minWidth: 180,
         }}>
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 10 }}>
-            NPS Score
+            Suscripciones Activas
           </div>
-          <div style={{ fontSize: 34, fontWeight: 700, fontFamily: 'var(--font-display)', color: stats.nps >= 70 ? 'var(--turf-green)' : stats.nps >= 50 ? '#f59e0b' : '#dc2626' }}>
-            {stats.nps} / 100
+          <div style={{ fontSize: 34, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--black)' }}>
+            {stripeData?.connected ? (stripeData.activeSubscriptions ?? 0) : '—'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--grey-500)', marginTop: 6 }}>
-            {stats.nps >= 70 ? 'Excelente' : stats.nps >= 50 ? 'Bueno' : 'Mejorable'}
+            {stripeData?.connected
+              ? (stripeData.livemode === false ? 'Stripe · modo TEST' : 'Vía Stripe')
+              : 'Consultando Stripe…'}
           </div>
         </div>
 
-        {/* Retention */}
+        {/* Total tournaments (real) */}
         <div style={{
           background: '#fff',
           border: '1px solid var(--grey-200)',
@@ -218,24 +332,13 @@ export default function SuperAdminDashboard() {
           minWidth: 180,
         }}>
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 10 }}>
-            Retencion de Usuarios
+            Torneos Totales
           </div>
           <div style={{ fontSize: 34, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--black)' }}>
-            {stats.retentionRate}%
+            {tournaments.length}
           </div>
-          <div style={{
-            marginTop: 10,
-            height: 6,
-            background: 'var(--grey-100)',
-            borderRadius: 3,
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              width: `${stats.retentionRate}%`,
-              height: '100%',
-              background: 'var(--turf-green)',
-              borderRadius: 3,
-            }} />
+          <div style={{ fontSize: 12, color: 'var(--grey-500)', marginTop: 6 }}>
+            {tournamentsThisMonth} este mes
           </div>
         </div>
 
@@ -270,7 +373,7 @@ export default function SuperAdminDashboard() {
           ) : (
             <>
               <div style={{ fontSize: 34, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--grey-400)' }}>
-                €{stats.monthlyRevenue}
+                —
               </div>
               <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 6, fontStyle: 'italic' }}>
                 {stripeData === null ? 'Consultando Stripe…' : 'Stripe no conectado (configurá STRIPE_SECRET_KEY)'}
@@ -343,7 +446,7 @@ export default function SuperAdminDashboard() {
             Crecimiento de Jugadores — Ultimos 6 meses
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={PLAYER_GROWTH}>
+            <LineChart data={playerGrowth}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#999' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#999' }} axisLine={false} tickLine={false} />
@@ -374,7 +477,7 @@ export default function SuperAdminDashboard() {
             Torneos por Mes
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={TORNEOS_MES}>
+            <BarChart data={tournamentsPerMonth}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#999' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#999' }} axisLine={false} tickLine={false} />
@@ -400,30 +503,36 @@ export default function SuperAdminDashboard() {
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', color: 'var(--grey-400)', textTransform: 'uppercase', marginBottom: 20 }}>
             Actividad Reciente
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {ACTIVITY_FEED.map((item, i) => (
-              <div key={i} style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 14,
-                padding: '10px 0',
-                borderBottom: i < ACTIVITY_FEED.length - 1 ? '1px solid var(--grey-100)' : 'none',
-              }}>
-                <div style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  background: 'var(--turf-green)',
-                  flexShrink: 0,
-                  marginTop: 5,
-                }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: 'var(--black)', lineHeight: 1.4 }}>{item.text}</div>
-                  <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 2 }}>{item.time}</div>
+          {activityFeed.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--grey-400)', padding: '16px 0', textAlign: 'center' }}>
+              Sin actividad reciente
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {activityFeed.map((item, i) => (
+                <div key={i} style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 14,
+                  padding: '10px 0',
+                  borderBottom: i < activityFeed.length - 1 ? '1px solid var(--grey-100)' : 'none',
+                }}>
+                  <div style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: 'var(--turf-green)',
+                    flexShrink: 0,
+                    marginTop: 5,
+                  }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, color: 'var(--black)', lineHeight: 1.4 }}>{item.text}</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 2 }}>{item.time}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Pending clubs */}
