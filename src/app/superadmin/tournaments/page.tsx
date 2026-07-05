@@ -627,7 +627,9 @@ export default function TournamentsPage() {
 
     function fetchFromSupabase() {
       getSATournamentsFromSupabase().then(sbT => {
-        if (sbT && sbT.length > 0) {
+        // null = fetch failed — keep showing local cache. [] is a legitimate
+        // "zero tournaments" result and must be trusted, not skipped.
+        if (sbT !== null) {
           setTournaments(sbT);
           saveSATournaments(sbT);
         }
