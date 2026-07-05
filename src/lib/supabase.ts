@@ -79,6 +79,36 @@ export async function exchangeCodeForSession(code: string) {
   return supabase.auth.exchangeCodeForSession(code);
 }
 
+/**
+ * Self-heal: ensure a confirmed auth user has a players row. Idempotent —
+ * /api/player/register returns the existing row (binding it to the auth user)
+ * or creates one with a server-assigned id. Returns the player row or null.
+ */
+export async function ensurePlayerRowForAuthUser(authUser: {
+  id: string; email?: string | null; user_metadata?: Record<string, unknown>;
+}): Promise<Record<string, unknown> | null> {
+  if (typeof window === 'undefined' || !authUser.email) return null;
+  const meta = authUser.user_metadata ?? {};
+  try {
+    const res = await fetch('/api/player/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: (meta.padelmgt_name as string) || (meta.full_name as string) || authUser.email.split('@')[0],
+        email: authUser.email,
+        country: (meta.padelmgt_country as string) || '',
+        sex: (meta.padelmgt_sex as string) || undefined,
+        authUserId: authUser.id,
+      }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return (json.player as Record<string, unknown>) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Fetch a player record from Supabase by their auth user_id. */
 export async function fetchPlayerByUserId(userId: string) {
   if (!supabase) return null;

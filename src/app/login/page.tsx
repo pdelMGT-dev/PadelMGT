@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatePlayer } from '@/lib/player-store';
+import { migrateLocalPlayerId } from '@/lib/player-league-store';
 import { syncAllFromSupabase, syncUserTournaments, syncUserGames } from '@/lib/supabase-sync';
-import { supabase, isSupabaseConfigured, authSignIn, fetchPlayerByUserId, fetchPlayerByEmail } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, authSignIn, fetchPlayerByUserId, fetchPlayerByEmail, ensurePlayerRowForAuthUser } from '@/lib/supabase';
 import BrandLogo from '@/components/BrandLogo';
 
 type UserRole = 'player' | 'club_manager' | 'league_organizer' | 'federation' | 'super_admin';
@@ -139,6 +140,15 @@ export default function LoginPage() {
     setLoading(true);
 
     function saveSession(session: Record<string, unknown>, role: string) {
+      // If this device previously used a different (stale, locally-computed)
+      // player id, rewrite local league references to the canonical id first.
+      try {
+        const prevRaw = localStorage.getItem('padelmgt_user');
+        const prevId = prevRaw ? (JSON.parse(prevRaw) as { id?: string }).id : undefined;
+        if (prevId && session.id && prevId !== session.id) {
+          migrateLocalPlayerId(prevId, session.id as string);
+        }
+      } catch { /* ignore */ }
       try { localStorage.setItem('padelmgt_user', JSON.stringify(session)); } catch { /* quota/private mode */ }
       try { localStorage.removeItem('padelmgt_last_sync'); } catch { /* ignore */ }
       try { document.cookie = `padelmgt_session=${role}; path=/; SameSite=Lax; max-age=86400`; } catch { /* ignore */ }
@@ -187,6 +197,13 @@ export default function LoginPage() {
       // Fetch the player record from Supabase (by user_id first, then by email)
       let sbPlayer = await fetchPlayerByUserId(authUser.id);
       if (!sbPlayer) sbPlayer = await fetchPlayerByEmail(authUser.email ?? email);
+
+      // Self-heal: confirmed auth user without a players row (lost to the old
+      // client-side id collision) → create it server-side right now.
+      if (!sbPlayer) {
+        const healed = await ensurePlayerRowForAuthUser(authUser);
+        if (healed) sbPlayer = await fetchPlayerByEmail(authUser.email ?? email);
+      }
 
       if (sbPlayer) {
         const cf = (sbPlayer.custom_fields as Record<string, string>) ?? {};

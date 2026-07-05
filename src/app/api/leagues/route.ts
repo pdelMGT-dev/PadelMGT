@@ -197,12 +197,41 @@ async function handleSync(svc: Svc, request: NextRequest, body: Body): Promise<N
   const callerIds = await getCallerPlayerIds(request);
   if (callerIds.length === 0) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   const owns = new Set(callerIds);
+  const canonicalId = callerIds[0];
 
-  // Only leagues the caller created may be pushed. Members/seasons are accepted
-  // only for those leagues.
-  const leagues = (body.leagues ?? []).filter(l => owns.has(l.createdBy));
+  // Ownership rules per pushed league:
+  //  - Already in Supabase → only its current owner may update it, and
+  //    created_by never changes (a pusher can't steal an existing league).
+  //  - Not in Supabase yet → the authenticated pusher claims it and
+  //    created_by is set to their canonical id. This heals leagues created
+  //    under stale locally-computed ids that never matched a real player row.
+  const pushed = body.leagues ?? [];
+  const pushedIds = pushed.map(l => l.id);
+  const existingById = new Map<string, string | null>();
+  if (pushedIds.length) {
+    const { data: existingRows } = await svc.from('player_leagues').select('id, created_by').in('id', pushedIds);
+    for (const r of (existingRows ?? []) as { id: string; created_by: string | null }[]) {
+      existingById.set(r.id, r.created_by);
+    }
+  }
+
+  const leagues: Array<LeagueIn & { effectiveCreatedBy: string }> = [];
+  const creatorRemap = new Map<string, string>(); // old local creator id → canonical
+  for (const l of pushed) {
+    if (existingById.has(l.id)) {
+      const owner = existingById.get(l.id);
+      if (owner && owns.has(owner)) leagues.push({ ...l, effectiveCreatedBy: owner });
+      // else: not the owner → silently skip (defensive; normal clients never hit this)
+    } else {
+      leagues.push({ ...l, effectiveCreatedBy: owns.has(l.createdBy) ? l.createdBy : canonicalId });
+      if (!owns.has(l.createdBy) && l.createdBy) creatorRemap.set(l.createdBy, canonicalId);
+    }
+  }
+
   const allowedLeagueIds = new Set(leagues.map(l => l.id));
-  const members = (body.members ?? []).filter(m => allowedLeagueIds.has(m.leagueId));
+  const members = (body.members ?? [])
+    .filter(m => allowedLeagueIds.has(m.leagueId))
+    .map(m => creatorRemap.has(m.playerId) ? { ...m, playerId: creatorRemap.get(m.playerId)! } : m);
   const seasons = (body.seasons ?? []).filter(s => allowedLeagueIds.has(s.leagueId));
 
   if (leagues.length) {
@@ -211,7 +240,7 @@ async function handleSync(svc: Svc, request: NextRequest, body: Body): Promise<N
       code: l.code ?? null,
       name: l.name,
       description: l.description ?? null,
-      created_by: l.createdBy,
+      created_by: l.effectiveCreatedBy,
       created_by_name: l.createdByName ?? null,
       is_open: l.isOpen ?? false,
       is_public: l.isPublic ?? true,

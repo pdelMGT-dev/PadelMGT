@@ -5,9 +5,10 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   supabase, exchangeCodeForSession, verifyEmailOtp, getAuthUser,
-  fetchPlayerByUserId, fetchPlayerByEmail,
+  fetchPlayerByUserId, fetchPlayerByEmail, ensurePlayerRowForAuthUser,
 } from '@/lib/supabase';
 import { syncAllFromSupabase } from '@/lib/supabase-sync';
+import { migrateLocalPlayerId } from '@/lib/player-league-store';
 import BrandLogo from '@/components/BrandLogo';
 
 type Role = 'player' | 'club_manager' | 'league_organizer' | 'federation';
@@ -78,6 +79,11 @@ function CallbackInner() {
       // Fetch the player record created at signup (by auth id, then email).
       let sbPlayer = await fetchPlayerByUserId(authUser.id);
       if (!sbPlayer) sbPlayer = await fetchPlayerByEmail(authUser.email ?? '');
+      // Self-heal: no row → create it server-side from auth metadata.
+      if (!sbPlayer) {
+        const healed = await ensurePlayerRowForAuthUser(authUser);
+        if (healed) sbPlayer = await fetchPlayerByEmail(authUser.email ?? '');
+      }
       if (!alive) return;
 
       const cf = (sbPlayer?.custom_fields as Record<string, string>) ?? {};
@@ -102,6 +108,11 @@ function CallbackInner() {
             firstLogin: true,
           };
 
+      try {
+        const prevRaw = localStorage.getItem('padelmgt_user');
+        const prevId = prevRaw ? (JSON.parse(prevRaw) as { id?: string }).id : undefined;
+        if (prevId && session.id && prevId !== session.id) migrateLocalPlayerId(prevId, session.id);
+      } catch { /* ignore */ }
       try { localStorage.setItem('padelmgt_user', JSON.stringify(session)); } catch { /* private mode */ }
       try { localStorage.removeItem('padelmgt_last_sync'); } catch { /* ignore */ }
       try { document.cookie = `padelmgt_session=${role}; path=/; SameSite=Lax; max-age=86400`; } catch { /* ignore */ }

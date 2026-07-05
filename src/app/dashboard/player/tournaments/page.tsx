@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import { getAllTournaments, createTournament, getTournament, saveTournament, cloneTournament } from '@/lib/tournament-store';
+import { syncUserTournaments } from '@/lib/supabase-sync';
 import { checkTournamentGate, incrementUsage, getPlayerLimits } from '@/lib/plan-config';
 import type { Tournament } from '@/lib/tournament-store';
 import type { FixedPair } from '@/lib/game-engine';
@@ -288,12 +289,15 @@ export default function PlayerTournamentsPage() {
 
   useEffect(() => {
     if (!currentUser) return;
-    setMyTournaments(getAllTournaments().filter(t =>
+    const mine = () => getAllTournaments().filter(t =>
       t.creatorId === currentUser.id ||
       t.players.some(p => p.id === currentUser.id) ||
       (t.invitedPlayers ?? []).some(p => p.id === currentUser.id)
-    ));
+    );
+    setMyTournaments(mine());
     setTournamentsLoading(false);
+    // Pull the fresh server copies (edits from other devices) and re-render.
+    syncUserTournaments(currentUser.id).then(() => setMyTournaments(mine())).catch(() => {});
   }, [currentUser]);
 
   const [activePersonalizados, setActivePersonalizados] = useState<PersonalizadoTournament[]>([]);

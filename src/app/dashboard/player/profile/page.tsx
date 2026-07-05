@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
 import { updatePlayer } from '@/lib/player-store';
+import { fetchPlayerByEmail } from '@/lib/supabase';
 import { getRankingHistoryForGame } from '@/lib/ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { PLAYER_LEVELS, LEVEL_CONFIG, getLevelInfo, normalizeLegacyLevel, type PlayerLevel } from '@/lib/level-config';
@@ -145,6 +146,41 @@ export default function PlayerProfilePage() {
     if (sessionUser) setUser(sessionUser as unknown as UserProfile);
   }, [sessionUser]);
 
+  // Supabase is the source of truth for profile data: pull the fresh row on
+  // mount and merge it over the session snapshot, so edits made on another
+  // device are visible here.
+  useEffect(() => {
+    if (!sessionUser?.email) return;
+    let alive = true;
+    fetchPlayerByEmail(sessionUser.email).then(row => {
+      if (!alive || !row) return;
+      const cf = (row.custom_fields as Record<string, string>) ?? {};
+      setUser(prev => prev ? {
+        ...prev,
+        name:        (row.name as string) || prev.name,
+        phone:       (row.phone as string) ?? prev.phone,
+        city:        (row.city as string) ?? prev.city,
+        nationality: (row.country as string) ?? prev.nationality,
+        level:       cf.level ?? prev.level,
+        sex:         cf.sex === 'M' ? 'masculino' : cf.sex === 'F' ? 'femenino' : prev.sex,
+        description: cf.description ?? prev.description,
+        birthDate:   cf.birthDate ?? prev.birthDate,
+        photoUrl:    cf.photoUrl !== undefined ? (cf.photoUrl || undefined) : prev.photoUrl,
+      } : prev);
+      // The form init effect only reruns on id change — refresh the fields
+      // with the server values directly.
+      if (row.name) setFName(row.name as string);
+      if (row.phone != null) setFPhone((row.phone as string) ?? '');
+      if (row.city != null) setFCity((row.city as string) ?? '');
+      if (row.country) setFNat(row.country as string);
+      if (cf.level) setFLevel(normalizeLegacyLevel(cf.level));
+      if (cf.sex) setFSex(cf.sex === 'M' ? 'masculino' : cf.sex === 'F' ? 'femenino' : (cf.sex as 'masculino' | 'femenino'));
+      if (cf.description !== undefined) setFDesc(cf.description);
+      if (cf.birthDate !== undefined) setFBirth(cf.birthDate);
+    });
+    return () => { alive = false; };
+  }, [sessionUser?.email]);
+
   // Load family data when user is set or tab switches to familia
   useEffect(() => {
     if (!user) return;
@@ -224,9 +260,15 @@ export default function PlayerProfilePage() {
     setSessionUser(updated as unknown as Parameters<typeof setSessionUser>[0]);
     setUser(updated);
     if (updated.id) {
+      // Push EVERY profile field so the edit is visible from any device.
       updatePlayer(updated.id, {
+        name: updated.name,
+        phone: updated.phone ?? '',
+        description: updated.description ?? '',
+        birthDate: updated.birthDate ?? '',
         country: updated.nationality,
         city: updated.city,
+        sex: updated.sex === 'masculino' ? 'M' : updated.sex === 'femenino' ? 'F' : undefined,
         level: fLevel,
         photoUrl: updated.photoUrl,
       });
@@ -258,7 +300,9 @@ export default function PlayerProfilePage() {
     const updated = { ...user, avatarBase64: undefined, photoUrl: undefined };
     setSessionUser(updated as unknown as Parameters<typeof setSessionUser>[0]);
     setUser(updated);
-    if (user.id) updatePlayer(user.id, { photoUrl: undefined });
+    // Empty string (not undefined) so the deletion survives JSON serialization
+    // and clears the photo server-side too.
+    if (user.id) updatePlayer(user.id, { photoUrl: '' });
   }
 
   // ---------------------------------------------------------------------------

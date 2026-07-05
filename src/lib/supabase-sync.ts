@@ -9,9 +9,9 @@ import {
 } from './superadmin-data';
 import { getAllPlayers } from './player-store';
 import { fetchTournamentsByCreator, fetchGamesByCreator } from './supabase';
-import { getAllTournaments, saveTournament } from './tournament-store';
+import { saveTournament } from './tournament-store';
 import type { Tournament } from './tournament-store';
-import { getAllGames, saveGame } from './game-store';
+import { saveGame } from './game-store';
 import type { ActiveGame } from './game-engine';
 
 const SYNC_TS_KEY = 'padelmgt_last_sync';
@@ -130,23 +130,20 @@ export async function syncUserTournaments(creatorPlayerId: string): Promise<void
   const rows = await fetchTournamentsByCreator(creatorPlayerId);
   if (!rows || rows.length === 0) return;
 
-  const localIds = new Set(getAllTournaments().map(t => t.id as string));
   for (const raw of rows) {
     if (!raw || !raw.id) continue;
-    if (!localIds.has(raw.id as string)) {
-      // New tournament from Supabase — normalize array fields so pages that
-      // iterate players/standings never crash on a partial row
-      const r = raw as Record<string, unknown>;
-      const normalized = {
-        ...r,
-        players:        Array.isArray(r.players)        ? r.players        : [],
-        invitedPlayers: Array.isArray(r.invitedPlayers) ? r.invitedPlayers : [],
-        standings:      Array.isArray(r.standings)      ? r.standings      : [],
-        rounds:         Array.isArray(r.rounds)         ? r.rounds         : [],
-      };
-      saveTournament(normalized as unknown as Tournament);
-    }
-    // Already exists locally — local is source of truth (most recent edit wins)
+    // Supabase is the source of truth: the server copy replaces the local one
+    // (every local mutation pushes immediately, so the server is at least as
+    // fresh as any other device). Local-only rows are left untouched.
+    const r = raw as Record<string, unknown>;
+    const normalized = {
+      ...r,
+      players:        Array.isArray(r.players)        ? r.players        : [],
+      invitedPlayers: Array.isArray(r.invitedPlayers) ? r.invitedPlayers : [],
+      standings:      Array.isArray(r.standings)      ? r.standings      : [],
+      rounds:         Array.isArray(r.rounds)         ? r.rounds         : [],
+    };
+    saveTournament(normalized as unknown as Tournament);
   }
 }
 
@@ -160,20 +157,18 @@ export async function syncUserGames(creatorPlayerId: string): Promise<void> {
   const rows = await fetchGamesByCreator(creatorPlayerId);
   if (!rows || rows.length === 0) return;
 
-  const localIds = new Set(getAllGames().map(g => g.id as string));
   for (const raw of rows) {
     if (!raw || !raw.id) continue;
-    if (!localIds.has(raw.id as string)) {
-      const r = raw as Record<string, unknown>;
-      const normalized = {
-        ...r,
-        players:        Array.isArray(r.players)        ? r.players        : [],
-        invitedPlayers: Array.isArray(r.invitedPlayers) ? r.invitedPlayers : [],
-        standings:      Array.isArray(r.standings)      ? r.standings      : [],
-        rounds:         Array.isArray(r.rounds)         ? r.rounds         : [],
-      };
-      saveGame(normalized as unknown as ActiveGame);
-    }
+    // Server copy wins (see syncUserTournaments). Local-only rows untouched.
+    const r = raw as Record<string, unknown>;
+    const normalized = {
+      ...r,
+      players:        Array.isArray(r.players)        ? r.players        : [],
+      invitedPlayers: Array.isArray(r.invitedPlayers) ? r.invitedPlayers : [],
+      standings:      Array.isArray(r.standings)      ? r.standings      : [],
+      rounds:         Array.isArray(r.rounds)         ? r.rounds         : [],
+    };
+    saveGame(normalized as unknown as ActiveGame);
   }
 }
 

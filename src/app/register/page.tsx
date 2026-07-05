@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { registerPlayer, type PlayerSex } from '@/lib/player-store';
+import { registerPlayerServerFirst, type PlayerSex } from '@/lib/player-store';
 import BrandLogo from '@/components/BrandLogo';
 import { authSignUp } from '@/lib/supabase';
 import { sendWelcomeEmail } from '@/lib/email';
@@ -83,7 +83,7 @@ export default function RegisterPage() {
     let authUserId: string | undefined;
     const { data: authData, error: authError } = await authSignUp(
       email.trim(), password,
-      { padelmgt_role: 'player' },
+      { padelmgt_role: 'player', padelmgt_name: name.trim(), padelmgt_country: country, padelmgt_sex: sex },
       `${window.location.origin}/auth/callback`,
     );
     if (authError) {
@@ -106,8 +106,8 @@ export default function RegisterPage() {
     }
     authUserId = authUserId ?? authData?.user?.id;
 
-    // 2. Create player record in localStorage (+ fire-and-forget to Supabase players table)
-    const player = registerPlayer({ name: name.trim(), email: email.trim(), country, sex, authUserId });
+    // 2. Create the player record SERVER-SIDE (id assigned by Supabase).
+    const { player } = await registerPlayerServerFirst({ name: name.trim(), email: email.trim(), country, sex, authUserId });
     if (!player) {
       setError('Ya existe una cuenta con ese email.');
       setLoading(false);

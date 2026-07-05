@@ -11,6 +11,7 @@ const ALL_NAV_ITEMS = [
   { label: 'JUGADORES',     href: '/superadmin/players',     roles: ['superadmin', 'player_db'] },
   { label: 'CLUBES',        href: '/superadmin/clubs',       roles: ['superadmin', 'clubs'] },
   { label: 'TORNEOS',       href: '/superadmin/tournaments', roles: ['superadmin', 'score_corrections'] },
+  { label: 'LIGAS',         href: '/superadmin/leagues',     roles: ['superadmin', 'score_corrections'] },
   { label: 'JUEGOS RAPIDOS',href: '/superadmin/games',       roles: ['superadmin', 'score_corrections'] },
   { label: 'SOLICITUDES',   href: '/superadmin/requests',    roles: ['superadmin'] },
   { label: 'RELACIONES',    href: '/superadmin/relations',   roles: ['superadmin'] },
