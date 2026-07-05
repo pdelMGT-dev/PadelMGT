@@ -21,9 +21,31 @@ export const isSupabaseConfigured = !!(url && key);
 
 // ── Auth helpers ───────────────────────────────────────────────────────────────
 
-export async function authSignUp(email: string, password: string, metadata?: Record<string, string>) {
+export async function authSignUp(
+  email: string,
+  password: string,
+  metadata?: Record<string, string>,
+  emailRedirectTo?: string,
+) {
   if (!supabase) return { data: null, error: { message: 'Supabase no configurado' } };
-  return supabase.auth.signUp({ email, password, ...(metadata ? { options: { data: metadata } } : {}) });
+  const options: { data?: Record<string, string>; emailRedirectTo?: string } = {};
+  if (metadata) options.data = metadata;
+  if (emailRedirectTo) options.emailRedirectTo = emailRedirectTo;
+  return supabase.auth.signUp({
+    email,
+    password,
+    ...(Object.keys(options).length ? { options } : {}),
+  });
+}
+
+/** Verify a magic-link / email-confirmation token hash (works cross-device,
+ * unlike the PKCE `code` flow which needs the original browser). */
+export async function verifyEmailOtp(
+  tokenHash: string,
+  type: 'signup' | 'email' | 'recovery' | 'invite' | 'magiclink' | 'email_change',
+) {
+  if (!supabase) return { data: null, error: { message: 'Supabase no configurado' } };
+  return supabase.auth.verifyOtp({ token_hash: tokenHash, type });
 }
 
 export async function authSignIn(email: string, password: string) {

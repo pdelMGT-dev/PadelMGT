@@ -77,9 +77,15 @@ export default function RegisterPage() {
 
     setLoading(true);
 
-    // 1. Register in Supabase Auth (password lives here, not in localStorage)
+    // 1. Register in Supabase Auth (password lives here, not in localStorage).
+    // emailRedirectTo sends the confirmation link back into the app so the user
+    // is auto-signed-in on confirmation instead of dead-ending on the home page.
     let authUserId: string | undefined;
-    const { data: authData, error: authError } = await authSignUp(email.trim(), password);
+    const { data: authData, error: authError } = await authSignUp(
+      email.trim(), password,
+      { padelmgt_role: 'player' },
+      `${window.location.origin}/auth/callback`,
+    );
     if (authError) {
       const msg = authError.message?.toLowerCase() ?? '';
       if (msg.includes('already registered') || msg.includes('already been registered') || msg.includes('already exists')) {
@@ -141,10 +147,10 @@ export default function RegisterPage() {
               ¡Cuenta creada!
             </h1>
             <p style={{ fontSize: 14, color: 'var(--grey-500)', margin: '0 0 8px', lineHeight: 1.6 }}>
-              Revisá tu bandeja de entrada en <strong>{email}</strong> para confirmar tu cuenta.
+              Revisá tu bandeja de entrada en <strong>{email}</strong> y hacé clic en el enlace para confirmar tu cuenta.
             </p>
             <p style={{ fontSize: 13, color: 'var(--grey-400)', margin: '0 0 32px' }}>
-              Una vez confirmado el email, podés iniciar sesión.
+              Al confirmar, entrarás automáticamente a la plataforma.
             </p>
             <Link href={loginUrl} className="btn btn-primary" style={{ display: 'inline-block', padding: '14px 32px', fontSize: 14, textDecoration: 'none', borderRadius: 0 }}>
               Ir a iniciar sesión →
