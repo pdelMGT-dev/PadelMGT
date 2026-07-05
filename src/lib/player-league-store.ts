@@ -80,27 +80,96 @@ function generateLeagueCode(): string {
   return `LIGA-${new Date().getFullYear()}-${suffix}`;
 }
 
-// ── Supabase sync helpers (best-effort, fire-and-forget) ──────────────────────
+// ── Supabase sync (best-effort, fire-and-forget) ──────────────────────────────
+// All league writes go through the service-role /api/leagues endpoint (anon
+// writes are blocked by RLS). Each mutation pushes the whole league "bundle"
+// — league + its members + its seasons — which is idempotent server-side.
 
-async function syncLeagueToSupabase(league: PlayerLeague): Promise<void> {
-  if (!supabase || !league.code) return;
-  const row = {
-    id: league.id, code: league.code, name: league.name,
-    description: league.description ?? null,
-    created_by_name: league.createdByName,
-    created_at: league.createdAt,
-    is_open: league.isOpen, is_public: league.isPublic ?? true,
-    default_points_win: league.defaultPointsWin ?? 3,
-    default_points_draw: league.defaultPointsDraw ?? 1,
-    default_points_loss: league.defaultPointsLoss ?? 0,
-  };
-  const { error } = await supabase.from('player_leagues').upsert(
-    { ...row, created_by: league.createdBy }, { onConflict: 'id' }
-  );
-  if (error) {
-    await supabase.from('player_leagues').upsert(
-      { ...row, created_by: null }, { onConflict: 'id' }
-    );
+/** Enriched "my leagues" row returned by GET /api/leagues. */
+export interface MyLeagueSummary {
+  id: string;
+  name: string;
+  description: string;
+  code: string;
+  role: 'creador' | 'coadmin' | 'jugador';
+  memberCount: number;
+  seasonCount: number;
+  activeSeasonName: string | null;
+  status: 'active' | 'completed' | 'upcoming';
+  createdAt: string;
+}
+
+async function pushLeagueBundle(leagueId: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const league = getPlayerLeague(leagueId);
+  if (!league) return;
+  try {
+    await fetch('/api/leagues', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        op: 'sync',
+        leagues: [league],
+        members: getLeagueMembers(leagueId),
+        seasons: getLeagueSeasons(leagueId),
+      }),
+    });
+  } catch { /* fire-and-forget */ }
+}
+
+/** Push every league the player created (with members + seasons) to Supabase.
+ * Used as a one-time backfill so localStorage-only leagues land server-side. */
+export async function backfillMyLeaguesToSupabase(playerId: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const mine = loadLeagues().filter(l => l.createdBy === playerId);
+  if (mine.length === 0) return;
+  const leagueIds = new Set(mine.map(l => l.id));
+  try {
+    await fetch('/api/leagues', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        op: 'sync',
+        leagues: mine,
+        members: memberStore.load().filter(m => leagueIds.has(m.leagueId)),
+        seasons: seasonStore.load().filter(s => leagueIds.has(s.leagueId)),
+      }),
+    });
+  } catch { /* fire-and-forget */ }
+}
+
+async function removeLeagueMemberInSupabase(leagueId: string, playerId: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch('/api/leagues', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'remove-member', leagueId, playerId }),
+    });
+  } catch { /* fire-and-forget */ }
+}
+
+async function deleteLeagueInSupabase(leagueId: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch('/api/leagues', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'delete-league', leagueId }),
+    });
+  } catch { /* fire-and-forget */ }
+}
+
+/** Fetch the caller's leagues (created + joined) enriched with role/counts. */
+export async function fetchMyLeaguesFromSupabase(): Promise<MyLeagueSummary[] | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const res = await fetch('/api/leagues', { method: 'GET' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return (json.leagues ?? []) as MyLeagueSummary[];
+  } catch {
+    return null;
   }
 }
 
@@ -127,22 +196,36 @@ export async function fetchLeagueByCodeFromSupabase(code: string): Promise<Playe
 }
 
 async function syncJoinRequestToSupabase(req: LeagueJoinRequest): Promise<void> {
-  if (!supabase) return;
-  const row = {
-    id: req.id, league_id: req.leagueId,
-    player_name: req.playerName, player_email: req.playerEmail ?? null,
-    message: req.message ?? null, status: req.status,
-    created_at: req.createdAt,
-    reviewed_at: req.reviewedAt ?? null, reviewed_by: req.reviewedBy ?? null,
-  };
-  const { error } = await supabase.from('league_join_requests').upsert(
-    { ...row, player_id: req.playerId }, { onConflict: 'id' }
-  );
-  if (error) {
-    await supabase.from('league_join_requests').upsert(
-      { ...row, player_id: null }, { onConflict: 'id' }
-    );
-  }
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch('/api/leagues', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        op: 'request',
+        request: {
+          id: req.id, leagueId: req.leagueId, playerId: req.playerId,
+          playerName: req.playerName, playerEmail: req.playerEmail ?? null,
+          message: req.message ?? null,
+        },
+      }),
+    });
+  } catch { /* fire-and-forget */ }
+}
+
+async function reviewJoinRequestInSupabase(
+  requestId: string,
+  status: 'approved' | 'rejected',
+  reviewedBy: string,
+): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch('/api/leagues', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'review', requestId, status, reviewedBy }),
+    });
+  } catch { /* fire-and-forget */ }
 }
 
 export async function fetchJoinRequestsFromSupabase(leagueId: string): Promise<LeagueJoinRequest[]> {
@@ -259,7 +342,8 @@ export function createPlayerLeague(params: {
   all.push(league);
   leagueStore.persist(all);
   addLeagueMember({ leagueId: league.id, playerId: params.createdBy, playerName: params.createdByName, role: 'admin' });
-  syncLeagueToSupabase(league).catch(() => {});
+  // Push the whole bundle (league + creator member) to Supabase.
+  pushLeagueBundle(league.id).catch(() => {});
   return league;
 }
 
@@ -268,7 +352,7 @@ export function savePlayerLeague(league: PlayerLeague): void {
   const idx = all.findIndex(l => l.id === league.id);
   if (idx >= 0) all[idx] = league; else all.push(league);
   leagueStore.persist(all);
-  syncLeagueToSupabase(league).catch(() => {});
+  pushLeagueBundle(league.id).catch(() => {});
 }
 
 export function deletePlayerLeague(id: string): void {
@@ -276,6 +360,7 @@ export function deletePlayerLeague(id: string): void {
   seasonStore.persist(seasonStore.load().filter(s => s.leagueId !== id));
   memberStore.persist(memberStore.load().filter(m => m.leagueId !== id));
   requestStore.persist(requestStore.load().filter(r => r.leagueId !== id));
+  deleteLeagueInSupabase(id).catch(() => {});
 }
 
 // Seasons
@@ -319,6 +404,7 @@ export function createLeagueSeason(params: {
   };
   all.push(season);
   seasonStore.persist(all);
+  pushLeagueBundle(params.leagueId).catch(() => {});
   return season;
 }
 
@@ -327,6 +413,7 @@ export function saveLeagueSeason(season: LeagueSeason): void {
   const idx = all.findIndex(s => s.id === season.id);
   if (idx >= 0) all[idx] = season; else all.push(season);
   seasonStore.persist(all);
+  pushLeagueBundle(season.leagueId).catch(() => {});
 }
 
 // Members
@@ -366,17 +453,19 @@ export function addLeagueMember(params: {
   };
   all.push(member);
   memberStore.persist(all);
+  pushLeagueBundle(params.leagueId).catch(() => {});
   return member;
 }
 
 export function removeLeagueMember(leagueId: string, playerId: string): void {
   memberStore.persist(memberStore.load().filter(m => !(m.leagueId === leagueId && m.playerId === playerId)));
+  removeLeagueMemberInSupabase(leagueId, playerId).catch(() => {});
 }
 
 export function updateMemberRole(leagueId: string, playerId: string, role: 'admin' | 'member'): void {
   const all = memberStore.load();
   const idx = all.findIndex(m => m.leagueId === leagueId && m.playerId === playerId);
-  if (idx >= 0) { all[idx] = { ...all[idx], role }; memberStore.persist(all); }
+  if (idx >= 0) { all[idx] = { ...all[idx], role }; memberStore.persist(all); pushLeagueBundle(leagueId).catch(() => {}); }
 }
 
 // Join Requests
@@ -429,8 +518,9 @@ export function reviewJoinRequest(
   if (idx < 0) return;
   all[idx] = { ...all[idx], status, reviewedAt: new Date().toISOString(), reviewedBy };
   requestStore.persist(all);
-  syncJoinRequestToSupabase(all[idx]).catch(() => {});
+  reviewJoinRequestInSupabase(requestId, status, reviewedBy).catch(() => {});
   if (status === 'approved') {
+    // addLeagueMember pushes the updated bundle (incl. the new member) to Supabase.
     addLeagueMember({ leagueId: all[idx].leagueId, playerId: all[idx].playerId, playerName: all[idx].playerName });
   }
 }
