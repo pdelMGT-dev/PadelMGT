@@ -1,11 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
-import { clubs as initialClubs, countries, cities } from '@/lib/data';
+import { useState, useEffect, useMemo } from 'react';
+import { clubs as initialClubs } from '@/lib/data';
 import { getSAClubsFromSupabase } from '@/lib/superadmin-data';
 import ClubSuggestionModal from '@/components/ClubSuggestionModal';
 import { syncClubReviews, getRatingsByClub } from '@/lib/club-review-store';
+
+// Friendly labels for known country codes/names found in club records —
+// falls back to the raw stored value for anything not listed here.
+const COUNTRY_LABELS: Record<string, string> = {
+  DR: 'República Dominicana',
+  ES: 'España',
+  US: 'Estados Unidos',
+};
 
 export default function ClubsPage() {
   const [search, setSearch] = useState('');
@@ -22,7 +30,9 @@ export default function ClubsPage() {
 
   useEffect(() => {
     getSAClubsFromSupabase().then(sb => {
-      if (sb && sb.length > 0) {
+      // null = fetch failed — keep the placeholder. [] is a legitimate
+      // "zero clubs" result and must be trusted, not skipped.
+      if (sb !== null) {
         setClubs(sb.filter(c => c.status === 'active').map(c => ({
           id: c.id,
           name: c.name,
@@ -40,7 +50,22 @@ export default function ClubsPage() {
     syncClubReviews().then(reviews => setRatings(getRatingsByClub(reviews)));
   }, []);
 
-  const available = cities[country] || ['All Cities'];
+  // Country/city filter options derived from the actual loaded clubs — not a
+  // static list, so they always match what's really in the database.
+  const countries = useMemo(() => {
+    const set = new Set(clubs.map(c => c.country).filter(Boolean));
+    return ['All Countries', ...Array.from(set).sort()];
+  }, [clubs]);
+
+  const cities = useMemo(() => {
+    const set = new Set(
+      clubs
+        .filter(c => country === 'All Countries' || c.country === country)
+        .map(c => c.city)
+        .filter(Boolean),
+    );
+    return ['All Cities', ...Array.from(set).sort()];
+  }, [clubs, country]);
 
   const filtered = clubs.filter((c) => {
     const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.city.toLowerCase().includes(search.toLowerCase());
@@ -70,10 +95,10 @@ export default function ClubsPage() {
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar clubes..." style={{ border: 'none', background: 'none', font: 'inherit', fontSize: 14, outline: 'none', width: '100%' }} />
             </div>
             <select value={country} onChange={e => { setCountry(e.target.value); setCity('All Cities'); }} className="field" style={{ margin: 0, padding: '10px 14px', borderRadius: 0, fontSize: 13 }}>
-              {countries.map(c => <option key={c}>{c}</option>)}
+              {countries.map(c => <option key={c} value={c}>{c === 'All Countries' ? c : (COUNTRY_LABELS[c] ?? c)}</option>)}
             </select>
             <select value={city} onChange={e => setCity(e.target.value)} className="field" style={{ margin: 0, padding: '10px 14px', borderRadius: 0, fontSize: 13 }}>
-              {available.map(c => <option key={c}>{c}</option>)}
+              {cities.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
 

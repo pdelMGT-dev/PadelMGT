@@ -25,7 +25,9 @@ export default function TournamentsPage() {
 
   useEffect(() => {
     getSATournamentsFromSupabase().then(sb => {
-      if (sb && sb.length > 0) {
+      // null = fetch failed — keep the placeholder. [] is a legitimate
+      // "zero tournaments" result and must be trusted, not skipped.
+      if (sb !== null) {
         setTournaments(sb.map(t => ({
           id: t.id,
           name: t.name,
@@ -33,10 +35,10 @@ export default function TournamentsPage() {
           club: t.club,
           city: t.city,
           players: 0,
-          maxPlayers: t.max_players ?? 0,
+          maxPlayers: t.players,
           level: '',
           prize: undefined,
-          startDate: t.start_date ?? '',
+          startDate: t.date,
           status: t.status,
         })));
       }

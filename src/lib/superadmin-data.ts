@@ -295,10 +295,10 @@ export function saveSATournaments(tournaments: SATournament[]): void {
 export function getSATournaments(): SATournament[] {
   if (typeof window === 'undefined') return [];
   const raw = localStorage.getItem('padelmgt_tournaments_v2');
-  if (!raw) return getMockTournaments();
+  if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as Array<Record<string, unknown>>;
-    if (parsed.length === 0) return getMockTournaments();
+    if (parsed.length === 0) return [];
     return parsed.map((t, i) => ({
       id: (t.id as string) || `t-${i}`,
       name: (t.name as string) || 'Torneo',
@@ -505,6 +505,41 @@ export async function getSAPlayersFromSupabase(): Promise<SAPlayer[] | null> {
     if (error) return null;
     return (data ?? []).map(row => rowToSAPlayer(row as Record<string, unknown>));
   } catch { return null; }
+}
+
+// Short-lived bookkeeping for the SA players merge: tracks ids just pushed to
+// Supabase so the next poll (which may land before the write is visible) doesn't
+// treat them as "deleted server-side" and drop them. Entries expire quickly —
+// this is only meant to cover the upsert→poll race window, not indefinite drift.
+const PENDING_SYNC_KEY = 'padelmgt_sa_pending_player_sync';
+const PENDING_SYNC_TTL_MS = 60_000;
+
+export function markPlayerPendingSync(id: string): void {
+  if (typeof window === 'undefined') return;
+  let map: Record<string, number> = {};
+  try {
+    const raw = localStorage.getItem(PENDING_SYNC_KEY);
+    map = raw ? JSON.parse(raw) : {};
+  } catch { map = {}; }
+  map[id] = Date.now();
+  localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(map));
+}
+
+export function getPendingSyncIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  const raw = localStorage.getItem(PENDING_SYNC_KEY);
+  if (!raw) return new Set();
+  try {
+    const map = JSON.parse(raw) as Record<string, number>;
+    const now = Date.now();
+    const fresh = Object.entries(map).filter(([, ts]) => now - ts < PENDING_SYNC_TTL_MS);
+    if (fresh.length !== Object.keys(map).length) {
+      localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(Object.fromEntries(fresh)));
+    }
+    return new Set(fresh.map(([id]) => id));
+  } catch {
+    return new Set();
+  }
 }
 
 export async function upsertSAPlayerToSupabase(player: SAPlayer): Promise<void> {

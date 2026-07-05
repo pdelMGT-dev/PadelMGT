@@ -11,6 +11,8 @@ import {
   getSAPlayersFromSupabase,
   upsertSAPlayerToSupabase,
   deleteSAPlayerFromSupabase,
+  markPlayerPendingSync,
+  getPendingSyncIds,
   type SAPlayer,
   type PlayerRelationship,
 } from '@/lib/superadmin-data';
@@ -497,34 +499,37 @@ export default function PlayersPage() {
 
     function fetchFromSupabase() {
       getSAPlayersFromSupabase().then(sbPlayers => {
-        if (sbPlayers && sbPlayers.length > 0) {
-          // Local is the write-authoritative source for SA edits (plan, status, etc.).
-          // Supabase is authoritative for profile data and new registrations.
-          // Strategy: merge Supabase into local, but preserve local-only fields
-          // (plan, status changes, etc.) to avoid overwriting SA edits during
-          // the race condition window between upsert and next poll.
-          const local = getSAPlayers();
-          const localMap = new Map(local.map(p => [p.id, p]));
-          const sbEmails = new Set(sbPlayers.map(p => p.email.toLowerCase()));
-          const sbIds = new Set(sbPlayers.map(p => p.id));
+        // null = fetch failed / Supabase not reachable — keep showing local cache.
+        // [] is a legitimate "zero players" result and must be trusted, not skipped.
+        if (sbPlayers === null) return;
 
-          const mergedSb = sbPlayers.map(sp => {
-            const loc = localMap.get(sp.id);
-            if (!loc) return sp;
-            // Existing player: prefer local SA-managed fields to avoid overwrite during polling
-            return {
-              ...sp,
-              plan:   loc.plan   ?? sp.plan,
-              status: loc.status ?? sp.status,
-            };
-          });
-          const localOnly = local.filter(
-            p => !sbIds.has(p.id) && !sbEmails.has(p.email.toLowerCase()),
-          );
-          const merged = [...mergedSb, ...localOnly];
-          setPlayers(merged);
-          saveSAPlayers(merged);
-        }
+        // Local is the write-authoritative source for SA edits (plan, status, etc.)
+        // in the brief window between an upsert and the next poll picking it up.
+        // Supabase is authoritative for everything else, including which rows
+        // still exist — a row missing from the fresh fetch is only kept if it
+        // was JUST written locally (markPlayerPendingSync), never indefinitely.
+        const local = getSAPlayers();
+        const localMap = new Map(local.map(p => [p.id, p]));
+        const sbEmails = new Set(sbPlayers.map(p => p.email.toLowerCase()));
+        const sbIds = new Set(sbPlayers.map(p => p.id));
+
+        const mergedSb = sbPlayers.map(sp => {
+          const loc = localMap.get(sp.id);
+          if (!loc) return sp;
+          // Existing player: prefer local SA-managed fields to avoid overwrite during polling
+          return {
+            ...sp,
+            plan:   loc.plan   ?? sp.plan,
+            status: loc.status ?? sp.status,
+          };
+        });
+        const pending = getPendingSyncIds();
+        const localOnly = local.filter(
+          p => !sbIds.has(p.id) && !sbEmails.has(p.email.toLowerCase()) && pending.has(p.id),
+        );
+        const merged = [...mergedSb, ...localOnly];
+        setPlayers(merged);
+        saveSAPlayers(merged);
       });
     }
 
@@ -628,7 +633,7 @@ export default function PlayersPage() {
     const updated = players.map(p => p.id === blockConfirm.playerId ? { ...p, status: 'blocked' as const } : p);
     saveAndRefresh(updated);
     const blocked = updated.find(p => p.id === blockConfirm.playerId);
-    if (blocked) upsertSAPlayerToSupabase(blocked);
+    if (blocked) { markPlayerPendingSync(blocked.id); upsertSAPlayerToSupabase(blocked); }
     if (selectedPlayer?.id === blockConfirm.playerId) setSelectedPlayer(prev => prev ? { ...prev, status: 'blocked' as const } : prev);
     setBlockConfirm(null);
     toast('Jugador bloqueado');
@@ -638,7 +643,7 @@ export default function PlayersPage() {
     const updated = players.map(p => p.id === playerId ? { ...p, status: 'active' as const } : p);
     saveAndRefresh(updated);
     const unblocked = updated.find(p => p.id === playerId);
-    if (unblocked) upsertSAPlayerToSupabase(unblocked);
+    if (unblocked) { markPlayerPendingSync(unblocked.id); upsertSAPlayerToSupabase(unblocked); }
     if (selectedPlayer?.id === playerId) setSelectedPlayer(prev => prev ? { ...prev, status: 'active' as const } : prev);
     toast('Jugador desbloqueado');
   }
@@ -661,6 +666,7 @@ export default function PlayersPage() {
     }
 
     saveAndRefresh(updated);
+    markPlayerPendingSync(p.id);
     upsertSAPlayerToSupabase(p);
     // Sync plan to RegisteredPlayer store so getUserPlan() picks it up immediately
     if (p.plan !== undefined) {
@@ -724,7 +730,7 @@ export default function PlayersPage() {
   function handleBulkBlock() {
     const updated = players.map(p => selectedIds.has(p.id) ? { ...p, status: 'blocked' as const } : p);
     saveAndRefresh(updated);
-    updated.filter(p => selectedIds.has(p.id)).forEach(p => upsertSAPlayerToSupabase(p));
+    updated.filter(p => selectedIds.has(p.id)).forEach(p => { markPlayerPendingSync(p.id); upsertSAPlayerToSupabase(p); });
     toast(`${selectedIds.size} jugadores bloqueados`);
     setSelectedIds(new Set());
   }
@@ -752,7 +758,7 @@ export default function PlayersPage() {
       });
     }
     saveAndRefresh(updated);
-    updated.filter(p => selectedIds.has(p.id)).forEach(p => upsertSAPlayerToSupabase(p));
+    updated.filter(p => selectedIds.has(p.id)).forEach(p => { markPlayerPendingSync(p.id); upsertSAPlayerToSupabase(p); });
     setBulkAction('');
     setSelectedIds(new Set());
     toast(`Acción aplicada a ${selectedIds.size} jugador(es)`);
@@ -835,6 +841,7 @@ export default function PlayersPage() {
     const unique = newPlayers.filter(p => !emails.has(p.email));
     const updated = [...players, ...unique];
     saveAndRefresh(updated);
+    unique.forEach(p => { markPlayerPendingSync(p.id); upsertSAPlayerToSupabase(p); });
     setShowImportModal(false);
     setCsvRows([]);
     setCsvFile(null);
