@@ -1049,12 +1049,35 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
 
             {/* Move to day */}
             {canManage && days.length > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
                 <Move size={13} color="var(--grey-400)" />
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Mover a:</span>
                 {days.map(d => (
                   <button key={d} disabled={d === editing.day} onClick={() => handleDropOnDayFor(editing.id, d)} style={{ padding: '4px 10px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: d === editing.day ? 'default' : 'pointer', border: '1px solid var(--grey-200)', background: d === editing.day ? 'var(--grey-100)' : '#fff', color: d === editing.day ? 'var(--grey-400)' : 'var(--black)' }}>{fmtDay(d)}</button>
                 ))}
+              </div>
+            )}
+            {/* Move court/time — touch path (drag doesn't exist on mobile) */}
+            {canManage && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Cancha:</span>
+                <select
+                  value={editing.courtName}
+                  onChange={e => dropSingleAtCell(editing.id, cellOf(editing.time), e.target.value)}
+                  style={{ padding: '5px 8px', fontSize: 12, border: '1px solid var(--grey-200)', background: '#fff' }}
+                >
+                  {courts.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Hora:</span>
+                <select
+                  value={cellOf(editing.time)}
+                  onChange={e => dropSingleAtCell(editing.id, Number(e.target.value), editing.courtName)}
+                  style={{ padding: '5px 8px', fontSize: 12, border: '1px solid var(--grey-200)', background: '#fff' }}
+                >
+                  {Array.from({ length: totalCells }, (_, cell) => (
+                    <option key={cell} value={cell}>{fmt12(gridStartMin + cell * GRID_MIN)}</option>
+                  ))}
+                </select>
               </div>
             )}
 
@@ -1103,6 +1126,38 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
               </span>
               <button onClick={() => setEditingBracketId(null)} style={{ marginLeft: 'auto', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)' }}>Cerrar ✕</button>
             </div>
+            {/* Move day/court/time — touch path (drag doesn't exist on mobile) */}
+            {canManage && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+                <Move size={13} color="var(--grey-400)" />
+                {days.length > 1 && (
+                  <>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Día:</span>
+                    {days.map(d => (
+                      <button key={d} disabled={d === bm.day} onClick={() => handleDropOnDayFor(bm.id, d)} style={{ padding: '4px 10px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', cursor: d === bm.day ? 'default' : 'pointer', border: '1px solid var(--grey-200)', background: d === bm.day ? 'var(--grey-100)' : '#fff', color: d === bm.day ? 'var(--grey-400)' : 'var(--black)' }}>{fmtDay(d)}</button>
+                    ))}
+                  </>
+                )}
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Cancha:</span>
+                <select
+                  value={bm.courtName}
+                  onChange={e => dropSingleAtCell(bm.id, cellOf(bm.time), e.target.value)}
+                  style={{ padding: '5px 8px', fontSize: 12, border: '1px solid var(--grey-200)', background: '#fff' }}
+                >
+                  {courts.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Hora:</span>
+                <select
+                  value={cellOf(bm.time)}
+                  onChange={e => dropSingleAtCell(bm.id, Number(e.target.value), bm.courtName)}
+                  style={{ padding: '5px 8px', fontSize: 12, border: '1px solid var(--grey-200)', background: '#fff' }}
+                >
+                  {Array.from({ length: totalCells }, (_, cell) => (
+                    <option key={cell} value={cell}>{fmt12(gridStartMin + cell * GRID_MIN)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {readOnly ? (
               <div>
                 <div style={{ fontSize: 14, marginBottom: 4 }}><strong>{teamName(bm.teamAId)}</strong> vs <strong>{teamName(bm.teamBId)}</strong></div>
@@ -1125,7 +1180,7 @@ function CourtCalendar({ tournament, canManage, canEditResults, requesterId, onU
 
       <div style={{ marginTop: 12, fontSize: 11, color: 'var(--grey-400)' }}>
         {canManage ? (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><GripVertical size={12} /> Arrastrá los partidos para cambiar de cancha, horario o día. Hacé clic para registrar el resultado.</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><GripVertical size={12} /> Tocá un partido para registrar el resultado o moverlo de cancha, horario o día. En computadora también podés arrastrarlo.</span>
         ) : 'Vista de solo lectura.'}
       </div>
     </div>

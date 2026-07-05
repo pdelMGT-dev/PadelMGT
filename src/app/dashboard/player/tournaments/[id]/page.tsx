@@ -1397,7 +1397,21 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
             setPairSlots(prev => prev.map((s, i) => i === pairIdx ? { ...s, [slot]: null } : s));
           }
 
-          const playerName = (id: string | null) => id ? (t.players.find(p => p.id === id)?.name ?? id) : null;
+          // Resolve names from confirmed players AND invited entries (provisional
+          // invitees live in invitedPlayers, not players — without this, slots
+          // restored from a saved draft show raw ids like "prov-1780…-0").
+          const playerName = (id: string | null) => {
+            if (!id) return null;
+            return t.players.find(p => p.id === id)?.name
+              ?? (t.invitedPlayers ?? []).find(ip => ip.id === id)?.name
+              ?? (id.startsWith('prov-') ? 'Jugador provisional' : id);
+          };
+
+          // Tap-to-place (mobile): HTML5 drag events never fire on touch, so a
+          // tap on a player selects it (same draggedPlayerId state) and a tap on
+          // a slot places it via the same drop handler the mouse path uses.
+          const toggleSelectPlayer = (pid: string) =>
+            setDraggedPlayerId(prev => (prev === pid ? null : pid));
 
           return (
             <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '20px 24px', marginBottom: 16 }}>
@@ -1420,6 +1434,16 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                     })));
                     setDraggedPlayerId(null);
                   }}
+                  onClick={() => {
+                    // Tap-to-place: with a slotted player selected, tapping the pool unassigns them.
+                    if (!draggedPlayerId || unassigned.some(p => p.id === draggedPlayerId)) return;
+                    setPairSlots(prev => prev.map(s => ({
+                      ...s,
+                      player1Id: s.player1Id === draggedPlayerId ? null : s.player1Id,
+                      player2Id: s.player2Id === draggedPlayerId ? null : s.player2Id,
+                    })));
+                    setDraggedPlayerId(null);
+                  }}
                 >
                   {unassigned.length === 0
                     ? <span style={{ fontSize: 12, color: 'var(--grey-400)' }}>Todos los jugadores están asignados</span>
@@ -1428,11 +1452,13 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                         key={p.id}
                         draggable
                         onDragStart={() => setDraggedPlayerId(p.id)}
+                        onClick={e => { e.stopPropagation(); toggleSelectPlayer(p.id); }}
                         style={{
-                          padding: '6px 14px', background: '#fff', border: '1px solid var(--grey-300)',
-                          fontSize: 13, fontWeight: 600, cursor: 'grab', userSelect: 'none',
+                          padding: '6px 14px', background: draggedPlayerId === p.id ? 'var(--court-blue)' : '#fff',
+                          color: draggedPlayerId === p.id ? '#fff' : 'var(--black)',
+                          border: `1px solid ${draggedPlayerId === p.id ? 'var(--court-blue)' : 'var(--grey-300)'}`,
+                          fontSize: 13, fontWeight: 600, cursor: 'pointer', userSelect: 'none',
                           boxShadow: draggedPlayerId === p.id ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
-                          opacity: draggedPlayerId === p.id ? 0.5 : 1,
                         }}
                       >
                         {p.name}
@@ -1440,6 +1466,11 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                     ))
                   }
                 </div>
+                {draggedPlayerId && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: 'var(--court-blue)', fontWeight: 600 }}>
+                    {playerName(draggedPlayerId)} seleccionado — tocá un lugar de equipo para colocarlo, o tocalo de nuevo para cancelar.
+                  </div>
+                )}
               </div>
 
               {/* Collapse toggle */}
@@ -1505,12 +1536,16 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                           key={slotKey}
                           onDragOver={e => e.preventDefault()}
                           onDrop={() => handleDropOnSlot(i, slotKey)}
+                          onClick={() => {
+                            // Tap-to-place: put the selected player in this slot.
+                            if (draggedPlayerId && draggedPlayerId !== slot[slotKey]) handleDropOnSlot(i, slotKey);
+                          }}
                           style={{
                             minHeight: 38, marginBottom: 6, padding: '6px 10px',
-                            background: slot[slotKey] ? 'var(--grey-50)' : 'transparent',
-                            border: `1px dashed ${slot[slotKey] ? 'var(--grey-300)' : 'var(--grey-200)'}`,
+                            background: slot[slotKey] ? 'var(--grey-50)' : draggedPlayerId ? 'rgba(26,78,216,0.05)' : 'transparent',
+                            border: `1px dashed ${draggedPlayerId && !slot[slotKey] ? 'var(--court-blue)' : slot[slotKey] ? 'var(--grey-300)' : 'var(--grey-200)'}`,
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            fontSize: 13,
+                            fontSize: 13, cursor: draggedPlayerId ? 'pointer' : 'default',
                           }}
                         >
                           {slot[slotKey] ? (
@@ -1518,17 +1553,20 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                               <span
                                 draggable
                                 onDragStart={() => setDraggedPlayerId(slot[slotKey]!)}
-                                style={{ fontWeight: 600, cursor: 'grab', flex: 1 }}
+                                onClick={e => { e.stopPropagation(); toggleSelectPlayer(slot[slotKey]!); }}
+                                style={{ fontWeight: 600, cursor: 'pointer', flex: 1, color: draggedPlayerId === slot[slotKey] ? 'var(--court-blue)' : undefined }}
                               >
                                 {playerName(slot[slotKey])}
                               </span>
                               <button
-                                onClick={() => removeFromSlot(i, slotKey)}
+                                onClick={e => { e.stopPropagation(); removeFromSlot(i, slotKey); }}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-400)', fontSize: 16, padding: '0 0 0 8px', lineHeight: 1 }}
                               >×</button>
                             </>
                           ) : (
-                            <span style={{ color: 'var(--grey-300)', fontSize: 12 }}>Arrastrá un jugador aquí</span>
+                            <span style={{ color: draggedPlayerId ? 'var(--court-blue)' : 'var(--grey-300)', fontSize: 12 }}>
+                              {draggedPlayerId ? 'Tocá para colocar aquí' : 'Tocá un jugador y luego aquí'}
+                            </span>
                           )}
                         </div>
                       ))}
