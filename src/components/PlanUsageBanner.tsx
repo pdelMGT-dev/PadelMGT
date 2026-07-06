@@ -86,27 +86,6 @@ const CLUB_FEATURES: Record<string, { done: string[]; locked?: string[]; upgrade
   },
 };
 
-const LEAGUE_FEATURES: Record<string, { done: string[]; locked?: string[]; upgrade?: string }> = {
-  liga_free: {
-    done:   ['1 liga activa', 'Hasta 8 equipos'],
-    locked: ['Múltiples ligas', 'Estadísticas avanzadas', 'Exportar datos'],
-    upgrade: 'liga_basic',
-  },
-  liga_basic: {
-    done:   ['3 ligas activas', 'Hasta 16 equipos', 'Estadísticas básicas'],
-    locked: ['Ligas ilimitadas', 'API de datos', 'Sponsorship tools'],
-    upgrade: 'liga_pro',
-  },
-  liga_pro: {
-    done:   ['Ligas ilimitadas', 'Hasta 64 equipos', 'API de datos'],
-    locked: ['Equipos ilimitados', 'Sponsorship tools'],
-    upgrade: 'liga_unlimited',
-  },
-  liga_unlimited: {
-    done:   ['Ligas y equipos ilimitados', 'API completa', 'Sponsorship tools', 'Soporte dedicado'],
-  },
-};
-
 function FeatureList({ done, locked }: { done: string[]; locked?: string[] }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px' }}>
@@ -127,7 +106,7 @@ function FeatureList({ done, locked }: { done: string[]; locked?: string[] }) {
 // ── Main component ──────────────────────────────────────────────────────────
 
 interface Props {
-  role: 'player' | 'club_manager' | 'league_organizer' | 'federation' | 'super_admin';
+  role: 'player' | 'club_manager' | 'super_admin';
 }
 
 export default function PlanUsageBanner({ role }: Props) {
@@ -182,8 +161,8 @@ export default function PlanUsageBanner({ role }: Props) {
     );
   }
 
-  // ── Super admin / federation: no banner needed ─────────────────────────────
-  if (role === 'super_admin' || role === 'federation') return null;
+  // ── Super admin: no banner needed ──────────────────────────────────────────
+  if (role === 'super_admin') return null;
 
   // ── Player banner ─────────────────────────────────────────────────────────
   if (role === 'player') {
@@ -251,38 +230,6 @@ export default function PlanUsageBanner({ role }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Plan del club</span>
-            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 10px', background: tierColor, color: meta.tier === 'pro' || meta.tier === 'max' ? 'var(--black)' : '#fff' }}>
-              {meta.label}
-            </span>
-          </div>
-          {hasUpgrade && (
-            <Link href="/pricing" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--black)', textDecoration: 'none', padding: '6px 16px', border: '2px solid var(--black)', whiteSpace: 'nowrap' }}>
-              ↑ Actualizar plan
-            </Link>
-          )}
-        </div>
-        <FeatureList done={features.done} locked={features.locked} />
-        {hasUpgrade && (
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--grey-100)', display: 'flex', justifyContent: 'flex-end' }}>
-            <Link href="/pricing" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--black)', textDecoration: 'none', padding: '8px 20px', background: 'var(--neon)' }}>
-              Ver todos los planes →
-            </Link>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── League banner ─────────────────────────────────────────────────────────
-  if (role === 'league_organizer') {
-    const features = LEAGUE_FEATURES[plan] ?? LEAGUE_FEATURES.liga_free;
-    const hasUpgrade = !!features.upgrade;
-
-    return (
-      <div style={{ border: `1px solid ${isUnlimited ? 'rgba(245,166,35,0.35)' : 'var(--grey-200)'}`, background: isUnlimited ? 'rgba(245,166,35,0.04)' : '#fff', padding: '20px 24px', marginBottom: 32 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)' }}>Plan de liga</span>
             <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '3px 10px', background: tierColor, color: meta.tier === 'pro' || meta.tier === 'max' ? 'var(--black)' : '#fff' }}>
               {meta.label}
             </span>

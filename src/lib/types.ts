@@ -1,4 +1,4 @@
-export type UserRole = 'player' | 'club_manager' | 'league_organizer' | 'federation';
+export type UserRole = 'player' | 'club_manager';
 
 export interface User {
   id: string;

@@ -11,18 +11,16 @@ import { syncAllFromSupabase } from '@/lib/supabase-sync';
 import { migrateLocalPlayerId } from '@/lib/player-league-store';
 import BrandLogo from '@/components/BrandLogo';
 
-type Role = 'player' | 'club_manager' | 'league_organizer' | 'federation';
+type Role = 'player' | 'club_manager';
 
 const ROLE_DASHBOARD: Record<Role, string> = {
   player:           '/dashboard/player',
   club_manager:     '/dashboard/club',
-  league_organizer: '/dashboard/league',
-  federation:       '/dashboard/federation',
 };
 
 function resolveRole(meta: Record<string, unknown> | undefined): Role {
   const r = (meta?.padelmgt_role as string) ?? 'player';
-  return (['player', 'club_manager', 'league_organizer', 'federation'].includes(r) ? r : 'player') as Role;
+  return (['player', 'club_manager'].includes(r) ? r : 'player') as Role;
 }
 
 function CallbackInner() {

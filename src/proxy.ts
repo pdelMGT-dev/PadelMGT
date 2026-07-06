@@ -15,8 +15,6 @@ const SA_PREFIXES = ['/superadmin', '/dashboard/super-admin'];
 const ROLE_PATHS: Record<string, string[]> = {
   super_admin: ['/dashboard/super-admin', '/superadmin'],
   club_manager: ['/dashboard/club'],
-  league_organizer: ['/dashboard/league'],
-  federation: ['/dashboard/federation'],
   player: ['/dashboard/player'],
 };
 

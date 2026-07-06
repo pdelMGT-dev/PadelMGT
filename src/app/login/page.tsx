@@ -9,7 +9,7 @@ import { syncAllFromSupabase, syncUserTournaments, syncUserGames } from '@/lib/s
 import { supabase, isSupabaseConfigured, authSignIn, fetchPlayerByUserId, fetchPlayerByEmail, ensurePlayerRowForAuthUser } from '@/lib/supabase';
 import BrandLogo from '@/components/BrandLogo';
 
-type UserRole = 'player' | 'club_manager' | 'league_organizer' | 'federation' | 'super_admin';
+type UserRole = 'player' | 'club_manager' | 'super_admin';
 
 interface MockUser {
   id: string;
@@ -65,26 +65,6 @@ const ALL_MOCK_USERS: MockUser[] = [
     role: 'club_manager',
     sub: '127 miembros · 8 canchas',
   },
-  // ── Liga ───────────────────────────────────────────────────────────────────
-  {
-    id: 'league-001',
-    email: 'liga@padelmgt.com',
-    password: 'liga123',
-    name: 'Liga Premier LATAM',
-    shortId: '#L001',
-    role: 'league_organizer',
-    sub: '12 equipos · Temp. 2026',
-  },
-  // ── Federación ─────────────────────────────────────────────────────────────
-  {
-    id: 'fed-001',
-    email: 'federacion@padelmgt.com',
-    password: 'fed123',
-    name: 'Federación Argentina',
-    shortId: '#F001',
-    role: 'federation',
-    sub: '380 clubes · 9 países',
-  },
 ];
 
 const MOCK_USERS: MockUser[] = DEMO_ACCOUNTS_ENABLED ? ALL_MOCK_USERS : [];
@@ -92,8 +72,6 @@ const MOCK_USERS: MockUser[] = DEMO_ACCOUNTS_ENABLED ? ALL_MOCK_USERS : [];
 const ROLE_REDIRECT: Record<UserRole, string> = {
   player: '/dashboard/player',
   club_manager: '/dashboard/club',
-  league_organizer: '/dashboard/league',
-  federation: '/dashboard/federation',
   super_admin: '/dashboard/super-admin',
 };
 
@@ -191,7 +169,7 @@ export default function LoginPage() {
       // Role comes from Supabase Auth user metadata (set at signup via ?role=).
       // super_admin is never derivable here — the SA area has its own signed login.
       const metaRole = (authUser.user_metadata?.padelmgt_role as string) ?? 'player';
-      const userRole: UserRole = (['player', 'club_manager', 'league_organizer', 'federation'].includes(metaRole)
+      const userRole: UserRole = (['player', 'club_manager'].includes(metaRole)
         ? metaRole : 'player') as UserRole;
 
       // Fetch the player record from Supabase (by user_id first, then by email)
@@ -404,8 +382,6 @@ export default function LoginPage() {
                 { label: 'Jugador 2', email: 'sofia@padelmgt.com',  pass: 'jugador123', color: 'var(--court-blue)' },
                 { label: 'Jugador 3', email: 'lucas@padelmgt.com',  pass: 'jugador123', color: 'var(--court-blue)' },
                 { label: 'Club',      email: 'cantera@padelmgt.com', pass: 'club123',    color: '#6b7280' },
-                { label: 'Liga',      email: 'liga@padelmgt.com',    pass: 'liga123',    color: '#6b7280' },
-                { label: 'Federación',email: 'federacion@padelmgt.com', pass: 'fed123', color: '#6b7280' },
               ].map((u) => (
                 <button
                   key={u.email}
