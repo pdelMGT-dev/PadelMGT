@@ -4,23 +4,25 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { getSAGamesFromSupabase } from '@/lib/superadmin-data';
 
-const initial = [
-  { id: '1', tournament: 'Open Buenos Aires 2026', court: 'Court Center', t1: 'Martínez / Pérez', t2: 'García / López', s1: [6, 4, 3], s2: [3, 6, 5], status: 'live' },
-  { id: '2', tournament: 'Liga Andina Otoño', court: 'Court 4', t1: 'Silva / Cruz', t2: 'Vargas / Romero', s1: [6, 6], s2: [2, 4], status: 'live' },
-  { id: '3', tournament: 'Open Buenos Aires 2026', court: 'Court 2', t1: 'Hernández / Díaz', t2: 'Ramírez / Torres', s1: [4, 6, 6], s2: [6, 3, 4], status: 'live' },
-  { id: '4', tournament: 'Express Caribe Saturday', court: 'Court A', t1: 'Flores / Rivera', t2: 'Gómez / Díaz', s1: [0, 0], s2: [0, 0], status: 'upcoming' },
-  { id: '5', tournament: 'Liga Premier LATAM', court: 'Court 1', t1: 'Castillo / Mendoza', t2: 'Reyes / Cruz', s1: [6, 4], s2: [2, 6], status: 'completed' },
-  { id: '6', tournament: 'Copa Empresas Lima', court: 'Court 3', t1: 'Aguilar / Ortiz', t2: 'Ramos / Ruiz', s1: [7, 6], s2: [5, 4], status: 'completed' },
-];
+type Match = {
+  id: string;
+  tournament: string;
+  court: string;
+  t1: string;
+  t2: string;
+  s1: number[];
+  s2: number[];
+  status: string;
+};
 
 export default function LiveScoresPage() {
-  const [matches, setMatches] = useState(initial);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [filter, setFilter] = useState('Todos');
   const [updated, setUpdated] = useState(new Date());
 
   useEffect(() => {
     getSAGamesFromSupabase().then(sb => {
-      if (sb && sb.length > 0) {
+      if (sb !== null) {
         setMatches(sb.map(g => ({
           id: g.id,
           tournament: g.name,
@@ -85,8 +87,17 @@ export default function LiveScoresPage() {
             </span>
           </div>
 
+          {/* Empty state */}
+          {filtered.length === 0 && (
+            <div style={{ padding: '96px 32px', textAlign: 'center', border: '1px solid var(--grey-200)', background: '#fff' }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-400)', fontWeight: 600, marginBottom: 12 }}>Sin actividad</div>
+              <p style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: 'var(--black)', margin: 0 }}>No hay partidos en vivo ahora mismo</p>
+              <p style={{ fontSize: 14, color: 'var(--grey-500)', marginTop: 10 }}>Vuelve pronto para seguir los resultados en tiempo real.</p>
+            </div>
+          )}
+
           {/* Match cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--grey-200)' }}>
+          <div style={{ display: filtered.length === 0 ? 'none' : 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: 'var(--grey-200)' }}>
             {filtered.map((m) => (
               <div key={m.id} style={{ background: m.status === 'live' ? '#111' : '#fff', padding: 28 }}>
                 {/* Header */}

@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { MOCK_PLAYERS as _MOCK_PLAYERS, MOCK_CLUBS as _MOCK_CLUBS, MOCK_TOURNAMENTS as _MOCK_TOURNAMENTS, MOCK_GAMES as _MOCK_GAMES } from './seeds/sa-data';
 import { normalizeLegacyLevel } from './level-config';
 
 export interface SAPlayer {
@@ -108,10 +107,6 @@ export interface PlayerRelationship {
   createdAt: string;
 }
 
-// ── Mock data (imported from seeds/sa-data.ts) ───────────────────────────────
-const MOCK_PLAYERS: SAPlayer[] = _MOCK_PLAYERS;
-const MOCK_CLUBS: SAClub[] = _MOCK_CLUBS;
-
 function getPendingScoreCorrections(): number {
   if (typeof window === 'undefined') return 0;
   try {
@@ -170,7 +165,7 @@ export function getSAStats(): SAStats {
 }
 
 export function getSAPlayers(): SAPlayer[] {
-  if (typeof window === 'undefined') return MOCK_PLAYERS;
+  if (typeof window === 'undefined') return [];
   const raw = localStorage.getItem('padelmgt_sa_players');
   if (raw) {
     try {
@@ -211,8 +206,9 @@ export function getSAPlayers(): SAPlayer[] {
     }
   }
 
-  const merged = fromStorage.length >= 10 ? fromStorage : [...fromStorage, ...MOCK_PLAYERS.slice(fromStorage.length)];
-  return merged;
+  // No mock padding: the SA panel shows only real registered players (synced
+  // from Supabase into this local cache).
+  return fromStorage;
 }
 
 export function saveSAPlayers(players: SAPlayer[]): void {
@@ -243,7 +239,7 @@ export function saveSAPlayers(players: SAPlayer[]): void {
 }
 
 export function getSAClubs(): SAClub[] {
-  if (typeof window === 'undefined') return MOCK_CLUBS;
+  if (typeof window === 'undefined') return [];
   const raw = localStorage.getItem('padelmgt_club_requests');
   let fromStorage: SAClub[] = [];
   if (raw) {
@@ -277,9 +273,8 @@ export function getSAClubs(): SAClub[] {
     }
   }
 
-  const ids = new Set(fromStorage.map(c => c.id));
-  const extra = MOCK_CLUBS.filter(m => !ids.has(m.id));
-  return [...fromStorage, ...extra];
+  // No mock clubs: only real club requests/records (synced from Supabase).
+  return fromStorage;
 }
 
 export function saveSAClubs(clubs: SAClub[]): void {
@@ -315,12 +310,8 @@ export function getSATournaments(): SATournament[] {
       format: (t.format as string) || (t.formatSlug as string) || 'Americano',
     }));
   } catch {
-    return getMockTournaments();
+    return [];
   }
-}
-
-function getMockTournaments(): SATournament[] {
-  return _MOCK_TOURNAMENTS;
 }
 
 export function saveSAGames(games: SAGame[]): void {
@@ -331,10 +322,10 @@ export function saveSAGames(games: SAGame[]): void {
 export function getSAGames(): SAGame[] {
   if (typeof window === 'undefined') return [];
   const raw = localStorage.getItem('padelmgt_games');
-  if (!raw) return getMockGames();
+  if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as Array<Record<string, unknown>>;
-    if (parsed.length === 0) return getMockGames();
+    if (parsed.length === 0) return [];
     return parsed.map((g, i) => ({
       id: (g.id as string) || `g-${i}`,
       name: (g.name as string) || `Juego ${i + 1}`,
@@ -351,12 +342,8 @@ export function getSAGames(): SAGame[] {
         : typeof g.scoreConfig === 'string' ? g.scoreConfig : 'puntos',
     }));
   } catch {
-    return getMockGames();
+    return [];
   }
-}
-
-function getMockGames(): SAGame[] {
-  return _MOCK_GAMES;
 }
 
 export function getSAAdminUsers(): SAAdminUser[] {

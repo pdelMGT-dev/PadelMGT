@@ -19,7 +19,6 @@ import {
 import { upsertGameToSupabase, deleteGameFromSupabase } from './superadmin-data';
 import { createLocalStore } from './local-store';
 import { sanitizeGameRecords } from './store-sanitize';
-import { INITIAL_GAMES } from './seeds/games';
 
 // Re-export engine functions so consumers can import from one place.
 export {
@@ -33,7 +32,8 @@ export {
   isGameFinished,
 };
 
-const _store = createLocalStore<ActiveGame[]>('padelmgt_games', INITIAL_GAMES);
+// No seed data: quick games come exclusively from Supabase (cached locally).
+const _store = createLocalStore<ActiveGame[]>('padelmgt_games', [], { seedOnFirstLoad: false });
 
 // ---------------------------------------------------------------------------
 // Code generators
