@@ -7,31 +7,28 @@ import { getSAPlayersFromSupabase } from '@/lib/superadmin-data';
 const categories = ['General', 'Masculino', 'Femenino', 'Sub-23', 'Veteranos'];
 const countries = ['Todos', 'Argentina', 'España', 'México', 'Colombia', 'Chile', 'Brasil', 'Uruguay'];
 
-const initialPlayers = [
-  { pos: 1, prev: 1, name: 'Alejandro Galán', country: 'ES', city: 'Madrid', pts: 8450, tournaments: 22, wins: 18, club: 'RC Padel Madrid' },
-  { pos: 2, prev: 3, name: 'Juan Lebrón', country: 'ES', city: 'Sevilla', pts: 8100, tournaments: 22, wins: 16, club: 'Club Sevilla Padel' },
-  { pos: 3, prev: 2, name: 'Federico Chingotto', country: 'AR', city: 'Buenos Aires', pts: 7850, tournaments: 21, wins: 15, club: 'Buenos Aires PC' },
-  { pos: 4, prev: 5, name: 'Arturo Coello', country: 'ES', city: 'Alicante', pts: 7600, tournaments: 20, wins: 14, club: 'Padel Alicante Pro' },
-  { pos: 5, prev: 4, name: 'Agustín Tapia', country: 'AR', city: 'Córdoba', pts: 7400, tournaments: 21, wins: 13, club: 'Córdoba Padel Club' },
-  { pos: 6, prev: 7, name: 'Franco Stupaczuk', country: 'AR', city: 'Buenos Aires', pts: 7100, tournaments: 19, wins: 12, club: 'Buenos Aires PC' },
-  { pos: 7, prev: 6, name: 'Sanyo Gutiérrez', country: 'AR', city: 'Tucumán', pts: 6950, tournaments: 20, wins: 11, club: 'Tucumán Padel' },
-  { pos: 8, prev: 8, name: 'Víctor Ruiz', country: 'ES', city: 'Barcelona', pts: 6800, tournaments: 18, wins: 10, club: 'Club Padel Barcelona' },
-  { pos: 9, prev: 11, name: 'Pablo Lima', country: 'BR', city: 'São Paulo', pts: 6500, tournaments: 19, wins: 9, club: 'SP Padel Academy' },
-  { pos: 10, prev: 9, name: 'Miguel Lamperti', country: 'AR', city: 'Rosario', pts: 6200, tournaments: 17, wins: 9, club: 'Rosario Padel' },
-  { pos: 11, prev: 10, name: 'Diego Ramos', country: 'UY', city: 'Montevideo', pts: 5900, tournaments: 16, wins: 8, club: 'Montevideo PC' },
-  { pos: 12, prev: 13, name: 'Carlos Sánchez', country: 'CO', city: 'Bogotá', pts: 5700, tournaments: 18, wins: 7, club: 'Bogotá Padel Club' },
-];
+type RankPlayer = {
+  pos: number;
+  prev: number;
+  name: string;
+  country: string;
+  city: string;
+  pts: number;
+  tournaments: number;
+  wins: number;
+  club: string;
+};
 
 const flags: Record<string, string> = { ES: '🇪🇸', AR: '🇦🇷', BR: '🇧🇷', CO: '🇨🇴', UY: '🇺🇾', MX: '🇲🇽', CL: '🇨🇱' };
 
 export default function RankingPage() {
   const [category, setCategory] = useState('General');
   const [country, setCountry] = useState('Todos');
-  const [players, setPlayers] = useState(initialPlayers);
+  const [players, setPlayers] = useState<RankPlayer[]>([]);
 
   useEffect(() => {
     getSAPlayersFromSupabase().then(sb => {
-      if (sb && sb.length > 0) {
+      if (sb !== null) {
         const active = sb.filter(p => p.status === 'active');
         active.sort((a, b) => (b.rankingPoints ?? 0) - (a.rankingPoints ?? 0));
         setPlayers(active.map((p, i) => ({
@@ -66,6 +63,7 @@ export default function RankingPage() {
       <section style={{ padding: '64px 48px 96px' }}>
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>
           {/* Top 3 podium */}
+          {filtered.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, background: 'var(--grey-200)', marginBottom: 56 }}>
             {players.slice(0, 3).map((p: typeof players[number], i) => (
               <div key={p.pos} style={{ background: i === 0 ? 'var(--black)' : '#fff', padding: '40px 32px', position: 'relative' }}>
@@ -78,6 +76,7 @@ export default function RankingPage() {
               </div>
             ))}
           </div>
+          )}
 
           {/* Filters */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, flexWrap: 'wrap', gap: 16 }}>
@@ -94,6 +93,12 @@ export default function RankingPage() {
           <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 24, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>{filtered.length} jugadores · {category} · Temp. 2026</p>
 
           {/* Full table */}
+          {filtered.length === 0 ? (
+            <div style={{ border: '1px solid var(--grey-200)', padding: '80px 32px', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--black)', marginBottom: 8 }}>Aún no hay jugadores en el ranking</div>
+              <p style={{ fontSize: 14, color: 'var(--grey-400)', margin: 0 }}>Cuando los jugadores acumulen puntos en torneos oficiales aparecerán aquí.</p>
+            </div>
+          ) : (
           <div style={{ border: '1px solid var(--grey-200)' }}>
             <table className="rank-table">
               <thead>
@@ -138,6 +143,7 @@ export default function RankingPage() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       </section>
 

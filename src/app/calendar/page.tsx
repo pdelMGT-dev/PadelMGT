@@ -6,20 +6,10 @@ import { getSATournamentsFromSupabase } from '@/lib/superadmin-data';
 
 const months = ['Mayo 2026', 'Junio 2026', 'Julio 2026'];
 
-const initialEvents = [
-  { date: '2026-05-14', day: 14, name: 'Americano Barrio Norte', type: 'tournament', format: 'Americano', club: 'Club Barrio Norte', city: 'Buenos Aires', spots: 4 },
-  { date: '2026-05-15', day: 15, name: 'Liga Premier LATAM – J8', type: 'league', format: 'Round Robin', club: 'Sede Central', city: 'Buenos Aires', spots: 0 },
-  { date: '2026-05-17', day: 17, name: 'Mexicano del Club', type: 'tournament', format: 'Mexicano', club: 'Club La Cantera', city: 'Córdoba', spots: 6 },
-  { date: '2026-05-18', day: 18, name: 'Open Knockout Mayo', type: 'tournament', format: 'Knockout', club: 'Padel Arena', city: 'Rosario', spots: 8 },
-  { date: '2026-05-20', day: 20, name: 'Copa Empresas Lima – SF', type: 'tournament', format: 'Round Robin', club: 'Club Empresarial', city: 'Lima', spots: 2 },
-  { date: '2026-05-22', day: 22, name: 'Liga Andina – J9', type: 'league', format: 'Team League', club: 'Multi-sede', city: 'Mendoza', spots: 0 },
-  { date: '2026-05-24', day: 24, name: 'Express Saturday Caribe', type: 'tournament', format: 'Americano', club: 'Club Caribe', city: 'Cartagena', spots: 3 },
-  { date: '2026-05-25', day: 25, name: 'Swiss Open Santiago', type: 'tournament', format: 'Swiss', club: 'Padel Santiago', city: 'Santiago', spots: 12 },
-  { date: '2026-05-28', day: 28, name: 'Copa Federación – Final', type: 'federation', format: 'Knockout', club: 'Arena Nacional', city: 'Buenos Aires', spots: 0 },
-  { date: '2026-05-30', day: 30, name: 'Round Robin Social Club', type: 'tournament', format: 'Round Robin', club: 'Social Club', city: 'Montevideo', spots: 5 },
-  { date: '2026-06-01', day: 1, name: 'Abierto Junio Americano', type: 'tournament', format: 'Americano', club: 'Club Central', city: 'Buenos Aires', spots: 8 },
-  { date: '2026-06-07', day: 7, name: 'Liga Premier LATAM – J9', type: 'league', format: 'Round Robin', club: 'Sede Central', city: 'Buenos Aires', spots: 0 },
-];
+interface CalEvent {
+  date: string; day: number; name: string; type: string;
+  format: string; club: string; city: string; spots: number;
+}
 
 const typeColors: Record<string, string> = {
   tournament: 'var(--court-blue)',
@@ -38,25 +28,23 @@ const filters = ['Todos', 'Torneos', 'Ligas', 'Federación'];
 export default function CalendarPage() {
   const [filter, setFilter] = useState('Todos');
   const [month, setMonth] = useState('Mayo 2026');
-  const [events, setEvents] = useState(initialEvents);
+  const [events, setEvents] = useState<CalEvent[]>([]);
 
   useEffect(() => {
     getSATournamentsFromSupabase().then(sb => {
-      if (sb && sb.length > 0) {
-        const sbEvents = sb.map(t => ({
-          date: t.start_date ?? '',
-          day: t.start_date ? parseInt(t.start_date.slice(8, 10)) : 0,
-          name: t.name,
-          type: 'tournament' as const,
-          format: t.format,
-          club: t.club,
-          city: t.city,
-          spots: 0,
-        }));
-        const existingNames = new Set(initialEvents.map(e => e.name));
-        const newEvents = sbEvents.filter(e => !existingNames.has(e.name));
-        setEvents([...initialEvents, ...newEvents]);
-      }
+      // null = fetch failed; [] = genuinely no tournaments. Either way the
+      // calendar shows only real Supabase tournaments (no demo events).
+      if (sb === null) return;
+      setEvents(sb.map(t => ({
+        date: t.date ?? '',
+        day: t.date ? parseInt(t.date.slice(8, 10)) : 0,
+        name: t.name,
+        type: 'tournament',
+        format: t.format,
+        club: t.club,
+        city: t.city,
+        spots: 0,
+      })));
     });
   }, []);
 
@@ -105,6 +93,16 @@ export default function CalendarPage() {
           <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 32, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>{filtered.length} evento{filtered.length !== 1 ? 's' : ''} en {month}</p>
 
           {/* Event list */}
+          {filtered.length === 0 ? (
+            <div style={{ border: '1px dashed var(--grey-300)', background: 'var(--grey-50)', padding: '64px 24px', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, textTransform: 'uppercase', color: 'var(--grey-300)', marginBottom: 10 }}>
+                Sin eventos en {month}
+              </div>
+              <div style={{ fontSize: 14, color: 'var(--grey-400)' }}>
+                Cuando se creen torneos, aparecerán acá.
+              </div>
+            </div>
+          ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
             {filtered.map((event, i) => (
               <div key={i} style={{ background: '#fff', padding: '24px 32px', display: 'flex', alignItems: 'center', gap: 28 }}>
@@ -144,12 +142,6 @@ export default function CalendarPage() {
               </div>
             ))}
           </div>
-
-          {filtered.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--grey-400)' }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 600, color: 'var(--grey-200)', marginBottom: 16 }}>SIN EVENTOS</div>
-              <p style={{ fontSize: 15 }}>No hay eventos para este filtro. Prueba con otro mes o categoría.</p>
-            </div>
           )}
         </div>
       </section>

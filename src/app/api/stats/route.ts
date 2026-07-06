@@ -46,7 +46,7 @@ export async function GET() {
       players:   stat('players',   realPlayers,   '0',  'Jugadores'),
       clubs:     stat('clubs',     realClubs,     '0',  'Clubes'),
       leagues:   stat('leagues',   realLeagues,   '0',  'Ligas Activas'),
-      countries: stat('countries', realCountries, '9',  'Países'),
+      countries: stat('countries', realCountries, '0',  'Países'),
     });
   } catch {
     return NextResponse.json({

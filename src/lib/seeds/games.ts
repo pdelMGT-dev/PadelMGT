@@ -384,4 +384,8 @@ const g13: ActiveGame = {
   levelLabel: 'Todos', creatorId: 'player-001', coCreatorIds: [],
 };
 
-export const INITIAL_GAMES: ActiveGame[] = [g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13];
+// Live app: quick games come only from Supabase. Kept empty so the (now unused)
+// demo fixtures above never seed a browser. The g1..g13 objects are intentionally
+// left defined but unreferenced to keep this file's history readable.
+export const INITIAL_GAMES: ActiveGame[] = [];
+void [g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13];

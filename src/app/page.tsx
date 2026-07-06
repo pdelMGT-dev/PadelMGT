@@ -41,13 +41,15 @@ const flags: Record<string, string> = { ES: '🇪🇸', AR: '🇦🇷', BR: '�
 
 export default function HomePage() {
   const [rankTab, setRankTab] = useState<'latam' | 'country'>('latam');
-  const [players, setPlayers] = useState(topPlayers);
-  const [matches, setMatches] = useState(liveMatches);
-  const [selectedCountry, setSelectedCountry] = useState(topPlayers[0].countryName);
+  // Start empty: the ranking teaser and "Juegos Actuales" show only real
+  // Supabase data (no demo players/matches).
+  const [players, setPlayers] = useState<typeof topPlayers>([]);
+  const [matches, setMatches] = useState<typeof liveMatches>([]);
+  const [selectedCountry, setSelectedCountry] = useState('');
   const [heroStats, setHeroStats] = useState([
-    { n: '12,400+', l: 'Jugadores' },
-    { n: '380',     l: 'Clubes' },
-    { n: '47',      l: 'Ligas Activas' },
+    { n: '—', l: 'Jugadores' },
+    { n: '—', l: 'Clubes' },
+    { n: '—', l: 'Ligas Activas' },
   ]);
   const [pzTiers, setPzTiers] = useState<PricingTier[]>([]);
   const [pzPromo, setPzPromo] = useState<PersonalizadoPromo | null>(null);
@@ -76,39 +78,37 @@ export default function HomePage() {
 
   useEffect(() => {
     getSAPlayersFromSupabase().then(sb => {
-      if (sb && sb.length > 0) {
-        const active = sb.filter(p => p.status === 'active');
-        active.sort((a, b) => (b.rankingPoints ?? 0) - (a.rankingPoints ?? 0));
-        setPlayers(active.slice(0, 9).map((p, i) => ({
-          pos: i + 1,
-          name: p.name,
-          country: flags[p.country] ?? p.country,
-          countryName: p.country,
-          club: p.city ?? '',
-          level: p.level ?? '',
-          wins: 0,
-          losses: 0,
-          points: p.rankingPoints ?? 0,
-        })));
-      }
+      if (sb === null) return;
+      const active = sb.filter(p => p.status === 'active');
+      active.sort((a, b) => (b.rankingPoints ?? 0) - (a.rankingPoints ?? 0));
+      const mapped = active.slice(0, 9).map((p, i) => ({
+        pos: i + 1,
+        name: p.name,
+        country: flags[p.country] ?? p.country,
+        countryName: p.country,
+        club: p.city ?? '',
+        level: p.level ?? '',
+        wins: 0,
+        losses: 0,
+        points: p.rankingPoints ?? 0,
+      }));
+      setPlayers(mapped);
+      if (mapped.length > 0) setSelectedCountry(mapped[0].countryName);
     });
   }, []);
 
   useEffect(() => {
     getSATournamentsFromSupabase().then(sb => {
-      if (sb && sb.length > 0) {
-        const active = sb.filter(t => t.status === 'ongoing');
-        if (active.length > 0) {
-          setMatches(active.map(t => ({
-            tournament: t.name,
-            t1: '–',
-            t2: '–',
-            s1: [] as number[],
-            s2: [] as number[],
-            court: t.club,
-          })));
-        }
-      }
+      if (sb === null) return;
+      const active = sb.filter(t => t.status === 'ongoing');
+      setMatches(active.map(t => ({
+        tournament: t.name,
+        t1: '–',
+        t2: '–',
+        s1: [] as number[],
+        s2: [] as number[],
+        court: t.club,
+      })));
     });
   }, []);
 
@@ -266,6 +266,11 @@ export default function HomePage() {
             <Link href="/live-scores" className="btn btn-outline-dark">Ver todos →</Link>
           </div>
 
+          {matches.length === 0 && (
+            <div style={{ border: '1px solid #28282a', background: '#1f1f21', padding: '48px 24px', textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 15 }}>
+              No hay partidos en vivo en este momento.
+            </div>
+          )}
           <div className="grid-3-live">
             {matches.map((m, i) => (
               <div key={i} style={{ background: '#1f1f21', padding: 24, border: '1px solid #28282a', borderRadius: 0 }}>
