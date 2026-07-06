@@ -9,9 +9,9 @@ import {
 } from './superadmin-data';
 import { getAllPlayers } from './player-store';
 import { fetchTournamentsByCreator, fetchGamesByCreator } from './supabase';
-import { saveTournament } from './tournament-store';
+import { reconcileCreatorTournaments } from './tournament-store';
 import type { Tournament } from './tournament-store';
-import { saveGame } from './game-store';
+import { reconcileCreatorGames } from './game-store';
 import type { ActiveGame } from './game-engine';
 
 const SYNC_TS_KEY = 'padelmgt_last_sync';
@@ -128,23 +128,23 @@ async function syncGames(): Promise<void> {
  */
 export async function syncUserTournaments(creatorPlayerId: string): Promise<void> {
   const rows = await fetchTournamentsByCreator(creatorPlayerId);
-  if (!rows || rows.length === 0) return;
+  // null = fetch failed → keep local. Otherwise the server list is
+  // authoritative for THIS creator's tournaments (added, updated AND removed).
+  if (rows === null) return;
 
-  for (const raw of rows) {
-    if (!raw || !raw.id) continue;
-    // Supabase is the source of truth: the server copy replaces the local one
-    // (every local mutation pushes immediately, so the server is at least as
-    // fresh as any other device). Local-only rows are left untouched.
-    const r = raw as Record<string, unknown>;
-    const normalized = {
-      ...r,
-      players:        Array.isArray(r.players)        ? r.players        : [],
-      invitedPlayers: Array.isArray(r.invitedPlayers) ? r.invitedPlayers : [],
-      standings:      Array.isArray(r.standings)      ? r.standings      : [],
-      rounds:         Array.isArray(r.rounds)         ? r.rounds         : [],
-    };
-    saveTournament(normalized as unknown as Tournament);
-  }
+  const normalized = rows
+    .filter(r => r && (r as Record<string, unknown>).id)
+    .map(raw => {
+      const r = raw as Record<string, unknown>;
+      return {
+        ...r,
+        players:        Array.isArray(r.players)        ? r.players        : [],
+        invitedPlayers: Array.isArray(r.invitedPlayers) ? r.invitedPlayers : [],
+        standings:      Array.isArray(r.standings)      ? r.standings      : [],
+        rounds:         Array.isArray(r.rounds)         ? r.rounds         : [],
+      } as unknown as Tournament;
+    });
+  reconcileCreatorTournaments(creatorPlayerId, normalized);
 }
 
 // ── User-scoped game sync (called on login) ───────────────────────────────────
@@ -155,21 +155,21 @@ export async function syncUserTournaments(creatorPlayerId: string): Promise<void
  */
 export async function syncUserGames(creatorPlayerId: string): Promise<void> {
   const rows = await fetchGamesByCreator(creatorPlayerId);
-  if (!rows || rows.length === 0) return;
+  if (rows === null) return; // fetch failed → keep local
 
-  for (const raw of rows) {
-    if (!raw || !raw.id) continue;
-    // Server copy wins (see syncUserTournaments). Local-only rows untouched.
-    const r = raw as Record<string, unknown>;
-    const normalized = {
-      ...r,
-      players:        Array.isArray(r.players)        ? r.players        : [],
-      invitedPlayers: Array.isArray(r.invitedPlayers) ? r.invitedPlayers : [],
-      standings:      Array.isArray(r.standings)      ? r.standings      : [],
-      rounds:         Array.isArray(r.rounds)         ? r.rounds         : [],
-    };
-    saveGame(normalized as unknown as ActiveGame);
-  }
+  const normalized = rows
+    .filter(r => r && (r as Record<string, unknown>).id)
+    .map(raw => {
+      const r = raw as Record<string, unknown>;
+      return {
+        ...r,
+        players:        Array.isArray(r.players)        ? r.players        : [],
+        invitedPlayers: Array.isArray(r.invitedPlayers) ? r.invitedPlayers : [],
+        standings:      Array.isArray(r.standings)      ? r.standings      : [],
+        rounds:         Array.isArray(r.rounds)         ? r.rounds         : [],
+      } as unknown as ActiveGame;
+    });
+  reconcileCreatorGames(creatorPlayerId, normalized);
 }
 
 // ── Public entry point ────────────────────────────────────────────────────────

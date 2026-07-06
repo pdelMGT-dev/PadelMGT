@@ -3,7 +3,7 @@
 
 import type { ActiveGame, GameFormat, PairType, ScoreConfig, GamePlayer, InvitedPlayer, KnockoutConfig } from './game-engine';
 export type { GamePlayer, InvitedPlayer } from './game-engine';
-import { upsertTournamentToSupabase } from './superadmin-data';
+import { upsertTournamentToSupabase, deleteTournamentFromSupabase } from './superadmin-data';
 import { createLocalStore } from './local-store';
 import { sanitizeGameRecords } from './store-sanitize';
 
@@ -47,6 +47,22 @@ export function saveTournament(tournament: Tournament): void {
   if (idx >= 0) { all[idx] = tournament; } else { all.push(tournament); }
   persist(all);
   upsertTournamentToSupabase(tournament as unknown as Record<string, unknown>).catch(err => console.warn('[Supabase] saveTournament failed:', err));
+}
+
+export function deleteTournament(id: string): void {
+  persist(_store.load().filter(t => t.id !== id));
+  deleteTournamentFromSupabase(id).catch(err => console.warn('[Supabase] deleteTournament failed:', err));
+}
+
+/**
+ * Reconcile this creator's tournaments against the authoritative Supabase set:
+ * their local tournaments are REPLACED by the server list (deletions on another
+ * device disappear here). Tournaments created by others are left untouched.
+ * Persist only — no re-push, the server is the source of truth.
+ */
+export function reconcileCreatorTournaments(creatorId: string, serverTournaments: Tournament[]): void {
+  const others = _store.load().filter(t => (t as { creatorId?: string }).creatorId !== creatorId);
+  _store.persist([...others, ...serverTournaments]);
 }
 
 export function createTournament(params: {
