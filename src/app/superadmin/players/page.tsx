@@ -18,7 +18,7 @@ import {
 } from '@/lib/superadmin-data';
 import { getAllPlayers, updatePlayer as updateRegisteredPlayer } from '@/lib/player-store';
 import type { PlanId } from '@/lib/plan-config';
-import { recordPlanChange, getPlanChanges } from '@/lib/plan-store';
+import { recordPlanChange, getPlanChanges, getPlans } from '@/lib/plan-store';
 import { getSANotes, addSANote, deleteSANote, type SANote } from '@/lib/sa-notes-store';
 import { getScoreCorrectionsByEntity } from '@/lib/score-correction-store';
 import { getRankingHistoryForPlayer, type RankingEntry } from '@/lib/ranking-store';
@@ -27,59 +27,60 @@ import { getLevelInfo, PLAYER_LEVELS } from '@/lib/level-config';
 
 interface PlanOption { id: string; label: string; color: string; bg: string }
 
-const ALL_PLAN_GROUPS: { group: string; plans: PlanOption[] }[] = [
-  {
-    group: 'Jugador',
-    plans: [
-      { id: 'free',       label: 'Free',           color: '#555',    bg: '#f0f0f0' },
-      { id: 'player_pro', label: 'Player Pro',      color: '#92400e', bg: '#fef3c7' },
-    ],
-  },
-  {
-    group: 'Liga',
-    plans: [
-      { id: 'liga_free',      label: 'Liga Free',      color: '#0369a1', bg: '#e0f2fe' },
-      { id: 'liga_basic',     label: 'Liga Basic',     color: '#1d4ed8', bg: '#dbeafe' },
-      { id: 'liga_pro',       label: 'Liga Pro',       color: '#7c3aed', bg: '#ede9fe' },
-      { id: 'liga_unlimited', label: 'Liga Unlimited', color: '#6d28d9', bg: '#f5f3ff' },
-    ],
-  },
-  {
-    group: 'Club',
-    plans: [
-      { id: 'club_starter', label: 'Club Starter', color: '#065f46', bg: '#d1fae5' },
-      { id: 'club_pro',     label: 'Club Pro',     color: '#166534', bg: '#dcfce7' },
-      { id: 'club_liga',    label: 'Club Liga',    color: '#14532d', bg: '#bbf7d0' },
-    ],
-  },
-  {
-    group: 'Federación',
-    plans: [
-      { id: 'fed_basic', label: 'Fed Basic', color: '#9a3412', bg: '#ffedd5' },
-      { id: 'fed_pro',   label: 'Fed Pro',   color: '#7c2d12', bg: '#fed7aa' },
-    ],
-  },
-  {
-    group: '★ Especial',
-    plans: [
-      { id: 'infinity', label: '∞ Infinity', color: '#7c3aed', bg: '#f3e8ff' },
-    ],
-  },
-];
+// Colors per known plan id; anything else falls back to neutral grey.
+const PLAN_COLORS: Record<string, { color: string; bg: string }> = {
+  free:             { color: '#555',    bg: '#f0f0f0' },
+  player_basic:     { color: '#1d4ed8', bg: '#dbeafe' },
+  player_pro:       { color: '#92400e', bg: '#fef3c7' },
+  player_unlimited: { color: '#6d28d9', bg: '#f5f3ff' },
+  club_starter:     { color: '#065f46', bg: '#d1fae5' },
+  club_pro:         { color: '#166534', bg: '#dcfce7' },
+  club_liga:        { color: '#14532d', bg: '#bbf7d0' },
+  fed_basic:        { color: '#9a3412', bg: '#ffedd5' },
+  fed_pro:          { color: '#7c2d12', bg: '#fed7aa' },
+  infinity:         { color: '#7c3aed', bg: '#f3e8ff' },
+  // legacy ids kept only so an already-assigned old plan still renders a badge
+  liga_free:      { color: '#0369a1', bg: '#e0f2fe' },
+  liga_basic:     { color: '#1d4ed8', bg: '#dbeafe' },
+  liga_pro:       { color: '#7c3aed', bg: '#ede9fe' },
+  liga_unlimited: { color: '#6d28d9', bg: '#f5f3ff' },
+};
+const PLAN_FALLBACK = { color: '#555', bg: '#f0f0f0' };
+function colorFor(id: string) { return PLAN_COLORS[id] ?? PLAN_FALLBACK; }
 
-const ALL_PLANS: PlanOption[] = ALL_PLAN_GROUPS.flatMap(g => g.plans);
+// Infinity is a special SA-only override (not part of the sellable catalog);
+// it is ALWAYS offered regardless of which plans the SA created.
+const INFINITY_OPTION: PlanOption = { id: 'infinity', label: '∞ Infinity', ...PLAN_COLORS.infinity };
 
-function plansForRole(role?: SAPlayer['role']): PlanOption[] {
-  if (role === 'federation_admin') return ALL_PLAN_GROUPS.find(g => g.group === 'Federación')!.plans;
-  if (role === 'club_admin') return [
-    ...ALL_PLAN_GROUPS.find(g => g.group === 'Liga')!.plans,
-    ...ALL_PLAN_GROUPS.find(g => g.group === 'Club')!.plans,
-  ];
-  return ALL_PLAN_GROUPS.find(g => g.group === 'Jugador')!.plans;
+const GROUP_LABELS: Record<string, string> = {
+  player: 'Jugador', liga: 'Liga', club: 'Club', federation: 'Federación', special: '★ Especial',
+};
+const GROUP_ORDER = ['player', 'liga', 'club', 'federation'];
+
+/** Plan dropdown options derived from the SA-managed catalog (active plans
+ * only), grouped, always ending with the special Infinity option. */
+function getPlanGroups(): { group: string; plans: PlanOption[] }[] {
+  const active = getPlans().filter(p => p.isActive && p.id !== 'infinity');
+  const groups: { group: string; plans: PlanOption[] }[] = [];
+  for (const g of GROUP_ORDER) {
+    const inGroup = active.filter(p => p.group === g);
+    if (inGroup.length === 0) continue;
+    groups.push({
+      group: GROUP_LABELS[g] ?? g,
+      plans: inGroup.map(p => ({ id: p.id, label: p.name, ...colorFor(p.id) })),
+    });
+  }
+  groups.push({ group: GROUP_LABELS.special, plans: [INFINITY_OPTION] });
+  return groups;
 }
 
-// Legacy alias kept for PlanBadge lookup
-const PLAYER_PLANS = ALL_PLANS;
+/** Visual (label + colors) for any plan id, including legacy/unknown ones. */
+function planVisual(id?: string): PlanOption {
+  if (!id || id === 'free') return { id: 'free', label: 'Free', ...colorFor('free') };
+  if (id === 'infinity') return INFINITY_OPTION;
+  const fromCatalog = getPlans().find(p => p.id === id);
+  return { id, label: fromCatalog?.name ?? id, ...colorFor(id) };
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -147,7 +148,7 @@ function LevelBadge({ level }: { level?: SAPlayer['level'] }) {
 }
 
 function PlanBadge({ plan }: { plan?: string }) {
-  const cfg = PLAYER_PLANS.find(p => p.id === plan) ?? PLAYER_PLANS[0];
+  const cfg = planVisual(plan);
   return (
     <span style={{ background: cfg.bg, color: cfg.color, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>
       {cfg.label}
@@ -363,7 +364,7 @@ function PlayerForm({
         </Field>
         <Field label="Plan de suscripción">
           <select style={{ ...inputStyle, fontWeight: 600 }} value={form.plan ?? 'free'} onChange={e => set('plan', e.target.value)}>
-            {ALL_PLAN_GROUPS.map(g => (
+            {getPlanGroups().map(g => (
               <optgroup key={g.group} label={g.group}>
                 {g.plans.map(p => (
                   <option key={p.id} value={p.id}>{p.label}</option>
@@ -1113,9 +1114,9 @@ export default function PlayersPage() {
               <option value="federation_admin">Admin Fed</option>
             </optgroup>
             <optgroup label="Plan">
-              <option value="plan:free">Plan Free</option>
-              <option value="plan:player_pro">Plan Player Pro</option>
-              <option value="plan:infinity">Plan ∞ Infinity</option>
+              {getPlanGroups().flatMap(g => g.plans).map(p => (
+                <option key={p.id} value={`plan:${p.id}`}>Plan {p.label}</option>
+              ))}
             </optgroup>
           </select>
           <button
@@ -1266,7 +1267,7 @@ export default function PlayersPage() {
                     }}
                     style={{ fontSize: 11, padding: '3px 6px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', color: 'var(--grey-600)', background: '#fff' }}
                   >
-                    {ALL_PLAN_GROUPS.map(g => (
+                    {getPlanGroups().map(g => (
                       <optgroup key={g.group} label={g.group}>
                         {g.plans.map(p => (
                           <option key={p.id} value={p.id}>{p.label}</option>
