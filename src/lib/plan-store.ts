@@ -205,6 +205,40 @@ export function getPlan(id: PlanId): SubscriptionPlan | undefined {
   return _planStore.load().find(p => p.id === id);
 }
 
+// ── Supabase sync (best-effort) ───────────────────────────────────────────────
+// The SA's working catalog is stored server-side (platform_config, service-role
+// writes only) so edits made on one device/browser show up on every other —
+// the local cache below is kept purely for instant paint / offline fallback.
+
+async function pushPlansToSupabase(plans: SubscriptionPlan[]): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    await fetch('/api/sa/plan-catalog', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plans }),
+    });
+  } catch { /* fire-and-forget */ }
+}
+
+/** Pull the SA's catalog from Supabase and replace the local cache. Returns
+ * the fetched plans, or null if unavailable (fetch failed / nothing saved
+ * yet) — callers should keep showing the local cache in that case. */
+export async function syncPlansFromSupabase(): Promise<SubscriptionPlan[] | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const res = await fetch('/api/sa/plan-catalog');
+    if (!res.ok) return null;
+    const json = await res.json();
+    const plans = json.plans as SubscriptionPlan[] | null;
+    if (!plans || plans.length === 0) return null;
+    _planStore.persist(plans);
+    return plans;
+  } catch {
+    return null;
+  }
+}
+
 export function updatePlan(id: PlanId, updates: Partial<SubscriptionPlan>): SubscriptionPlan | null {
   const all = _planStore.load();
   const idx = all.findIndex(p => p.id === id);
@@ -212,13 +246,16 @@ export function updatePlan(id: PlanId, updates: Partial<SubscriptionPlan>): Subs
   const updated = { ...all[idx], ...updates, updatedAt: new Date().toISOString() };
   all[idx] = updated;
   _planStore.persist(all);
+  pushPlansToSupabase(all).catch(() => {});
   return updated;
 }
 
 export function addPlan(plan: SubscriptionPlan): SubscriptionPlan {
   const all = _planStore.load();
   const withTimestamp = { ...plan, updatedAt: new Date().toISOString() };
-  _planStore.persist([...all, withTimestamp]);
+  const updated = [...all, withTimestamp];
+  _planStore.persist(updated);
+  pushPlansToSupabase(updated).catch(() => {});
   return withTimestamp;
 }
 
@@ -227,6 +264,7 @@ export function deletePlan(id: string): boolean {
   const filtered = all.filter(p => p.id !== id);
   if (filtered.length === all.length) return false;
   _planStore.persist(filtered);
+  pushPlansToSupabase(filtered).catch(() => {});
   return true;
 }
 
