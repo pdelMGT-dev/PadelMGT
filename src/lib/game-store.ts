@@ -98,6 +98,17 @@ export function deleteGame(id: string): void {
     .catch(err => console.warn('[Supabase] deleteGame failed:', err));
 }
 
+/**
+ * Reconcile this creator's games against the authoritative Supabase set:
+ * their local games are REPLACED by the server list (so deletions made on
+ * another device disappear here). Games created by other players are left
+ * untouched. Does NOT re-push (persist only), since the server is the source.
+ */
+export function reconcileCreatorGames(creatorId: string, serverGames: ActiveGame[]): void {
+  const others = _store.load().filter(g => (g as { creatorId?: string }).creatorId !== creatorId);
+  _store.persist([...others, ...serverGames]);
+}
+
 export function createQuickGame(params: {
   name: string;
   date: string;
