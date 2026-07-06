@@ -1,20 +1,34 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { getSAPlayersFromSupabase } from '@/lib/superadmin-data';
 import {
-  getAllPlayers, getFriendsForPlayer, removeFriendship,
-  searchPlayers, getPlayerCountries, type RegisteredPlayer,
-} from '@/lib/player-store';
-import {
-  sendFriendRequest, acceptFriendRequest, rejectFriendRequest, cancelFriendRequest,
-  getPendingRequestsFor, getSentRequests, getRequestBetween,
-  type FriendRequest,
+  fetchFriendData, sendFriendRequestSB, acceptFriendRequestSB,
+  rejectFriendRequestSB, cancelFriendRequestSB, removeFriendSB,
+  type FriendRequest, type FriendSummary,
 } from '@/lib/friend-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getLevelInfo } from '@/lib/level-config';
+
 type Tab = 'friends' | 'requests' | 'search' | 'sent';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// Lightweight player shape used across this page (from Supabase).
+interface UIPlayer {
+  id: string; shortId: string; name: string;
+  sex?: 'M' | 'F'; city?: string; country?: string;
+  level?: string; rankingPoints: number;
+}
+
+function toUIPlayer(p: {
+  id: string; shortId: string; name: string; sex?: 'M' | 'F';
+  city?: string; country?: string; level?: string; rankingPoints?: number;
+}): UIPlayer {
+  return {
+    id: p.id, shortId: p.shortId, name: p.name, sex: p.sex,
+    city: p.city, country: p.country, level: p.level, rankingPoints: p.rankingPoints ?? 0,
+  };
+}
+
 function initials(name: string) {
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
@@ -24,9 +38,7 @@ function avatarBg(id: string) {
   return AVATAR_COLORS[id.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function Avatar({ player, size = 48 }: { player: RegisteredPlayer; size?: number }) {
+function Avatar({ player, size = 48 }: { player: UIPlayer; size?: number }) {
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0,
@@ -39,98 +51,91 @@ function Avatar({ player, size = 48 }: { player: RegisteredPlayer; size?: number
   );
 }
 
-function PlayerMeta({ p }: { p: RegisteredPlayer }) {
+function PlayerMeta({ p }: { p: UIPlayer }) {
+  const lvl = p.level ? getLevelInfo(p.level as Parameters<typeof getLevelInfo>[0]) : null;
   return (
     <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 2 }}>
-      {[p.level ? `${getLevelInfo(p.level).level} ${getLevelInfo(p.level).group}` : null, p.city, p.country].filter(Boolean).join(' · ')}
+      {[lvl ? `${lvl.level} ${lvl.group}` : null, p.city, p.country].filter(Boolean).join(' · ')}
     </div>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
-
 export default function PlayerFriendsPage() {
   const { user: currentUser } = useCurrentUser();
   const [tab, setTab]   = useState<Tab>('friends');
-  const [friends,       setFriends]       = useState<RegisteredPlayer[]>([]);
+  const [allPlayers,    setAllPlayers]    = useState<UIPlayer[]>([]);
+  const [friends,       setFriends]       = useState<FriendSummary[]>([]);
   const [incoming,      setIncoming]      = useState<FriendRequest[]>([]);
   const [sent,          setSent]          = useState<FriendRequest[]>([]);
   const [friendSearch,  setFriendSearch]  = useState('');
   const [searchQ,       setSearchQ]       = useState('');
   const [searchCountry, setSearchCountry] = useState('');
-  const [searchResults, setSearchResults] = useState<RegisteredPlayer[]>([]);
-  const [countries,     setCountries]     = useState<string[]>([]);
-  const [confirmDelete, setConfirmDelete] = useState<RegisteredPlayer | null>(null);
-  const [reqVersion,    setReqVersion]    = useState(0);
+  const [confirmDelete, setConfirmDelete] = useState<FriendSummary | null>(null);
 
-  const refresh = useCallback((userId: string) => {
-    setFriends(getFriendsForPlayer(userId));
-    setIncoming(getPendingRequestsFor(userId));
-    setSent(getSentRequests(userId).filter(r => r.status === 'pending'));
-    setReqVersion(v => v + 1);
+  const playerById = useCallback(
+    (id: string): UIPlayer | undefined => allPlayers.find(p => p.id === id),
+    [allPlayers],
+  );
+
+  const refresh = useCallback(async () => {
+    const data = await fetchFriendData();
+    if (data) {
+      setIncoming(data.incoming);
+      setSent(data.sent.filter(r => r.status === 'pending'));
+      setFriends(data.friends);
+    }
   }, []);
 
   useEffect(() => {
     if (!currentUser) return;
-    setCountries(getPlayerCountries());
-    refresh(currentUser.id);
+    getSAPlayersFromSupabase().then(sb => {
+      if (sb) setAllPlayers(sb.filter(p => p.status !== 'blocked').map(toUIPlayer));
+    });
+    refresh();
   }, [currentUser, refresh]);
 
-  // Live search
-  useEffect(() => {
+  const friendIds = new Set(friends.map(f => f.playerId));
+  const countries = [...new Set(allPlayers.map(p => p.country).filter(Boolean) as string[])].sort();
+
+  // Search / suggestions among real Supabase players (excluding self + friends).
+  const searchResults: UIPlayer[] = (() => {
+    if (!currentUser) return [];
+    const base = allPlayers.filter(p => p.id !== currentUser.id && !friendIds.has(p.id));
+    if (!searchQ.trim() && !searchCountry) return base.slice(0, 12);
+    const q = searchQ.trim().toLowerCase();
+    return base.filter(p => {
+      const matchQ = !q
+        || p.name.toLowerCase().includes(q)
+        || p.shortId.toLowerCase().includes(q)
+        || p.shortId.replace('#', '').includes(q);
+      const matchC = !searchCountry || p.country === searchCountry;
+      return matchQ && matchC;
+    });
+  })();
+
+  async function handleAccept(req: FriendRequest) { await acceptFriendRequestSB(req.id); refresh(); }
+  async function handleReject(req: FriendRequest) { await rejectFriendRequestSB(req.id); refresh(); }
+  async function handleCancel(req: FriendRequest) { await cancelFriendRequestSB(req.id); refresh(); }
+  async function handleAdd(player: UIPlayer) {
     if (!currentUser) return;
-    const friendIds = new Set(friends.map(f => f.id));
-    if (!searchQ.trim() && !searchCountry) {
-      // Suggestions: players not already friends, not self
-      const suggestions = getAllPlayers()
-        .filter(p => p.id !== currentUser.id && !friendIds.has(p.id))
-        .slice(0, 8);
-      setSearchResults(suggestions);
-      return;
-    }
-    const results = searchPlayers(searchQ, searchCountry ? { country: searchCountry } : undefined)
-      .filter(p => p.id !== currentUser.id && !friendIds.has(p.id));
-    setSearchResults(results);
-  }, [searchQ, searchCountry, friends, currentUser, reqVersion]);
-
-  function handleAccept(req: FriendRequest) {
-    acceptFriendRequest(req.id);
-    if (currentUser) refresh(currentUser.id);
+    await sendFriendRequestSB(currentUser.id, currentUser.name, player.id, player.name);
+    refresh();
   }
-
-  function handleReject(req: FriendRequest) {
-    rejectFriendRequest(req.id);
-    if (currentUser) refresh(currentUser.id);
-  }
-
-  function handleCancel(req: FriendRequest) {
-    cancelFriendRequest(req.id);
-    if (currentUser) refresh(currentUser.id);
-  }
-
-  function handleAdd(player: RegisteredPlayer) {
-    if (!currentUser) return;
-    sendFriendRequest(currentUser.id, currentUser.name, player.id, player.name);
-    if (currentUser) refresh(currentUser.id);
-  }
-
-  function handleConfirmDelete(player: RegisteredPlayer) {
-    setConfirmDelete(player);
-  }
-
-  function handleDeleteConfirmed() {
-    if (!currentUser || !confirmDelete) return;
-    removeFriendship(currentUser.id, confirmDelete.id);
+  async function handleDeleteConfirmed() {
+    if (!confirmDelete) return;
+    await removeFriendSB(confirmDelete.requestId);
     setConfirmDelete(null);
-    refresh(currentUser.id);
+    refresh();
   }
 
   const filteredFriends = friendSearch.trim()
-    ? friends.filter(f =>
-        f.name.toLowerCase().includes(friendSearch.toLowerCase()) ||
-        f.shortId.toLowerCase().includes(friendSearch.toLowerCase()) ||
-        (f.city ?? '').toLowerCase().includes(friendSearch.toLowerCase())
-      )
+    ? friends.filter(f => {
+        const p = playerById(f.playerId);
+        const q = friendSearch.toLowerCase();
+        return f.playerName.toLowerCase().includes(q)
+          || (p?.shortId ?? '').toLowerCase().includes(q)
+          || (p?.city ?? '').toLowerCase().includes(q);
+      })
     : friends;
 
   const pendingCount = incoming.length;
@@ -142,16 +147,20 @@ export default function PlayerFriendsPage() {
     { id: 'sent',     label: `Enviadas (${sent.length})` },
   ];
 
+  // Resolve a FriendSummary to a full UIPlayer card (fallback to name only).
+  function summaryToPlayer(f: FriendSummary): UIPlayer {
+    return playerById(f.playerId) ?? { id: f.playerId, shortId: '', name: f.playerName, rankingPoints: 0 };
+  }
+
   return (
     <div className="dash-page" style={{ padding: '40px 40px 80px' }}>
-
       {/* Confirm delete dialog */}
       {confirmDelete && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#fff', padding: '40px', maxWidth: 400, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, textTransform: 'uppercase', marginBottom: 12 }}>Eliminar amistad</div>
             <div style={{ fontSize: 14, color: 'var(--grey-500)', marginBottom: 28, lineHeight: 1.6 }}>
-              ¿Seguro que querés eliminar a <strong>{confirmDelete.name}</strong> de tu lista de amigos? Se eliminará de ambos lados.
+              ¿Seguro que querés eliminar a <strong>{confirmDelete.playerName}</strong> de tu lista de amigos? Se eliminará de ambos lados.
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={handleDeleteConfirmed}
@@ -215,27 +224,30 @@ export default function PlayerFriendsPage() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
-              {filteredFriends.map(f => (
-                <div key={f.id} className="friends-list-item" style={{ background: '#fff', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <Avatar player={f} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 2 }}>
-                      <span style={{ fontWeight: 600, fontSize: 15 }}>{f.name}</span>
-                      <span className="chip" style={{ fontSize: 10 }}>{f.shortId}</span>
-                      {f.sex && <span style={{ fontSize: 10, color: 'var(--grey-400)' }}>{f.sex === 'M' ? '♂' : '♀'}</span>}
+              {filteredFriends.map(f => {
+                const p = summaryToPlayer(f);
+                return (
+                  <div key={f.requestId} className="friends-list-item" style={{ background: '#fff', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <Avatar player={p} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 2 }}>
+                        <span style={{ fontWeight: 600, fontSize: 15 }}>{p.name}</span>
+                        {p.shortId && <span className="chip" style={{ fontSize: 10 }}>{p.shortId}</span>}
+                        {p.sex && <span style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.sex === 'M' ? '♂' : '♀'}</span>}
+                      </div>
+                      <PlayerMeta p={p} />
                     </div>
-                    <PlayerMeta p={f} />
+                    <div style={{ textAlign: 'right', marginRight: 16 }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600 }}>{p.rankingPoints.toLocaleString()}</div>
+                      <div style={{ fontSize: 10, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>pts</div>
+                    </div>
+                    <button onClick={() => setConfirmDelete(f)}
+                      style={{ padding: '7px 14px', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', fontSize: 11, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>
+                      Eliminar
+                    </button>
                   </div>
-                  <div style={{ textAlign: 'right', marginRight: 16 }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600 }}>{f.rankingPoints.toLocaleString()}</div>
-                    <div style={{ fontSize: 10, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>pts</div>
-                  </div>
-                  <button onClick={() => handleConfirmDelete(f)}
-                    style={{ padding: '7px 14px', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', fontSize: 11, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>
-                    Eliminar
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>
@@ -251,7 +263,7 @@ export default function PlayerFriendsPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
               {incoming.map(req => {
-                const sender = getAllPlayers().find(p => p.id === req.fromId);
+                const sender = playerById(req.fromId);
                 return (
                   <div key={req.id} style={{ background: '#fff', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
                     {sender ? <Avatar player={sender} /> : (
@@ -283,7 +295,7 @@ export default function PlayerFriendsPage() {
         <>
           <div className="friends-search-row" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
             <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-              placeholder="Buscar por nombre, ID (#00104) o email..."
+              placeholder="Buscar por nombre o ID (#00104)..."
               style={{ flex: 1, padding: '10px 14px', border: '1px solid var(--grey-200)', fontSize: 13, outline: 'none', fontFamily: 'var(--font-body)' }} />
             <select value={searchCountry} onChange={e => setSearchCountry(e.target.value)}
               style={{ padding: '10px 32px 10px 12px', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: '#fff', outline: 'none', minWidth: 160,
@@ -308,19 +320,17 @@ export default function PlayerFriendsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
               {searchResults.map(p => {
                 if (!currentUser) return null;
-                const existingReq = getRequestBetween(currentUser.id, p.id);
-                const isFriend = friends.some(f => f.id === p.id);
+                const sentReq = sent.find(r => r.toId === p.id && r.status === 'pending');
+                const incomingReq = incoming.find(r => r.fromId === p.id);
                 let actionEl: React.ReactNode;
-                if (isFriend) {
-                  actionEl = <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--turf-green)' }}>✓ Amigo</span>;
-                } else if (existingReq?.fromId === currentUser.id && existingReq?.status === 'pending') {
+                if (sentReq) {
                   actionEl = (
-                    <button onClick={() => { cancelFriendRequest(existingReq.id); refresh(currentUser.id); }}
+                    <button onClick={() => handleCancel(sentReq)}
                       style={{ padding: '7px 14px', border: '1px solid var(--grey-200)', background: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)' }}>
                       Cancelar solicitud
                     </button>
                   );
-                } else if (existingReq?.toId === currentUser.id && existingReq?.status === 'pending') {
+                } else if (incomingReq) {
                   actionEl = <span style={{ fontSize: 12, fontWeight: 700, color: '#f5a623' }}>⏳ Te envió solicitud</span>;
                 } else {
                   actionEl = (
@@ -336,7 +346,7 @@ export default function PlayerFriendsPage() {
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 2 }}>
                         <span style={{ fontWeight: 600, fontSize: 15 }}>{p.name}</span>
-                        <span className="chip" style={{ fontSize: 10 }}>{p.shortId}</span>
+                        {p.shortId && <span className="chip" style={{ fontSize: 10 }}>{p.shortId}</span>}
                         {p.sex && <span style={{ fontSize: 10, color: 'var(--grey-400)' }}>{p.sex === 'M' ? '♂' : '♀'}</span>}
                       </div>
                       <PlayerMeta p={p} />
@@ -364,7 +374,7 @@ export default function PlayerFriendsPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--grey-200)' }}>
               {sent.map(req => {
-                const target = getAllPlayers().find(p => p.id === req.toId);
+                const target = playerById(req.toId);
                 return (
                   <div key={req.id} style={{ background: '#fff', padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 16 }}>
                     {target ? <Avatar player={target} /> : (
