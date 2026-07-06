@@ -8,6 +8,7 @@ import type { ActiveGame } from '@/lib/game-engine';
 import {
   getPendingInvitationsForPlayer,
   respondToInvitation,
+  syncMyInvitations,
   type Invitation,
 } from '@/lib/invitation-store';
 import { addFriendship, getPlayer, type RegisteredPlayer } from '@/lib/player-store';
@@ -92,6 +93,8 @@ export default function PlayerHomePage() {
     setTotalWins(allHistory.filter(m => m.result === 'V').length);
     setEventsPlayed(new Set(allHistory.map(m => m.gameId)).size);
     setPendingInvitations(getPendingInvitationsForPlayer(uid));
+    // Pull invitations from Supabase (cross-device) then refresh the list.
+    syncMyInvitations(uid, currentUser.email).then(() => setPendingInvitations(getPendingInvitationsForPlayer(uid))).catch(() => {});
     void loadPlayerReviewTeams(uid).then(setReviewTeams).catch(() => {});
   }, [currentUser]);
 

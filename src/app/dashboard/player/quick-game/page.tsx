@@ -7,7 +7,7 @@ import { createQuickGame, getAllGames, cloneQuickGame } from '@/lib/game-store';
 import { syncUserGames } from '@/lib/supabase-sync';
 import CloneDialog from '@/components/CloneDialog';
 import { checkGameGate, incrementUsage, getPlayerLimits } from '@/lib/plan-config';
-import { createInvitation, getPendingInvitationsForPlayer, respondToInvitation, getInvitationsForPlayer } from '@/lib/invitation-store';
+import { createInvitation, getPendingInvitationsForPlayer, respondToInvitation, getInvitationsForPlayer, syncMyInvitations } from '@/lib/invitation-store';
 import type { Invitation } from '@/lib/invitation-store';
 import { getFriendsForPlayer, searchPlayers, addFriendship } from '@/lib/player-store';
 import { getGame, saveGame } from '@/lib/game-store';
@@ -244,9 +244,11 @@ export default function QuickGamePage() {
     setMyClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
     setAllClubs(getSAClubs().filter(c => c.status === 'active').map(c => ({ id: c.id, name: c.name, city: c.city || '', country: c.country || '', courts: c.courts || 0 })));
     setMyLeagues(getMyLeagues(currentUser.id));
-    // load invitations for this player
-    const invs = getInvitationsForPlayer(currentUser.id).filter(i => i.status === 'pending');
-    setMyInvitations(invs);
+    // load invitations for this player (local first, then pull from Supabase)
+    setMyInvitations(getInvitationsForPlayer(currentUser.id).filter(i => i.status === 'pending'));
+    syncMyInvitations(currentUser.id, currentUser.email)
+      .then(() => setMyInvitations(getInvitationsForPlayer(currentUser.id).filter(i => i.status === 'pending')))
+      .catch(() => {});
   }, [reloadGames, currentUser]);
 
   // ── Wizard state ──────────────────────────────────────────────────────────
