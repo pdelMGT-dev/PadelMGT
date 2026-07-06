@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Menu, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getPendingCount } from '@/lib/friend-request-store';
+import { fetchFriendData } from '@/lib/friend-request-store';
 import { getAdminPendingRequestsCount } from '@/lib/player-league-store';
 import { getPendingApprovalsForGuardian } from '@/lib/family-approval-store';
 import { getFamilyLinks } from '@/lib/family-store';
@@ -93,7 +93,8 @@ export default function DashboardSidebar() {
 
   useEffect(() => {
     if (user?.role === 'player') {
-      setFriendBadge(getPendingCount(user.id));
+      // Friend badge comes from Supabase (cross-device pending requests).
+      fetchFriendData().then(d => { if (d) setFriendBadge(d.incoming.length); });
       setLeagueBadge(getAdminPendingRequestsCount(user.id));
       // Family: pending guardian approvals + incoming family-link requests
       const pendingApprovals = getPendingApprovalsForGuardian(user.id).length;

@@ -1,11 +1,8 @@
-// friend-request-store.ts — Two-way friend request management
-
-import { addFriendship } from './player-store';
-import { upsertFriendRequestToSupabase } from './superadmin-data';
-import { SEED_FRIEND_REQUESTS } from './seeds/players';
-import { createLocalStore } from './local-store';
-
-const KEY = 'padelmgt_friend_requests';
+// friend-request-store.ts — Two-way friend requests, Supabase-backed.
+// Friend data lives in the `friend_requests` table and is written exclusively
+// through the service-role /api/friends endpoint, so both parties see the same
+// state on any device. The legacy localStorage functions below are kept only
+// for callers not yet migrated; the friends page uses the async helpers.
 
 export type FriendRequestStatus = 'pending' | 'accepted' | 'rejected';
 
@@ -19,7 +16,69 @@ export interface FriendRequest {
   createdAt: string;
 }
 
-const _store = createLocalStore<FriendRequest[]>(KEY, SEED_FRIEND_REQUESTS);
+export interface FriendSummary {
+  requestId: string;
+  playerId: string;
+  playerName: string;
+  since: string;
+}
+
+export interface FriendData {
+  incoming: FriendRequest[];
+  sent: FriendRequest[];
+  friends: FriendSummary[];
+}
+
+// ── Supabase-backed API (used by the friends page) ────────────────────────────
+
+/** Fetch the caller's incoming/sent requests and accepted friends. */
+export async function fetchFriendData(): Promise<FriendData | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const res = await fetch('/api/friends');
+    if (!res.ok) return null;
+    return (await res.json()) as FriendData;
+  } catch {
+    return null;
+  }
+}
+
+async function postFriends(body: Record<string, unknown>): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    const res = await fetch('/api/friends', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export function sendFriendRequestSB(fromId: string, fromName: string, toId: string, toName: string): Promise<boolean> {
+  return postFriends({ op: 'send', fromId, fromName, toId, toName });
+}
+export function acceptFriendRequestSB(requestId: string): Promise<boolean> {
+  return postFriends({ op: 'accept', requestId });
+}
+export function rejectFriendRequestSB(requestId: string): Promise<boolean> {
+  return postFriends({ op: 'reject', requestId });
+}
+export function cancelFriendRequestSB(requestId: string): Promise<boolean> {
+  return postFriends({ op: 'cancel', requestId });
+}
+export function removeFriendSB(requestId: string): Promise<boolean> {
+  return postFriends({ op: 'remove', requestId });
+}
+
+// ── Legacy localStorage API (kept for un-migrated callers) ─────────────────────
+
+import { createLocalStore } from './local-store';
+
+const KEY = 'padelmgt_friend_requests';
+const _store = createLocalStore<FriendRequest[]>(KEY, [], { seedOnFirstLoad: false });
 
 function generateId(): string {
   return `fr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -57,32 +116,25 @@ export function sendFriendRequest(
     createdAt: new Date().toISOString(),
   };
   _store.persist([..._store.load(), req]);
-  upsertFriendRequestToSupabase(req).catch(() => {});
   return req;
 }
 
-/** Accept a pending request — creates the friendship on both sides. */
+/** Accept a pending request (local fallback only). */
 export function acceptFriendRequest(requestId: string): void {
   const all = _store.load();
   const idx = all.findIndex(r => r.id === requestId);
   if (idx < 0) return;
-  const req = all[idx];
-  const accepted = { ...req, status: 'accepted' as const };
-  all[idx] = accepted;
+  all[idx] = { ...all[idx], status: 'accepted' as const };
   _store.persist(all);
-  upsertFriendRequestToSupabase(accepted).catch(() => {});
-  addFriendship(req.fromId, req.toId);
 }
 
-/** Reject a pending request. */
+/** Reject a pending request (local fallback only). */
 export function rejectFriendRequest(requestId: string): void {
   const all = _store.load();
   const idx = all.findIndex(r => r.id === requestId);
   if (idx < 0) return;
-  const rejected = { ...all[idx], status: 'rejected' as const };
-  all[idx] = rejected;
+  all[idx] = { ...all[idx], status: 'rejected' as const };
   _store.persist(all);
-  upsertFriendRequestToSupabase(rejected).catch(() => {});
 }
 
 /** Cancel (delete) a request the current user sent. */

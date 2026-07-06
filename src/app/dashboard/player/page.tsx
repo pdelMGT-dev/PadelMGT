@@ -10,8 +10,8 @@ import {
   respondToInvitation,
   type Invitation,
 } from '@/lib/invitation-store';
-import { addFriendship, getPlayer, getFriendsForPlayer, type RegisteredPlayer } from '@/lib/player-store';
-import { getPendingRequestsFor, acceptFriendRequest, rejectFriendRequest, type FriendRequest } from '@/lib/friend-request-store';
+import { addFriendship, getPlayer, type RegisteredPlayer } from '@/lib/player-store';
+import { fetchFriendData, acceptFriendRequestSB, rejectFriendRequestSB, type FriendRequest, type FriendSummary } from '@/lib/friend-request-store';
 import { getTournament, saveTournament } from '@/lib/tournament-store';
 import {
   getMatchHistoryForPlayer,
@@ -48,7 +48,7 @@ export default function PlayerHomePage() {
   const [showProfileReminder, setShowProfileReminder] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [playerData, setPlayerData] = useState<RegisteredPlayer | null>(null);
-  const [realFriends, setRealFriends] = useState<RegisteredPlayer[]>([]);
+  const [realFriends, setRealFriends] = useState<FriendSummary[]>([]);
   const [reviewTeams, setReviewTeams] = useState<PlayerReviewTeam[]>([]);
 
   function showToast(msg: string) {
@@ -72,9 +72,8 @@ export default function PlayerHomePage() {
 
   useEffect(() => {
     if (!currentUser) return;
-    setFriendRequests(getPendingRequestsFor(currentUser.id));
+    fetchFriendData().then(d => { if (d) { setFriendRequests(d.incoming); setRealFriends(d.friends); } });
     setPlayerData(getPlayer(currentUser.id));
-    setRealFriends(getFriendsForPlayer(currentUser.id));
     if (currentUser.firstLogin) {
       setShowProfileReminder(true);
       // Clear firstLogin flag so reminder only shows once per session
@@ -300,9 +299,9 @@ export default function PlayerHomePage() {
                 <span style={{ fontSize: 12, color: 'var(--grey-400)', marginLeft: 8 }}>quiere ser tu amigo</span>
               </div>
               <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                <button onClick={() => { acceptFriendRequest(req.id); setFriendRequests(prev => prev.filter(r => r.id !== req.id)); showToast(`¡Ahora sos amigo de ${req.fromName}!`); }}
+                <button onClick={() => { acceptFriendRequestSB(req.id); setFriendRequests(prev => prev.filter(r => r.id !== req.id)); showToast(`¡Ahora sos amigo de ${req.fromName}!`); }}
                   style={{ padding: '6px 14px', background: 'var(--turf-green)', color: '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.06em' }}>✓ Aceptar</button>
-                <button onClick={() => { rejectFriendRequest(req.id); setFriendRequests(prev => prev.filter(r => r.id !== req.id)); }}
+                <button onClick={() => { rejectFriendRequestSB(req.id); setFriendRequests(prev => prev.filter(r => r.id !== req.id)); }}
                   style={{ padding: '6px 14px', background: '#fff', border: '1px solid var(--grey-200)', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: 'var(--grey-500)' }}>Rechazar</button>
               </div>
             </div>
@@ -478,17 +477,13 @@ export default function PlayerHomePage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {realFriends.slice(0, 4).map((f) => (
-                <div key={f.id} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div key={f.playerId} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <div style={{ width: 36, height: 36, background: 'var(--court-blue)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
-                    {f.name.split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()}
+                    {f.playerName.split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>{f.shortId}{f.city ? ` · ${f.city}` : ''}</div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600 }}>{f.rankingPoints.toLocaleString()}</div>
-                    <div style={{ fontSize: 9, color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>pts</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--black)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.playerName}</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>Amigo</div>
                   </div>
                 </div>
               ))}
