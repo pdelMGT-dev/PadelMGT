@@ -15,11 +15,10 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getUserPlan, refreshVerifiedPlan, type PlanId } from '@/lib/plan-config';
 import { useTournamentNotificationCount } from '@/hooks/useTournamentNotifications';
 
-type Role = 'player' | 'club' | 'league' | 'federation' | 'super_admin';
+type Role = 'player' | 'club' | 'super_admin';
 
 const roleLabels: Record<Role, string> = {
-  player: 'Jugador', club: 'Club', league: 'Liga',
-  federation: 'Federación', super_admin: 'Super Admin',
+  player: 'Jugador', club: 'Club', super_admin: 'Super Admin',
 };
 
 const navItems: Record<Role, { href: string; label: string; icon: string }[]> = {
@@ -41,24 +40,10 @@ const navItems: Record<Role, { href: string; label: string; icon: string }[]> = 
     { href: '/dashboard/club/members',     label: 'Miembros',       icon: '◑' },
     { href: '/dashboard/club/courts',      label: 'Canchas',        icon: '▦' },
   ],
-  league: [
-    { href: '/dashboard/league',           label: 'Panel de Liga',         icon: '◈' },
-    { href: '/dashboard/league/standings', label: 'Tabla de Posiciones',   icon: '△' },
-    { href: '/dashboard/league/seasons',   label: 'Temporadas',            icon: '▦' },
-    { href: '/dashboard/league/teams',     label: 'Equipos',               icon: '◑' },
-  ],
-  federation: [
-    { href: '/dashboard/federation',              label: 'Panel General',       icon: '◈' },
-    { href: '/dashboard/federation/rankings',     label: 'Rankings Oficiales',  icon: '△' },
-    { href: '/dashboard/federation/tournaments',  label: 'Torneos Sancionados', icon: '◉' },
-    { href: '/dashboard/federation/clubs',        label: 'Clubes Afiliados',    icon: '◑' },
-  ],
   super_admin: [
     { href: '/dashboard/super-admin', label: 'Panel General',    icon: '◈' },
     { href: '/dashboard/player',      label: 'Vista Jugador',    icon: '◎' },
     { href: '/dashboard/club',        label: 'Vista Club',       icon: '◑' },
-    { href: '/dashboard/league',      label: 'Vista Liga',       icon: '▦' },
-    { href: '/dashboard/federation',  label: 'Vista Federación', icon: '△' },
   ],
 };
 
@@ -111,8 +96,6 @@ export default function DashboardSidebar() {
   const activeRole: Role =
     pathname.startsWith('/dashboard/super-admin') ? 'super_admin'
     : pathname.startsWith('/dashboard/club')        ? 'club'
-    : pathname.startsWith('/dashboard/league')      ? 'league'
-    : pathname.startsWith('/dashboard/federation')  ? 'federation'
     : 'player';
 
   const isBS = activeRole === 'player';
@@ -151,8 +134,6 @@ export default function DashboardSidebar() {
   const switchableRoles: { role: Role; label: string }[] = [
     { role: 'player', label: 'Jugador' },
     { role: 'club',   label: 'Club' },
-    { role: 'league', label: 'Liga' },
-    { role: 'federation', label: 'Fed.' },
   ];
 
   const sidebarContent = (

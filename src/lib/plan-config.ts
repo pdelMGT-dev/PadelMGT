@@ -168,8 +168,8 @@ function getLimitsForPlan(planId: string): PlanLimits {
   return DEFAULT_LIMITS[planId] ?? DEFAULT_LIMITS.free;
 }
 
-// ── Club/league/federation roles bypass player limits entirely ───────────────
-const BYPASS_ROLES = new Set(['club_manager', 'league_organizer', 'federation', 'super_admin']);
+// ── Club/super-admin roles bypass player limits entirely ─────────────────────
+const BYPASS_ROLES = new Set(['club_manager', 'super_admin']);
 
 // ── Monthly usage tracking ────────────────────────────────────────────────────
 const USAGE_PREFIX = 'padelmgt_usage_';

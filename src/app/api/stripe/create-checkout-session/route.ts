@@ -26,14 +26,11 @@ const DASHBOARD_REDIRECT: Record<string, string> = {
   player_pro_year:       '/dashboard/player?subscription=success',
   player_unlimited:      '/dashboard/player?subscription=success',
   player_unlimited_year: '/dashboard/player?subscription=success',
-  liga_basic:      '/dashboard/league?subscription=success',
-  liga_pro:        '/dashboard/league?subscription=success',
-  liga_unlimited:  '/dashboard/league?subscription=success',
+  // liga_*/fed_* plans redirected to now-deleted dashboards (dead roles); they
+  // fall through to the default '/dashboard/player?subscription=success' below.
   club_starter:    '/dashboard/club?subscription=success',
   club_pro:        '/dashboard/club?subscription=success',
   club_liga:       '/dashboard/club?subscription=success',
-  fed_basic:       '/dashboard/federation?subscription=success',
-  fed_pro:         '/dashboard/federation?subscription=success',
 };
 
 const TRIAL_DAYS: Record<string, number> = {

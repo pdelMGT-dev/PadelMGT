@@ -13,8 +13,6 @@ import BrandLogo from '@/components/BrandLogo';
 const SIGNUP_ROLES: Record<string, { dashboard: string; label: string }> = {
   player:           { dashboard: '/dashboard/player', label: 'Jugador' },
   club_manager:     { dashboard: '/dashboard/club',   label: 'Club' },
-  league_organizer: { dashboard: '/dashboard/league', label: 'Liga' },
-  federation:       { dashboard: '/dashboard/federation', label: 'Federación' },
 };
 
 const COUNTRIES: string[] = [
