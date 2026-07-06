@@ -7,6 +7,7 @@ import {
   addPlan,
   deletePlan,
   getPlanChanges,
+  syncPlansFromSupabase,
   type SubscriptionPlan,
   type PlanFeature,
 } from '@/lib/plan-store';
@@ -161,6 +162,8 @@ export default function PlansPage() {
 
   useEffect(() => {
     setPlans(getPlans());
+    // Pull the SA's catalog from Supabase (cross-device) then refresh.
+    syncPlansFromSupabase().then(remote => { if (remote) setPlans(remote); }).catch(() => {});
   }, []);
 
   useEffect(() => {

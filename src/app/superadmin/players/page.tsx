@@ -18,7 +18,7 @@ import {
 } from '@/lib/superadmin-data';
 import { getAllPlayers, updatePlayer as updateRegisteredPlayer } from '@/lib/player-store';
 import type { PlanId } from '@/lib/plan-config';
-import { recordPlanChange, getPlanChanges, getPlans } from '@/lib/plan-store';
+import { recordPlanChange, getPlanChanges, getPlans, syncPlansFromSupabase } from '@/lib/plan-store';
 import { getSANotes, addSANote, deleteSANote, type SANote } from '@/lib/sa-notes-store';
 import { getScoreCorrectionsByEntity } from '@/lib/score-correction-store';
 import { getRankingHistoryForPlayer, type RankingEntry } from '@/lib/ranking-store';
@@ -493,10 +493,14 @@ export default function PlayersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<{ step: number } | null>(null);
   const [bulkAction, setBulkAction] = useState('');
+  const [, forcePlansRefresh] = useState(0);
 
   useEffect(() => {
     setPlayers(getSAPlayers());
     setCustomFields(getPlayerCustomFields());
+    // Pull the plan catalog from Supabase (cross-device) so the plan dropdown
+    // reflects plans created/edited from another browser.
+    syncPlansFromSupabase().then(remote => { if (remote) forcePlansRefresh(v => v + 1); }).catch(() => {});
 
     function fetchFromSupabase() {
       getSAPlayersFromSupabase().then(sbPlayers => {
