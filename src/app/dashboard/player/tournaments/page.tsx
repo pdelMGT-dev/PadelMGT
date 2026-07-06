@@ -18,7 +18,7 @@ import {
 } from '@/lib/personalizado-store';
 import { getFriendsForPlayer, searchPlayers } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
-import { getPlayerClubs } from '@/lib/club-membership-store';
+import { getPlayerClubs, syncMyClubs } from '@/lib/club-membership-store';
 import { getSAClubs } from '@/lib/superadmin-data';
 import { useToast } from '@/components/ToastProvider';
 import { SkeletonCard } from '@/components/Skeleton';
@@ -282,8 +282,9 @@ export default function PlayerTournamentsPage() {
   // ── Init ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!currentUser) return;
-    const memberships = getPlayerClubs(currentUser.id);
-    setMyTClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
+    const loadClubs = () => setMyTClubs(getPlayerClubs(currentUser.id).map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
+    loadClubs();
+    syncMyClubs(currentUser.id).then(loadClubs).catch(() => {});
     setTAllClubs(getSAClubs().filter(c => c.status === 'active').map(c => ({ id: c.id, name: c.name, city: c.city || '', country: c.country || '', courts: c.courts || 0 })));
   }, [currentUser]);
 

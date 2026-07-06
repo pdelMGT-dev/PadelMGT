@@ -16,7 +16,7 @@ import type { ActiveGame, GamePlayer as EnginePlayer, InvitedPlayer, ScoreConfig
 import { matchDurationMinutes, estimateEventDuration, formatDurationRange } from '@/lib/duration-estimate';
 import { getRankingHistoryForGame } from '@/lib/ranking-store';
 import type { RankingEntry } from '@/lib/ranking-store';
-import { getPlayerClubs } from '@/lib/club-membership-store';
+import { getPlayerClubs, syncMyClubs } from '@/lib/club-membership-store';
 import { getSAClubs } from '@/lib/superadmin-data';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getMyLeagues, getLeagueSeasons, getActiveSeason, type PlayerLeague, type LeagueSeason } from '@/lib/player-league-store';
@@ -239,9 +239,10 @@ export default function QuickGamePage() {
     if (!currentUser) return;
     // Pull fresh server copies (edits from other devices) and re-render.
     syncUserGames(currentUser.id).then(reloadGames).catch(() => {});
-    // load player's clubs from membership store
-    const memberships = getPlayerClubs(currentUser.id);
-    setMyClubs(memberships.map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
+    // load player's clubs from membership store (local first, then Supabase)
+    const loadClubs = () => setMyClubs(getPlayerClubs(currentUser.id).map(m => ({ id: m.clubId, name: m.clubName, city: m.clubCity, country: m.clubCountry, courts: 0 })));
+    loadClubs();
+    syncMyClubs(currentUser.id).then(loadClubs).catch(() => {});
     setAllClubs(getSAClubs().filter(c => c.status === 'active').map(c => ({ id: c.id, name: c.name, city: c.city || '', country: c.country || '', courts: c.courts || 0 })));
     setMyLeagues(getMyLeagues(currentUser.id));
     // load invitations for this player (local first, then pull from Supabase)

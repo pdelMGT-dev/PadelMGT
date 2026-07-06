@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { LayoutGrid, List } from 'lucide-react';
 import { getSAClubs, getSAClubsFromSupabase, type SAClub } from '@/lib/superadmin-data';
 import {
-  joinClub, leaveClub, isClubMember, getPlayerClubs,
+  joinClub, leaveClub, isClubMember, getPlayerClubs, syncMyClubs,
   type ClubMembership,
 } from '@/lib/club-membership-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -320,7 +320,10 @@ export default function PlayerClubsPage() {
   }, []);
 
   useEffect(() => {
-    if (user) setMyMemberships(getPlayerClubs(user.id));
+    if (!user) return;
+    setMyMemberships(getPlayerClubs(user.id));
+    // Pull memberships from Supabase (cross-device) then refresh.
+    syncMyClubs(user.id).then(() => setMyMemberships(getPlayerClubs(user.id))).catch(() => {});
   }, [user]);
 
   function refreshMemberships() {
