@@ -97,7 +97,7 @@ export default function LeaguesPage() {
   }, [user]);
 
   return (
-    <div className="bs-page" style={{ padding: '40px clamp(16px, 4vw, 32px) 80px', maxWidth: 1100, margin: '0 auto' }}>
+    <div className="bs-page" style={{ padding: '40px clamp(16px, 4vw, 32px) 80px' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 32 }}>
         <div>
