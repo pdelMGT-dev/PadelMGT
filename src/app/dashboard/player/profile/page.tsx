@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
-import { updatePlayer } from '@/lib/player-store';
+import { updatePlayer, seedLocalPlayer } from '@/lib/player-store';
 import { fetchPlayerByEmail } from '@/lib/supabase';
 import { getRankingHistoryForGame } from '@/lib/ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -155,6 +155,28 @@ export default function PlayerProfilePage() {
     fetchPlayerByEmail(sessionUser.email).then(row => {
       if (!alive || !row) return;
       const cf = (row.custom_fields as Record<string, string>) ?? {};
+      // Seed the local player cache from this authoritative fetch — without
+      // this, updatePlayer() below has no matching local row to merge edits
+      // into and silently drops the save (this was the actual bug: sex/level
+      // edits looked saved in the UI but never reached Supabase).
+      seedLocalPlayer({
+        id: row.id as string,
+        shortId: cf.shortId ?? '',
+        name: (row.name as string) ?? '',
+        email: (row.email as string) ?? sessionUser.email,
+        sex: (['M', 'F'].includes(cf.sex) ? cf.sex as 'M' | 'F' : undefined),
+        country: (row.country as string) ?? undefined,
+        city: (row.city as string) ?? undefined,
+        level: cf.level ? normalizeLegacyLevel(cf.level) : undefined,
+        photoUrl: cf.photoUrl || undefined,
+        phone: (row.phone as string) ?? undefined,
+        description: cf.description,
+        birthDate: cf.birthDate,
+        ranking: 0,
+        rankingPoints: (row.ranking_points as number) ?? 0,
+        profileCompleted: cf.profileCompleted === 'true',
+        plan: cf.plan,
+      });
       setUser(prev => prev ? {
         ...prev,
         name:        (row.name as string) || prev.name,
@@ -261,8 +283,12 @@ export default function PlayerProfilePage() {
     setUser(updated);
     if (updated.id) {
       // Push EVERY profile field so the edit is visible from any device.
+      // email is included explicitly — the server route requires it, and
+      // relying solely on the local cache having it is what caused silent
+      // save failures (see updatePlayer / seedLocalPlayer above).
       updatePlayer(updated.id, {
         name: updated.name,
+        email: updated.email,
         phone: updated.phone ?? '',
         description: updated.description ?? '',
         birthDate: updated.birthDate ?? '',
@@ -290,7 +316,7 @@ export default function PlayerProfilePage() {
       const updated = { ...user, avatarBase64: base64, photoUrl: base64 };
       setSessionUser(updated as unknown as Parameters<typeof setSessionUser>[0]);
       setUser(updated);
-      if (user.id) updatePlayer(user.id, { photoUrl: base64 });
+      if (user.id) updatePlayer(user.id, { email: user.email, photoUrl: base64 });
     };
     reader.readAsDataURL(file);
   }
@@ -302,7 +328,7 @@ export default function PlayerProfilePage() {
     setUser(updated);
     // Empty string (not undefined) so the deletion survives JSON serialization
     // and clears the photo server-side too.
-    if (user.id) updatePlayer(user.id, { photoUrl: '' });
+    if (user.id) updatePlayer(user.id, { email: user.email, photoUrl: '' });
   }
 
   // ---------------------------------------------------------------------------
