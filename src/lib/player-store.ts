@@ -265,13 +265,40 @@ export function updatePlayerRankingPoints(playerId: string, delta: number): void
   syncPlayerToSupabase(all[idx]).catch(err => console.warn('[player-store] updateRankingPoints sync failed:', err));
 }
 
-/** Update any fields on an existing player and sync to Supabase. */
+/**
+ * Cache a player row locally WITHOUT pushing back to Supabase — used when the
+ * row was just fetched FROM Supabase (e.g. the profile page's load-on-mount),
+ * so the local cache has a match before the user edits anything. This is what
+ * makes updatePlayer() below reliable: without it, a stale/empty local cache
+ * silently swallowed every edit (found live: player-00119's level/sex updates
+ * never reached Supabase because idx<0 short-circuited before the sync call).
+ */
+export function seedLocalPlayer(player: RegisteredPlayer): void {
+  const all = _store.load();
+  const idx = all.findIndex(p => p.id === player.id);
+  if (idx >= 0) all[idx] = { ...all[idx], ...player }; else all.push(player);
+  _store.persist(all);
+}
+
+/** Update any fields on a player and sync to Supabase. Works even when the
+ * local cache doesn't have the row yet (e.g. cleared cache, different device) —
+ * it always pushes to Supabase rather than silently no-op'ing; the server
+ * route is the actual source of truth and merges custom_fields safely. */
 export function updatePlayer(playerId: string, updates: Partial<RegisteredPlayer>): RegisteredPlayer | null {
   const all = _store.load();
   const idx = all.findIndex(p => p.id === playerId);
-  if (idx < 0) return null;
-  const updated = { ...all[idx], ...updates };
-  all[idx] = updated;
+  const existing = idx >= 0 ? all[idx] : null;
+  if (!existing && !updates.email) {
+    // No local row and no email supplied: the server route requires email to
+    // identify/authorize the row, so this update cannot be pushed. Log loudly
+    // instead of a silent drop, and give callers a chance to pass it.
+    console.warn(`[player-store] updatePlayer(${playerId}): no local cache and no email in updates — skipping Supabase sync`);
+    return null;
+  }
+  const updated: RegisteredPlayer = existing
+    ? { ...existing, ...updates }
+    : { id: playerId, shortId: '', name: '', ranking: 0, rankingPoints: 0, ...updates } as RegisteredPlayer;
+  if (idx >= 0) all[idx] = updated; else all.push(updated);
   _store.persist(all);
   // Also update padelmgt_user session if it's the same player
   if (typeof window !== 'undefined') {
