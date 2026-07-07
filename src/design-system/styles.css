@@ -1,0 +1,22 @@
+/*
+  PadelMGT design-system package stylesheet.
+
+  Single entry point for every primitive in this package. It imports the
+  real app stylesheet so tokens/classes never drift from what's actually
+  live on padelmgt.com — this package wraps the real visual language,
+  it doesn't reinvent one.
+*/
+@import '../app/globals.css';
+
+/*
+  Small additions beyond globals.css: generic hover/label utility classes
+  used by this package's Table/Field primitives, extracted from patterns
+  that were previously copy-pasted per page (e.g. src/app/dashboard/player/leagues/page.tsx).
+*/
+.ds-table-row { transition: background 0.12s; }
+.ds-table-row:hover { background: var(--grey-50); }
+
+.ds-eyebrow-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--grey-400);
+}
