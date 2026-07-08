@@ -68,14 +68,34 @@ authoring more previews is the standing offer on any future re-sync
 (`.design-sync/previews/<Name>.tsx` — floor-card grades and files carry
 forward, nothing is lost by doing this incrementally).
 
-## Environment quirk: DesignSync tool permission prompts
+## Environment quirks hit during the first sync (resolved)
 
-`create_project` and `finalize_plan` calls in this session intermittently
-failed with `Tool permission stream closed before response received` —
-sometimes resolving on a retry (2-3 attempts), sometimes not resolving at
-all within the session. This looks like an environment/UI issue delivering
-the approval dialog in this remote/headless session, not a user rejection.
-If a re-sync hits the same wall, tell the user plainly and offer: retry:
-approve from a local interactive Claude Code session instead (where this
-consistently worked); or hand them `ds-bundle/` + the exact upload commands
-to run themselves.
+- **`create_project` permission prompts** intermittently failed with `Tool
+  permission stream closed before response received` in this remote/headless
+  session — resolved on retry (2-3 attempts). Looked like a UI delivery
+  issue, not a user rejection.
+- **`write_files` needs the FULL `/design-login` OAuth**, not just
+  `/design-consent` (which is enough for `list_projects`/`create_project`/
+  `finalize_plan`). `/design-login` requires a real interactive terminal
+  with browser access — cannot run in this remote/headless environment at
+  all, no amount of retrying fixes it. The actual upload had to be done from
+  a genuinely local Claude Code session (Terminal, not the desktop app's
+  "Code" tab — that also runs in the cloud sandbox). That local session
+  didn't have the `/design-sync` skill's converter scripts available, so
+  rather than reproducing them there, the already-built-and-validated
+  `ds-bundle/` was committed to git as a one-time snapshot so the (locally
+  authorized) session could upload it directly with no rebuild. That commit
+  was removed again once the upload succeeded — don't expect to find it in
+  history going forward; if a future re-sync hits this same wall, repeat the
+  trick (temporarily `git add -f ds-bundle/...` the relevant paths, commit,
+  push, have the authorized machine pull + upload, then revert the commit).
+- **Wrong project type on first `create_project` call**: creating the
+  project via the standalone `mcp__claude-design__create_project` tool (as
+  opposed to `DesignSync`'s own `create_project` method) produced a project
+  of type `PROJECT_TYPE_PROJECT`, not `PROJECT_TYPE_DESIGN_SYSTEM` — this
+  wasn't caught until the upload step. Always `DesignSync(get_project)`
+  right after creation and confirm `type: PROJECT_TYPE_DESIGN_SYSTEM` before
+  proceeding. The wrong-type project (`07ecbe06-d143-42a5-a20d-8aa04fec5410`)
+  was deleted; the real one is `356bff9f-056a-440c-a68a-516f990fa5b0`
+  ("PadelMGT Design System") — already recorded as `projectId` in
+  `.design-sync/config.json`.
