@@ -1,0 +1,8 @@
+{
+  "name": "padelmgt-design-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pure presentational primitives wrapping PadelMGT's real visual language, for use in Claude Design.",
+  "main": "index.ts",
+  "types": "dist-types/index.d.ts"
+}

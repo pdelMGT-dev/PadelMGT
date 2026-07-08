@@ -1,0 +1,12 @@
+{
+  "pkg": "padelmgt-design-system",
+  "globalName": "PadelMGTDesignSystem",
+  "projectId": "356bff9f-056a-440c-a68a-516f990fa5b0",
+  "shape": "package",
+  "srcDir": ".",
+  "cssEntry": "styles.css",
+  "overrides": {
+    "SectionHeader": { "cardMode": "column" }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
