@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { getSAAdminUsers, saveSAAdminUsers, getSAAdminUsersFromSupabase, upsertSAAdminUserToSupabase, deleteSAAdminUserFromSupabase, getSAPlayers, getSAClubs, getSATournaments, seedPlayersToSupabase, seedClubsToSupabase, upsertTournamentToSupabase, type SAAdminUser } from '@/lib/superadmin-data';
 import { getGlobalRankingConfig, saveRankingConfig, syncRankingConfigFromSupabase, pushRankingConfigToSupabase } from '@/lib/ranking-config-store';
 import { getMinorCategories, saveMinorCategories, syncMinorCategoriesFromSupabase, pushMinorCategoriesToSupabase, type MinorCategory } from '@/lib/minor-categories-store';
-import { getAuditLog, clearAuditLog, type AuditEntry } from '@/lib/audit-log-store';
+import { getAuditLog, clearAuditLog, syncAuditLogFromSupabase, type AuditEntry } from '@/lib/audit-log-store';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
@@ -156,6 +156,9 @@ export default function ConfigPage() {
     }).catch(() => {});
     // Load audit log
     setAuditLog(getAuditLog(200));
+    syncAuditLogFromSupabase(200).then(remote => {
+      if (remote !== null) setAuditLog(remote);
+    }).catch(() => {});
     // Load sitio web config
     fetch('/api/sa/stats')
       .then(r => r.json() as Promise<{ config: Record<string, { display: string; useReal: boolean }> | null }>)
