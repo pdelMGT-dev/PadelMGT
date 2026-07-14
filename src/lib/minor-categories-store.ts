@@ -31,6 +31,30 @@ export function saveMinorCategories(cats: MinorCategory[]): void {
   _store.persist(cats);
 }
 
+// ── Supabase sync ─────────────────────────────────────────────────────────────
+
+/** Pull the real categories from Supabase into the local cache. Returns null
+ * on fetch failure (caller should keep showing the local cache). */
+export async function syncMinorCategoriesFromSupabase(): Promise<MinorCategory[] | null> {
+  try {
+    const res = await fetch('/api/minor-categories');
+    if (!res.ok) return null;
+    const data = await res.json() as { categories: MinorCategory[] };
+    if (!Array.isArray(data.categories)) return null;
+    saveMinorCategories(data.categories);
+    return data.categories;
+  } catch { return null; }
+}
+
+export async function pushMinorCategoriesToSupabase(cats: MinorCategory[]): Promise<void> {
+  const res = await fetch('/api/sa/minor-categories', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ categories: cats }),
+  });
+  if (!res.ok) throw new Error(`push minor categories failed: ${res.status}`);
+}
+
 // ── Age helpers (Jan-1 official rule) ─────────────────────────────────────────
 
 /** Age the player turns during the tournament year, measured at Jan 1 of that year (official rule). */

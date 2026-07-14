@@ -21,7 +21,7 @@ import {
   type ScorePhaseConfig,
   type DeuceRule,
 } from '@/lib/personalizado-store';
-import { getMinorCategories, type MinorCategory } from '@/lib/minor-categories-store';
+import { getMinorCategories, syncMinorCategoriesFromSupabase, type MinorCategory } from '@/lib/minor-categories-store';
 import { searchPlayers, getPlayer, type RegisteredPlayer } from '@/lib/player-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useToast } from '@/components/ToastProvider';
@@ -205,7 +205,12 @@ export default function ControlPanelPage({ params }: { params: Promise<{ id: str
 
   // SA base age categories (quick-pick for child tournaments)
   const [baseMinorCats, setBaseMinorCats] = useState<MinorCategory[]>([]);
-  useEffect(() => { setBaseMinorCats(getMinorCategories()); }, []);
+  useEffect(() => {
+    setBaseMinorCats(getMinorCategories());
+    syncMinorCategoriesFromSupabase().then(remote => {
+      if (remote) setBaseMinorCats(remote);
+    }).catch(() => {});
+  }, []);
 
   // Co-creator management (creator only)
   const [coSearch, setCoSearch] = useState('');

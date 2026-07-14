@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getSAAdminUsers, saveSAAdminUsers, getSAAdminUsersFromSupabase, upsertSAAdminUserToSupabase, deleteSAAdminUserFromSupabase, getSAPlayers, getSAClubs, getSATournaments, seedPlayersToSupabase, seedClubsToSupabase, upsertTournamentToSupabase, type SAAdminUser } from '@/lib/superadmin-data';
-import { getGlobalRankingConfig, saveRankingConfig } from '@/lib/ranking-config-store';
-import { getMinorCategories, saveMinorCategories, type MinorCategory } from '@/lib/minor-categories-store';
+import { getGlobalRankingConfig, saveRankingConfig, syncRankingConfigFromSupabase, pushRankingConfigToSupabase } from '@/lib/ranking-config-store';
+import { getMinorCategories, saveMinorCategories, syncMinorCategoriesFromSupabase, pushMinorCategoriesToSupabase, type MinorCategory } from '@/lib/minor-categories-store';
 import { getAuditLog, clearAuditLog, type AuditEntry } from '@/lib/audit-log-store';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -146,8 +146,14 @@ export default function ConfigPage() {
     setRankWin(cfg.pointsWin);
     setRankDraw(cfg.pointsDraw);
     setRankLoss(cfg.pointsLoss);
+    syncRankingConfigFromSupabase().then(remote => {
+      if (remote) { setRankWin(remote.pointsWin); setRankDraw(remote.pointsDraw); setRankLoss(remote.pointsLoss); }
+    }).catch(() => {});
     // Load minor (age) categories config
     setMinorCats(getMinorCategories());
+    syncMinorCategoriesFromSupabase().then(remote => {
+      if (remote) setMinorCats(remote);
+    }).catch(() => {});
     // Load audit log
     setAuditLog(getAuditLog(200));
     // Load sitio web config
@@ -678,7 +684,12 @@ export default function ConfigPage() {
             <button
               onClick={() => {
                 const cfg = getGlobalRankingConfig();
-                saveRankingConfig({ ...cfg, pointsWin: rankWin, pointsDraw: rankDraw, pointsLoss: rankLoss });
+                const updated = { ...cfg, pointsWin: rankWin, pointsDraw: rankDraw, pointsLoss: rankLoss };
+                saveRankingConfig(updated);
+                pushRankingConfigToSupabase(updated).catch(err => {
+                  console.error('[config] pushRankingConfigToSupabase failed:', err);
+                  toast('Guardado localmente, pero falló la sincronización con Supabase', false);
+                });
                 setRankSaved(true);
                 toast('Configuración de ranking guardada');
                 setTimeout(() => setRankSaved(false), 3000);
@@ -739,6 +750,10 @@ export default function ConfigPage() {
             <button
               onClick={() => {
                 saveMinorCategories(minorCats);
+                pushMinorCategoriesToSupabase(minorCats).catch(err => {
+                  console.error('[config] pushMinorCategoriesToSupabase failed:', err);
+                  toast('Guardado localmente, pero falló la sincronización con Supabase', false);
+                });
                 setMinorSaved(true);
                 toast('Categorías de menores guardadas');
                 setTimeout(() => setMinorSaved(false), 3000);
