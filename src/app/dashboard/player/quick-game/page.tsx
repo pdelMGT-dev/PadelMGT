@@ -9,7 +9,7 @@ import CloneDialog from '@/components/CloneDialog';
 import { checkGameGate, incrementUsage, getPlayerLimits } from '@/lib/plan-config';
 import { createInvitation, getPendingInvitationsForPlayer, respondToInvitation, getInvitationsForPlayer, syncMyInvitations } from '@/lib/invitation-store';
 import type { Invitation } from '@/lib/invitation-store';
-import { getFriendsForPlayer, searchPlayers, addFriendship } from '@/lib/player-store';
+import { getFriendsForPlayer, fetchFriendsFromSupabase, searchPlayers, addFriendship } from '@/lib/player-store';
 import { getGame, saveGame } from '@/lib/game-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import type { ActiveGame, GamePlayer as EnginePlayer, InvitedPlayer, ScoreConfig } from '@/lib/game-engine';
@@ -316,6 +316,9 @@ export default function QuickGamePage() {
     if (step === 3 && currentUser) {
       setFriendList(getFriendsForPlayer(currentUser.id));
       setMyFamily(getFamilyMembers(currentUser.id));
+      fetchFriendsFromSupabase(currentUser.id).then(remote => {
+        if (remote !== null) setFriendList(remote);
+      }).catch(() => {});
     }
   }, [step, currentUser]);
 

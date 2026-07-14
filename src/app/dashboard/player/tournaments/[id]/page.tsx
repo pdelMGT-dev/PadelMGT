@@ -7,7 +7,7 @@ import type { Tournament } from '@/lib/tournament-store';
 import type { GamePlayer, InvitedPlayer } from '@/lib/game-engine';
 import { startTournament } from '@/lib/tournament-engine';
 import { createInvitation, getInvitationsForGame } from '@/lib/invitation-store';
-import { searchPlayers, getFriendsForPlayer, addFriendship } from '@/lib/player-store';
+import { searchPlayers, getFriendsForPlayer, fetchFriendsFromSupabase, addFriendship } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, syncJoinRequestsFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { createScoreCorrection, getScoreCorrectionsByEntity, type ScoreCorrectionRequest } from '@/lib/score-correction-store';
@@ -211,6 +211,9 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
       ...(tournament.invitedPlayers ?? []).map(p => p.id),
     ]);
     setInviteFriends(getFriendsForPlayer(currentUser.id).filter(f => !allIds.has(f.id)));
+    fetchFriendsFromSupabase(currentUser.id).then(remote => {
+      if (remote !== null) setInviteFriends(remote.filter(f => !allIds.has(f.id)));
+    }).catch(() => {});
   }, [currentUser, tournament]);
 
   // ── Load existing score corrections for this tournament ───────────────────

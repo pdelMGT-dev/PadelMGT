@@ -420,6 +420,41 @@ export async function deletePlayerRelationshipFromSupabase(id: string): Promise<
   if (!res.ok) throw new Error(`delete relationship failed: ${res.status}`);
 }
 
+export interface SAFriendship {
+  id: string;
+  aId: string;
+  aName: string;
+  bId: string;
+  bName: string;
+  since: string;
+}
+
+/** Global friendship graph (all accepted friend_requests), for the SA
+ * Relations panel. Returns null on fetch failure — caller should keep
+ * showing the local cache in that case. */
+export async function getSAFriendshipsFromSupabase(): Promise<SAFriendship[] | null> {
+  try {
+    const res = await fetch('/api/sa/friendships', { credentials: 'include' });
+    if (!res.ok) return null;
+    const data = await res.json() as { friendships: SAFriendship[] };
+    return data.friendships;
+  } catch { return null; }
+}
+
+export async function addSAFriendship(aId: string, aName: string, bId: string, bName: string): Promise<void> {
+  const res = await fetch('/api/sa/friendships', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ aId, aName, bId, bName }),
+  });
+  if (!res.ok) throw new Error(`add friendship failed: ${res.status}`);
+}
+
+export async function removeSAFriendship(aId: string, bId: string): Promise<void> {
+  const res = await fetch(`/api/sa/friendships?aId=${encodeURIComponent(aId)}&bId=${encodeURIComponent(bId)}`, { method: 'DELETE', credentials: 'include' });
+  if (!res.ok) throw new Error(`remove friendship failed: ${res.status}`);
+}
+
 // ── Supabase integration ───────────────────────────────────────────────────────
 
 // Map Supabase row → SAPlayer

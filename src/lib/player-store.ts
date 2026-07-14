@@ -230,6 +230,46 @@ export function addFriendship(playerId: string, friendId: string): void {
   if (!map[playerId].includes(friendId)) map[playerId].push(friendId);
   if (!map[friendId].includes(playerId)) map[friendId].push(playerId);
   persistFriendshipMap(map);
+  syncFriendshipToSupabase(playerId, friendId).catch(err => console.warn('[player-store] friendship sync failed:', err));
+}
+
+/** Directly confirm an accepted friendship in Supabase (no approval step) so
+ * it's visible to the other player on any device. Fire-and-forget from the
+ * caller's perspective; playerId must be the currently authenticated caller. */
+async function syncFriendshipToSupabase(playerId: string, friendId: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const players = _store.load();
+  const fromName = players.find(p => p.id === playerId)?.name;
+  const toName = players.find(p => p.id === friendId)?.name;
+  const res = await fetch('/api/friends', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ op: 'auto', fromId: playerId, fromName, toId: friendId, toName }),
+  });
+  if (!res.ok) throw new Error(`sync friendship failed: ${res.status}`);
+}
+
+/** Pull the caller's accepted friends from Supabase and merge into the local
+ * cache so friendships made on another device show up here too. Returns
+ * null on fetch failure (caller should keep showing the local cache). */
+export async function fetchFriendsFromSupabase(playerId: string): Promise<RegisteredPlayer[] | null> {
+  if (isServer()) return null;
+  try {
+    const res = await fetch('/api/friends', { credentials: 'include' });
+    if (!res.ok) return null;
+    const data = await res.json() as { friends: Array<{ playerId: string }> };
+    const map = loadFriendshipMap();
+    const ids = new Set([...(map[playerId] ?? []), ...data.friends.map(f => f.playerId)]);
+    map[playerId] = [...ids];
+    for (const f of data.friends) {
+      const rev = new Set(map[f.playerId] ?? []);
+      rev.add(playerId);
+      map[f.playerId] = [...rev];
+    }
+    persistFriendshipMap(map);
+    return getFriendsForPlayer(playerId);
+  } catch { return null; }
 }
 
 export function removeFriendship(playerId: string, friendId: string): void {

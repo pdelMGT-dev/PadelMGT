@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getPlayerByEmail, getFriendsForPlayer } from '@/lib/player-store';
+import { getPlayerByEmail, getFriendsForPlayer, fetchFriendsFromSupabase } from '@/lib/player-store';
 import { getFriendsSnapshots, saveFriendsSnapshot, getAvailableYears, getFriendsSnapshot } from '@/lib/friends-ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import type { RegisteredPlayer } from '@/lib/player-store';
@@ -77,6 +77,13 @@ export default function PlayerRankingPage() {
       const all = [full, ...friends];
       const sorted = [...all].sort((a, b) => b.rankingPoints - a.rankingPoints);
       setFriendsRanking(sorted);
+
+      fetchFriendsFromSupabase(full.id).then(remote => {
+        if (remote === null) return;
+        setFriendsList(remote);
+        const allRemote = [full, ...remote];
+        setFriendsRanking([...allRemote].sort((a, b) => b.rankingPoints - a.rankingPoints));
+      }).catch(() => {});
 
       // History
       const years = getAvailableYears(full.id);

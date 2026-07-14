@@ -11,6 +11,9 @@ import { serviceClient, getCallerPlayerIds } from '@/lib/supabase-server';
  *   POST op:'accept'  → accept a request addressed to the caller.
  *   POST op:'reject'  → reject a request addressed to the caller.
  *   POST op:'cancel'  → delete a pending request the caller sent.
+ *   POST op:'auto'    → directly create/confirm an accepted friendship, no
+ *                       approval step (used when two players are auto-linked
+ *                       after playing a game/tournament together).
  */
 
 type Svc = NonNullable<ReturnType<typeof serviceClient>>;
@@ -99,6 +102,39 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'from_id,to_id' });
     if (error) { console.warn('[friends send]', error.message); return NextResponse.json({ error: 'No se pudo enviar' }, { status: 500 }); }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (op === 'auto') {
+    const fromId = body.fromId as string;
+    const toId   = body.toId as string;
+    if (!fromId || !toId) return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
+    if (!mine.has(fromId)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+    if (fromId === toId)   return NextResponse.json({ error: 'No podés agregarte a vos mismo' }, { status: 400 });
+
+    const { data: existing } = await svc
+      .from('friend_requests')
+      .select('*')
+      .or(`and(from_id.eq.${fromId},to_id.eq.${toId}),and(from_id.eq.${toId},to_id.eq.${fromId})`);
+    const rows = (existing ?? []) as Row[];
+    const existingRow = rows[0];
+
+    if (existingRow) {
+      if (existingRow.status === 'accepted') return NextResponse.json({ ok: true, already: 'friends' });
+      const { error } = await svc.from('friend_requests')
+        .update({ status: 'accepted', updated_at: new Date().toISOString() })
+        .eq('id', existingRow.id);
+      if (error) return NextResponse.json({ error: 'No se pudo actualizar' }, { status: 500 });
+      return NextResponse.json({ ok: true });
+    }
+
+    const id = (body.id as string) || `fr-${fromId}-${toId}`;
+    const { error } = await svc.from('friend_requests').insert({
+      id, from_id: fromId, from_name: (body.fromName as string) ?? null,
+      to_id: toId, to_name: (body.toName as string) ?? null,
+      status: 'accepted', updated_at: new Date().toISOString(),
+    });
+    if (error) { console.warn('[friends auto]', error.message); return NextResponse.json({ error: 'No se pudo crear' }, { status: 500 }); }
     return NextResponse.json({ ok: true });
   }
 

@@ -20,7 +20,7 @@ import {
   createInvitation,
   deleteInvitationsForGame,
 } from '@/lib/invitation-store';
-import { searchPlayers, addFriendship, areFriends, getFriendsForPlayer } from '@/lib/player-store';
+import { searchPlayers, addFriendship, areFriends, getFriendsForPlayer, fetchFriendsFromSupabase } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { applyGameRankingResults, getRankingHistoryForGame } from '@/lib/ranking-store';
 import type { RankingEntry } from '@/lib/ranking-store';
@@ -327,6 +327,9 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       const alreadyInvited = game?.invitedPlayers.filter(ip => ip.status === 'pending').map(ip => ip.id) ?? [];
       const exclude = new Set([...alreadyIn, ...alreadyInvited]);
       setFriendList(getFriendsForPlayer(currentUser.id).filter(f => !exclude.has(f.id)));
+      fetchFriendsFromSupabase(currentUser.id).then(remote => {
+        if (remote !== null) setFriendList(remote.filter(f => !exclude.has(f.id)));
+      }).catch(() => {});
     }
   }, [showAddModal, currentUser, game?.players, game?.invitedPlayers]);
 

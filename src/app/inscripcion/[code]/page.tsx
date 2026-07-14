@@ -15,7 +15,7 @@ import {
   sendPersonalizadoWaitlistedEmail,
   sendPartnerInvitationEmail,
 } from '@/lib/email';
-import { getFriendsForPlayer, searchPlayers, type RegisteredPlayer } from '@/lib/player-store';
+import { getFriendsForPlayer, fetchFriendsFromSupabase, searchPlayers, type RegisteredPlayer } from '@/lib/player-store';
 import { getFamilyMembers, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
 import { isEligibleForMaxAge, ageOnJan1 } from '@/lib/minor-categories-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -121,6 +121,9 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
   useEffect(() => {
     if (!user) return;
     setFriends(getFriendsForPlayer(user.id));
+    fetchFriendsFromSupabase(user.id).then(remote => {
+      if (remote !== null) setFriends(remote);
+    }).catch(() => {});
   }, [user]);
 
   // Load the guardian's family members when user is available
