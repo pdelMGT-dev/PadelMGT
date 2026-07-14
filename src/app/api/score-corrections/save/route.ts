@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { serviceClient, getServerUser } from '@/lib/supabase-server';
+import { requireSARequest } from '@/lib/sa-session';
 
 /**
  * Upsert a score-correction request with the service-role key.
  *
- * Both creating a request (a participant) and reviewing it (the organizer) are
- * done by logged-in users, so a valid auth session is required — this closes
- * the anon-write hole on score_corrections. Fire-and-forget on the client.
+ * Creating a request (a participant) needs a Supabase Auth session; reviewing
+ * one (the SA, approving/rejecting) authenticates via the separate signed SA
+ * cookie instead — accept either. A valid session is required either way,
+ * closing the anon-write hole on score_corrections. Fire-and-forget on the
+ * client.
  *
  * Body: the ScoreCorrectionRequest object (camelCase); mapped to columns here.
  */
@@ -21,6 +24,8 @@ interface CorrectionBody {
   requestedById?: string;
   currentScore?: string;
   requestedScore?: string;
+  requestedPair1Score?: number;
+  requestedPair2Score?: number;
   reason?: string;
   status?: string;
   reviewedBy?: string | null;
@@ -34,8 +39,8 @@ export async function POST(request: NextRequest) {
   const svc = serviceClient();
   if (!svc) return NextResponse.json({ error: 'Servicio no disponible' }, { status: 503 });
 
-  const user = await getServerUser(request);
-  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  const [user, saSession] = await Promise.all([getServerUser(request), requireSARequest(request)]);
+  if (!user && !saSession) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
   let c: CorrectionBody;
   try {
@@ -59,6 +64,8 @@ export async function POST(request: NextRequest) {
     requested_by_id: c.requestedById ?? '',
     current_score: c.currentScore ?? '',
     requested_score: c.requestedScore ?? '',
+    requested_pair1_score: c.requestedPair1Score ?? null,
+    requested_pair2_score: c.requestedPair2Score ?? null,
     reason: c.reason ?? '',
     status: c.status ?? 'pending',
     reviewed_by: c.reviewedBy ?? null,

@@ -6,15 +6,11 @@ import { getSAClubs } from '@/lib/superadmin-data';
 import type { SAPlayer, SAClub } from '@/lib/superadmin-data';
 import { joinClub, leaveClub } from '@/lib/club-membership-store';
 import type { ClubMembership } from '@/lib/club-membership-store';
-import { joinLeague, leaveLeague, getAllLeagueMemberships } from '@/lib/league-membership-store';
-import type { LeagueMembership } from '@/lib/league-membership-store';
-import { joinFederation, leaveFederation, getAllFederationMemberships } from '@/lib/federation-membership-store';
-import type { FederationMembership } from '@/lib/federation-membership-store';
 import { addFriendship, removeFriendship } from '@/lib/player-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'club' | 'friends' | 'league' | 'federation' | 'family';
+type Tab = 'club' | 'friends' | 'family';
 type AddMode = 'text' | 'csv' | 'table';
 
 interface FamilyMemberRow {
@@ -41,19 +37,6 @@ interface FriendshipRow {
   playerBId: string;
   playerBName: string;
 }
-
-// Static league / federation entities (extend later)
-const MOCK_LEAGUES = [
-  { id: 'league-001', name: 'Liga Premier LATAM' },
-  { id: 'league-002', name: 'Liga Regional Sur' },
-  { id: 'league-003', name: 'Liga Nacional Argentina' },
-];
-
-const MOCK_FEDERATIONS = [
-  { id: 'fed-001', name: 'Federación Argentina' },
-  { id: 'fed-002', name: 'Federación España' },
-  { id: 'fed-003', name: 'Federación Chile' },
-];
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -109,16 +92,6 @@ export default function RelationsPage() {
   const [friendSelected, setFriendSelected] = useState<Set<string>>(new Set());
   const [friendFilterA, setFriendFilterA] = useState('');
 
-  // League state
-  const [leagueMemberships, setLeagueMemberships] = useState<LeagueMembership[]>([]);
-  const [leagueSelected, setLeagueSelected] = useState<Set<string>>(new Set());
-  const [leagueFilterLeague, setLeagueFilterLeague] = useState('');
-
-  // Federation state
-  const [fedMemberships, setFedMemberships] = useState<FederationMembership[]>([]);
-  const [fedSelected, setFedSelected] = useState<Set<string>>(new Set());
-  const [fedFilterFed, setFedFilterFed] = useState('');
-
   // Family state (read-only listing of family members + links)
   const [familyMembers, setFamilyMembers] = useState<FamilyMemberRow[]>([]);
   const [familyLinks, setFamilyLinks] = useState<FamilyLinkRow[]>([]);
@@ -169,9 +142,6 @@ export default function RelationsPage() {
       }
       setFriendships(rows);
     } catch { setFriendships([]); }
-
-    setLeagueMemberships(getAllLeagueMemberships());
-    setFedMemberships(getAllFederationMemberships());
 
     // Family members + links — read localStorage directly (SA read-only listing)
     try {
@@ -233,28 +203,6 @@ export default function RelationsPage() {
         joinClub(id, { id: club.id, name: club.name, city: club.city, country: club.country });
         created++;
       }
-    } else if (tab === 'league') {
-      const league = MOCK_LEAGUES.find(l => l.id === addTarget);
-      if (!league) return;
-      for (const id of ids) {
-        const p = players.find(pl => pl.id === id);
-        if (!p) { skipped++; continue; }
-        const existing = leagueMemberships.some(m => m.playerId === id && m.leagueId === league.id);
-        if (existing) { skipped++; continue; }
-        joinLeague({ id: p.id, name: p.name, email: p.email }, league);
-        created++;
-      }
-    } else if (tab === 'federation') {
-      const fed = MOCK_FEDERATIONS.find(f => f.id === addTarget);
-      if (!fed) return;
-      for (const id of ids) {
-        const p = players.find(pl => pl.id === id);
-        if (!p) { skipped++; continue; }
-        const existing = fedMemberships.some(m => m.playerId === id && m.federationId === fed.id);
-        if (existing) { skipped++; continue; }
-        joinFederation({ id: p.id, name: p.name, email: p.email }, fed);
-        created++;
-      }
     } else if (tab === 'friends') {
       // ids contains two player IDs; create friendship between each pair
       if (ids.length < 2) { setAddResult({ created: 0, skipped: ids.length }); return; }
@@ -304,18 +252,6 @@ export default function RelationsPage() {
         removeFriendship(aId, bId);
       }
       setFriendSelected(new Set());
-    } else if (tab === 'league') {
-      for (const key of leagueSelected) {
-        const [playerId, leagueId] = key.split('|');
-        leaveLeague(playerId, leagueId);
-      }
-      setLeagueSelected(new Set());
-    } else if (tab === 'federation') {
-      for (const key of fedSelected) {
-        const [playerId, fedId] = key.split('|');
-        leaveFederation(playerId, fedId);
-      }
-      setFedSelected(new Set());
     }
     reloadAll();
   }
@@ -352,14 +288,6 @@ export default function RelationsPage() {
     });
   }, [friendships, friendFilterA]);
 
-  const filteredLeagueMems = useMemo(() => {
-    return leagueMemberships.filter(m => !leagueFilterLeague || m.leagueId === leagueFilterLeague);
-  }, [leagueMemberships, leagueFilterLeague]);
-
-  const filteredFedMems = useMemo(() => {
-    return fedMemberships.filter(m => !fedFilterFed || m.federationId === fedFilterFed);
-  }, [fedMemberships, fedFilterFed]);
-
   const tableFilteredPlayers = useMemo(() => {
     const q = addTableSearch.toLowerCase();
     return players.filter(p => !q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q) || p.shortId?.toLowerCase().includes(q));
@@ -370,8 +298,6 @@ export default function RelationsPage() {
   const TABS: { key: Tab; label: string; count: number }[] = [
     { key: 'club',       label: 'Club — Jugador',         count: clubMemberships.length },
     { key: 'friends',    label: 'Amistades',              count: friendships.length },
-    { key: 'league',     label: 'Liga — Jugador',         count: leagueMemberships.length },
-    { key: 'federation', label: 'Federación — Jugador',   count: fedMemberships.length },
     { key: 'family',     label: 'Familia',                count: familyMembers.length + familyLinks.length },
   ];
 
@@ -389,20 +315,15 @@ export default function RelationsPage() {
 
   const activeSelected =
     tab === 'club' ? clubSelected :
-    tab === 'friends' ? friendSelected :
-    tab === 'league' ? leagueSelected :
-    fedSelected;
+    friendSelected;
 
   const activeEntityLabel =
     tab === 'club' ? 'Club' :
-    tab === 'friends' ? 'Jugador destino' :
-    tab === 'league' ? 'Liga' : 'Federación';
+    'Jugador destino';
 
   const activeEntities =
     tab === 'club' ? clubs.map(c => ({ id: c.id, name: c.name })) :
-    tab === 'friends' ? players.map(p => ({ id: p.id, name: `${p.name} (${p.email})` })) :
-    tab === 'league' ? MOCK_LEAGUES :
-    MOCK_FEDERATIONS;
+    players.map(p => ({ id: p.id, name: `${p.name} (${p.email})` }));
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -609,18 +530,6 @@ export default function RelationsPage() {
             {tab === 'friends' && (
               <input value={friendFilterA} onChange={e => setFriendFilterA(e.target.value)} placeholder="Filtrar jugador…" style={{ ...inp, width: 240 }} />
             )}
-            {tab === 'league' && (
-              <select value={leagueFilterLeague} onChange={e => setLeagueFilterLeague(e.target.value)} style={{ ...sel, width: 'auto', minWidth: 220 }}>
-                <option value="">Todas las ligas</option>
-                {MOCK_LEAGUES.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-            )}
-            {tab === 'federation' && (
-              <select value={fedFilterFed} onChange={e => setFedFilterFed(e.target.value)} style={{ ...sel, width: 'auto', minWidth: 220 }}>
-                <option value="">Todas las federaciones</option>
-                {MOCK_FEDERATIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-            )}
             {tab === 'family' && (
               <>
                 <div style={{ display: 'flex', gap: 0 }}>
@@ -710,78 +619,6 @@ export default function RelationsPage() {
             </table>
           )}
 
-          {/* League-Player table */}
-          {tab === 'league' && (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={th}>
-                    <input type="checkbox"
-                      checked={filteredLeagueMems.length > 0 && filteredLeagueMems.every(m => leagueSelected.has(`${m.playerId}|${m.leagueId}`))}
-                      onChange={() => toggleAll(filteredLeagueMems.map(m => `${m.playerId}|${m.leagueId}`), leagueSelected, setLeagueSelected)}
-                    />
-                  </th>
-                  <th style={th}>Jugador</th>
-                  <th style={th}>Email</th>
-                  <th style={th}>Liga</th>
-                  <th style={th}>Fecha</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLeagueMems.length === 0 ? (
-                  <tr><td colSpan={5} style={{ ...td, textAlign: 'center', color: '#9ca3af', padding: '32px' }}>Sin relaciones</td></tr>
-                ) : filteredLeagueMems.map(m => {
-                  const key = `${m.playerId}|${m.leagueId}`;
-                  return (
-                    <tr key={key} style={{ background: leagueSelected.has(key) ? '#fef2f2' : undefined }}>
-                      <td style={td}><input type="checkbox" checked={leagueSelected.has(key)} onChange={() => toggleRow(leagueSelected, key, setLeagueSelected)} /></td>
-                      <td style={td}><span style={{ fontWeight: 600 }}>{m.playerName}</span><br /><span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{m.playerId}</span></td>
-                      <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{m.playerEmail}</span></td>
-                      <td style={td}>{m.leagueName}</td>
-                      <td style={td}>{m.joinedAt}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-
-          {/* Federation-Player table */}
-          {tab === 'federation' && (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={th}>
-                    <input type="checkbox"
-                      checked={filteredFedMems.length > 0 && filteredFedMems.every(m => fedSelected.has(`${m.playerId}|${m.federationId}`))}
-                      onChange={() => toggleAll(filteredFedMems.map(m => `${m.playerId}|${m.federationId}`), fedSelected, setFedSelected)}
-                    />
-                  </th>
-                  <th style={th}>Jugador</th>
-                  <th style={th}>Email</th>
-                  <th style={th}>Federación</th>
-                  <th style={th}>Fecha</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredFedMems.length === 0 ? (
-                  <tr><td colSpan={5} style={{ ...td, textAlign: 'center', color: '#9ca3af', padding: '32px' }}>Sin relaciones</td></tr>
-                ) : filteredFedMems.map(m => {
-                  const key = `${m.playerId}|${m.federationId}`;
-                  return (
-                    <tr key={key} style={{ background: fedSelected.has(key) ? '#fef2f2' : undefined }}>
-                      <td style={td}><input type="checkbox" checked={fedSelected.has(key)} onChange={() => toggleRow(fedSelected, key, setFedSelected)} /></td>
-                      <td style={td}><span style={{ fontWeight: 600 }}>{m.playerName}</span><br /><span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{m.playerId}</span></td>
-                      <td style={td}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{m.playerEmail}</span></td>
-                      <td style={td}>{m.federationName}</td>
-                      <td style={td}>{m.joinedAt}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-
           {/* Family table */}
           {tab === 'family' && familyView === 'members' && (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -849,8 +686,6 @@ export default function RelationsPage() {
         <div style={{ padding: '10px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', fontSize: 11, color: '#9ca3af' }}>
           {tab === 'club' && `${filteredClubMems.length} relaciones`}
           {tab === 'friends' && `${filteredFriendships.length} amistades`}
-          {tab === 'league' && `${filteredLeagueMems.length} relaciones`}
-          {tab === 'federation' && `${filteredFedMems.length} relaciones`}
           {tab === 'family' && (familyView === 'members' ? `${filteredFamilyMembers.length} familiares` : `${filteredFamilyLinks.length} vínculos`)}
         </div>
       </div>

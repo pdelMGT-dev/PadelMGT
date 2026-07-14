@@ -328,9 +328,10 @@ export default function GamesPage() {
     updateScoreCorrectionStatus(approveConfirm.corrId, 'approved', { reviewedBy: 'Super Admin' });
     setCorrections(getScoreCorrections().filter(c => c.type === 'game'));
     setApproveConfirm(null);
-    // NOTE: this only flips the correction's status — it does not yet patch the
-    // game's stored score or recalculate affected players' ranking points.
-    // That application step doesn't exist anywhere in the codebase yet.
+    // NOTE: this only flips the correction's status — it doesn't patch the
+    // game's score or recalculate ranking points. Unlike tournament
+    // corrections (see score-correction-apply.ts), no UI anywhere ever
+    // creates a 'game'-type correction, so there's nothing to apply here yet.
     toast('Correccion marcada como aprobada');
   }
 
