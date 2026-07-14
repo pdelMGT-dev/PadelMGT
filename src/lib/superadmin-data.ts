@@ -394,6 +394,32 @@ export function savePlayerRelationships(rels: PlayerRelationship[]): void {
   localStorage.setItem('padelmgt_sa_player_relationships', JSON.stringify(rels));
 }
 
+/** Pull the real cross-device relationship list from Supabase. Returns null
+ * on fetch failure (caller should keep showing the local cache), not [] —
+ * an empty result is only trustworthy when the fetch actually succeeded. */
+export async function getPlayerRelationshipsFromSupabase(): Promise<PlayerRelationship[] | null> {
+  try {
+    const res = await fetch('/api/sa/player-relationships', { credentials: 'include' });
+    if (!res.ok) return null;
+    const data = await res.json() as { relationships: PlayerRelationship[] };
+    return data.relationships;
+  } catch { return null; }
+}
+
+export async function addPlayerRelationshipToSupabase(rel: PlayerRelationship): Promise<void> {
+  const res = await fetch('/api/sa/player-relationships', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: rel.id, playerId: rel.playerId, relatedPlayerId: rel.relatedPlayerId, type: rel.type }),
+  });
+  if (!res.ok) throw new Error(`add relationship failed: ${res.status}`);
+}
+
+export async function deletePlayerRelationshipFromSupabase(id: string): Promise<void> {
+  const res = await fetch(`/api/sa/player-relationships?id=${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'include' });
+  if (!res.ok) throw new Error(`delete relationship failed: ${res.status}`);
+}
+
 // ── Supabase integration ───────────────────────────────────────────────────────
 
 // Map Supabase row → SAPlayer
