@@ -334,12 +334,15 @@ export default function RelationsPage() {
   // ── Filtered data ──────────────────────────────────────────────────────────
 
   const filteredClubMems = useMemo(() => {
+    const q = clubFilterPlayer.toLowerCase();
     return clubMemberships.filter(m => {
       const matchClub = !clubFilterClub || m.clubId === clubFilterClub;
-      const matchPlayer = !clubFilterPlayer || m.playerId === clubFilterPlayer || m.clubName.toLowerCase().includes(clubFilterPlayer.toLowerCase());
+      const playerName = players.find(p => p.id === m.playerId)?.name ?? '';
+      const matchPlayer = !q || m.playerId === clubFilterPlayer
+        || m.clubName.toLowerCase().includes(q) || playerName.toLowerCase().includes(q);
       return matchClub && matchPlayer;
     });
-  }, [clubMemberships, clubFilterClub, clubFilterPlayer]);
+  }, [clubMemberships, clubFilterClub, clubFilterPlayer, players]);
 
   const filteredFriendships = useMemo(() => {
     return friendships.filter(f => {

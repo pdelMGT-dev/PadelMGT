@@ -172,6 +172,14 @@ export default function ConfigPage() {
         if (d.content?.milestones?.length) setMilestones(d.content.milestones);
       })
       .catch(() => {});
+    // Load general settings (platform name, support email)
+    fetch('/api/sa/general-config', { credentials: 'include' })
+      .then(r => r.ok ? r.json() as Promise<{ config: { platformName?: string; supportEmail?: string } | null }> : null)
+      .then(d => {
+        if (d?.config?.platformName) setPlatformName(d.config.platformName);
+        if (d?.config?.supportEmail) setSupportEmail(d.config.supportEmail);
+      })
+      .catch(() => {});
     // Load branding (logos)
     fetch('/api/sa/branding', { credentials: 'include' })
       .then(r => r.ok ? r.json() as Promise<{ branding: Record<string, string> | null }> : null)
@@ -472,7 +480,20 @@ export default function ConfigPage() {
                 <input style={inputStyle} type="email" value={supportEmail} onChange={e => setSupportEmail(e.target.value)} />
               </Field>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button onClick={() => toast('Configuracion guardada')} style={{ padding: '9px 20px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                <button onClick={async () => {
+                    try {
+                      const res = await fetch('/api/sa/general-config', {
+                        method: 'POST', credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ platformName, supportEmail }),
+                      });
+                      if (!res.ok) throw new Error(await res.text());
+                      toast('Configuracion guardada');
+                    } catch (err) {
+                      console.error('[SA config] general save failed:', err);
+                      toast('Error al guardar — reintentá', false);
+                    }
+                  }} style={{ padding: '9px 20px', background: '#0a0a0a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                   Guardar cambios
                 </button>
               </div>

@@ -8,7 +8,7 @@ import {
   mergeCorrectionsFromSupabase,
   type ScoreCorrectionRequest,
 } from '@/lib/score-correction-store';
-import { getSAClubs, saveSAClubs, type SAClub } from '@/lib/superadmin-data';
+import { getSAClubs, saveSAClubs, upsertSAClubToSupabase, type SAClub } from '@/lib/superadmin-data';
 
 // ─── Unified request type ─────────────────────────────────────────────────────
 
@@ -129,6 +129,8 @@ export default function RequestsPage() {
       const clubs = getSAClubs();
       const updated = clubs.map(c => c.id === req.meta.clubId ? { ...c, status: 'active' as const } : c);
       saveSAClubs(updated);
+      const approved = updated.find(c => c.id === req.meta.clubId);
+      if (approved) upsertSAClubToSupabase(approved).catch(err => console.error('[SA requests] club approve sync failed:', err));
     }
     setApproveConfirm(null);
     setSelectedReq(null);
@@ -147,6 +149,8 @@ export default function RequestsPage() {
       const clubs = getSAClubs();
       const updated = clubs.map(c => c.id === req.meta.clubId ? { ...c, status: 'rejected' as const } : c);
       saveSAClubs(updated);
+      const rejected = updated.find(c => c.id === req.meta.clubId);
+      if (rejected) upsertSAClubToSupabase(rejected).catch(err => console.error('[SA requests] club reject sync failed:', err));
     }
     setRejectConfirm(null);
     setSelectedReq(null);

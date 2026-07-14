@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getSAGames, saveSAGames, getSAGamesFromSupabase, type SAGame } from '@/lib/superadmin-data';
+import { getSAGames, saveSAGames, getSAGamesFromSupabase, upsertSAGameToSupabase, deleteGameFromSupabase, type SAGame } from '@/lib/superadmin-data';
 import {
   getScoreCorrections,
   updateScoreCorrectionStatus,
@@ -204,7 +204,9 @@ export default function GamesPage() {
 
     function fetchFromSupabase() {
       getSAGamesFromSupabase().then(sbGames => {
-        if (sbGames && sbGames.length > 0) {
+        // null = fetch failed — keep showing local cache. [] is a legitimate
+        // "zero games" result and must be trusted, not skipped.
+        if (sbGames !== null) {
           setGames(sbGames);
           saveSAGames(sbGames);
         }
@@ -238,6 +240,7 @@ export default function GamesPage() {
     const exists = games.find(x => x.id === g.id);
     const updated = exists ? games.map(x => x.id === g.id ? g : x) : [g, ...games];
     saveAndRefresh(updated);
+    upsertSAGameToSupabase(g).catch(err => { console.error('[SA games] save failed:', err); toast('El juego se guardó localmente pero no en Supabase — reintentá', false); });
     if (selectedGame?.id === g.id) setSelectedGame(g);
     setShowCreateModal(false);
     setEditGame(null);
@@ -247,6 +250,7 @@ export default function GamesPage() {
   function handleDeleteGame(gameId: string) {
     const updated = games.filter(g => g.id !== gameId);
     saveAndRefresh(updated);
+    deleteGameFromSupabase(gameId).catch(err => console.error('[SA games] delete failed:', err));
     if (selectedGame?.id === gameId) setSelectedGame(null);
     setDeleteConfirm(null);
     toast('Juego eliminado');
@@ -255,6 +259,8 @@ export default function GamesPage() {
   function handleStatusChange(gameId: string, status: SAGame['status']) {
     const updated = games.map(g => g.id === gameId ? { ...g, status } : g);
     saveAndRefresh(updated);
+    const changed = updated.find(g => g.id === gameId);
+    if (changed) upsertSAGameToSupabase(changed).catch(err => console.error('[SA games] status change failed:', err));
     if (selectedGame?.id === gameId) setSelectedGame(prev => prev ? { ...prev, status } : prev);
     toast(`Estado cambiado a: ${status === 'ongoing' ? 'En curso' : status === 'completed' ? 'Finalizado' : 'Cancelado'}`);
   }
@@ -322,7 +328,10 @@ export default function GamesPage() {
     updateScoreCorrectionStatus(approveConfirm.corrId, 'approved', { reviewedBy: 'Super Admin' });
     setCorrections(getScoreCorrections().filter(c => c.type === 'game'));
     setApproveConfirm(null);
-    toast('Correccion aprobada y aplicada');
+    // NOTE: this only flips the correction's status — it does not yet patch the
+    // game's stored score or recalculate affected players' ranking points.
+    // That application step doesn't exist anywhere in the codebase yet.
+    toast('Correccion marcada como aprobada');
   }
 
   function handleReject(corrId: string) {
@@ -695,7 +704,7 @@ export default function GamesPage() {
           </p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={() => setApproveConfirm(null)} style={{ padding: '9px 20px', border: '1px solid var(--grey-200)', borderRadius: 4, cursor: 'pointer', background: '#fff', fontSize: 13, color: 'var(--grey-500)' }}>Cancelar</button>
-            <button onClick={handleApproveFinal} style={{ padding: '9px 20px', background: 'var(--turf-green)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Confirmar y aplicar</button>
+            <button onClick={handleApproveFinal} style={{ padding: '9px 20px', background: 'var(--turf-green)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>Confirmar aprobación</button>
           </div>
         </Modal>
       )}
