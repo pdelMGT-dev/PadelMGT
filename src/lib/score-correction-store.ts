@@ -2,7 +2,6 @@
 
 import { createLocalStore } from './local-store';
 import { supabase } from './supabase';
-import { updatePlayerRankingPoints } from './player-store';
 
 export interface ScoreCorrectionRequest {
   id: string;
@@ -15,6 +14,11 @@ export interface ScoreCorrectionRequest {
   requestedById: string;
   currentScore: string;
   requestedScore: string;
+  // Structured set-score the correction resolves to (sets won per pair) —
+  // what actually gets applied to the match + used to recompute ranking
+  // points. currentScore/requestedScore stay free text for human display.
+  requestedPair1Score: number;
+  requestedPair2Score: number;
   reason: string;
   createdAt: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -66,7 +70,7 @@ export function createScoreCorrection(
 export function updateScoreCorrectionStatus(
   id: string,
   status: 'approved' | 'rejected',
-  opts: { reviewedBy?: string; reviewNotes?: string } = {},
+  opts: { reviewedBy?: string; reviewNotes?: string; affectedPlayerIds?: string[]; rankingAdjusted?: boolean } = {},
 ): ScoreCorrectionRequest | null {
   const all = _store.load();
   const idx = all.findIndex(c => c.id === id);
@@ -77,28 +81,13 @@ export function updateScoreCorrectionStatus(
     reviewedBy: opts.reviewedBy,
     reviewedAt: new Date().toISOString(),
     reviewNotes: opts.reviewNotes,
+    ...(opts.affectedPlayerIds ? { affectedPlayerIds: opts.affectedPlayerIds } : {}),
+    ...(opts.rankingAdjusted !== undefined ? { rankingAdjusted: opts.rankingAdjusted } : {}),
   };
   all[idx] = updated;
   _store.persist(all);
   syncCorrectionToSupabase(updated).catch(() => {});
   return updated;
-}
-
-export function applyRankingAdjustmentForCorrection(
-  correctionId: string,
-  playerDeltas: Array<{ playerId: string; oldDelta: number; newDelta: number }>,
-): void {
-  const all = _store.load();
-  const idx = all.findIndex(c => c.id === correctionId);
-  if (idx < 0) return;
-
-  for (const pd of playerDeltas) {
-    const diff = pd.newDelta - pd.oldDelta;
-    if (diff !== 0) updatePlayerRankingPoints(pd.playerId, diff);
-  }
-
-  all[idx] = { ...all[idx], rankingAdjusted: true };
-  _store.persist(all);
 }
 
 export async function fetchCorrectionsFromSupabase(): Promise<ScoreCorrectionRequest[]> {
@@ -120,6 +109,8 @@ export async function fetchCorrectionsFromSupabase(): Promise<ScoreCorrectionReq
       requestedById: row.requested_by_id ?? '',
       currentScore: row.current_score ?? '',
       requestedScore: row.requested_score ?? '',
+      requestedPair1Score: row.requested_pair1_score ?? 0,
+      requestedPair2Score: row.requested_pair2_score ?? 0,
       reason: row.reason ?? '',
       createdAt: row.created_at,
       status: row.status as 'pending' | 'approved' | 'rejected',

@@ -9,6 +9,7 @@ import {
   type ScoreCorrectionRequest,
 } from '@/lib/score-correction-store';
 import { getSAClubs, saveSAClubs, upsertSAClubToSupabase, type SAClub } from '@/lib/superadmin-data';
+import { applyTournamentScoreCorrection } from '@/lib/score-correction-apply';
 
 // ─── Unified request type ─────────────────────────────────────────────────────
 
@@ -63,7 +64,12 @@ function adaptScoreCorrection(c: ScoreCorrectionRequest): UnifiedRequest {
     requestedBy: c.requestedBy,
     createdAt: c.createdAt,
     status: c.status,
-    meta: { correctionId: c.id, currentScore: c.currentScore, requestedScore: c.requestedScore, reason: c.reason, entityName: c.entityName, roundNum: c.roundNum, courtNum: c.courtNum, reviewedBy: c.reviewedBy, reviewedAt: c.reviewedAt },
+    meta: {
+      correctionId: c.id, currentScore: c.currentScore, requestedScore: c.requestedScore, reason: c.reason,
+      entityType: c.type, entityId: c.entityId, entityName: c.entityName, roundNum: c.roundNum, courtNum: c.courtNum,
+      requestedPair1Score: c.requestedPair1Score, requestedPair2Score: c.requestedPair2Score,
+      reviewedBy: c.reviewedBy, reviewedAt: c.reviewedAt, rankingAdjusted: c.rankingAdjusted,
+    },
   };
 }
 
@@ -119,12 +125,38 @@ export default function RequestsPage() {
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
   }
 
-  function handleApprove(req: UnifiedRequest) {
+  async function handleApprove(req: UnifiedRequest) {
     if (req.type === 'score_correction') {
+      const entityType = req.meta.entityType as 'tournament' | 'game';
+      const entityId = req.meta.entityId as string;
+      const roundNum = req.meta.roundNum as number;
+      const courtNum = req.meta.courtNum as number;
+      const p1 = req.meta.requestedPair1Score as number;
+      const p2 = req.meta.requestedPair2Score as number;
+
+      let affectedPlayerIds: string[] | undefined;
+      let applyError: string | undefined;
+
+      if (entityType === 'tournament') {
+        const result = await applyTournamentScoreCorrection(entityId, roundNum, courtNum, p1, p2);
+        if (result.ok) affectedPlayerIds = result.affectedPlayerIds;
+        else applyError = result.error;
+      }
+      // Game-type corrections have no reachable creation path today (no UI
+      // ever creates one) — nothing to apply. See score-correction-apply.ts.
+
       updateScoreCorrectionStatus(req.meta.correctionId as string, 'approved', {
         reviewedBy: 'Super Admin',
         reviewNotes: reviewNotes.trim() || undefined,
+        affectedPlayerIds,
+        rankingAdjusted: !!affectedPlayerIds,
       });
+
+      if (applyError) {
+        toast(`Aprobada, pero no se pudo aplicar el resultado: ${applyError}`, false);
+        setApproveConfirm(null); setSelectedReq(null); setReviewNotes(''); loadRequests();
+        return;
+      }
     } else if (req.type === 'club_approval') {
       const clubs = getSAClubs();
       const updated = clubs.map(c => c.id === req.meta.clubId ? { ...c, status: 'active' as const } : c);
@@ -136,7 +168,7 @@ export default function RequestsPage() {
     setSelectedReq(null);
     setReviewNotes('');
     loadRequests();
-    toast('Solicitud aprobada');
+    toast(req.type === 'score_correction' ? 'Corrección aprobada y aplicada — score y puntos de ranking actualizados' : 'Solicitud aprobada');
   }
 
   function handleReject(req: UnifiedRequest) {
@@ -349,6 +381,11 @@ export default function RequestsPage() {
                     <div style={{ fontSize: 24, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--turf-green)' }}>{selectedReq.meta.requestedScore as string}</div>
                   </div>
                 </div>
+                {selectedReq.meta.entityType === 'tournament' && (
+                  <div style={{ fontSize: 11, color: 'var(--grey-500)' }}>
+                    Se aplicará como: Pareja 1 = {selectedReq.meta.requestedPair1Score as number} sets · Pareja 2 = {selectedReq.meta.requestedPair2Score as number} sets
+                  </div>
+                )}
                 <div style={{ padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', fontSize: 12, color: '#92400e', fontStyle: 'italic' }}>
                   "{selectedReq.meta.reason as string}"
                 </div>

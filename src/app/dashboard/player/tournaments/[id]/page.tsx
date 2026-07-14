@@ -129,6 +129,8 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
   const [corrCourt, setCorrCourt] = useState('');
   const [corrCurrentScore, setCorrCurrentScore] = useState('');
   const [corrRequestedScore, setCorrRequestedScore] = useState('');
+  const [corrPair1Sets, setCorrPair1Sets] = useState('');
+  const [corrPair2Sets, setCorrPair2Sets] = useState('');
   const [corrReason, setCorrReason] = useState('');
   const [corrSent, setCorrSent] = useState(false);
   const [existingCorrections, setExistingCorrections] = useState<ScoreCorrectionRequest[]>([]);
@@ -385,6 +387,19 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                     <input style={inp} placeholder="ej: 4 – 6" value={corrRequestedScore} onChange={e => setCorrRequestedScore(e.target.value)} />
                   </div>
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={lbl}>Sets ganados — Pareja 1</label>
+                    <input style={inp} type="number" min="0" placeholder="ej: 2" value={corrPair1Sets} onChange={e => setCorrPair1Sets(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Sets ganados — Pareja 2</label>
+                    <input style={inp} type="number" min="0" placeholder="ej: 1" value={corrPair2Sets} onChange={e => setCorrPair2Sets(e.target.value)} />
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: -6 }}>
+                  Estos números (sets ganados por cada pareja) son los que se aplican al corregir — el texto de arriba es solo para referencia.
+                </div>
                 <div>
                   <label style={lbl}>Motivo de la corrección</label>
                   <textarea style={{ ...inp, minHeight: 72, resize: 'vertical' }} placeholder="Describe por qué el score necesita ser corregido..." value={corrReason} onChange={e => setCorrReason(e.target.value)} />
@@ -392,7 +407,7 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button
                     onClick={() => {
-                      if (!corrRound || !corrCourt || !corrCurrentScore || !corrRequestedScore || !corrReason.trim()) return;
+                      if (!corrRound || !corrCourt || !corrCurrentScore || !corrRequestedScore || corrPair1Sets === '' || corrPair2Sets === '' || !corrReason.trim()) return;
                       createScoreCorrection({
                         type: 'tournament',
                         entityId: tournament.id,
@@ -403,6 +418,8 @@ export default function GestionarTorneoPage({ params }: { params: Promise<{ id: 
                         requestedById: currentUser.id,
                         currentScore: corrCurrentScore.trim(),
                         requestedScore: corrRequestedScore.trim(),
+                        requestedPair1Score: Number(corrPair1Sets),
+                        requestedPair2Score: Number(corrPair2Sets),
                         reason: corrReason.trim(),
                       });
                       setExistingCorrections(getScoreCorrectionsByEntity(tournament.id));
