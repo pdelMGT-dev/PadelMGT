@@ -71,3 +71,30 @@ export function deleteRankingConfig(id: string): void {
   if (id === 'global') return;
   _store.persist(_store.load().filter(c => c.id !== id));
 }
+
+// ── Supabase sync ─────────────────────────────────────────────────────────────
+// The point math (ranking-store.ts) reads getGlobalRankingConfig() synchronously
+// everywhere, so the local cache stays the source of truth for gameplay; these
+// just keep it fresh across devices.
+
+/** Pull the real global config from Supabase into the local cache. Returns
+ * null on fetch failure (caller should keep showing the local cache). */
+export async function syncRankingConfigFromSupabase(): Promise<RankingTableConfig | null> {
+  try {
+    const res = await fetch('/api/ranking-config');
+    if (!res.ok) return null;
+    const data = await res.json() as { config: RankingTableConfig };
+    if (!data.config) return null;
+    saveRankingConfig(data.config);
+    return data.config;
+  } catch { return null; }
+}
+
+export async function pushRankingConfigToSupabase(config: RankingTableConfig): Promise<void> {
+  const res = await fetch('/api/sa/ranking-config', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pointsWin: config.pointsWin, pointsDraw: config.pointsDraw, pointsLoss: config.pointsLoss }),
+  });
+  if (!res.ok) throw new Error(`push ranking config failed: ${res.status}`);
+}
