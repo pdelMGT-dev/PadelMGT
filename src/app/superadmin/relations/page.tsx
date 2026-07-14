@@ -7,6 +7,7 @@ import type { SAPlayer, SAClub } from '@/lib/superadmin-data';
 import { joinClub, leaveClub } from '@/lib/club-membership-store';
 import type { ClubMembership } from '@/lib/club-membership-store';
 import { addFriendship, removeFriendship } from '@/lib/player-store';
+import { getSAFriendshipsFromSupabase, addSAFriendship, removeSAFriendship } from '@/lib/superadmin-data';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -143,6 +144,19 @@ export default function RelationsPage() {
       setFriendships(rows);
     } catch { setFriendships([]); }
 
+    // Cross-device truth from Supabase (overrides local cache once loaded)
+    getSAFriendshipsFromSupabase().then(remote => {
+      if (remote === null) return;
+      const rows: FriendshipRow[] = remote.map(f => ({
+        key: [f.aId, f.bId].sort().join('|'),
+        playerAId: f.aId,
+        playerAName: f.aName || ps.find(p => p.id === f.aId)?.name || f.aId,
+        playerBId: f.bId,
+        playerBName: f.bName || ps.find(p => p.id === f.bId)?.name || f.bId,
+      }));
+      setFriendships(rows);
+    }).catch(() => {});
+
     // Family members + links — read localStorage directly (SA read-only listing)
     try {
       const raw = localStorage.getItem('padelmgt_family_members') ?? '[]';
@@ -207,6 +221,7 @@ export default function RelationsPage() {
       // ids contains two player IDs; create friendship between each pair
       if (ids.length < 2) { setAddResult({ created: 0, skipped: ids.length }); return; }
       const [aId, ...rest] = ids;
+      const aName = players.find(p => p.id === aId)?.name ?? aId;
       for (const bId of rest) {
         if (aId === bId) { skipped++; continue; }
         const already = friendships.some(f =>
@@ -214,7 +229,12 @@ export default function RelationsPage() {
           (f.playerAId === bId && f.playerBId === aId)
         );
         if (already) { skipped++; continue; }
+        const bName = players.find(p => p.id === bId)?.name ?? bId;
         addFriendship(aId, bId);
+        addSAFriendship(aId, aName, bId, bName).catch(err => {
+          console.error('[relations] addSAFriendship failed:', err);
+          alert(`No se pudo sincronizar ${aName} - ${bName} con Supabase.`);
+        });
         created++;
       }
     }
@@ -250,6 +270,7 @@ export default function RelationsPage() {
       for (const key of friendSelected) {
         const [aId, bId] = key.split('|');
         removeFriendship(aId, bId);
+        removeSAFriendship(aId, bId).catch(err => console.error('[relations] removeSAFriendship failed:', err));
       }
       setFriendSelected(new Set());
     }

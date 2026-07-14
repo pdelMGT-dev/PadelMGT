@@ -16,7 +16,7 @@ import {
   type PersonalizadoTournament,
   type PendingInvitation,
 } from '@/lib/personalizado-store';
-import { getFriendsForPlayer, searchPlayers } from '@/lib/player-store';
+import { getFriendsForPlayer, fetchFriendsFromSupabase, searchPlayers } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { getPlayerClubs, syncMyClubs } from '@/lib/club-membership-store';
 import { getSAClubs } from '@/lib/superadmin-data';
@@ -348,6 +348,9 @@ export default function PlayerTournamentsPage() {
     if (step === 3 && currentUser) {
       const friends = getFriendsForPlayer(currentUser.id);
       setTFriendList(friends.filter(f => !tPlayers.some(p => p.id === f.id)));
+      fetchFriendsFromSupabase(currentUser.id).then(remote => {
+        if (remote !== null) setTFriendList(remote.filter(f => !tPlayers.some(p => p.id === f.id)));
+      }).catch(() => {});
     }
   }, [step, currentUser]);
 
