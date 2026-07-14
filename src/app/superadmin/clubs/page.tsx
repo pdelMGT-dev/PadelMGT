@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { getSAClubs, saveSAClubs, getSAClubsFromSupabase, upsertSAClubToSupabase, deleteSAClubFromSupabase, type SAClub } from '@/lib/superadmin-data';
-import { getSANotes, addSANote, deleteSANote, type SANote } from '@/lib/sa-notes-store';
+import { getSANotes, addSANote, deleteSANote, fetchSANotesFromSupabase, type SANote } from '@/lib/sa-notes-store';
 import { logAudit } from '@/lib/audit-log-store';
 import { getPlans } from '@/lib/plan-store';
 
@@ -802,6 +802,9 @@ export default function ClubsPage() {
                       setClubDrawerTab('profile');
                       setClubNotes(getSANotes('club', c.id));
                       setClubNoteInput('');
+                      fetchSANotesFromSupabase('club', c.id).then(remote => {
+                        if (remote !== null) setClubNotes(remote);
+                      }).catch(() => {});
                     }}
                     onMouseEnter={e => { if (!bulkSelected.has(c.id)) e.currentTarget.style.background = '#fafafa'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = bulkSelected.has(c.id) ? '#f0fdf4' : '#fff'; }}

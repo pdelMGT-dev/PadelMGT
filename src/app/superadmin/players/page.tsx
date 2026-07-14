@@ -8,6 +8,9 @@ import {
   savePlayerCustomFields,
   getPlayerRelationships,
   savePlayerRelationships,
+  getPlayerRelationshipsFromSupabase,
+  addPlayerRelationshipToSupabase,
+  deletePlayerRelationshipFromSupabase,
   getSAPlayersFromSupabase,
   upsertSAPlayerToSupabase,
   deleteSAPlayerFromSupabase,
@@ -19,7 +22,7 @@ import {
 import { getAllPlayers, updatePlayer as updateRegisteredPlayer } from '@/lib/player-store';
 import type { PlanId } from '@/lib/plan-config';
 import { recordPlanChange, getPlanChanges, getPlans, syncPlansFromSupabase } from '@/lib/plan-store';
-import { getSANotes, addSANote, deleteSANote, type SANote } from '@/lib/sa-notes-store';
+import { getSANotes, addSANote, deleteSANote, fetchSANotesFromSupabase, type SANote } from '@/lib/sa-notes-store';
 import { getScoreCorrectionsByEntity } from '@/lib/score-correction-store';
 import { getRankingHistoryForPlayer, type RankingEntry } from '@/lib/ranking-store';
 import { logAudit } from '@/lib/audit-log-store';
@@ -494,6 +497,7 @@ export default function PlayersPage() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<{ step: number } | null>(null);
   const [bulkAction, setBulkAction] = useState('');
   const [, forcePlansRefresh] = useState(0);
+  const [, forceRelRefresh] = useState(0);
 
   useEffect(() => {
     setPlayers(getSAPlayers());
@@ -501,6 +505,11 @@ export default function PlayersPage() {
     // Pull the plan catalog from Supabase (cross-device) so the plan dropdown
     // reflects plans created/edited from another browser.
     syncPlansFromSupabase().then(remote => { if (remote) forcePlansRefresh(v => v + 1); }).catch(() => {});
+    // Pull player relationships from Supabase (cross-device) — local cache is
+    // only an instant-paint fallback.
+    getPlayerRelationshipsFromSupabase().then(remote => {
+      if (remote !== null) { savePlayerRelationships(remote); forceRelRefresh(v => v + 1); }
+    }).catch(() => {});
 
     function fetchFromSupabase() {
       getSAPlayersFromSupabase().then(sbPlayers => {
@@ -881,16 +890,15 @@ export default function PlayersPage() {
       (r.playerId === relatedId && r.relatedPlayerId === playerId)
     );
     if (dup) { toast('Relacion ya existente', false); return; }
-    const updated: PlayerRelationship[] = [...existing, {
-      id: uid(), playerId, relatedPlayerId: relatedId, type,
-      createdAt: new Date().toISOString(),
-    }];
-    savePlayerRelationships(updated);
+    const rel: PlayerRelationship = { id: uid(), playerId, relatedPlayerId: relatedId, type, createdAt: new Date().toISOString() };
+    savePlayerRelationships([...existing, rel]);
+    addPlayerRelationshipToSupabase(rel).catch(err => { console.error('[SA players] relationship add sync failed:', err); toast('Guardado local pero no en Supabase — reintentá', false); });
     toast('Relacion agregada');
   }
   function removeRelationship(relId: string) {
     const updated = getPlayerRelationships().filter(r => r.id !== relId);
     savePlayerRelationships(updated);
+    deletePlayerRelationshipFromSupabase(relId).catch(err => { console.error('[SA players] relationship delete sync failed:', err); toast('Borrado local pero no en Supabase — puede reaparecer', false); });
     toast('Relacion eliminada');
   }
 
@@ -1002,6 +1010,9 @@ export default function PlayersPage() {
                       setDrawerNotes(getSANotes('player', p.id));
                       setDrawerRankingHistory(getRankingHistoryForPlayer(p.id));
                       setDrawerNoteInput('');
+                      fetchSANotesFromSupabase('player', p.id).then(remote => {
+                        if (remote !== null) setDrawerNotes(remote);
+                      }).catch(() => {});
                     }}
                     onMouseEnter={e => { if (!selectedIds.has(p.id)) e.currentTarget.style.background = '#fafafa'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = selectedIds.has(p.id) ? '#f0fdf4' : '#fff'; }}
