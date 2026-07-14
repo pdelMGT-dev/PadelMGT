@@ -311,7 +311,7 @@ export default function SuperAdminDashboard() {
   }
 
   return (
-    <div style={{ padding: '26px 28px 60px', maxWidth: 1440, fontFamily: 'var(--font-body)', display: 'flex', flexDirection: 'column', gap: 22 }}>
+    <div style={{ padding: '26px 28px 60px', fontFamily: 'var(--font-body)', display: 'flex', flexDirection: 'column', gap: 22 }}>
       {/* Toasts */}
       <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {toasts.map(t => (

@@ -64,7 +64,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     <div style={{
       width: 240,
       minHeight: '100vh',
-      background: '#0a0a0a',
+      background: 'var(--court-blue-deep)',
       display: 'flex',
       flexDirection: 'column',
       position: 'fixed',
@@ -184,7 +184,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
           top: 16,
           left: 16,
           zIndex: 200,
-          background: '#0a0a0a',
+          background: 'var(--court-blue-deep)',
           border: 'none',
           color: '#fff',
           width: 40,
