@@ -8,6 +8,7 @@ import {
   deletePlan,
   getPlanChanges,
   syncPlansFromSupabase,
+  pushPlansToSupabase,
   type SubscriptionPlan,
   type PlanFeature,
 } from '@/lib/plan-store';
@@ -439,7 +440,7 @@ export default function PlansPage() {
     setEditLimits({ ...DEFAULT_PLAN_LIMITS, ...(allPlanLimits[plan.id] ?? {}) });
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!editingPlan) return;
     const updated = updatePlan(editingPlan.id, {
       ...editForm,
@@ -450,14 +451,27 @@ export default function PlansPage() {
     if (!updated) { toast('Error al guardar', false); return; }
     setPlans(getPlans());
     const limitsPayload = { ...allPlanLimits, [editingPlan.id]: editLimits };
-    fetch('/api/sa/plan-limits', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ limits: limitsPayload }),
-    }).catch(() => {});
+    let limitsOk = true;
+    try {
+      const res = await fetch('/api/sa/plan-limits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limits: limitsPayload }),
+      });
+      limitsOk = res.ok;
+    } catch { limitsOk = false; }
     setAllPlanLimits(limitsPayload);
     setEditingPlan(null);
-    toast('Plan actualizado');
+    // updatePlan already fires its own best-effort catalog push; await it
+    // again here (idempotent) just to know whether it actually landed, so
+    // the toast reflects reality instead of always claiming success.
+    try {
+      await pushPlansToSupabase(getPlans());
+      toast(limitsOk ? 'Plan actualizado' : 'Plan actualizado, pero los límites no se sincronizaron', limitsOk);
+    } catch (err) {
+      console.error('[SA plans] catalog sync failed:', err);
+      toast('Guardado localmente, pero no se sincronizó con Supabase — reintentá', false);
+    }
   }
 
   function handleFeatureChange(idx: number, field: keyof PlanFeature, value: string | boolean) {

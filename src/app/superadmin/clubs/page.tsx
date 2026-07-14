@@ -4,8 +4,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getSAClubs, saveSAClubs, getSAClubsFromSupabase, upsertSAClubToSupabase, deleteSAClubFromSupabase, type SAClub } from '@/lib/superadmin-data';
 import { getSANotes, addSANote, deleteSANote, type SANote } from '@/lib/sa-notes-store';
 import { logAudit } from '@/lib/audit-log-store';
+import { getPlans } from '@/lib/plan-store';
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
+
+/** Club plan dropdown options derived from the SA-managed catalog (the
+ * 'club' group, both active and inactive — inactive here means "not sold to
+ * new customers", not "doesn't exist", so historical/grandfathered clubs
+ * still need to be assignable to them), always ending with Infinity. */
+function getClubPlanOptions(): { value: string; label: string }[] {
+  const clubPlans = getPlans().filter(p => p.group === 'club').map(p => ({ value: p.id, label: p.name }));
+  return [{ value: 'free', label: 'Free' }, ...clubPlans, { value: 'infinity', label: '∞ Infinity' }];
+}
 
 const PAGE_SIZE = 15;
 
@@ -243,25 +253,7 @@ function ClubForm({
         </Field>
         <Field label="Plan de suscripción">
           <select style={inputStyle} value={form.plan ?? 'free'} onChange={e => set('plan', e.target.value as SAClub['plan'])}>
-            <optgroup label="Club">
-              <option value="free">Free</option>
-              <option value="club_starter">Club Starter</option>
-              <option value="club_pro">Club Pro</option>
-              <option value="club_liga">Club Liga</option>
-            </optgroup>
-            <optgroup label="Liga">
-              <option value="liga_free">Liga Free</option>
-              <option value="liga_basic">Liga Basic</option>
-              <option value="liga_pro">Liga Pro</option>
-              <option value="liga_unlimited">Liga Unlimited</option>
-            </optgroup>
-            <optgroup label="Federación">
-              <option value="fed_basic">Fed Basic</option>
-              <option value="fed_pro">Fed Pro</option>
-            </optgroup>
-            <optgroup label="★ Especial">
-              <option value="infinity">∞ Infinity</option>
-            </optgroup>
+            {getClubPlanOptions().map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </Field>
         <Field label="Estado">
@@ -353,18 +345,24 @@ export default function ClubsPage() {
 
     function fetchFromSupabase() {
       getSAClubsFromSupabase().then(sbClubs => {
-        if (!sbClubs || sbClubs.length === 0) return;
-        // Local is authoritative (SA edits persist there).
-        // Only bring in clubs from Supabase that don't exist locally yet
-        // (e.g. new registration requests from the public form).
+        // null = fetch failed / Supabase not reachable — keep showing local cache.
+        // [] is a legitimate "zero clubs" result and must be trusted, not skipped.
+        if (sbClubs === null) return;
+
+        // Supabase is authoritative for which rows still exist — a club deleted
+        // server-side must disappear here too, not linger in the local cache
+        // forever. Local wins only for the fields an SA action just changed
+        // (status/plan), so an in-flight optimistic update isn't clobbered by
+        // the next poll picking up a not-yet-committed row.
         const local = getSAClubs();
-        const localIds = new Set(local.map(c => c.id));
-        const newFromSb = sbClubs.filter(c => !localIds.has(c.id));
-        if (newFromSb.length > 0) {
-          const all = [...local, ...newFromSb];
-          setClubs(all);
-          saveSAClubs(all);
-        }
+        const localMap = new Map(local.map(c => [c.id, c]));
+        const merged = sbClubs.map(sc => {
+          const loc = localMap.get(sc.id);
+          if (!loc) return sc;
+          return { ...sc, status: loc.status ?? sc.status, plan: loc.plan ?? sc.plan };
+        });
+        setClubs(merged);
+        saveSAClubs(merged);
       });
     }
 
@@ -479,7 +477,7 @@ export default function ClubsPage() {
     const exists = clubs.find(x => x.id === c.id);
     const updated = exists ? clubs.map(x => x.id === c.id ? c : x) : [c, ...clubs];
     saveAndRefresh(updated);
-    upsertSAClubToSupabase(c);
+    upsertSAClubToSupabase(c).catch(err => { console.error('[SA clubs] save failed:', err); toast('El club se guardó localmente pero no en Supabase — reintentá', false); });
     setShowCreateModal(false);
     setEditClub(null);
     if (selectedClub?.id === c.id) setSelectedClub(c);
@@ -491,7 +489,7 @@ export default function ClubsPage() {
     const updated = clubs.map(c => c.id === clubId ? { ...c, status: 'active' as const } : c);
     saveAndRefresh(updated);
     const approved = updated.find(c => c.id === clubId);
-    if (approved) upsertSAClubToSupabase(approved); // propagate so it appears on public /clubs
+    if (approved) upsertSAClubToSupabase(approved).catch(err => { console.error('[SA clubs] approve sync failed:', err); toast('Aprobado localmente pero no se sincronizó — reintentá', false); }); // propagate so it appears on public /clubs
     if (selectedClub?.id === clubId) setSelectedClub(prev => prev ? { ...prev, status: 'active' as const } : prev);
     logAudit('club_approved', 'Super Admin', { targetType: 'club', targetId: clubId, targetName: club?.name });
     toast('Club aprobado');
@@ -505,7 +503,7 @@ export default function ClubsPage() {
     const updated = clubs.map(c => c.id === rejectConfirm.clubId ? { ...c, status: 'rejected' as const, rejectReason: rejectConfirm.reason || undefined } : c);
     saveAndRefresh(updated);
     const rejected = updated.find(c => c.id === rejectConfirm.clubId);
-    if (rejected) upsertSAClubToSupabase(rejected);
+    if (rejected) upsertSAClubToSupabase(rejected).catch(err => { console.error('[SA clubs] reject sync failed:', err); toast('Rechazado localmente pero no se sincronizó — reintentá', false); });
     if (selectedClub?.id === rejectConfirm.clubId) setSelectedClub(prev => prev ? { ...prev, status: 'rejected' as const, rejectReason: rejectConfirm.reason || undefined } : prev);
     setRejectConfirm(null);
     logAudit('club_rejected', 'Super Admin', { targetType: 'club', targetId: rejectConfirm.clubId, targetName: club?.name, details: rejectConfirm.reason || undefined });
@@ -519,7 +517,7 @@ export default function ClubsPage() {
     const club = clubs.find(c => c.id === deleteConfirm.clubId);
     const updated = clubs.filter(c => c.id !== deleteConfirm.clubId);
     saveAndRefresh(updated);
-    deleteSAClubFromSupabase(deleteConfirm.clubId);
+    deleteSAClubFromSupabase(deleteConfirm.clubId).catch(err => { console.error('[SA clubs] delete failed:', err); toast('No se pudo borrar en Supabase — puede reaparecer', false); });
     if (selectedClub?.id === deleteConfirm.clubId) setSelectedClub(null);
     setDeleteConfirm(null);
     logAudit('club_deleted', 'Super Admin', { targetType: 'club', targetId: deleteConfirm.clubId, targetName: club?.name });
@@ -533,7 +531,7 @@ export default function ClubsPage() {
     const updated = clubs.map(c => c.id === clubId ? { ...c, status: newStatus } : c);
     saveAndRefresh(updated);
     const toggled = updated.find(c => c.id === clubId);
-    if (toggled) upsertSAClubToSupabase(toggled);
+    if (toggled) upsertSAClubToSupabase(toggled).catch(err => { console.error('[SA clubs] toggle sync failed:', err); toast('Cambio local pero no sincronizado — reintentá', false); });
     if (selectedClub?.id === clubId) setSelectedClub(prev => prev ? { ...prev, status: newStatus } : prev);
     toast(newStatus === 'active' ? 'Club activado' : 'Club desactivado');
   }
@@ -542,7 +540,7 @@ export default function ClubsPage() {
     const updated = clubs.map(c => c.id === clubId ? { ...c, plan } : c);
     saveAndRefresh(updated);
     const changed = updated.find(c => c.id === clubId);
-    if (changed) upsertSAClubToSupabase(changed);
+    if (changed) upsertSAClubToSupabase(changed).catch(err => { console.error('[SA clubs] plan change sync failed:', err); toast('Plan cambiado localmente pero no sincronizado — reintentá', false); });
     if (selectedClub?.id === clubId) setSelectedClub(prev => prev ? { ...prev, plan } : prev);
     setDrawerPlan(plan);
     toast('Plan actualizado');
@@ -553,7 +551,7 @@ export default function ClubsPage() {
     const updated = clubs.map(c => c.id === selectedClub.id ? { ...c, status: 'rejected' as const, rejectReason: drawerRejectReason || undefined } : c);
     saveAndRefresh(updated);
     const rejected = updated.find(c => c.id === selectedClub.id);
-    if (rejected) upsertSAClubToSupabase(rejected);
+    if (rejected) upsertSAClubToSupabase(rejected).catch(err => { console.error('[SA clubs] drawer reject sync failed:', err); toast('Rechazado localmente pero no sincronizado — reintentá', false); });
     setSelectedClub(prev => prev ? { ...prev, status: 'rejected' as const, rejectReason: drawerRejectReason || undefined } : prev);
     setShowDrawerRejectInput(false);
     setDrawerRejectReason('');
@@ -564,16 +562,17 @@ export default function ClubsPage() {
     if (!bulkAction || bulkSelected.size === 0) return;
     let updated = [...clubs];
     const PLAN_VALUES = ['free', 'basic', 'pro', 'club_starter', 'club_pro', 'club_liga', 'liga_free', 'liga_basic', 'liga_pro', 'liga_unlimited', 'fed_basic', 'fed_pro', 'infinity'];
+    const bulkErrs = (label: string) => (err: unknown) => console.error(`[SA clubs] bulk ${label} sync failed:`, err);
     if (bulkAction === 'delete') {
       const ids = new Set(bulkSelected);
       updated = clubs.filter(c => !ids.has(c.id));
-      ids.forEach(id => deleteSAClubFromSupabase(id));
+      ids.forEach(id => deleteSAClubFromSupabase(id).catch(bulkErrs('delete')));
     } else if (['active', 'inactive', 'pending', 'rejected'].includes(bulkAction)) {
       updated = clubs.map(c => bulkSelected.has(c.id) ? { ...c, status: bulkAction as SAClub['status'] } : c);
-      updated.filter(c => bulkSelected.has(c.id)).forEach(c => upsertSAClubToSupabase(c));
+      updated.filter(c => bulkSelected.has(c.id)).forEach(c => upsertSAClubToSupabase(c).catch(bulkErrs('status')));
     } else if (PLAN_VALUES.includes(bulkAction)) {
       updated = clubs.map(c => bulkSelected.has(c.id) ? { ...c, plan: bulkAction as SAClub['plan'] } : c);
-      updated.filter(c => bulkSelected.has(c.id)).forEach(c => upsertSAClubToSupabase(c));
+      updated.filter(c => bulkSelected.has(c.id)).forEach(c => upsertSAClubToSupabase(c).catch(bulkErrs('plan')));
     }
     saveAndRefresh(updated);
     setBulkSelected(new Set());
@@ -709,9 +708,7 @@ export default function ClubsPage() {
           <select value={planFilter} onChange={e => { setPlanFilter(e.target.value); setPage(1); }}
             style={{ ...inputStyle, width: 150 }}>
             <option value="all">Todos los planes</option>
-            <option value="free">Free</option>
-            <option value="basic">Basic</option>
-            <option value="pro">Pro</option>
+            {getClubPlanOptions().map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         )}
         <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--grey-400)', display: 'flex', alignItems: 'center' }}>
@@ -1092,25 +1089,7 @@ export default function ClubsPage() {
                   onChange={e => setDrawerPlan(e.target.value as SAClub['plan'])}
                   style={{ ...inputStyle, flex: 1 }}
                 >
-                  <optgroup label="Club">
-                    <option value="free">Free</option>
-                    <option value="club_starter">Club Starter</option>
-                    <option value="club_pro">Club Pro</option>
-                    <option value="club_liga">Club Liga</option>
-                  </optgroup>
-                  <optgroup label="Liga">
-                    <option value="liga_free">Liga Free</option>
-                    <option value="liga_basic">Liga Basic</option>
-                    <option value="liga_pro">Liga Pro</option>
-                    <option value="liga_unlimited">Liga Unlimited</option>
-                  </optgroup>
-                  <optgroup label="Federación">
-                    <option value="fed_basic">Fed Basic</option>
-                    <option value="fed_pro">Fed Pro</option>
-                  </optgroup>
-                  <optgroup label="★ Especial">
-                    <option value="infinity">∞ Infinity</option>
-                  </optgroup>
+                  {getClubPlanOptions().map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 <button
                   onClick={() => handleChangePlan(selectedClub.id, drawerPlan)}

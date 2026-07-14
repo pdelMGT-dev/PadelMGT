@@ -210,15 +210,17 @@ export function getPlan(id: PlanId): SubscriptionPlan | undefined {
 // writes only) so edits made on one device/browser show up on every other —
 // the local cache below is kept purely for instant paint / offline fallback.
 
-async function pushPlansToSupabase(plans: SubscriptionPlan[]): Promise<void> {
+// Exported so callers that need to know whether the cross-device sync
+// actually succeeded (not just the local write) can await it directly,
+// instead of relying on the fire-and-forget calls below.
+export async function pushPlansToSupabase(plans: SubscriptionPlan[]): Promise<void> {
   if (typeof window === 'undefined') return;
-  try {
-    await fetch('/api/sa/plan-catalog', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plans }),
-    });
-  } catch { /* fire-and-forget */ }
+  const res = await fetch('/api/sa/plan-catalog', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plans }),
+  });
+  if (!res.ok) throw new Error(`plan catalog push failed: ${res.status} ${await res.text().catch(() => '')}`);
 }
 
 /** Pull the SA's catalog from Supabase and replace the local cache. Returns
@@ -246,7 +248,7 @@ export function updatePlan(id: PlanId, updates: Partial<SubscriptionPlan>): Subs
   const updated = { ...all[idx], ...updates, updatedAt: new Date().toISOString() };
   all[idx] = updated;
   _planStore.persist(all);
-  pushPlansToSupabase(all).catch(() => {});
+  pushPlansToSupabase(all).catch(err => console.error('[plan-store] updatePlan sync failed:', err));
   return updated;
 }
 
@@ -255,7 +257,7 @@ export function addPlan(plan: SubscriptionPlan): SubscriptionPlan {
   const withTimestamp = { ...plan, updatedAt: new Date().toISOString() };
   const updated = [...all, withTimestamp];
   _planStore.persist(updated);
-  pushPlansToSupabase(updated).catch(() => {});
+  pushPlansToSupabase(updated).catch(err => console.error('[plan-store] addPlan sync failed:', err));
   return withTimestamp;
 }
 
@@ -264,7 +266,7 @@ export function deletePlan(id: string): boolean {
   const filtered = all.filter(p => p.id !== id);
   if (filtered.length === all.length) return false;
   _planStore.persist(filtered);
-  pushPlansToSupabase(filtered).catch(() => {});
+  pushPlansToSupabase(filtered).catch(err => console.error('[plan-store] deletePlan sync failed:', err));
   return true;
 }
 

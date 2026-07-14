@@ -50,13 +50,21 @@ export default function SALeaguesPage() {
 
     async function fetchAll() {
       if (!supabase) { setLoaded(true); return; }
-      const [{ data: lRows }, { data: mRows }, { data: sRows }, { data: rRows }] = await Promise.all([
+      const [{ data: lRows, error: lErr }, { data: mRows }, { data: sRows }, { data: rRows }] = await Promise.all([
         supabase.from('player_leagues').select('*').order('created_at', { ascending: false }),
         supabase.from('league_members').select('league_id'),
         supabase.from('league_seasons').select('league_id, name, status'),
         supabase.from('league_join_requests').select('league_id, status'),
       ]);
       if (!alive) return;
+      // A failed primary query must not be treated as "no leagues" — keep
+      // showing whatever was last loaded instead of clobbering it with an
+      // empty list.
+      if (lErr) {
+        console.error('[SA leagues] fetch failed:', lErr.message);
+        setLoaded(true);
+        return;
+      }
 
       const memberCount = new Map<string, number>();
       for (const m of (mRows ?? []) as { league_id: string }[]) {

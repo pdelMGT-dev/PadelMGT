@@ -72,6 +72,7 @@ export function updatePromoCode(id: string, updates: Partial<PromoCode>): PromoC
 export function deletePromoCode(id: string): void {
   const all = _promoStore.load().filter(p => p.id !== id);
   _promoStore.persist(all);
+  syncPromoDeleteToSupabase(id).catch(() => {});
 }
 
 // ── Validation + Redemption ───────────────────────────────────────────────────
@@ -147,6 +148,15 @@ async function syncPromoToSupabase(p: PromoCode): Promise<void> {
       is_active: p.isActive,
       created_by: p.createdBy,
     }, { onConflict: 'id' });
+  } catch {
+    // fire-and-forget
+  }
+}
+
+async function syncPromoDeleteToSupabase(id: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('promo_codes').delete().eq('id', id);
   } catch {
     // fire-and-forget
   }

@@ -422,7 +422,22 @@ function TournamentDetailDrawer({
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--grey-500)', textTransform: 'uppercase', marginBottom: 8 }}>Cambiar Estado</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {(['ongoing', 'upcoming', 'completed', 'cancelled'] as const).map(s => (
-              <button key={s} onClick={() => onStatusChange(summary.id, s)}
+              <button key={s} onClick={() => {
+                  onStatusChange(summary.id, s);
+                  if (full) {
+                    // SA vocabulary -> engine GameStatus. 'cancelled' has no
+                    // engine equivalent, so the nested game data is left
+                    // untouched in that case — only the SA-facing column
+                    // (via the explicit columnStatus arg below) changes.
+                    const engineStatus = s === 'ongoing' ? 'live' as const
+                      : s === 'upcoming' ? 'created' as const
+                      : s === 'completed' ? 'finished' as const
+                      : null;
+                    const updated: Tournament = engineStatus ? { ...full, status: engineStatus } : full;
+                    if (engineStatus) { saveTournament(updated); setFull(updated); }
+                    upsertTournamentToSupabase(updated as unknown as Record<string, unknown>, s);
+                  }
+                }}
                 style={{ padding: '6px 14px', borderRadius: 4, border: '1px solid var(--grey-200)', cursor: 'pointer', fontSize: 11, fontWeight: 700, background: summary.status === s ? '#0a0a0a' : '#fff', color: summary.status === s ? '#fff' : 'var(--grey-600)' }}>
                 {statusColors[s].label}
               </button>
@@ -741,6 +756,12 @@ export default function TournamentsPage() {
     const all = getSATournaments();
     saveSATournaments([...all, ...newTs]);
     setTournaments(getSATournaments());
+    // These are brand-new IDs (t-imp-*), so upserting the SA summary shape as
+    // `data` is safe — there's no existing richer tournament record to clobber.
+    for (const t of newTs) {
+      upsertTournamentToSupabase(t as unknown as Record<string, unknown>, t.status)
+        .catch(err => console.error('[SA tournaments] import sync failed:', err));
+    }
     toast(`${newTs.length} torneo(s) importado(s) correctamente`);
     setShowImportModal(false);
     setCsvRows([]);

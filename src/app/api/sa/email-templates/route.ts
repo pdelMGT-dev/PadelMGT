@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireSARequest, saUnauthorized } from '@/lib/sa-session';
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -9,7 +10,9 @@ function supabaseAdmin() {
 }
 
 // GET  — list all templates
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!(await requireSARequest(request))) return saUnauthorized();
+
   const sb = supabaseAdmin();
   if (!sb) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
 
@@ -28,6 +31,8 @@ export async function GET() {
 
 // POST — upsert a template (insert or update by type)
 export async function POST(request: NextRequest) {
+  if (!(await requireSARequest(request))) return saUnauthorized();
+
   const sb = supabaseAdmin();
   if (!sb) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
 
@@ -77,6 +82,8 @@ export async function POST(request: NextRequest) {
 
 // DELETE — deactivate a template by type (soft delete via is_active=false)
 export async function DELETE(request: NextRequest) {
+  if (!(await requireSARequest(request))) return saUnauthorized();
+
   const sb = supabaseAdmin();
   if (!sb) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
 

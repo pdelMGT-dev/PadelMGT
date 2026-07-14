@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   try {
     const [balance, charges, subs] = await Promise.all([
       stripe.balance.retrieve(),
-      stripe.charges.list({ limit: 20 }),
+      stripe.charges.list({ limit: 20 }), // "recent activity" list — display only
       stripe.subscriptions.list({ status: 'active', limit: 100 }),
     ]);
 
@@ -28,12 +28,22 @@ export async function GET(request: NextRequest) {
       return byCurrency;
     };
 
-    // Revenue this calendar month (succeeded charges)
+    // Revenue this calendar month (succeeded charges) — paginated across the
+    // WHOLE month, not just the 20 most recent charges overall (a busier
+    // month than 20 charges would otherwise silently undercount).
     const monthStart = new Date();
     monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-    const monthRevenue = charges.data
-      .filter(c => c.status === 'succeeded' && c.created * 1000 >= monthStart.getTime())
-      .reduce((acc, c) => acc + c.amount, 0);
+    let monthRevenue = 0;
+    let monthChargesSeen = 0;
+    const MONTH_CHARGE_SAFETY_CAP = 5000;
+    for await (const c of stripe.charges.list({ created: { gte: Math.floor(monthStart.getTime() / 1000) }, limit: 100 })) {
+      monthChargesSeen++;
+      if (c.status === 'succeeded') monthRevenue += c.amount;
+      if (monthChargesSeen >= MONTH_CHARGE_SAFETY_CAP) {
+        console.warn(`[SA Stripe] month revenue pagination hit safety cap of ${MONTH_CHARGE_SAFETY_CAP} charges — total may be undercounted`);
+        break;
+      }
+    }
 
     // MRR estimate from active subscriptions (normalize yearly → monthly)
     let mrrCents = 0;

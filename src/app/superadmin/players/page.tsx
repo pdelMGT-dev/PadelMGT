@@ -620,7 +620,7 @@ export default function PlayersPage() {
     const target = players.find(p => p.id === deleteConfirm.playerId);
     const updated = players.filter(p => p.id !== deleteConfirm.playerId);
     saveAndRefresh(updated);
-    deleteSAPlayerFromSupabase(deleteConfirm.playerId);
+    deleteSAPlayerFromSupabase(deleteConfirm.playerId).catch(err => { console.error('[SA players] delete failed:', err); toast('No se pudo borrar en Supabase — puede reaparecer', false); });
     setDeleteConfirm(null);
     if (selectedPlayer?.id === deleteConfirm.playerId) setSelectedPlayer(null);
     logAudit('player_deleted', 'Super Admin', { targetType: 'player', targetId: deleteConfirm.playerId, targetName: target?.name });
@@ -774,7 +774,7 @@ export default function PlayersPage() {
   function handleBulkDeleteFinal() {
     const ids = new Set(selectedIds);
     const updated = players.filter(p => !ids.has(p.id));
-    ids.forEach(id => deleteSAPlayerFromSupabase(id));
+    ids.forEach(id => deleteSAPlayerFromSupabase(id).catch(err => console.error('[SA players] bulk delete failed:', err)));
     saveAndRefresh(updated);
     setBulkDeleteConfirm(null);
     setSelectedIds(new Set());

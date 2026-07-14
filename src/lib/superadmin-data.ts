@@ -550,17 +550,17 @@ export async function upsertSAPlayerToSupabase(player: SAPlayer): Promise<void> 
   } catch (err) { console.error('[Supabase] upsertPlayer exception:', err); }
 }
 
+// Throws on failure so callers can surface a "delete failed" error instead of
+// assuming success. The service-role /api/superadmin/players route is the only
+// authorized path — a direct anon-key delete would be blocked by RLS anyway,
+// so there's no useful fallback to silently swallow errors into.
 export async function deleteSAPlayerFromSupabase(id: string): Promise<void> {
-  try {
-    const res = await fetch('/api/superadmin/players', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
-    if (res.ok) return;
-  } catch { /* fall through */ }
-  if (!supabase) return;
-  try { await supabase.from('players').delete().eq('id', id); } catch { /* silent */ }
+  const res = await fetch('/api/superadmin/players', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+  if (!res.ok) throw new Error(`delete player failed: ${res.status} ${await res.text().catch(() => '')}`);
 }
 
 // Clubs
@@ -573,32 +573,33 @@ export async function getSAClubsFromSupabase(): Promise<SAClub[] | null> {
   } catch { return null; }
 }
 
+// Throws on failure (network error or non-2xx) so callers relying on
+// .catch(...) to surface a "save failed" toast actually get invoked — an
+// unchecked res.ok previously made every write look like it succeeded.
 export async function upsertSAClubToSupabase(club: SAClub): Promise<void> {
   if (typeof window === 'undefined') return;
   // Route through the SA-guarded service-role endpoint (anon writes on the clubs
   // table are blocked by RLS).
-  try {
-    await fetch('/api/sa/clubs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: club.id, name: club.name, city: club.city, country: club.country,
-        courts: club.courts, members: club.members, status: club.status,
-        adminEmail: club.adminEmail, plan: club.plan,
-        joinedAt: club.joinedAt || new Date().toISOString(),
-        address: club.address || null,
-        clubType: club.clubType || null,
-        mapsUrl: club.mapsUrl || null,
-      }),
-    });
-  } catch (err) { console.error('[SA clubs] upsert exception:', err); }
+  const res = await fetch('/api/sa/clubs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: club.id, name: club.name, city: club.city, country: club.country,
+      courts: club.courts, members: club.members, status: club.status,
+      adminEmail: club.adminEmail, plan: club.plan,
+      joinedAt: club.joinedAt || new Date().toISOString(),
+      address: club.address || null,
+      clubType: club.clubType || null,
+      mapsUrl: club.mapsUrl || null,
+    }),
+  });
+  if (!res.ok) throw new Error(`upsert club failed: ${res.status} ${await res.text().catch(() => '')}`);
 }
 
 export async function deleteSAClubFromSupabase(id: string): Promise<void> {
   if (typeof window === 'undefined') return;
-  try {
-    await fetch(`/api/sa/clubs?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-  } catch { /* silent */ }
+  const res = await fetch(`/api/sa/clubs?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`delete club failed: ${res.status} ${await res.text().catch(() => '')}`);
 }
 
 // Admin users — go through the protected /api/sa/admins routes (signed SA
@@ -707,12 +708,23 @@ export async function getFullTournamentFromSupabase(id: string): Promise<Record<
   } catch { return null; }
 }
 
-export async function upsertTournamentToSupabase(t: Record<string, unknown>): Promise<void> {
+// `t.status` is normally the tournament engine's own status vocabulary
+// ('created'|'starting_soon'|'live'|'finished', see GameStatus), never the
+// SA panel's ('upcoming'|'ongoing'|'completed'|'cancelled') — the two only
+// partially overlap and 'cancelled' has no engine equivalent at all. Pass
+// `columnStatus` explicitly (SA vocabulary) when the caller wants the SA
+// status set without touching the nested `data` payload's own status field
+// (e.g. a plain SA status-change action) — otherwise it's derived from `t.status`.
+export async function upsertTournamentToSupabase(t: Record<string, unknown>, columnStatus?: SATournament['status']): Promise<void> {
   if (!supabase) return;
   const rawStatus = t.status as string;
-  const status = rawStatus === 'created' || rawStatus === 'open' ? 'upcoming'
+  const status = columnStatus ?? (
+    rawStatus === 'created' || rawStatus === 'open' ? 'upcoming'
+    : rawStatus === 'starting_soon' ? 'upcoming'
+    : rawStatus === 'live' ? 'ongoing'
     : rawStatus === 'finished' ? 'completed'
-    : (['upcoming', 'ongoing', 'completed', 'cancelled'].includes(rawStatus) ? rawStatus : 'upcoming');
+    : (['upcoming', 'ongoing', 'completed', 'cancelled'].includes(rawStatus) ? rawStatus : 'upcoming')
+  );
   try {
     const { error } = await supabase.from('tournaments').upsert({
       id: t.id,
@@ -756,6 +768,34 @@ export async function getSAGamesFromSupabase(): Promise<SAGame[] | null> {
       scoreConfig: (row.score_config as string) ?? 'puntos',
     }));
   } catch { return null; }
+}
+
+// SA-panel-safe game upsert: `quick_games.data` holds the full live game object
+// (participants, round results, join code) that the real quick-game UI reads via
+// fetchGameByCode/fetchGamesByCreator. A naive upsert from the SA summary form
+// (name/date/players/format/rounds/status only) would clobber that real payload
+// for existing games. This reads the current `data` first and merges the SA's
+// edited fields into it, so a live game's real state survives an SA edit.
+export async function upsertSAGameToSupabase(g: SAGame): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { data: existing } = await supabase.from('quick_games').select('data').eq('id', g.id).maybeSingle();
+    const mergedData = {
+      ...(existing?.data as Record<string, unknown> ?? {}),
+      id: g.id, name: g.name, date: g.date, players: g.players,
+      format: g.format, rounds: g.rounds, scoreConfig: g.scoreConfig, status: g.status,
+    };
+    const { error } = await supabase.from('quick_games').upsert({
+      id: g.id,
+      name: g.name ?? null,
+      format: g.format ?? null,
+      score_config: g.scoreConfig ?? 'puntos',
+      status: g.status,
+      rounds_played: g.rounds ?? 0,
+      data: mergedData,
+    });
+    if (error) console.error('[Supabase] upsertSAGame error:', error.message, error.details);
+  } catch (err) { console.error('[Supabase] upsertSAGame exception:', err); }
 }
 
 export async function upsertGameToSupabase(g: Record<string, unknown>): Promise<void> {
