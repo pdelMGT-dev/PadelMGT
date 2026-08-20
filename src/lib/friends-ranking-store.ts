@@ -36,10 +36,37 @@ export function saveFriendsSnapshot(snapshot: FriendsSnapshot): void {
   if (idx >= 0) all[idx] = snapshot;
   else all.push(snapshot);
   _store.persist(all);
+  pushSnapshotToSupabase(snapshot).catch(err => console.warn('[friends-ranking] Supabase sync failed:', err));
 }
 
 export function getAvailableYears(ownerId: string): number[] {
   const snapshots = getFriendsSnapshots(ownerId);
   const years = new Set(snapshots.map(s => s.year));
   return Array.from(years).sort((a, b) => b - a);
+}
+
+// ── Supabase sync ─────────────────────────────────────────────────────────────
+
+async function pushSnapshotToSupabase(snapshot: FriendsSnapshot): Promise<void> {
+  const res = await fetch('/api/friends-ranking-snapshots', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(snapshot),
+  });
+  if (!res.ok) throw new Error(`push snapshot failed: ${res.status}`);
+}
+
+/** Pull this owner's real snapshots from Supabase and merge into the local
+ * cache. Returns null on fetch failure (caller should keep showing the
+ * local cache in that case). */
+export async function fetchFriendsSnapshotsFromSupabase(ownerId: string): Promise<FriendsSnapshot[] | null> {
+  try {
+    const res = await fetch('/api/friends-ranking-snapshots', { credentials: 'include' });
+    if (!res.ok) return null;
+    const data = await res.json() as { snapshots: FriendsSnapshot[] };
+    const remote = data.snapshots.filter(s => s.ownerId === ownerId);
+    const others = _store.load().filter(s => s.ownerId !== ownerId);
+    _store.persist([...others, ...remote]);
+    return remote;
+  } catch { return null; }
 }

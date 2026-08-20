@@ -104,6 +104,7 @@ export function applyGameRankingResults(game: ActiveGame, leagueId?: string): Ra
   }
 
   _store.persist(all);
+  pushRankingEntriesToSupabase(created).catch(() => {});
   return created;
 }
 
@@ -185,6 +186,7 @@ export function applyTournamentRankingResults(tournament: Tournament, leagueId?:
 
   let all = _store.load();
   const existing = all.filter(e => e.gameId === tournament.id);
+  let wasRecomputed = false;
 
   if (existing.length > 0) {
     // Already processed — recompute only if the stored entries are stale.
@@ -197,6 +199,7 @@ export function applyTournamentRankingResults(tournament: Tournament, leagueId?:
     all = all.filter(e => e.gameId !== tournament.id);
     _store.persist(all);
     all = _store.load();
+    wasRecomputed = true;
   }
 
   const created: RankingEntry[] = [];
@@ -222,6 +225,7 @@ export function applyTournamentRankingResults(tournament: Tournament, leagueId?:
   }
 
   _store.persist(all);
+  pushRankingEntriesToSupabase(created, wasRecomputed ? tournament.id : undefined).catch(() => {});
   return created;
 }
 
@@ -327,6 +331,7 @@ export function applyPersonalizadoRankingResults(tournament: PersonalizadoTourna
   }
 
   _store.persist(all);
+  pushRankingEntriesToSupabase(created).catch(() => {});
   return created;
 }
 
@@ -336,4 +341,57 @@ export function getRankingHistoryForPlayer(playerId: string): RankingEntry[] {
 
 export function getRankingHistoryForGame(gameId: string): RankingEntry[] {
   return _store.load().filter((e) => e && e.gameId === gameId);
+}
+
+// ── Supabase sync ─────────────────────────────────────────────────────────────
+// The apply* functions above stay synchronous (they're called inline from
+// game/tournament finish flows and their return value feeds the UI), so the
+// local cache remains the source of truth for the dedup check within a single
+// call. These push newly-created entries in the background and let other
+// devices pull the durable trail for display / diffing.
+
+async function pushRankingEntriesToSupabase(entries: RankingEntry[], replaceGameId?: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (entries.length === 0 && !replaceGameId) return;
+  try {
+    const res = await fetch('/api/ranking-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entries, replaceGameId }),
+    });
+    if (!res.ok) console.warn('[ranking-store] push failed:', res.status);
+  } catch (err) {
+    console.warn('[ranking-store] push failed:', err);
+  }
+}
+
+/** Pull this player's real ranking history from Supabase and merge into the
+ * local cache. Returns null on fetch failure (caller should keep showing
+ * the local cache in that case). */
+export async function fetchRankingHistoryForPlayerFromSupabase(playerId: string): Promise<RankingEntry[] | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const res = await fetch(`/api/ranking-history?playerId=${encodeURIComponent(playerId)}`);
+    if (!res.ok) return null;
+    const data = await res.json() as { entries: RankingEntry[] };
+    const others = _store.load().filter(e => e.playerId !== playerId);
+    _store.persist([...others, ...data.entries]);
+    return data.entries;
+  } catch { return null; }
+}
+
+/** Pull the real entries already recorded for one game/tournament from
+ * Supabase and merge into the local cache — call before the dedup check in
+ * apply* so a device that never ran this locally doesn't re-credit points
+ * another device already applied. Returns null on fetch failure. */
+export async function fetchRankingHistoryForGameFromSupabase(gameId: string): Promise<RankingEntry[] | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const res = await fetch(`/api/ranking-history?gameId=${encodeURIComponent(gameId)}`);
+    if (!res.ok) return null;
+    const data = await res.json() as { entries: RankingEntry[] };
+    const others = _store.load().filter(e => e.gameId !== gameId);
+    _store.persist([...others, ...data.entries]);
+    return data.entries;
+  } catch { return null; }
 }

@@ -22,7 +22,7 @@ import {
 } from '@/lib/invitation-store';
 import { searchPlayers, addFriendship, areFriends, getFriendsForPlayer, fetchFriendsFromSupabase } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
-import { applyGameRankingResults, getRankingHistoryForGame } from '@/lib/ranking-store';
+import { applyGameRankingResults, getRankingHistoryForGame, fetchRankingHistoryForGameFromSupabase } from '@/lib/ranking-store';
 import type { RankingEntry } from '@/lib/ranking-store';
 import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, syncJoinRequestsFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -317,6 +317,9 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   useEffect(() => {
     if (game?.status === 'finished') {
       setRankingEntries(getRankingHistoryForGame(game.id));
+      fetchRankingHistoryForGameFromSupabase(game.id).then(remote => {
+        if (remote !== null) setRankingEntries(remote);
+      }).catch(() => {});
     }
   }, [game?.status, game?.id]);
 

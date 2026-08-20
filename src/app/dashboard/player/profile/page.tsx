@@ -5,7 +5,7 @@ import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
 import { updatePlayer, seedLocalPlayer } from '@/lib/player-store';
 import { fetchPlayerByEmail } from '@/lib/supabase';
-import { getRankingHistoryForGame } from '@/lib/ranking-store';
+import { getRankingHistoryForGame, fetchRankingHistoryForPlayerFromSupabase } from '@/lib/ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { PLAYER_LEVELS, LEVEL_CONFIG, getLevelInfo, normalizeLegacyLevel, type PlayerLevel } from '@/lib/level-config';
 import {
@@ -107,6 +107,7 @@ export default function PlayerProfilePage() {
   const [tab, setTab] = useState<Tab>('perfil');
   const [activeGames, setActiveGames] = useState<ActiveGame[]>([]);
   const [finishedGames, setFinishedGames] = useState<ActiveGame[]>([]);
+  const [, forceRankingHistoryRefresh] = useState(0);
 
   // Settings form state
   const [fName, setFName] = useState('');
@@ -246,6 +247,9 @@ export default function PlayerProfilePage() {
     const mine = all.filter(g => (g.players ?? []).some(p => p.id === user.id));
     setActiveGames(mine.filter(g => g.status !== 'finished'));
     setFinishedGames(mine.filter(g => g.status === 'finished'));
+    fetchRankingHistoryForPlayerFromSupabase(user.id).then(remote => {
+      if (remote !== null) forceRankingHistoryRefresh(v => v + 1);
+    }).catch(() => {});
     // init form
     setFName(user.name || '');
     setFEmail(user.email || '');
@@ -377,7 +381,7 @@ export default function PlayerProfilePage() {
         const history = getRankingHistoryForGame(g.id);
         const userId = user?.id ?? '';
         const entry = history.find(h => h.playerId === userId);
-        return entry?.points ?? 0;
+        return entry?.newTotal ?? 0;
       }).filter(v => v > 0);
     } catch { return []; }
   })();

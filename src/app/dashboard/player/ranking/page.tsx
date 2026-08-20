@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getPlayerByEmail, getFriendsForPlayer, fetchFriendsFromSupabase } from '@/lib/player-store';
-import { getFriendsSnapshots, saveFriendsSnapshot, getAvailableYears, getFriendsSnapshot } from '@/lib/friends-ranking-store';
+import { getFriendsSnapshots, saveFriendsSnapshot, getAvailableYears, getFriendsSnapshot, fetchFriendsSnapshotsFromSupabase } from '@/lib/friends-ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import type { RegisteredPlayer } from '@/lib/player-store';
 import { getSAPlayersFromSupabase } from '@/lib/superadmin-data';
@@ -94,6 +94,15 @@ export default function PlayerRankingPage() {
         setAvailableYears([]);
         setSelectedYear(new Date().getFullYear());
       }
+
+      fetchFriendsSnapshotsFromSupabase(full.id).then(remote => {
+        if (remote === null) return;
+        const remoteYears = Array.from(new Set(remote.map(s => s.year))).sort((a, b) => b - a);
+        if (remoteYears.length > 0) {
+          setAvailableYears(remoteYears);
+          setSelectedYear(prev => (remoteYears.includes(prev) ? prev : remoteYears[0]));
+        }
+      }).catch(() => {});
     }
   }, [user]);
 
