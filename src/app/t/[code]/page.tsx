@@ -6,7 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { getTournamentByCode, saveTournament } from '@/lib/tournament-store';
 import type { Tournament } from '@/lib/tournament-store';
 import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, type JoinRequest } from '@/lib/join-request-store';
-import { getFamilyMembers, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
+import { getFamilyMembers, fetchFamilyMembersFromSupabase, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import KnockoutBracketView from '@/components/KnockoutBracketView';
 import WorldCupBracketView from '@/components/WorldCupBracketView';
@@ -148,8 +148,12 @@ export default function PublicTournamentPage({ params }: { params: Promise<{ cod
 
   // Load the guardian's family members when logged in.
   useEffect(() => {
-    if (currentUser) setFamilyMembers(getFamilyMembers(currentUser.id));
-    else setFamilyMembers([]);
+    if (currentUser) {
+      setFamilyMembers(getFamilyMembers(currentUser.id));
+      fetchFamilyMembersFromSupabase(currentUser.id).then(remote => {
+        if (remote !== null) setFamilyMembers(remote);
+      }).catch(() => {});
+    } else setFamilyMembers([]);
   }, [currentUser?.id]);
 
   function handleJoin(entityId: string) {

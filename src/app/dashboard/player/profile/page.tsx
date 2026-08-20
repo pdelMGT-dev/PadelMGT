@@ -11,11 +11,12 @@ import { PLAYER_LEVELS, LEVEL_CONFIG, getLevelInfo, normalizeLegacyLevel, type P
 import {
   getFamilyMembers, saveFamilyMember, deleteFamilyMember, getFamilyLinks,
   saveFamilyLink, createFamilyMember, updateFamilyMember, requestFamilyLink,
+  fetchFamilyMembersFromSupabase, fetchFamilyLinksFromSupabase,
   RELATION_LABELS,
   type FamilyMember, type FamilyLink, type RelationType,
 } from '@/lib/family-store';
 import {
-  getPendingApprovalsForGuardian, respondToApproval,
+  getPendingApprovalsForGuardian, respondToApproval, fetchApprovalsForGuardianFromSupabase,
   type FamilyApprovalRequest,
 } from '@/lib/family-approval-store';
 import { getGame, updateGame } from '@/lib/game-store';
@@ -209,6 +210,15 @@ export default function PlayerProfilePage() {
     setFamilyMembers(getFamilyMembers(user.id));
     setFamilyLinks(getFamilyLinks(user.id));
     setApprovals(getPendingApprovalsForGuardian(user.id));
+    fetchFamilyMembersFromSupabase(user.id).then(remote => {
+      if (remote !== null) setFamilyMembers(remote);
+    }).catch(() => {});
+    fetchFamilyLinksFromSupabase(user.id).then(remote => {
+      if (remote !== null) setFamilyLinks(remote);
+    }).catch(() => {});
+    fetchApprovalsForGuardianFromSupabase(user.id).then(remote => {
+      if (remote !== null) setApprovals(remote.filter(r => r.status === 'pending'));
+    }).catch(() => {});
   }, [user?.id, tab]);
 
   // ── Guardian approval handlers ──────────────────────────────────────────────

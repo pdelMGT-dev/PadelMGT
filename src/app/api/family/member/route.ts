@@ -29,6 +29,38 @@ function memberToRow(m: FamilyMember): Record<string, unknown> {
   };
 }
 
+function rowToMember(r: Record<string, unknown>): FamilyMember {
+  return {
+    id: r.id as string,
+    ownerId: r.owner_id as string,
+    fullName: r.full_name as string,
+    relationType: r.relation_type as FamilyMember['relationType'],
+    sex: r.sex as FamilyMember['sex'],
+    birthDate: r.birth_date as string,
+    email: (r.email as string) ?? undefined,
+    linkedPlayerId: (r.linked_player_id as string) ?? undefined,
+    invitationStatus: r.invitation_status as FamilyMember['invitationStatus'],
+    createdAt: r.created_at as string,
+  };
+}
+
+export async function GET(request: NextRequest) {
+  const svc = serviceClient();
+  if (!svc) return NextResponse.json({ members: [] });
+
+  const { searchParams } = new URL(request.url);
+  const ownerId = searchParams.get('ownerId');
+  if (!ownerId) return NextResponse.json({ error: 'Falta ownerId' }, { status: 400 });
+
+  const callerIds = await getCallerPlayerIds(request);
+  if (!callerIds.includes(ownerId)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+
+  const { data, error } = await svc.from('family_members').select('*').eq('owner_id', ownerId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ members: (data ?? []).map(rowToMember) });
+}
+
 export async function POST(request: NextRequest) {
   const svc = serviceClient();
   if (!svc) return NextResponse.json({ error: 'Servicio no disponible' }, { status: 503 });

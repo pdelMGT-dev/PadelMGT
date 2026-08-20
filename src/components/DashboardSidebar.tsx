@@ -6,8 +6,8 @@ import { useEffect, useState } from 'react';
 import { Menu, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchFriendData } from '@/lib/friend-request-store';
 import { getAdminPendingRequestsCount } from '@/lib/player-league-store';
-import { getPendingApprovalsForGuardian } from '@/lib/family-approval-store';
-import { getFamilyLinks } from '@/lib/family-store';
+import { getPendingApprovalsForGuardian, fetchApprovalsForGuardianFromSupabase } from '@/lib/family-approval-store';
+import { getFamilyLinks, fetchFamilyLinksFromSupabase } from '@/lib/family-store';
 import { syncAllFromSupabase } from '@/lib/supabase-sync';
 import { authSignOut } from '@/lib/supabase';
 import BrandLogo from './BrandLogo';
@@ -82,9 +82,21 @@ export default function DashboardSidebar() {
       fetchFriendData().then(d => { if (d) setFriendBadge(d.incoming.length); });
       setLeagueBadge(getAdminPendingRequestsCount(user.id));
       // Family: pending guardian approvals + incoming family-link requests
-      const pendingApprovals = getPendingApprovalsForGuardian(user.id).length;
-      const pendingLinks = getFamilyLinks(user.id).filter(l => l.toPlayerId === user.id && l.status === 'pending').length;
-      setProfileBadge(pendingApprovals + pendingLinks);
+      const localApprovals = getPendingApprovalsForGuardian(user.id).length;
+      const localLinks = getFamilyLinks(user.id).filter(l => l.toPlayerId === user.id && l.status === 'pending').length;
+      setProfileBadge(localApprovals + localLinks);
+      Promise.all([
+        fetchApprovalsForGuardianFromSupabase(user.id),
+        fetchFamilyLinksFromSupabase(user.id),
+      ]).then(([remoteApprovals, remoteLinks]) => {
+        const approvalsCount = remoteApprovals !== null
+          ? remoteApprovals.filter(r => r.status === 'pending').length
+          : localApprovals;
+        const linksCount = remoteLinks !== null
+          ? remoteLinks.filter(l => l.toPlayerId === user.id && l.status === 'pending').length
+          : localLinks;
+        setProfileBadge(approvalsCount + linksCount);
+      }).catch(() => {});
     }
     // Sync all Supabase tables to localStorage (debounced to 30s)
     syncAllFromSupabase();

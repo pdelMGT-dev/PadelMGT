@@ -20,7 +20,7 @@ import { getPlayerClubs, syncMyClubs } from '@/lib/club-membership-store';
 import { getSAClubs } from '@/lib/superadmin-data';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getMyLeagues, getLeagueSeasons, getActiveSeason, type PlayerLeague, type LeagueSeason } from '@/lib/player-league-store';
-import { getFamilyMembers, lookupFamilyMember, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
+import { getFamilyMembers, fetchFamilyMembersFromSupabase, lookupFamilyMember, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
 import { createApprovalRequest } from '@/lib/family-approval-store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -318,6 +318,9 @@ export default function QuickGamePage() {
       setMyFamily(getFamilyMembers(currentUser.id));
       fetchFriendsFromSupabase(currentUser.id).then(remote => {
         if (remote !== null) setFriendList(remote);
+      }).catch(() => {});
+      fetchFamilyMembersFromSupabase(currentUser.id).then(remote => {
+        if (remote !== null) setMyFamily(remote);
       }).catch(() => {});
     }
   }, [step, currentUser]);
