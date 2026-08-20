@@ -15,18 +15,6 @@ type Invitation = {
   createdAt: string;
 };
 
-type ClubPlayer = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  level: string;
-  points: number;
-  joined: string;
-  status: 'pending' | 'invited' | 'joined';
-  invitedAt?: string;
-};
-
 const LEVEL_LABELS: Record<string, string> = {
   '1': 'Nivel 1 — Iniciación', '2': 'Nivel 2 — Básico', '3': 'Nivel 3 — Intermedio bajo',
   '4': 'Nivel 4 — Intermedio', '5': 'Nivel 5 — Intermedio alto',
@@ -56,14 +44,10 @@ export default function JoinPage({ params }: { params: Promise<{ token: string }
   const [done, setDone]          = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('padelmgt_invitations');
-      const invitations: Invitation[] = raw ? JSON.parse(raw) : [];
-      const found = invitations.find(i => i.token === token);
-      setInvitation(found ?? 'not_found');
-    } catch {
-      setInvitation('not_found');
-    }
+    fetch(`/api/club-invite?token=${encodeURIComponent(token)}`)
+      .then(res => res.ok ? res.json() as Promise<{ invitation: Invitation | null }> : { invitation: null })
+      .then(({ invitation: found }) => setInvitation(found ?? 'not_found'))
+      .catch(() => setInvitation('not_found'));
   }, [token]);
 
   function handleSubmit(e: React.FormEvent) {
@@ -87,23 +71,14 @@ export default function JoinPage({ params }: { params: Promise<{ token: string }
     };
     try { localStorage.setItem('padelmgt_user', JSON.stringify(user)); } catch {}
 
-    // Mark invitation accepted
-    try {
-      const raw = localStorage.getItem('padelmgt_invitations');
-      const invitations: Invitation[] = raw ? JSON.parse(raw) : [];
-      const updated = invitations.map(i => i.token === token ? { ...i, status: 'accepted' as const } : i);
-      localStorage.setItem('padelmgt_invitations', JSON.stringify(updated));
-    } catch {}
-
-    // Update player status in club database
-    try {
-      const raw = localStorage.getItem('padelmgt_club_players');
-      const players: ClubPlayer[] = raw ? JSON.parse(raw) : [];
-      const updated = players.map(p =>
-        p.email === invitation.email ? { ...p, status: 'joined' as const } : p
-      );
-      localStorage.setItem('padelmgt_club_players', JSON.stringify(updated));
-    } catch {}
+    // Mark the invitation accepted server-side (also flips the club's roster
+    // entry to 'joined' — the invitee has no club-manager session to do that
+    // through directly).
+    fetch('/api/club-invite', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    }).catch(err => console.warn('[club-invite] accept failed:', err));
 
     setDone(true);
     setTimeout(() => router.push('/dashboard/player/quick-game'), 2500);

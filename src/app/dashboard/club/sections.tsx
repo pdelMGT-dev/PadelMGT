@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { fetchClubContent, pushClubContent } from '@/lib/club-content-client';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared style helpers
@@ -44,22 +45,15 @@ interface Photo {
   caption: string;
 }
 
-const SAMPLE_PHOTOS: Photo[] = [
-  { id: 'p1', url: '', title: 'Cancha 1 — Indoor', caption: 'Cancha de moqueta con iluminación LED' },
-  { id: 'p2', url: '', title: 'Cancha 3 — Panorámica', caption: 'Vista desde el nivel superior' },
-  { id: 'p3', url: '', title: 'Bar del club', caption: 'Área de descanso y cafetería' },
-  { id: 'p4', url: '', title: 'Recepción', caption: 'Entrada principal del club' },
-];
-
 function loadPhotos(): Photo[] {
-  if (typeof window === 'undefined') return SAMPLE_PHOTOS;
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem('padelmgt_club_gallery');
     if (raw) return JSON.parse(raw) as Photo[];
   } catch {
     // ignore
   }
-  return SAMPLE_PHOTOS;
+  return [];
 }
 
 function GallerySection() {
@@ -69,10 +63,19 @@ function GallerySection() {
   const [formTitle, setFormTitle] = useState('');
   const [formCaption, setFormCaption] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const skipNextPush = React.useRef(true);
+
+  useEffect(() => {
+    fetchClubContent<Photo[]>('gallery').then(remote => { if (remote !== null) setPhotos(remote); }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     localStorage.setItem('padelmgt_club_gallery', JSON.stringify(photos));
+    // Skip the mount-time run: pushing here would race the fetch above and
+    // could clobber the real server data with a stale local snapshot.
+    if (skipNextPush.current) { skipNextPush.current = false; return; }
+    pushClubContent('gallery', photos).catch(err => console.warn('[club-content] gallery sync failed:', err));
   }, [photos]);
 
   function handleSave() {
@@ -293,15 +296,6 @@ interface CourtFormData {
   notes: string;
 }
 
-const INITIAL_COURTS: Court[] = [
-  { id: 'c1', name: 'Cancha 1', type: 'Indoor',   surface: 'Moqueta', status: 'disponible',   notes: '' },
-  { id: 'c2', name: 'Cancha 2', type: 'Indoor',   surface: 'Moqueta', status: 'disponible',   notes: '' },
-  { id: 'c3', name: 'Cancha 3', type: 'Outdoor',  surface: 'Cristal', status: 'ocupada',       notes: 'Reservada 18:00-20:00' },
-  { id: 'c4', name: 'Cancha 4', type: 'Outdoor',  surface: 'Cristal', status: 'disponible',   notes: '' },
-  { id: 'c5', name: 'Cancha 5', type: 'Cubierta', surface: 'Cemento', status: 'mantenimiento', notes: 'Reparación de iluminación' },
-  { id: 'c6', name: 'Cancha 6', type: 'Cubierta', surface: 'Moqueta', status: 'disponible',   notes: '' },
-];
-
 const EMPTY_COURT_FORM: CourtFormData = {
   name: '',
   type: 'Indoor',
@@ -311,14 +305,14 @@ const EMPTY_COURT_FORM: CourtFormData = {
 };
 
 function loadCourts(): Court[] {
-  if (typeof window === 'undefined') return INITIAL_COURTS;
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem('padelmgt_club_courts');
     if (raw) return JSON.parse(raw) as Court[];
   } catch {
     // ignore
   }
-  return INITIAL_COURTS;
+  return [];
 }
 
 function statusDotColor(status: CourtStatus): string {
@@ -338,10 +332,17 @@ function CourtsSection() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<CourtFormData>(EMPTY_COURT_FORM);
+  const skipNextPush = React.useRef(true);
+
+  useEffect(() => {
+    fetchClubContent<Court[]>('courts').then(remote => { if (remote !== null) setCourts(remote); }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     localStorage.setItem('padelmgt_club_courts', JSON.stringify(courts));
+    if (skipNextPush.current) { skipNextPush.current = false; return; }
+    pushClubContent('courts', courts).catch(err => console.warn('[club-content] courts sync failed:', err));
   }, [courts]);
 
   const countByStatus = (s: CourtStatus) => courts.filter((c) => c.status === s).length;
@@ -599,33 +600,6 @@ interface AnnouncementFormData {
   pinned: boolean;
 }
 
-const SAMPLE_ANNOUNCEMENTS: Announcement[] = [
-  {
-    id: 'a1',
-    title: 'Americano de Mayo — Inscripciones abiertas',
-    body: 'Abrimos las inscripciones para el Americano de Mayo. Formato individual, 16 jugadores máximo. Precio: $2.500. Inscribite antes del 20/05.',
-    category: 'Torneo',
-    date: '2026-05-12',
-    pinned: true,
-  },
-  {
-    id: 'a2',
-    title: 'Mantenimiento — Cancha 5 fuera de servicio',
-    body: 'La cancha 5 estará fuera de servicio del 15 al 18 de mayo por reparación de iluminación. Pedimos disculpas por las molestias.',
-    category: 'Comunicado',
-    date: '2026-05-14',
-    pinned: false,
-  },
-  {
-    id: 'a3',
-    title: '2x1 en reservas los martes y miércoles',
-    body: 'Reservá 2 canchas por el precio de 1 los martes y miércoles de 14:00 a 18:00 durante todo mayo.',
-    category: 'Oferta',
-    date: '2026-05-01',
-    pinned: false,
-  },
-];
-
 const EMPTY_ANNOUNCEMENT_FORM: AnnouncementFormData = {
   title: '',
   body: '',
@@ -635,14 +609,14 @@ const EMPTY_ANNOUNCEMENT_FORM: AnnouncementFormData = {
 };
 
 function loadAnnouncements(): Announcement[] {
-  if (typeof window === 'undefined') return SAMPLE_ANNOUNCEMENTS;
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem('padelmgt_club_announcements');
     if (raw) return JSON.parse(raw) as Announcement[];
   } catch {
     // ignore
   }
-  return SAMPLE_ANNOUNCEMENTS;
+  return [];
 }
 
 function categoryBadgeStyle(category: AnnouncementCategory): React.CSSProperties {
@@ -662,10 +636,17 @@ function AnnouncementsSection() {
   const [announcements, setAnnouncements] = useState<Announcement[]>(() => loadAnnouncements());
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<AnnouncementFormData>(EMPTY_ANNOUNCEMENT_FORM);
+  const skipNextPush = React.useRef(true);
+
+  useEffect(() => {
+    fetchClubContent<Announcement[]>('announcements').then(remote => { if (remote !== null) setAnnouncements(remote); }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     localStorage.setItem('padelmgt_club_announcements', JSON.stringify(announcements));
+    if (skipNextPush.current) { skipNextPush.current = false; return; }
+    pushClubContent('announcements', announcements).catch(err => console.warn('[club-content] announcements sync failed:', err));
   }, [announcements]);
 
   function handlePublish() {
