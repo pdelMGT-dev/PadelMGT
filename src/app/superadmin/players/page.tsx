@@ -21,7 +21,7 @@ import {
 } from '@/lib/superadmin-data';
 import { getAllPlayers, updatePlayer as updateRegisteredPlayer } from '@/lib/player-store';
 import type { PlanId } from '@/lib/plan-config';
-import { recordPlanChange, getPlanChanges, getPlans, syncPlansFromSupabase } from '@/lib/plan-store';
+import { recordPlanChange, getPlanChanges, getPlans, syncPlansFromSupabase, fetchPlanChangesFromSupabase } from '@/lib/plan-store';
 import { getSANotes, addSANote, deleteSANote, fetchSANotesFromSupabase, type SANote } from '@/lib/sa-notes-store';
 import { getScoreCorrectionsByEntity } from '@/lib/score-correction-store';
 import { getRankingHistoryForPlayer, fetchRankingHistoryForPlayerFromSupabase, type RankingEntry } from '@/lib/ranking-store';
@@ -498,6 +498,7 @@ export default function PlayersPage() {
   const [bulkAction, setBulkAction] = useState('');
   const [, forcePlansRefresh] = useState(0);
   const [, forceRelRefresh] = useState(0);
+  const [, forcePlanChangesRefresh] = useState(0);
 
   useEffect(() => {
     setPlayers(getSAPlayers());
@@ -1015,6 +1016,9 @@ export default function PlayersPage() {
                       }).catch(() => {});
                       fetchRankingHistoryForPlayerFromSupabase(p.id).then(remote => {
                         if (remote !== null) setDrawerRankingHistory(remote);
+                      }).catch(() => {});
+                      fetchPlanChangesFromSupabase().then(remote => {
+                        if (remote !== null) forcePlanChangesRefresh(v => v + 1);
                       }).catch(() => {});
                     }}
                     onMouseEnter={e => { if (!selectedIds.has(p.id)) e.currentTarget.style.background = '#fafafa'; }}

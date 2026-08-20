@@ -283,5 +283,27 @@ export function recordPlanChange(record: Omit<PlanChangeRecord, 'id' | 'changedA
   };
   const all = _changeStore.load();
   _changeStore.persist([change, ...all]);
+  pushPlanChangeToSupabase(change).catch(err => console.warn('[plan-store] recordPlanChange sync failed:', err));
   return change;
+}
+
+async function pushPlanChangeToSupabase(change: PlanChangeRecord): Promise<void> {
+  const res = await fetch('/api/sa/plan-changes', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(change),
+  });
+  if (!res.ok) throw new Error(`push plan change failed: ${res.status}`);
+}
+
+/** Pull the real cross-device plan-change log from Supabase. Returns null on
+ * fetch failure (caller should keep showing the local cache). */
+export async function fetchPlanChangesFromSupabase(): Promise<PlanChangeRecord[] | null> {
+  try {
+    const res = await fetch('/api/sa/plan-changes', { credentials: 'include' });
+    if (!res.ok) return null;
+    const data = await res.json() as { changes: PlanChangeRecord[] };
+    _changeStore.persist(data.changes);
+    return data.changes;
+  } catch { return null; }
 }

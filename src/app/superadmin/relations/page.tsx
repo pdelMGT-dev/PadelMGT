@@ -119,11 +119,16 @@ export default function RelationsPage() {
   function reloadAll(allPlayers?: SAPlayer[]) {
     const ps = allPlayers ?? players;
 
-    // Club memberships — read localStorage directly (no getAllMemberships export)
+    // Club memberships — local cache for instant paint, replaced by Supabase truth
     try {
       const raw = localStorage.getItem('padelmgt_club_memberships');
       setClubMemberships(raw ? JSON.parse(raw) as ClubMembership[] : []);
     } catch { setClubMemberships([]); }
+
+    fetch('/api/sa/club-memberships', { credentials: 'include' })
+      .then(res => res.ok ? res.json() as Promise<{ memberships: ClubMembership[] }> : null)
+      .then(data => { if (data) setClubMemberships(data.memberships); })
+      .catch(() => {});
 
     // Friendships — build pairs from the map
     try {
@@ -157,7 +162,9 @@ export default function RelationsPage() {
       setFriendships(rows);
     }).catch(() => {});
 
-    // Family members + links — read localStorage directly (SA read-only listing)
+    // Family members + links — local cache for instant paint, replaced by
+    // the SA-wide Supabase listing (the player-facing routes only return
+    // the caller's own data, useless for this overview).
     try {
       const raw = localStorage.getItem('padelmgt_family_members') ?? '[]';
       const arr = JSON.parse(raw) as Array<Record<string, unknown>>;
@@ -183,6 +190,32 @@ export default function RelationsPage() {
         status: (l.status as string) ?? 'pending',
       })));
     } catch { setFamilyLinks([]); }
+
+    fetch('/api/sa/family', { credentials: 'include' })
+      .then(res => res.ok ? res.json() as Promise<{
+        members: Array<{ id: string; ownerId: string; fullName: string; relationType: string; birthDate: string; invitationStatus: string }>;
+        links: Array<{ id: string; fromPlayerName: string; fromPlayerId: string; toPlayerEmail: string; relationFromTo: string; status: string }>;
+      }> : null)
+      .then(data => {
+        if (!data) return;
+        setFamilyMembers(data.members.map(m => ({
+          id: m.id,
+          ownerId: m.ownerId,
+          ownerName: ps.find(p => p.id === m.ownerId)?.name ?? m.ownerId,
+          fullName: m.fullName,
+          relationType: m.relationType,
+          birthDate: m.birthDate ?? '',
+          invitationStatus: m.invitationStatus ?? 'none',
+        })));
+        setFamilyLinks(data.links.map(l => ({
+          id: l.id,
+          fromName: l.fromPlayerName ?? l.fromPlayerId,
+          toEmail: l.toPlayerEmail ?? '',
+          relation: l.relationFromTo ?? '',
+          status: l.status ?? 'pending',
+        })));
+      })
+      .catch(() => {});
   }
 
   // ── Bulk add logic ─────────────────────────────────────────────────────────
