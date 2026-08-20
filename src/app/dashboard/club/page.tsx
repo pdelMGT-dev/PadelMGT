@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getAllGames } from '@/lib/game-store';
 import type { ActiveGame } from '@/lib/game-engine';
 import { useToast } from '@/components/ToastProvider';
 import PlanUsageBanner from '@/components/PlanUsageBanner';
 import { getClubMembersByName } from '@/lib/club-membership-store';
 import { getAllPlayers } from '@/lib/player-store';
+import { fetchClubContent, pushClubContent } from '@/lib/club-content-client';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -68,18 +69,7 @@ const LEVEL_LABELS: Record<string, string> = {
   '6': 'Nivel 6 — Avanzado', '7': 'Nivel 7 — Competición', 'Pro': 'Pro',
 };
 
-const CLUB_NAME = 'Club Barrio Norte';
-
-const INITIAL_PLAYERS: ClubPlayer[] = [
-  { id: 'cp1', name: 'Ana Rodríguez',   email: 'ana@email.com',    phone: '+54 11 4444-0001', level: '4', points: 1150, joined: '2024-03-01', status: 'joined' },
-  { id: 'cp2', name: 'Carlos Vega',     email: 'carlos@email.com', phone: '+54 11 4444-0002', level: '5', points: 1320, joined: '2024-01-15', status: 'joined' },
-  { id: 'cp3', name: 'Sofía López',     email: 'sofia@email.com',  phone: '+54 11 4444-0003', level: '3', points: 870,  joined: '2024-06-10', status: 'invited', invitedAt: '2025-04-20' },
-  { id: 'cp4', name: 'Marcos Herrera',  email: 'marcos@email.com', phone: '+54 11 4444-0004', level: '5', points: 1280, joined: '2023-11-20', status: 'joined' },
-  { id: 'cp5', name: 'Laura Torres',    email: 'laura@email.com',  phone: '+54 11 4444-0005', level: '3', points: 750,  joined: '2025-02-08', status: 'pending' },
-  { id: 'cp6', name: 'Diego Fernández', email: 'diego@email.com',  phone: '+54 11 4444-0006', level: '6', points: 1490, joined: '2023-09-01', status: 'joined' },
-  { id: 'cp7', name: 'Valentina Cruz',  email: 'valen@email.com',  phone: '+54 11 4444-0007', level: '2', points: 580,  joined: '2025-04-12', status: 'pending' },
-  { id: 'cp8', name: 'Rodrigo Peña',    email: 'rodri@email.com',  phone: '+54 11 4444-0008', level: '4', points: 1100, joined: '2024-08-30', status: 'invited', invitedAt: '2025-05-01' },
-];
+const DEFAULT_CLUB_NAME = 'Mi Club';
 
 // ── CSV parser ─────────────────────────────────────────────────────────────────
 
@@ -109,7 +99,7 @@ function saveInvitations(invs: Invitation[]) {
   try { localStorage.setItem('padelmgt_invitations', JSON.stringify(invs)); } catch {}
 }
 
-function createInvitation(player: ClubPlayer): { invitation: Invitation; link: string } {
+function createInvitation(player: ClubPlayer, clubName: string): { invitation: Invitation; link: string } {
   const token = crypto.randomUUID().replace(/-/g, '');
   const now = new Date().toISOString();
   const invitation: Invitation = {
@@ -117,7 +107,7 @@ function createInvitation(player: ClubPlayer): { invitation: Invitation; link: s
     token,
     email: player.email,
     playerName: player.name,
-    clubName: CLUB_NAME,
+    clubName,
     level: player.level,
     points: player.points,
     status: 'pending',
@@ -125,6 +115,14 @@ function createInvitation(player: ClubPlayer): { invitation: Invitation; link: s
   };
   const existing = loadInvitations().filter(i => i.email !== player.email);
   saveInvitations([...existing, invitation]);
+  fetch('/api/club-invite', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: invitation.id, token: invitation.token, email: invitation.email,
+      playerName: invitation.playerName, level: invitation.level, points: invitation.points,
+    }),
+  }).catch(err => console.warn('[club-invite] create failed:', err));
   const base = typeof window !== 'undefined' ? window.location.origin : 'https://padelmgt.com';
   return { invitation, link: `${base}/join/${token}` };
 }
@@ -212,7 +210,7 @@ function ResumenSection({ players, games }: { players: ClubPlayer[]; games: Acti
   );
 }
 
-function PlayersSection({ players, setPlayers }: { players: ClubPlayer[]; setPlayers: React.Dispatch<React.SetStateAction<ClubPlayer[]>> }) {
+function PlayersSection({ players, setPlayers, clubName }: { players: ClubPlayer[]; setPlayers: React.Dispatch<React.SetStateAction<ClubPlayer[]>>; clubName: string }) {
   const { showToast } = useToast();
   const [mode, setMode] = useState<'list' | 'add' | 'import'>('list');
   const [search, setSearch] = useState('');
@@ -257,7 +255,7 @@ function PlayersSection({ players, setPlayers }: { players: ClubPlayer[]; setPla
 
   function handleInvite(player: ClubPlayer) {
     if (!player.email) { showToast('Este jugador no tiene email registrado.'); return; }
-    const { link } = createInvitation(player);
+    const { link } = createInvitation(player, clubName);
     const now = new Date().toISOString();
     setPlayers(prev => prev.map(p => p.id === player.id ? { ...p, status: 'invited', invitedAt: now } : p));
     setInviteLink(link);
@@ -269,7 +267,7 @@ function PlayersSection({ players, setPlayers }: { players: ClubPlayer[]; setPla
     const withEmail = targets.filter(p => p.email && p.status !== 'joined');
     if (withEmail.length === 0) { showToast('Todos los jugadores ya tienen cuenta o no tienen email.'); return; }
     const now = new Date().toISOString();
-    withEmail.forEach(p => createInvitation(p));
+    withEmail.forEach(p => createInvitation(p, clubName));
     setPlayers(prev => prev.map(p => withEmail.some(t => t.id === p.id) ? { ...p, status: 'invited', invitedAt: now } : p));
     setJustImported([]);
     showToast(`${withEmail.length} invitaciones generadas.`);
@@ -497,10 +495,14 @@ export default function ClubDashboardPage() {
   const { showToast } = useToast();
   const [tab, setTab] = useState<Tab>('resumen');
 
+  const [myClub, setMyClub] = useState<{ id: string; name: string } | null>(null);
+  const clubName = myClub?.name ?? DEFAULT_CLUB_NAME;
+
   const [players, setPlayers] = useState<ClubPlayer[]>(() => {
-    if (typeof window === 'undefined') return INITIAL_PLAYERS;
-    try { const s = localStorage.getItem('padelmgt_club_players'); return s ? JSON.parse(s) : INITIAL_PLAYERS; } catch { return INITIAL_PLAYERS; }
+    if (typeof window === 'undefined') return [];
+    try { const s = localStorage.getItem('padelmgt_club_players'); return s ? JSON.parse(s) : []; } catch { return []; }
   });
+  const skipNextRosterPush = useRef(true);
 
   const [games, setGames] = useState<ActiveGame[]>([]);
   const [platformMembers, setPlatformMembers] = useState<{ id: string; name: string; email: string; shortId?: string; level?: string; rankingPoints: number; joinedAt: string }[]>([]);
@@ -512,13 +514,27 @@ export default function ClubDashboardPage() {
   } | null>(null);
 
   useEffect(() => {
+    fetch('/api/my-club', { credentials: 'include' })
+      .then(res => res.ok ? res.json() as Promise<{ club: { id: string; name: string } | null }> : null)
+      .then(data => { if (data?.club) setMyClub(data.club); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchClubContent<ClubPlayer[]>('roster').then(remote => { if (remote !== null) setPlayers(remote); }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     try { localStorage.setItem('padelmgt_club_players', JSON.stringify(players)); } catch {}
+    if (skipNextRosterPush.current) { skipNextRosterPush.current = false; return; }
+    pushClubContent('roster', players).catch(err => console.warn('[club-content] roster sync failed:', err));
   }, [players]);
 
   useEffect(() => { setGames(getAllGames()); }, []);
 
   useEffect(() => {
-    const memberships = getClubMembersByName(CLUB_NAME);
+    if (!myClub) { setPlatformMembers([]); return; }
+    const memberships = getClubMembersByName(myClub.name);
     const allPlayers = getAllPlayers();
     const members = memberships.map(m => {
       const p = allPlayers.find(p => p.id === m.playerId);
@@ -529,7 +545,7 @@ export default function ClubDashboardPage() {
       } : null;
     }).filter(Boolean) as typeof platformMembers;
     setPlatformMembers(members);
-  }, []);
+  }, [myClub]);
 
   useEffect(() => {
     import('./sections').then(m => setSections({ GallerySection: m.GallerySection, CourtsSection: m.CourtsSection, AnnouncementsSection: m.AnnouncementsSection })).catch(() => {});
@@ -553,7 +569,7 @@ export default function ClubDashboardPage() {
           <div>
             <a href="/dashboard/player/quick-game" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', textDecoration: 'none', fontWeight: 600, letterSpacing: '0.04em', display: 'inline-block', marginBottom: 12 }}>← Dashboard</a>
             <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--neon)', fontWeight: 600, marginBottom: 8 }}>Panel de administración</div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 6px', color: '#fff' }}>{CLUB_NAME}</h1>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: '0 0 6px', color: '#fff' }}>{clubName}</h1>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>Buenos Aires, Argentina · 6 canchas · Miembro desde Mar 2024</div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -606,7 +622,7 @@ export default function ClubDashboardPage() {
               </div>
             )}
             {/* Manually added players */}
-            <PlayersSection players={players} setPlayers={setPlayers} />
+            <PlayersSection players={players} setPlayers={setPlayers} clubName={clubName} />
           </div>
         )}
         {tab === 'galeria'     && (Sections ? <Sections.GallerySection /> : <div style={{ padding: 40, textAlign: 'center', color: 'var(--grey-400)', fontSize: 13 }}>Cargando galería...</div>)}
