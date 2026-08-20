@@ -76,6 +76,42 @@ async function syncApprovalToSupabase(req: FamilyApprovalRequest): Promise<void>
   }
 }
 
+function rowToApproval(r: Record<string, unknown>): FamilyApprovalRequest {
+  return {
+    id: r.id as string,
+    guardianId: r.guardian_id as string,
+    familyMemberId: r.family_member_id as string,
+    familyMemberName: r.family_member_name as string,
+    context: r.context as FamilyApprovalRequest['context'],
+    entityId: r.entity_id as string,
+    entityName: r.entity_name as string,
+    entityDate: (r.entity_date as string) ?? undefined,
+    fromPlayerId: r.from_player_id as string,
+    fromPlayerName: r.from_player_name as string,
+    status: r.status as FamilyApprovalRequest['status'],
+    createdAt: r.created_at as string,
+    respondedAt: (r.responded_at as string) ?? undefined,
+  };
+}
+
+/** Pull this guardian's real approval requests from Supabase and merge into
+ * the local cache. Returns null on fetch failure (caller should keep
+ * showing the local cache in that case). */
+export async function fetchApprovalsForGuardianFromSupabase(guardianId: string): Promise<FamilyApprovalRequest[] | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  try {
+    const { data, error } = await supabase.from('family_approvals').select('*').eq('guardian_id', guardianId);
+    if (error) { console.warn('[FamilyApproval] fetch:', error.message); return null; }
+    const remote = (data ?? []).map(rowToApproval);
+    const others = _store.load().filter(r => r.guardianId !== guardianId);
+    _store.persist([...others, ...remote]);
+    return remote;
+  } catch (e) {
+    console.warn('[FamilyApproval] fetch:', e);
+    return null;
+  }
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /** All approval requests (pending + resolved) where the player is the guardian. */

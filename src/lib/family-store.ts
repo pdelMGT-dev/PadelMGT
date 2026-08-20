@@ -182,6 +182,37 @@ export function saveFamilyLink(link: FamilyLink): void {
   _linksStore.persist(all);
 }
 
+// ── Cross-device sync (pull) ──────────────────────────────────────────────────
+
+/** Pull this owner's real family members from Supabase and merge into the
+ * local cache. Returns null on fetch failure (caller should keep showing
+ * the local cache in that case). */
+export async function fetchFamilyMembersFromSupabase(ownerId: string): Promise<FamilyMember[] | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const res = await fetch(`/api/family/member?ownerId=${encodeURIComponent(ownerId)}`);
+    if (!res.ok) return null;
+    const data = await res.json() as { members: FamilyMember[] };
+    const others = _membersStore.load().filter(m => m.ownerId !== ownerId);
+    _membersStore.persist([...others, ...data.members]);
+    return data.members;
+  } catch { return null; }
+}
+
+/** Pull this player's real family links (sent + received) from Supabase and
+ * merge into the local cache. Returns null on fetch failure. */
+export async function fetchFamilyLinksFromSupabase(playerId: string): Promise<FamilyLink[] | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const res = await fetch(`/api/family/link?playerId=${encodeURIComponent(playerId)}`);
+    if (!res.ok) return null;
+    const data = await res.json() as { links: FamilyLink[] };
+    const others = _linksStore.load().filter(l => l.fromPlayerId !== playerId && l.toPlayerId !== playerId);
+    _linksStore.persist([...others, ...data.links]);
+    return data.links;
+  } catch { return null; }
+}
+
 // ── High-level async operations ───────────────────────────────────────────────
 
 /** Create a new family member with a generated ID and persist it. */

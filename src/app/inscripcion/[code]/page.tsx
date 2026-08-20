@@ -16,7 +16,7 @@ import {
   sendPartnerInvitationEmail,
 } from '@/lib/email';
 import { getFriendsForPlayer, fetchFriendsFromSupabase, searchPlayers, type RegisteredPlayer } from '@/lib/player-store';
-import { getFamilyMembers, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
+import { getFamilyMembers, fetchFamilyMembersFromSupabase, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
 import { isEligibleForMaxAge, ageOnJan1 } from '@/lib/minor-categories-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import BrandLogo from '@/components/BrandLogo';
@@ -130,6 +130,9 @@ export default function InscripcionPage({ params }: { params: Promise<{ code: st
   useEffect(() => {
     if (!user) { setFamilyMembers([]); return; }
     setFamilyMembers(getFamilyMembers(user.id));
+    fetchFamilyMembersFromSupabase(user.id).then(remote => {
+      if (remote !== null) setFamilyMembers(remote);
+    }).catch(() => {});
   }, [user]);
 
   const acceptsFamily = tournament?.config?.acceptsFamilyMembers === true;

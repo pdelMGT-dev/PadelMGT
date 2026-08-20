@@ -15,6 +15,40 @@ import { deriveInverseRelation, type RelationType, type FamilyLink } from '@/lib
  *   - Updates the link status to 'accepted' or 'rejected'
  *   - Returns { ok: true }
  */
+function rowToLink(r: Record<string, unknown>): FamilyLink {
+  return {
+    id: r.id as string,
+    fromPlayerId: r.from_player_id as string,
+    toPlayerId: r.to_player_id as string,
+    toPlayerEmail: r.to_player_email as string,
+    fromPlayerName: r.from_player_name as string,
+    relationFromTo: r.relation_from_to as RelationType,
+    relationToFrom: r.relation_to_from as RelationType,
+    status: r.status as FamilyLink['status'],
+    createdAt: r.created_at as string,
+  };
+}
+
+export async function GET(request: NextRequest) {
+  const svc = serviceClient();
+  if (!svc) return NextResponse.json({ links: [] });
+
+  const { searchParams } = new URL(request.url);
+  const playerId = searchParams.get('playerId');
+  if (!playerId) return NextResponse.json({ error: 'Falta playerId' }, { status: 400 });
+
+  const callerIds = await getCallerPlayerIds(request);
+  if (!callerIds.includes(playerId)) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+
+  const { data, error } = await svc
+    .from('family_links')
+    .select('*')
+    .or(`from_player_id.eq.${playerId},to_player_id.eq.${playerId}`);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ links: (data ?? []).map(rowToLink) });
+}
+
 export async function POST(request: NextRequest) {
   const svc = serviceClient();
   if (!svc) return NextResponse.json({ error: 'Servicio no disponible' }, { status: 503 });
