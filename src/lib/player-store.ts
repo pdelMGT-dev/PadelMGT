@@ -7,14 +7,15 @@ export { SEED_PLAYERS, SEED_FRIENDSHIPS };
 /** Sync player data to Supabase via the server-side API route (uses service role key). */
 async function syncPlayerToSupabase(p: RegisteredPlayer & { authUserId?: string }): Promise<void> {
   if (typeof window === 'undefined') return; // server-side: skip
-  try {
-    await fetch('/api/player/update', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(p),
-    });
-  } catch (err) {
-    console.warn('[player-store] syncPlayerToSupabase failed:', err);
+  const res = await fetch('/api/player/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(p),
+  });
+  if (!res.ok) {
+    let message = `status ${res.status}`;
+    try { const body = await res.json() as { error?: string }; if (body.error) message = body.error; } catch { /* ignore */ }
+    throw new Error(message);
   }
 }
 
@@ -323,8 +324,16 @@ export function seedLocalPlayer(player: RegisteredPlayer): void {
 /** Update any fields on a player and sync to Supabase. Works even when the
  * local cache doesn't have the row yet (e.g. cleared cache, different device) —
  * it always pushes to Supabase rather than silently no-op'ing; the server
- * route is the actual source of truth and merges custom_fields safely. */
-export function updatePlayer(playerId: string, updates: Partial<RegisteredPlayer>): RegisteredPlayer | null {
+ * route is the actual source of truth and merges custom_fields safely.
+ *
+ * Returns the optimistically-updated local player plus a `synced` promise
+ * the caller can await to know whether the Supabase write actually landed —
+ * without this, a failed sync (auth session expired, ownership check
+ * rejected, DB error) was invisible: the UI always showed success. */
+export function updatePlayer(
+  playerId: string,
+  updates: Partial<RegisteredPlayer>,
+): { player: RegisteredPlayer | null; synced: Promise<boolean> } {
   const all = _store.load();
   const idx = all.findIndex(p => p.id === playerId);
   const existing = idx >= 0 ? all[idx] : null;
@@ -333,7 +342,7 @@ export function updatePlayer(playerId: string, updates: Partial<RegisteredPlayer
     // identify/authorize the row, so this update cannot be pushed. Log loudly
     // instead of a silent drop, and give callers a chance to pass it.
     console.warn(`[player-store] updatePlayer(${playerId}): no local cache and no email in updates — skipping Supabase sync`);
-    return null;
+    return { player: null, synced: Promise.resolve(false) };
   }
   const updated: RegisteredPlayer = existing
     ? { ...existing, ...updates }
@@ -352,6 +361,8 @@ export function updatePlayer(playerId: string, updates: Partial<RegisteredPlayer
       }
     } catch { /* silent */ }
   }
-  syncPlayerToSupabase(updated).catch(err => console.warn('[player-store] updatePlayer sync failed:', err));
-  return updated;
+  const synced = syncPlayerToSupabase(updated)
+    .then(() => true)
+    .catch(err => { console.warn('[player-store] updatePlayer sync failed:', err); return false; });
+  return { player: updated, synced };
 }

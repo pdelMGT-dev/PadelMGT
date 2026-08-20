@@ -121,6 +121,7 @@ export default function PlayerProfilePage() {
   const [fLevel, setFLevel] = useState<PlayerLevel>('1.0');
   const [levelExpanded, setLevelExpanded] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [saveError, setSaveError] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Family tab state
@@ -295,26 +296,35 @@ export default function PlayerProfilePage() {
     };
     setSessionUser(updated as unknown as Parameters<typeof setSessionUser>[0]);
     setUser(updated);
-    if (updated.id) {
-      // Push EVERY profile field so the edit is visible from any device.
-      // email is included explicitly — the server route requires it, and
-      // relying solely on the local cache having it is what caused silent
-      // save failures (see updatePlayer / seedLocalPlayer above).
-      updatePlayer(updated.id, {
-        name: updated.name,
-        email: updated.email,
-        phone: updated.phone ?? '',
-        description: updated.description ?? '',
-        birthDate: updated.birthDate ?? '',
-        country: updated.nationality,
-        city: updated.city,
-        sex: updated.sex === 'masculino' ? 'M' : updated.sex === 'femenino' ? 'F' : undefined,
-        level: fLevel,
-        photoUrl: updated.photoUrl,
-      });
-    }
-    setSaveMsg('¡Perfil actualizado!');
-    setTimeout(() => setSaveMsg(''), 3000);
+    setSaveError(false);
+    if (!updated.id) return;
+    // Push EVERY profile field so the edit is visible from any device.
+    // email is included explicitly — the server route requires it, and
+    // relying solely on the local cache having it is what caused silent
+    // save failures (see updatePlayer / seedLocalPlayer above).
+    const { synced } = updatePlayer(updated.id, {
+      name: updated.name,
+      email: updated.email,
+      phone: updated.phone ?? '',
+      description: updated.description ?? '',
+      birthDate: updated.birthDate ?? '',
+      country: updated.nationality,
+      city: updated.city,
+      sex: updated.sex === 'masculino' ? 'M' : updated.sex === 'femenino' ? 'F' : undefined,
+      level: fLevel,
+      photoUrl: updated.photoUrl,
+    });
+    setSaveMsg('Guardando...');
+    synced.then(ok => {
+      if (ok) {
+        setSaveError(false);
+        setSaveMsg('¡Perfil actualizado!');
+      } else {
+        setSaveError(true);
+        setSaveMsg('No se pudo guardar en el servidor. Intentá de nuevo — si el problema sigue, cerrá sesión y volvé a entrar.');
+      }
+      setTimeout(() => setSaveMsg(''), ok ? 3000 : 6000);
+    });
   }
 
   function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -330,7 +340,10 @@ export default function PlayerProfilePage() {
       const updated = { ...user, avatarBase64: base64, photoUrl: base64 };
       setSessionUser(updated as unknown as Parameters<typeof setSessionUser>[0]);
       setUser(updated);
-      if (user.id) updatePlayer(user.id, { email: user.email, photoUrl: base64 });
+      if (user.id) {
+        const { synced } = updatePlayer(user.id, { email: user.email, photoUrl: base64 });
+        synced.then(ok => { if (!ok) alert('No se pudo guardar la foto en el servidor. Intentá de nuevo.'); });
+      }
     };
     reader.readAsDataURL(file);
   }
@@ -342,7 +355,10 @@ export default function PlayerProfilePage() {
     setUser(updated);
     // Empty string (not undefined) so the deletion survives JSON serialization
     // and clears the photo server-side too.
-    if (user.id) updatePlayer(user.id, { email: user.email, photoUrl: '' });
+    if (user.id) {
+      const { synced } = updatePlayer(user.id, { email: user.email, photoUrl: '' });
+      synced.then(ok => { if (!ok) alert('No se pudo eliminar la foto en el servidor. Intentá de nuevo.'); });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1400,7 +1416,7 @@ export default function PlayerProfilePage() {
             {saveMsg && (
               <div style={{
                 marginTop: 12, fontFamily: 'var(--font-body)', fontSize: 13,
-                color: 'var(--turf-green)', fontWeight: 600, textAlign: 'center',
+                color: saveError ? '#dc2626' : 'var(--turf-green)', fontWeight: 600, textAlign: 'center',
               }}>
                 {saveMsg}
               </div>
