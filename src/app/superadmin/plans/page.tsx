@@ -9,6 +9,7 @@ import {
   getPlanChanges,
   syncPlansFromSupabase,
   pushPlansToSupabase,
+  fetchPlanChangesFromSupabase,
   type SubscriptionPlan,
   type PlanFeature,
 } from '@/lib/plan-store';
@@ -161,10 +162,13 @@ export default function PlansPage() {
     description: '', displayOnPricing: false, displayText: '', displayBadge: '',
   });
 
+  const [, forcePlanChangesRefresh] = useState(0);
+
   useEffect(() => {
     setPlans(getPlans());
     // Pull the SA's catalog from Supabase (cross-device) then refresh.
     syncPlansFromSupabase().then(remote => { if (remote) setPlans(remote); }).catch(() => {});
+    fetchPlanChangesFromSupabase().then(remote => { if (remote !== null) forcePlanChangesRefresh(v => v + 1); }).catch(() => {});
   }, []);
 
   useEffect(() => {
