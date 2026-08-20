@@ -24,7 +24,7 @@ import type { PlanId } from '@/lib/plan-config';
 import { recordPlanChange, getPlanChanges, getPlans, syncPlansFromSupabase } from '@/lib/plan-store';
 import { getSANotes, addSANote, deleteSANote, fetchSANotesFromSupabase, type SANote } from '@/lib/sa-notes-store';
 import { getScoreCorrectionsByEntity } from '@/lib/score-correction-store';
-import { getRankingHistoryForPlayer, type RankingEntry } from '@/lib/ranking-store';
+import { getRankingHistoryForPlayer, fetchRankingHistoryForPlayerFromSupabase, type RankingEntry } from '@/lib/ranking-store';
 import { logAudit } from '@/lib/audit-log-store';
 import { getLevelInfo, PLAYER_LEVELS } from '@/lib/level-config';
 
@@ -1012,6 +1012,9 @@ export default function PlayersPage() {
                       setDrawerNoteInput('');
                       fetchSANotesFromSupabase('player', p.id).then(remote => {
                         if (remote !== null) setDrawerNotes(remote);
+                      }).catch(() => {});
+                      fetchRankingHistoryForPlayerFromSupabase(p.id).then(remote => {
+                        if (remote !== null) setDrawerRankingHistory(remote);
                       }).catch(() => {});
                     }}
                     onMouseEnter={e => { if (!selectedIds.has(p.id)) e.currentTarget.style.background = '#fafafa'; }}

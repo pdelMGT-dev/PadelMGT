@@ -7,7 +7,7 @@ import { getGameByCode, saveGame } from '@/lib/game-store';
 import { fetchGameByCode } from '@/lib/supabase';
 import type { ActiveGame, ScoreConfig, FixedPair } from '@/lib/game-engine';
 import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, type JoinRequest } from '@/lib/join-request-store';
-import { getRankingHistoryForGame, type RankingEntry } from '@/lib/ranking-store';
+import { getRankingHistoryForGame, fetchRankingHistoryForGameFromSupabase, type RankingEntry } from '@/lib/ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import MatchSetResult from '@/components/MatchSetResult';
 
@@ -131,7 +131,12 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
   useEffect(() => {
     const applyGame = (g: ActiveGame | null) => {
       setGame(g);
-      if (g?.status === 'finished') setRankingEntries(getRankingHistoryForGame(g.id));
+      if (g?.status === 'finished') {
+        setRankingEntries(getRankingHistoryForGame(g.id));
+        fetchRankingHistoryForGameFromSupabase(g.id).then(remote => {
+          if (remote !== null) setRankingEntries(remote);
+        }).catch(() => {});
+      }
       if (currentUser && g) {
         // Check Supabase for status updates (creator may have approved/rejected from another device)
         syncMyJoinRequestFromSupabase(g.id, currentUser.id)
