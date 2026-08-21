@@ -297,13 +297,37 @@ export function areFriends(playerId: string, otherId: string): boolean {
   return (map[playerId] ?? []).includes(otherId);
 }
 
+/**
+ * Apply a ranking-point delta to a player — possibly a teammate/opponent,
+ * not just the caller. Updates the local cache when the row happens to be
+ * cached, but ALWAYS pushes to Supabase via /api/ranking-points/apply
+ * (ownership-free, unlike /api/player/update) rather than silently no-op'ing
+ * when the local cache doesn't have the row — that early-return used to
+ * mean OTHER players' points from a shared game never reached the server
+ * unless they personally opened the game from their own device.
+ */
 export function updatePlayerRankingPoints(playerId: string, delta: number): void {
   const all = _store.load();
   const idx = all.findIndex(p => p.id === playerId);
-  if (idx < 0) return;
-  all[idx] = { ...all[idx], rankingPoints: Math.max(0, all[idx].rankingPoints + delta) };
-  _store.persist(all);
-  syncPlayerToSupabase(all[idx]).catch(err => console.warn('[player-store] updateRankingPoints sync failed:', err));
+  if (idx >= 0) {
+    all[idx] = { ...all[idx], rankingPoints: Math.max(0, all[idx].rankingPoints + delta) };
+    _store.persist(all);
+  }
+  syncRankingPointsToSupabase(playerId, delta).catch(err => console.warn('[player-store] updateRankingPoints sync failed:', err));
+}
+
+async function syncRankingPointsToSupabase(playerId: string, delta: number): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const res = await fetch('/api/ranking-points/apply', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ playerId, delta }),
+  });
+  if (!res.ok) {
+    let message = `status ${res.status}`;
+    try { const body = await res.json() as { error?: string }; if (body.error) message = body.error; } catch { /* ignore */ }
+    throw new Error(message);
+  }
 }
 
 /**

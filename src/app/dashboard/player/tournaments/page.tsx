@@ -455,9 +455,9 @@ export default function PlayerTournamentsPage() {
   }
 
   // ── Create tournament ────────────────────────────────────────────────────────
-  function handleCreateTournament() {
+  async function handleCreateTournament() {
     if (!currentUser) return;
-    const gate = checkTournamentGate(tMaxPlayers);
+    const gate = await checkTournamentGate(tMaxPlayers);
     if (!gate.allowed) {
       if (gate.reason === 'tournaments_per_month') {
         setPlanError(`Alcanzaste el límite de ${gate.limit} torneo por mes en el plan Free. Activá Pro para torneos ilimitados.`);

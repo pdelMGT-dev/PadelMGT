@@ -60,8 +60,12 @@ function deriveResult(playerId: string, standings: Standing[]): RankingResult {
 
 /**
  * Apply game results to all confirmed players and persist the entries.
+ * Pulls the real cross-device history for this game first, so a device
+ * that never ran this locally doesn't re-credit points another device
+ * already applied.
  */
-export function applyGameRankingResults(game: ActiveGame, leagueId?: string): RankingEntry[] {
+export async function applyGameRankingResults(game: ActiveGame, leagueId?: string): Promise<RankingEntry[]> {
+  await fetchRankingHistoryForGameFromSupabase(game.id).catch(() => null);
   const all = _store.load();
   const created: RankingEntry[] = [];
   const isTraditional = game.scoreConfig?.type === 'traditional';
@@ -173,7 +177,8 @@ export function getTournamentRankingPreview(game: ActiveGame): Array<{ playerId:
  * zero because the bracket was ignored), the old entries are reversed and
  * replaced. Otherwise it's a no-op, so it stays safe to call on every load.
  */
-export function applyTournamentRankingResults(tournament: Tournament, leagueId?: string): RankingEntry[] {
+export async function applyTournamentRankingResults(tournament: Tournament, leagueId?: string): Promise<RankingEntry[]> {
+  await fetchRankingHistoryForGameFromSupabase(tournament.id).catch(() => null);
   const cfg = getGlobalRankingConfig();
   const records = computeTournamentRankRecords(tournament).filter(r => r.wins + r.draws + r.losses > 0);
 
@@ -273,7 +278,8 @@ function tallyMatchResult(
  * Idempotent: dedups via the same gameId-based check as the other apply* fns,
  * so calling this repeatedly for an already-processed tournament is a no-op.
  */
-export function applyPersonalizadoRankingResults(tournament: PersonalizadoTournament): RankingEntry[] {
+export async function applyPersonalizadoRankingResults(tournament: PersonalizadoTournament): Promise<RankingEntry[]> {
+  await fetchRankingHistoryForGameFromSupabase(tournament.id).catch(() => null);
   const all = _store.load();
   if (all.some((e) => e.gameId === tournament.id)) return [];
 

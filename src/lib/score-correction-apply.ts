@@ -67,7 +67,7 @@ export async function applyTournamentScoreCorrection(
   // finished-and-credited (reverses the stale entries, reapplies the fresh
   // ones) or is still in progress (first-time credit for what's completed so
   // far; a later real finish reconciles again with the full final state).
-  applyTournamentRankingResults(updated);
+  await applyTournamentRankingResults(updated);
 
   return { ok: true, affectedPlayerIds };
 }

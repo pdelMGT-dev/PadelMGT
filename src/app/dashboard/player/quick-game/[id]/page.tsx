@@ -688,12 +688,12 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     showToast('Te uniste al juego como jugador.');
   }
 
-  function handleFinishGame() {
+  async function handleFinishGame() {
     if (!game) return;
     const standings = calculateStandings(game);
     const finished: ActiveGame = { ...game, status: 'finished', standings };
     saveGame(finished);
-    const entries = applyGameRankingResults(finished);
+    const entries = await applyGameRankingResults(finished);
     setGame(finished);
     setRankingEntries(entries);
     showToast('¡Juego finalizado! Ranking actualizado.');

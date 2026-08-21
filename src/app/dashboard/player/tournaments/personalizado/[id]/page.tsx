@@ -283,7 +283,7 @@ export default function PersonalizadoDetailPage({ params }: { params: Promise<{ 
   // mirroring how classic tournaments/quick games apply ranking on finish.
   useEffect(() => {
     if (tournament?.status === 'finished') {
-      applyPersonalizadoRankingResults(tournament);
+      void applyPersonalizadoRankingResults(tournament).catch(err => console.warn('[ranking] apply failed:', err));
     }
   }, [tournament]);
 

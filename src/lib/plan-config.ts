@@ -195,6 +195,44 @@ export function incrementUsage(type: 'games' | 'tournaments'): void {
   try { localStorage.setItem(USAGE_PREFIX + monthKey(), JSON.stringify(usage)); } catch { /* ignore */ }
 }
 
+// ── Server-verified usage (real counts, not a client-resettable counter) ─────
+// A localStorage counter can be reset just by clearing storage or switching
+// device/browser, silently bypassing the plan's monthly limits. /api/me/usage
+// counts the caller's real quick_games/tournaments rows in Supabase instead.
+const VERIFIED_USAGE_KEY = 'padelmgt_verified_usage_v1';
+const VERIFIED_USAGE_TTL = 60 * 1000;
+
+interface VerifiedUsageCache { games: number; tournaments: number; fetchedAt: number; }
+
+function getCachedServerUsage(): VerifiedUsageCache | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(VERIFIED_USAGE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw) as VerifiedUsageCache;
+    if (Date.now() - cache.fetchedAt > VERIFIED_USAGE_TTL) return null;
+    return cache;
+  } catch { return null; }
+}
+
+/** Fetch real usage counts from Supabase. Falls back to the local counter
+ * (best-effort only) when the fetch fails, e.g. offline. */
+async function fetchServerUsage(): Promise<{ games: number; tournaments: number }> {
+  const cached = getCachedServerUsage();
+  if (cached) return { games: cached.games, tournaments: cached.tournaments };
+  try {
+    const res = await fetch('/api/me/usage', { credentials: 'include' });
+    if (!res.ok) return readUsage();
+    const data = await res.json() as { games: number; tournaments: number };
+    try {
+      sessionStorage.setItem(VERIFIED_USAGE_KEY, JSON.stringify({ ...data, fetchedAt: Date.now() }));
+    } catch { /* ignore */ }
+    return data;
+  } catch {
+    return readUsage();
+  }
+}
+
 // ── Server-verified plan cache ────────────────────────────────────────────────
 // /api/me/plan derives the plan from the verified Supabase session (Stripe
 // webhook + SA are the sources of truth). When available, this OVERRIDES any
@@ -289,27 +327,27 @@ export type GateResult =
   | { allowed: false; reason: 'active_leagues'; limit: number; used: number }
   | { allowed: false; reason: 'players_per_league'; limit: number };
 
-export function checkGameGate(maxPlayers: number): GateResult {
+export async function checkGameGate(maxPlayers: number): Promise<GateResult> {
   const plan = getUserPlan();
   if (BYPASS_ROLES.has(plan) || plan === 'fed_pro' || plan === 'infinity') return { allowed: true };
   const lim = getLimitsForPlan(plan);
   if (lim.maxPlayersPerGame !== -1 && maxPlayers > lim.maxPlayersPerGame)
     return { allowed: false, reason: 'players_per_game', limit: lim.maxPlayersPerGame };
   if (lim.maxGamesPerMonth !== -1) {
-    const used = readUsage().games;
+    const used = (await fetchServerUsage()).games;
     if (used >= lim.maxGamesPerMonth) return { allowed: false, reason: 'games_per_month', limit: lim.maxGamesPerMonth, used };
   }
   return { allowed: true };
 }
 
-export function checkTournamentGate(maxPlayers: number): GateResult {
+export async function checkTournamentGate(maxPlayers: number): Promise<GateResult> {
   const plan = getUserPlan();
   if (BYPASS_ROLES.has(plan) || plan === 'fed_pro' || plan === 'infinity') return { allowed: true };
   const lim = getLimitsForPlan(plan);
   if (lim.maxPlayersPerTournament !== -1 && maxPlayers > lim.maxPlayersPerTournament)
     return { allowed: false, reason: 'players_per_tournament', limit: lim.maxPlayersPerTournament };
   if (lim.maxTournamentsPerMonth !== -1) {
-    const used = readUsage().tournaments;
+    const used = (await fetchServerUsage()).tournaments;
     if (used >= lim.maxTournamentsPerMonth) return { allowed: false, reason: 'tournaments_per_month', limit: lim.maxTournamentsPerMonth, used };
   }
   return { allowed: true };
