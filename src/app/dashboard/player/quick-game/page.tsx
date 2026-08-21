@@ -455,9 +455,9 @@ export default function QuickGamePage() {
 
   function goToDashboard() { resetWizard(); setView('dashboard'); }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!currentUser) return;
-    const gate = checkGameGate(maxPlayers);
+    const gate = await checkGameGate(maxPlayers);
     if (!gate.allowed) {
       if (gate.reason === 'games_per_month') {
         setPlanError(`Alcanzaste el límite de ${gate.limit} Juegos Rápidos este mes en el plan Free. Activá Pro para juegos ilimitados.`);

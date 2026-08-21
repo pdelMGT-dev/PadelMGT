@@ -356,7 +356,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     });
   }
 
-  function handleSaveScore(roundNum: number, courtNum: number) {
+  async function handleSaveScore(roundNum: number, courtNum: number) {
     const key = `${roundNum}-${courtNum}`;
     const raw = scoreInputs[key] ?? { p1: '', p2: '' };
     const p1 = Math.max(0, parseInt(raw.p1 || '0', 10));
@@ -371,7 +371,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
     setTournament(updated);
     // Exit edit mode for this court after saving
     setEditingCourts(prev => { const next = new Set(prev); next.delete(key); return next; });
-    if (updated.status === 'finished') applyTournamentRankingResults(updated);
+    if (updated.status === 'finished') await applyTournamentRankingResults(updated);
   }
 
   function handleEditCourt(roundNum: number, courtNum: number) {
@@ -438,12 +438,12 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
 
   // ── Finish tournament ─────────────────────────────────────────────────────
 
-  function handleFinishTournament() {
+  async function handleFinishTournament() {
     const standings = calculateStandings(t);
     const updated: Tournament = { ...t, status: 'finished', standings };
     saveTournament(updated);
     setTournament(updated);
-    applyTournamentRankingResults(updated);
+    await applyTournamentRankingResults(updated);
     setFinishConfirm(false);
   }
 
@@ -1371,7 +1371,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                 <span style={{ fontSize: 14, color: 'var(--grey-400)', transform: koBracketPhaseOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▼</span>
               </div>
               {koBracketPhaseOpen && (() => {
-                const onScore = (roundIdx: number, matchIdx: number, s1: number, s2: number, sets?: Array<{ p1: number; p2: number }>, walkover?: boolean) => {
+                const onScore = async (roundIdx: number, matchIdx: number, s1: number, s2: number, sets?: Array<{ p1: number; p2: number }>, walkover?: boolean) => {
                   const scored = updateKnockoutBracketMatch(t, roundIdx, matchIdx, s1, s2, sets, walkover);
                   // Notify winner (advanced/champion), loser (eliminated) and any newly-set next match.
                   const { items, notifiedEvents } = classicBracketNotifications(scored, roundIdx, matchIdx);
@@ -1380,7 +1380,7 @@ export default function LiveTorneoPage({ params }: { params: Promise<{ id: strin
                   setTournament(updated);
                   if (items.length) void createNotifications(updated.id, 'torneo', items);
                   if (updated.status === 'finished') {
-                    applyTournamentRankingResults(updated);
+                    await applyTournamentRankingResults(updated);
                     showToast('¡Torneo finalizado! Resultados guardados.', 'success');
                   }
                 };
