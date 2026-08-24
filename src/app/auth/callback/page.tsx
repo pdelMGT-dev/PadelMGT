@@ -77,8 +77,11 @@ function CallbackInner() {
       // Fetch the player record created at signup (by auth id, then email).
       let sbPlayer = await fetchPlayerByUserId(authUser.id);
       if (!sbPlayer) sbPlayer = await fetchPlayerByEmail(authUser.email ?? '');
-      // Self-heal: no row → create it server-side from auth metadata.
-      if (!sbPlayer) {
+      // Self-heal: no row at all, OR a row exists but was only found by
+      // email — never bound to this auth user's id, which silently 403s
+      // every future server-side write. /api/player/register is idempotent
+      // by email, so this either creates the row or binds the existing one.
+      if (!sbPlayer || !sbPlayer.user_id) {
         const healed = await ensurePlayerRowForAuthUser(authUser);
         if (healed) sbPlayer = await fetchPlayerByEmail(authUser.email ?? '');
       }

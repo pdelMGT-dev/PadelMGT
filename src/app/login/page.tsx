@@ -176,9 +176,13 @@ export default function LoginPage() {
       let sbPlayer = await fetchPlayerByUserId(authUser.id);
       if (!sbPlayer) sbPlayer = await fetchPlayerByEmail(authUser.email ?? email);
 
-      // Self-heal: confirmed auth user without a players row (lost to the old
-      // client-side id collision) → create it server-side right now.
-      if (!sbPlayer) {
+      // Self-heal: no row at all (lost to the old client-side id collision),
+      // OR a row exists but was only found by email — never bound to this
+      // auth user's id, which silently 403s every future server-side write
+      // (the ownership check on /api/player/update requires user_id to
+      // match). /api/player/register is idempotent by email, so calling it
+      // here either creates the row or binds the existing unclaimed one.
+      if (!sbPlayer || !sbPlayer.user_id) {
         const healed = await ensurePlayerRowForAuthUser(authUser);
         if (healed) sbPlayer = await fetchPlayerByEmail(authUser.email ?? email);
       }
