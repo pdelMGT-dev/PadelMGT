@@ -152,13 +152,24 @@ export async function POST(request: NextRequest) {
 
         if (player) {
           const normalizedPlan = normalizePlan(resolvedPlan);
-          console.log(`[Stripe] Updating player ${player['id']} with plan=${normalizedPlan}`);
           const cf = (player['custom_fields'] as Record<string, unknown>) ?? {};
-          const { error: updateErr } = await sb.from('players')
-            .update({ custom_fields: { ...cf, plan: normalizedPlan, subscriptionStatus: status } })
-            .eq('id', player['id']);
-          if (updateErr) console.error('[Stripe] player update error:', updateErr.message);
-          else console.log(`[Stripe] Player ${player['id']} plan updated to ${normalizedPlan} ✓`);
+          // 'infinity' is an explicit SA-granted override (not a sellable
+          // plan) — no Stripe subscription should ever downgrade it, mirroring
+          // the same protection /api/me/plan already applies on the read side.
+          if (cf.plan === 'infinity') {
+            console.log(`[Stripe] Player ${player['id']} has plan=infinity (SA override) — not overwriting from subscription`);
+            const { error: statusErr } = await sb.from('players')
+              .update({ custom_fields: { ...cf, subscriptionStatus: status } })
+              .eq('id', player['id']);
+            if (statusErr) console.error('[Stripe] player status update error:', statusErr.message);
+          } else {
+            console.log(`[Stripe] Updating player ${player['id']} with plan=${normalizedPlan}`);
+            const { error: updateErr } = await sb.from('players')
+              .update({ custom_fields: { ...cf, plan: normalizedPlan, subscriptionStatus: status } })
+              .eq('id', player['id']);
+            if (updateErr) console.error('[Stripe] player update error:', updateErr.message);
+            else console.log(`[Stripe] Player ${player['id']} plan updated to ${normalizedPlan} ✓`);
+          }
         } else {
           console.warn(`[Stripe] No player record found for email=${email} — plan not saved to players table`);
         }
@@ -184,8 +195,10 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
         if (player) {
           const cf = (player['custom_fields'] as Record<string, unknown>) ?? {};
+          // Same infinity protection as the created/updated handler above.
+          const nextPlan = cf.plan === 'infinity' ? 'infinity' : 'free';
           await sb.from('players')
-            .update({ custom_fields: { ...cf, plan: 'free', subscriptionStatus: 'canceled' } })
+            .update({ custom_fields: { ...cf, plan: nextPlan, subscriptionStatus: 'canceled' } })
             .eq('id', player['id']);
         }
       }
