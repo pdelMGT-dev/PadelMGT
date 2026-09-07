@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://padelmgt.com';
   const webhookSecretSet = !!process.env.STRIPE_WEBHOOK_SECRET;
+  const webhookSecretTestSet = !!process.env.STRIPE_WEBHOOK_SECRET_TEST;
   const prices = PRICE_ENV_VARS.map(p => {
     const val = process.env[p.envVar];
     return { ...p, set: !!val && !val.startsWith('price_...') };
@@ -30,16 +31,16 @@ export async function GET(request: NextRequest) {
     : secretKey!.startsWith('sk_live_') ? 'live' : secretKey!.startsWith('sk_test_') ? 'test' : null;
 
   if (!configured) {
-    return NextResponse.json({ configured: false, mode: null, apiReachable: false, error: null, webhookSecretSet, appUrl, prices });
+    return NextResponse.json({ configured: false, mode: null, apiReachable: false, error: null, webhookSecretSet, webhookSecretTestSet, appUrl, prices });
   }
 
   try {
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(secretKey!);
     await stripe.balance.retrieve();
-    return NextResponse.json({ configured: true, mode, apiReachable: true, error: null, webhookSecretSet, appUrl, prices });
+    return NextResponse.json({ configured: true, mode, apiReachable: true, error: null, webhookSecretSet, webhookSecretTestSet, appUrl, prices });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error desconocido';
-    return NextResponse.json({ configured: true, mode, apiReachable: false, error: message, webhookSecretSet, appUrl, prices });
+    return NextResponse.json({ configured: true, mode, apiReachable: false, error: message, webhookSecretSet, webhookSecretTestSet, appUrl, prices });
   }
 }
