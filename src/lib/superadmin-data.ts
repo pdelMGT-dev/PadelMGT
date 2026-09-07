@@ -455,6 +455,26 @@ export async function removeSAFriendship(aId: string, bId: string): Promise<void
   if (!res.ok) throw new Error(`remove friendship failed: ${res.status}`);
 }
 
+/** Create a club membership on the caller's behalf as the SA — the
+ * player-facing /api/club-memberships route only authorizes the caller's OWN
+ * player id (via their Supabase Auth session), which the SA's signed cookie
+ * session never has, so SA-created memberships need this dedicated route. */
+export async function addSAClubMembership(
+  playerId: string, clubId: string, clubName: string, clubCity: string, clubCountry: string,
+): Promise<void> {
+  const res = await fetch('/api/sa/club-memberships', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ playerId, clubId, clubName, clubCity, clubCountry }),
+  });
+  if (!res.ok) throw new Error(`add club membership failed: ${res.status}`);
+}
+
+export async function removeSAClubMembership(playerId: string, clubId: string): Promise<void> {
+  const res = await fetch(`/api/sa/club-memberships?playerId=${encodeURIComponent(playerId)}&clubId=${encodeURIComponent(clubId)}`, { method: 'DELETE', credentials: 'include' });
+  if (!res.ok) throw new Error(`remove club membership failed: ${res.status}`);
+}
+
 // ── Supabase integration ───────────────────────────────────────────────────────
 
 // Map Supabase row → SAPlayer
