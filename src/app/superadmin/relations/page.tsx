@@ -37,6 +37,7 @@ interface FriendshipRow {
   playerAName: string;
   playerBId: string;
   playerBName: string;
+  since?: string;
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -62,6 +63,10 @@ const inp: React.CSSProperties = {
   fontSize: 13, outline: 'none', boxSizing: 'border-box',
 };
 const sel: React.CSSProperties = { ...inp, background: '#fff', cursor: 'pointer' };
+const lbl: React.CSSProperties = {
+  display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+  textTransform: 'uppercase', color: '#6b7280', marginBottom: 6,
+};
 const card: React.CSSProperties = {
   border: '1px solid #e5e7eb', marginBottom: 24, overflow: 'hidden',
 };
@@ -73,6 +78,83 @@ function parseCSV(text: string): string[] {
     .split(/[\n,;]+/)
     .map(s => s.trim().replace(/^"|"$/g, ''))
     .filter(Boolean);
+}
+
+// ── Searchable player picker (replaces giant native <select> lists) ────────────
+
+function PlayerCombobox({
+  players, value, onChange, placeholder = 'Buscar por nombre, email o ID…', excludeIds,
+}: {
+  players: SAPlayer[];
+  value: string;
+  onChange: (id: string) => void;
+  placeholder?: string;
+  excludeIds?: Set<string>;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const selected = players.find(p => p.id === value) ?? null;
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return players
+      .filter(p => !excludeIds?.has(p.id))
+      .filter(p => !q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q) || p.shortId?.toLowerCase().includes(q))
+      .slice(0, 30);
+  }, [players, query, excludeIds]);
+
+  if (selected && !open) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid #d1d5db', padding: '8px 12px', background: '#f9fafb' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>{selected.name}</div>
+          <div style={{ fontSize: 11, color: '#6b7280', fontFamily: 'monospace' }}>{selected.email}</div>
+        </div>
+        <button onClick={() => { onChange(''); setQuery(''); setOpen(true); }} style={{ ...btn('ghost'), padding: '5px 12px', fontSize: 11, flexShrink: 0 }}>
+          Cambiar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <input
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        style={inp}
+      />
+      {open && (query.trim() ? results.length > 0 : true) && (
+        <div style={{ position: 'absolute', zIndex: 30, top: '100%', left: 0, right: 0, maxHeight: 260, overflowY: 'auto', background: '#fff', border: '1px solid #d1d5db', borderTop: 'none', boxShadow: '0 6px 16px rgba(0,0,0,0.10)' }}>
+          {results.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontSize: 12, color: '#9ca3af' }}>Sin resultados</div>
+          ) : results.map(p => (
+            <div
+              key={p.id}
+              onMouseDown={e => { e.preventDefault(); onChange(p.id); setQuery(''); setOpen(false); }}
+              style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#f9fafb'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; }}
+            >
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</div>
+              <div style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{p.email} · {p.id}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -98,6 +180,13 @@ export default function RelationsPage() {
   const [familyLinks, setFamilyLinks] = useState<FamilyLinkRow[]>([]);
   const [familyFilter, setFamilyFilter] = useState('');
   const [familyView, setFamilyView] = useState<'members' | 'links'>('members');
+
+  // Quick link panel (single pair — the common case)
+  const [quickClubId, setQuickClubId] = useState('');
+  const [quickPlayerId, setQuickPlayerId] = useState('');
+  const [quickAId, setQuickAId] = useState('');
+  const [quickBId, setQuickBId] = useState('');
+  const [quickResult, setQuickResult] = useState<string | null>(null);
 
   // Bulk add panel
   const [showCreate, setShowCreate] = useState(false);
@@ -158,6 +247,7 @@ export default function RelationsPage() {
         playerAName: f.aName || ps.find(p => p.id === f.aId)?.name || f.aId,
         playerBId: f.bId,
         playerBName: f.bName || ps.find(p => p.id === f.bId)?.name || f.bId,
+        since: f.since,
       }));
       setFriendships(rows);
     }).catch(() => {});
@@ -230,6 +320,43 @@ export default function RelationsPage() {
     }).filter(Boolean) as string[];
   }
 
+  // Quick link: the common case, one pair at a time via searchable pickers.
+  function handleQuickClubLink() {
+    const club = clubs.find(c => c.id === quickClubId);
+    const p = players.find(pl => pl.id === quickPlayerId);
+    if (!club || !p) return;
+    const existing = clubMemberships.some(m => m.playerId === quickPlayerId && m.clubId === quickClubId);
+    if (existing) { setQuickResult(`${p.name} ya pertenece a ${club.name}.`); return; }
+    joinClub(quickPlayerId, { id: club.id, name: club.name, city: club.city, country: club.country });
+    addSAClubMembership(quickPlayerId, club.id, club.name, club.city, club.country).catch(err => {
+      console.error('[relations] addSAClubMembership failed:', err);
+      alert(`No se pudo sincronizar ${p.name} - ${club.name} con Supabase.`);
+    });
+    setQuickResult(`✓ ${p.name} unido a ${club.name}.`);
+    setQuickClubId(''); setQuickPlayerId('');
+    reloadAll();
+  }
+
+  function handleQuickFriend() {
+    if (quickAId === quickBId) return;
+    const a = players.find(p => p.id === quickAId);
+    const b = players.find(p => p.id === quickBId);
+    if (!a || !b) return;
+    const already = friendships.some(f =>
+      (f.playerAId === quickAId && f.playerBId === quickBId) ||
+      (f.playerAId === quickBId && f.playerBId === quickAId)
+    );
+    if (already) { setQuickResult(`${a.name} y ${b.name} ya son amigos.`); return; }
+    addFriendship(quickAId, quickBId);
+    addSAFriendship(quickAId, a.name, quickBId, b.name).catch(err => {
+      console.error('[relations] addSAFriendship failed:', err);
+      alert(`No se pudo sincronizar ${a.name} - ${b.name} con Supabase.`);
+    });
+    setQuickResult(`✓ ${a.name} y ${b.name} ahora son amigos.`);
+    setQuickAId(''); setQuickBId('');
+    reloadAll();
+  }
+
   function handleBulkAdd() {
     if (!addTarget) return;
     let ids: string[] = [];
@@ -255,11 +382,11 @@ export default function RelationsPage() {
         created++;
       }
     } else if (tab === 'friends') {
-      // ids contains two player IDs; create friendship between each pair
-      if (ids.length < 2) { setAddResult({ created: 0, skipped: ids.length }); return; }
-      const [aId, ...rest] = ids;
+      // addTarget is Jugador A; ids are the B side — one friendship per id.
+      const aId = addTarget;
       const aName = players.find(p => p.id === aId)?.name ?? aId;
-      for (const bId of rest) {
+      if (ids.length === 0) { setAddResult({ created: 0, skipped: 0 }); return; }
+      for (const bId of ids) {
         if (aId === bId) { skipped++; continue; }
         const already = friendships.some(f =>
           (f.playerAId === aId && f.playerBId === bId) ||
@@ -349,8 +476,10 @@ export default function RelationsPage() {
 
   const tableFilteredPlayers = useMemo(() => {
     const q = addTableSearch.toLowerCase();
-    return players.filter(p => !q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q) || p.shortId?.toLowerCase().includes(q));
-  }, [players, addTableSearch]);
+    return players
+      .filter(p => tab !== 'friends' || p.id !== addTarget) // can't pair Jugador A with themselves
+      .filter(p => !q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q) || p.shortId?.toLowerCase().includes(q));
+  }, [players, addTableSearch, tab, addTarget]);
 
   // ── Tab labels ─────────────────────────────────────────────────────────────
 
@@ -376,13 +505,7 @@ export default function RelationsPage() {
     tab === 'club' ? clubSelected :
     friendSelected;
 
-  const activeEntityLabel =
-    tab === 'club' ? 'Club' :
-    'Jugador destino';
-
-  const activeEntities =
-    tab === 'club' ? clubs.map(c => ({ id: c.id, name: c.name })) :
-    players.map(p => ({ id: p.id, name: `${p.name} (${p.email})` }));
+  const activeEntities = clubs.map(c => ({ id: c.id, name: c.name }));
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -404,7 +527,10 @@ export default function RelationsPage() {
         {TABS.map(t => (
           <button
             key={t.key}
-            onClick={() => { setTab(t.key); setAddResult(null); setAddTarget(''); setAddTextInput(''); setAddTableSelected(new Set()); }}
+            onClick={() => {
+              setTab(t.key); setAddResult(null); setAddTarget(''); setAddTextInput(''); setAddTableSelected(new Set());
+              setQuickClubId(''); setQuickPlayerId(''); setQuickAId(''); setQuickBId(''); setQuickResult(null);
+            }}
             style={{
               padding: '10px 20px', border: 'none', background: 'transparent', cursor: 'pointer',
               fontSize: 13, fontWeight: tab === t.key ? 700 : 400,
@@ -420,6 +546,58 @@ export default function RelationsPage() {
           </button>
         ))}
       </div>
+
+      {/* ── QUICK LINK (the common case: one pair, fast) ────────────────────── */}
+      {(tab === 'club' || tab === 'friends') && (
+        <div style={{ ...card, padding: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#374151', marginBottom: 16 }}>
+            {tab === 'club' ? 'Vincular jugador a club' : 'Vincular dos jugadores'}
+          </div>
+          {tab === 'club' ? (
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 240px', minWidth: 240 }}>
+                <label style={lbl}>Club</label>
+                <select value={quickClubId} onChange={e => { setQuickClubId(e.target.value); setQuickResult(null); }} style={sel}>
+                  <option value="">— Seleccionar club —</option>
+                  {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: '1 1 300px', minWidth: 260 }}>
+                <label style={lbl}>Jugador</label>
+                <PlayerCombobox players={players} value={quickPlayerId} onChange={id => { setQuickPlayerId(id); setQuickResult(null); }} />
+              </div>
+              <button
+                onClick={handleQuickClubLink}
+                disabled={!quickClubId || !quickPlayerId}
+                style={{ ...btn('primary'), opacity: (!quickClubId || !quickPlayerId) ? 0.4 : 1, flexShrink: 0 }}
+              >
+                Unir a club
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 280px', minWidth: 260 }}>
+                <label style={lbl}>Jugador A</label>
+                <PlayerCombobox players={players} value={quickAId} onChange={id => { setQuickAId(id); setQuickResult(null); }} excludeIds={quickBId ? new Set([quickBId]) : undefined} />
+              </div>
+              <div style={{ flex: '1 1 280px', minWidth: 260 }}>
+                <label style={lbl}>Jugador B</label>
+                <PlayerCombobox players={players} value={quickBId} onChange={id => { setQuickBId(id); setQuickResult(null); }} excludeIds={quickAId ? new Set([quickAId]) : undefined} />
+              </div>
+              <button
+                onClick={handleQuickFriend}
+                disabled={!quickAId || !quickBId}
+                style={{ ...btn('primary'), opacity: (!quickAId || !quickBId) ? 0.4 : 1, flexShrink: 0 }}
+              >
+                Crear amistad
+              </button>
+            </div>
+          )}
+          {quickResult && (
+            <div style={{ marginTop: 12, fontSize: 12, color: quickResult.startsWith('✓') ? '#059669' : '#b45309' }}>{quickResult}</div>
+          )}
+        </div>
+      )}
 
       {/* ── BULK ADD PANEL (collapsible — the list below is the main view) ────── */}
       {tab !== 'family' && (
@@ -441,20 +619,24 @@ export default function RelationsPage() {
         {showCreate && (
         <div style={{ padding: 20 }}>
           {/* Step 1: target entity */}
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 16, maxWidth: 360 }}>
             <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: 6 }}>
-              1. {activeEntityLabel} destino
+              1. {tab === 'club' ? 'Club destino' : 'Jugador A'}
             </label>
-            <select value={addTarget} onChange={e => setAddTarget(e.target.value)} style={{ ...sel, maxWidth: 360 }}>
-              <option value="">— Seleccionar —</option>
-              {activeEntities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-            </select>
+            {tab === 'club' ? (
+              <select value={addTarget} onChange={e => setAddTarget(e.target.value)} style={sel}>
+                <option value="">— Seleccionar —</option>
+                {activeEntities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            ) : (
+              <PlayerCombobox players={players} value={addTarget} onChange={setAddTarget} placeholder="Buscar jugador A…" />
+            )}
           </div>
 
           {/* Step 2: player selection mode */}
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6b7280', marginBottom: 6 }}>
-              2. Jugadores a vincular
+              2. {tab === 'club' ? 'Jugadores a vincular' : 'Jugador(es) B'}
             </label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               {([['text', 'Texto / Emails / IDs'], ['csv', 'CSV'], ['table', 'Tabla visual']] as const).map(([mode, label]) => (
@@ -662,16 +844,18 @@ export default function RelationsPage() {
                   </th>
                   <th style={th}>Jugador A</th>
                   <th style={th}>Jugador B</th>
+                  <th style={th}>Desde</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredFriendships.length === 0 ? (
-                  <tr><td colSpan={3} style={{ ...td, textAlign: 'center', color: '#9ca3af', padding: '32px' }}>Sin amistades</td></tr>
+                  <tr><td colSpan={4} style={{ ...td, textAlign: 'center', color: '#9ca3af', padding: '32px' }}>Sin amistades</td></tr>
                 ) : filteredFriendships.map(f => (
                   <tr key={f.key} style={{ background: friendSelected.has(f.key) ? '#fef2f2' : undefined }}>
                     <td style={td}><input type="checkbox" checked={friendSelected.has(f.key)} onChange={() => toggleRow(friendSelected, f.key, setFriendSelected)} /></td>
                     <td style={td}><span style={{ fontWeight: 600 }}>{f.playerAName}</span><br /><span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{f.playerAId}</span></td>
                     <td style={td}><span style={{ fontWeight: 600 }}>{f.playerBName}</span><br /><span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{f.playerBId}</span></td>
+                    <td style={{ ...td, color: '#9ca3af', fontSize: 12 }}>{f.since ? new Date(f.since).toLocaleDateString('es-DO') : '—'}</td>
                   </tr>
                 ))}
               </tbody>
