@@ -612,18 +612,37 @@ export function computeLeagueStandings(
 
   for (const game of leagueGames) {
     for (const st of game.standings) {
+      const draws  = st.draws ?? 0;
+      const losses = st.losses ?? (st.played - st.wins - draws);
+      const wonPts = st.wins * cfg.pointsWin + draws * cfg.pointsDraw + losses * cfg.pointsLoss;
+
       let entry = byPlayer.get(st.playerId);
       if (!entry) {
         entry = { playerId: st.playerId, playerName: st.playerName, points: 0, wins: 0, draws: 0, losses: 0, played: 0 };
         byPlayer.set(st.playerId, entry);
       }
-      const draws  = st.draws ?? 0;
-      const losses = st.losses ?? (st.played - st.wins - draws);
       entry.wins   += st.wins;
       entry.draws  += draws;
       entry.losses += losses;
       entry.played += st.played;
-      entry.points += st.wins * cfg.pointsWin + draws * cfg.pointsDraw + losses * cfg.pointsLoss;
+      entry.points += wonPts;
+
+      // Fixed-pairs mode: st.player2Id is the pair's second member, credited
+      // with the same result — otherwise they'd never appear in standings.
+      if (st.player2Id) {
+        const fp = game.fixedPairs?.find(p => p.player2Id === st.player2Id && p.player1Id === st.playerId);
+        const player2Name = fp?.player2Name ?? st.playerName.split(' / ')[1] ?? st.playerName;
+        let entry2 = byPlayer.get(st.player2Id);
+        if (!entry2) {
+          entry2 = { playerId: st.player2Id, playerName: player2Name, points: 0, wins: 0, draws: 0, losses: 0, played: 0 };
+          byPlayer.set(st.player2Id, entry2);
+        }
+        entry2.wins   += st.wins;
+        entry2.draws  += draws;
+        entry2.losses += losses;
+        entry2.played += st.played;
+        entry2.points += wonPts;
+      }
     }
   }
 

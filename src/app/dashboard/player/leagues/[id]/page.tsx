@@ -354,8 +354,18 @@ export default function LeagueDetailPage() {
             </div>
             {league.description && <div style={{ fontSize: 13, color: 'var(--grey-500)' }}>{league.description}</div>}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--grey-400)', textAlign: 'right', flexShrink: 0 }}>
-            {members.length} miembro{members.length !== 1 ? 's' : ''}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
+            <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
+              {members.length} miembro{members.length !== 1 ? 's' : ''}
+            </div>
+            {amAdmin && (
+              <Link
+                href={`/dashboard/player/quick-game?leagueId=${id}`}
+                style={{ padding: '10px 18px', background: 'var(--black)', color: '#fff', fontSize: 12, fontWeight: 700, textDecoration: 'none', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}
+              >
+                + Crear Juego Rápido
+              </Link>
+            )}
           </div>
         </div>
       </div>

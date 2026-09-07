@@ -286,6 +286,8 @@ export default function QuickGamePage() {
 
   // Step IV — Tipo de pareja
   const [pairType, setPairType] = useState<PairType | null>(null);
+  // Pareja fija: rondas que juega cada equipo (null = round robin completo)
+  const [roundsPerTeam, setRoundsPerTeam] = useState<number | null>(null);
 
   // League (optional)
   const [myLeagues, setMyLeagues]         = useState<PlayerLeague[]>([]);
@@ -301,6 +303,17 @@ export default function QuickGamePage() {
   const [tiebreak, setTiebreak]         = useState(7);
   const [deuceRule, setDeuceRule]       = useState<DeuceRule>('gold');
   const [pointTarget, setPointTarget]   = useState(16);
+
+  // Pre-select league when arriving from a League page's "Crear Juego Rápido"
+  // link (?leagueId=...) — deep-links into the wizard instead of duplicating
+  // the creation flow on the League page itself.
+  useEffect(() => {
+    if (myLeagues.length === 0) return;
+    const leagueId = new URLSearchParams(window.location.search).get('leagueId');
+    if (leagueId && myLeagues.some(l => l.id === leagueId)) {
+      setSelectedLeagueId(leagueId);
+    }
+  }, [myLeagues]);
 
   // Update league seasons when league selected
   useEffect(() => {
@@ -447,7 +460,7 @@ export default function QuickGamePage() {
     setMaxPlayers(4); setInvitedList([]); setPlayerTab('friends');
     setSearchQuery(''); setSearchResults([]); setFriendList([]);
     setMyFamily([]); setFamilyIdInput(''); setFamilyLookupMsg(''); setFamilyLooking(false);
-    setPairType(null);
+    setPairType(null); setRoundsPerTeam(null);
     setCourts(1); setScoreType('traditional'); setSetsPerMatch(1);
     setGamesPerSet(6); setTiebreak(7); setDeuceRule('gold'); setPointTarget(16);
     setSelectedLeagueId(''); setSelectedSeasonId(''); setLeagueSeasons([]);
@@ -528,6 +541,7 @@ export default function QuickGamePage() {
       creatorId: currentUser.id,
       leagueId: selectedLeagueId || undefined,
       seasonId: selectedSeasonId || undefined,
+      maxRoundsPerTeam: enginePairType === 'parejas' && roundsPerTeam ? roundsPerTeam : undefined,
     });
 
     incrementUsage('games');
@@ -1530,9 +1544,29 @@ export default function QuickGamePage() {
         )}
 
         {pairType === 'fixed' && (
-          <div style={{ padding: '16px 20px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 12, color: 'var(--grey-600)', lineHeight: 1.6 }}>
-            Podrás armar las parejas desde la gestión del juego una vez que todos los jugadores hayan confirmado.
-          </div>
+          <>
+            <div style={{ padding: '16px 20px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 12, color: 'var(--grey-600)', lineHeight: 1.6, marginBottom: 16 }}>
+              Podrás armar las parejas manualmente o sortearlas desde la gestión del juego una vez que todos los jugadores hayan confirmado. El cronograma completo (todas las rondas y canchas) se verá desde el inicio.
+            </div>
+            <div style={card}>
+              <div style={secTitle}>Rondas por equipo</div>
+              <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 12 }}>
+                ¿Cuántas veces juega cada equipo? Ideal para Juegos Rápidos de Liga (ej: 3 rondas en 1h30 de renta).
+              </p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={() => setRoundsPerTeam(null)}
+                  style={{ padding: '10px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: `2px solid ${roundsPerTeam === null ? 'var(--black)' : 'var(--grey-200)'}`, background: roundsPerTeam === null ? 'var(--black)' : '#fff', color: roundsPerTeam === null ? '#fff' : 'var(--black)' }}>
+                  Todas (round robin)
+                </button>
+                {[2, 3, 4, 5].map(n => (
+                  <button key={n} onClick={() => setRoundsPerTeam(n)}
+                    style={{ width: 48, height: 40, fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, cursor: 'pointer', border: `2px solid ${roundsPerTeam === n ? 'var(--black)' : 'var(--grey-200)'}`, background: roundsPerTeam === n ? 'var(--black)' : '#fff', color: roundsPerTeam === n ? '#fff' : 'var(--black)' }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
         )}
 
         <NavBtns onBack={() => setStep(3)} onNext={() => setStep(5)} disabled={!pairType} nextLabel="Paso 5: Config →" />
