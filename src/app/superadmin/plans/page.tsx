@@ -546,9 +546,13 @@ export default function PlansPage() {
     try {
       const isEdit = !!editingPromo;
       const method = isEdit ? 'PATCH' : 'POST';
+      // '' is not a valid timestamp — the "Sin vencimiento" checkbox can
+      // leave expiresAt as '' rather than null when toggled off without a
+      // date picked yet.
+      const normalized = { ...promoForm, expiresAt: promoForm.expiresAt || null };
       const body = isEdit
-        ? JSON.stringify({ id: editingPromo!.id, updates: promoForm })
-        : JSON.stringify({ promo: promoForm });
+        ? JSON.stringify({ id: editingPromo!.id, updates: normalized })
+        : JSON.stringify({ promo: normalized });
       const res = await fetch('/api/sa/promos', { method, headers: { 'Content-Type': 'application/json' }, body });
       if (!res.ok) {
         const errBody = await res.json().catch(() => null) as { error?: string } | null;
@@ -1626,7 +1630,7 @@ export default function PlansPage() {
                     onChange={e => setPromoForm(f => ({ ...f, expiresAt: e.target.value || null }))}
                   />
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}>
-                    <input type="checkbox" checked={promoForm.expiresAt === null} onChange={e => setPromoForm(f => ({ ...f, expiresAt: e.target.checked ? null : '' }))} />
+                    <input type="checkbox" checked={promoForm.expiresAt === null} onChange={e => setPromoForm(f => ({ ...f, expiresAt: e.target.checked ? null : (f.expiresAt || new Date().toISOString().slice(0, 10)) }))} />
                     Sin vencimiento
                   </label>
                 </div>

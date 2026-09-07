@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     description:        p.description ?? '',
     max_uses:           p.maxUses ?? null,
     used_count:         0,
-    expires_at:         p.expiresAt ?? null,
+    expires_at:         p.expiresAt || null,
     is_active:          p.isActive ?? true,
     created_by:         p.createdBy ?? '',
     eligibility:        p.eligibility ?? 'all',
@@ -97,7 +97,7 @@ export async function PATCH(request: NextRequest) {
   if (u.description !== undefined) dbUpdates.description        = u.description;
   if (u.maxUses     !== undefined) dbUpdates.max_uses           = u.maxUses;
   if (u.usedCount   !== undefined) dbUpdates.used_count         = u.usedCount;
-  if (u.expiresAt   !== undefined) dbUpdates.expires_at         = u.expiresAt;
+  if (u.expiresAt   !== undefined) dbUpdates.expires_at         = u.expiresAt || null;
   if (u.isActive    !== undefined) dbUpdates.is_active          = u.isActive;
   if (u.eligibility !== undefined) dbUpdates.eligibility        = u.eligibility;
   if (u.unlockPlan  !== undefined) dbUpdates.unlock_plan        = u.unlockPlan;
