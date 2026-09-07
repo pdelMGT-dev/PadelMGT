@@ -7,7 +7,7 @@ import type { SAPlayer, SAClub } from '@/lib/superadmin-data';
 import { joinClub, leaveClub } from '@/lib/club-membership-store';
 import type { ClubMembership } from '@/lib/club-membership-store';
 import { addFriendship, removeFriendship } from '@/lib/player-store';
-import { getSAFriendshipsFromSupabase, addSAFriendship, removeSAFriendship } from '@/lib/superadmin-data';
+import { getSAFriendshipsFromSupabase, addSAFriendship, removeSAFriendship, addSAClubMembership, removeSAClubMembership } from '@/lib/superadmin-data';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -248,6 +248,10 @@ export default function RelationsPage() {
         const existing = clubMemberships.some(m => m.playerId === id && m.clubId === club.id);
         if (existing) { skipped++; continue; }
         joinClub(id, { id: club.id, name: club.name, city: club.city, country: club.country });
+        addSAClubMembership(id, club.id, club.name, club.city, club.country).catch(err => {
+          console.error('[relations] addSAClubMembership failed:', err);
+          alert(`No se pudo sincronizar ${p.name} - ${club.name} con Supabase.`);
+        });
         created++;
       }
     } else if (tab === 'friends') {
@@ -297,6 +301,7 @@ export default function RelationsPage() {
       for (const key of clubSelected) {
         const [playerId, clubId] = key.split('|');
         leaveClub(playerId, clubId);
+        removeSAClubMembership(playerId, clubId).catch(err => console.error('[relations] removeSAClubMembership failed:', err));
       }
       setClubSelected(new Set());
     } else if (tab === 'friends') {
