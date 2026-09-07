@@ -16,6 +16,7 @@ interface ConfigStatus {
   apiReachable: boolean;
   error: string | null;
   webhookSecretSet: boolean;
+  webhookSecretTestSet: boolean;
   appUrl: string;
   prices: PriceStatus[];
 }
@@ -171,6 +172,15 @@ export default function StripePage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={mono}>{appUrl}/api/stripe/webhook</span>
             <CopyBtn text={`${appUrl}/api/stripe/webhook`} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, marginBottom: 6 }}>
+            <StatusDot ok={!!status?.webhookSecretTestSet} />
+            <span style={{ fontSize: 13, fontWeight: 600 }}>
+              {status?.webhookSecretTestSet ? 'STRIPE_WEBHOOK_SECRET_TEST configurado' : 'STRIPE_WEBHOOK_SECRET_TEST no configurado'}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
+            Necesario si esta misma URL está registrada como endpoint también en el modo Test de Stripe — cada modo firma con un secreto distinto.
           </div>
           <div style={{ fontSize: 11, color: '#707072', lineHeight: 1.6 }}>
             Creá este endpoint en <span style={mono}>Stripe → Developers → Webhooks</span> con los eventos:{' '}

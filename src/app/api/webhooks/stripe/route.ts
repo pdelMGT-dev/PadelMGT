@@ -10,6 +10,9 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  // See src/app/api/stripe/webhook/route.ts for why a second, test-mode
+  // secret is needed when the same URL is registered in both Stripe modes.
+  const webhookSecretTest = process.env.STRIPE_WEBHOOK_SECRET_TEST;
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
   if (!webhookSecret || !stripeSecretKey) {
@@ -28,7 +31,12 @@ export async function POST(request: NextRequest) {
   try {
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(stripeSecretKey);
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+    } catch (liveErr) {
+      if (!webhookSecretTest) throw liveErr;
+      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecretTest);
+    }
   } catch (err) {
     console.error('[stripe-webhook] Signature verification failed:', err);
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });

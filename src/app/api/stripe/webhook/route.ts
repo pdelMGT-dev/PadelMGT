@@ -57,6 +57,13 @@ export async function POST(request: NextRequest) {
 
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   const webhookSecret   = process.env.STRIPE_WEBHOOK_SECRET;
+  // Stripe issues a SEPARATE signing secret per mode even for the same
+  // endpoint URL — if this URL is registered as a webhook destination in
+  // both Test mode and Live mode, only one secret can live in
+  // STRIPE_WEBHOOK_SECRET. Set STRIPE_WEBHOOK_SECRET_TEST to the test-mode
+  // endpoint's secret (Stripe Dashboard → Developers → Webhooks → toggle
+  // Test mode → this endpoint → Signing secret) so both verify correctly.
+  const webhookSecretTest = process.env.STRIPE_WEBHOOK_SECRET_TEST;
 
   if (!stripeSecretKey || !webhookSecret) {
     console.error('[Stripe] Missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET');
@@ -68,7 +75,12 @@ export async function POST(request: NextRequest) {
   try {
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(stripeSecretKey);
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret) as typeof event;
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret) as typeof event;
+    } catch (liveErr) {
+      if (!webhookSecretTest) throw liveErr;
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecretTest) as typeof event;
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Webhook signature verification failed';
     console.error('[Stripe webhook] signature error:', message);
