@@ -151,6 +151,7 @@ export interface ActiveGame {
   players: GamePlayer[];      // confirmed players (including creator)
   invitedPlayers: InvitedPlayer[]; // full invitation list with status
   fixedPairs?: FixedPair[];   // set by creator in 'parejas' mode before start
+  maxRoundsPerTeam?: number;  // 'parejas' mode: cap rounds instead of full round-robin (e.g. Juego Rápido de Liga: 3)
   rounds: GameRound[];
   currentRound: number;       // 0 = not started, 1+ = current round number
   standings: Standing[];
@@ -386,7 +387,7 @@ function generateMexicanoParejas(
   return { num: roundNum, status: 'pending', courts, resting: restingIds };
 }
 
-function fisherYates<T>(arr: T[]): T[] {
+export function fisherYates<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -994,6 +995,7 @@ export function startNextRound(game: ActiveGame): ActiveGame {
 export function generateFixedPairsRounds(
   players: GamePlayer[],
   numCourts: number,
+  maxRounds?: number,
 ): GameRound[] {
   const pairCount = Math.floor(players.length / 2);
   if (pairCount < 2) return [];
@@ -1038,6 +1040,9 @@ export function generateFixedPairsRounds(
     }
   }
 
+  if (maxRounds && maxRounds > 0 && maxRounds < rounds.length) {
+    return rounds.slice(0, maxRounds);
+  }
   return rounds;
 }
 
@@ -1050,7 +1055,7 @@ export function startGame(game: ActiveGame): ActiveGame {
 
   // Fixed pairs: use pair round-robin instead of individual rotation
   if (game.pairType === 'parejas' && game.players.length >= 4) {
-    rounds = generateFixedPairsRounds(game.players, game.courts).map((r, i) =>
+    rounds = generateFixedPairsRounds(game.players, game.courts, game.maxRoundsPerTeam).map((r, i) =>
       i === 0 ? { ...r, status: 'active' as const } : r,
     );
     return {

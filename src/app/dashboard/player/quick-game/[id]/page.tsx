@@ -13,7 +13,7 @@ import {
   isGameFinished,
   calculateStandings,
 } from '@/lib/game-store';
-import { isRoundComplete } from '@/lib/game-engine';
+import { isRoundComplete, fisherYates, generateFixedPairsRounds } from '@/lib/game-engine';
 import type { ActiveGame, GamePlayer, InvitedPlayer, FixedPair, ScoreConfig } from '@/lib/game-engine';
 import {
   getInvitationsForGame,
@@ -409,6 +409,24 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   const canStart = isPending && allConfirmed && (game.pairType !== 'parejas' || (pairsFullyAssigned && pairsLocked));
 
+  // Full schedule (all rounds × courts) — visible from the moment pairs are
+  // locked, not revealed round-by-round. Once the game is live/finished,
+  // game.rounds already holds the real generated schedule; before that we
+  // compute the same preview from the locked pair assignments.
+  const scheduleRounds = useMemo(() => {
+    if (game.pairType !== 'parejas') return [];
+    if (game.rounds.length > 0) return game.rounds;
+    if (!pairsLocked || !pairsFullyAssigned) return [];
+    const orderedPlayers: GamePlayer[] = [];
+    for (const pa of pairAssignments) {
+      const p1 = game.players.find(p => p.id === pa.player1Id);
+      const p2 = game.players.find(p => p.id === pa.player2Id);
+      if (p1) orderedPlayers.push(p1);
+      if (p2) orderedPlayers.push(p2);
+    }
+    return generateFixedPairsRounds(orderedPlayers, game.courts, game.maxRoundsPerTeam);
+  }, [game.pairType, game.rounds, game.players, game.courts, game.maxRoundsPerTeam, pairsLocked, pairsFullyAssigned, pairAssignments]);
+
   const currentRound = game.rounds.find(r => r.num === game.currentRound) ?? null;
   const currentRoundComplete = currentRound ? isRoundComplete(currentRound) : false;
   const gameComplete = isGameFinished(game);
@@ -796,6 +814,29 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     setGame(updated);
     setPairsLocked(true);
     showToast('Parejas guardadas.');
+  }
+
+  function handleSortearParejas() {
+    if (!game) return;
+    const numPairs = Math.floor(game.maxPlayers / 2);
+    const shuffled = fisherYates([...game.players]);
+    const assignments: FixedPair[] = Array.from({ length: numPairs }, (_, i) => ({
+      pairIndex: i,
+      player1Id: shuffled[i * 2]?.id ?? '',
+      player2Id: shuffled[i * 2 + 1]?.id ?? '',
+      player1Name: shuffled[i * 2]?.name ?? '',
+      player2Name: shuffled[i * 2 + 1]?.name ?? '',
+    }));
+    setPairAssignments(assignments);
+    showToast('Parejas sorteadas — revisá y confirmá.');
+  }
+
+  function handleArmarManualmente() {
+    if (!game) return;
+    const numPairs = Math.floor(game.maxPlayers / 2);
+    setPairAssignments(Array.from({ length: numPairs }, (_, i) => ({
+      pairIndex: i, player1Id: '', player2Id: '', player1Name: '', player2Name: '',
+    })));
   }
 
   // ── Drag & Drop for pair builder ──────────────────────────────────────────
@@ -1597,6 +1638,20 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
               return (
                 <div>
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                    <button
+                      onClick={handleSortearParejas}
+                      style={{ padding: '9px 16px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.02em' }}
+                    >
+                      🎲 Sortear Parejas
+                    </button>
+                    <button
+                      onClick={handleArmarManualmente}
+                      style={{ padding: '9px 16px', background: '#fff', color: 'var(--black)', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.02em' }}
+                    >
+                      ✋ Armar Manualmente
+                    </button>
+                  </div>
                   <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 16 }}>
                     Tocá un jugador para seleccionarlo y después tocá el lugar de la pareja donde va. (En computadora también podés arrastrar.)
                   </p>
@@ -1746,6 +1801,46 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               );
             })()
           )}
+        </div>
+      )}
+
+      {/* ── SECTION B.5: Cronograma Completo ────────────────────────────────── */}
+      {scheduleRounds.length > 0 && (
+        <div style={cardStyle}>
+          <div style={secTitle}>
+            Cronograma Completo {game.status === 'created' || game.status === 'starting_soon' ? '(vista previa)' : ''}
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 16 }}>
+            {scheduleRounds.length} ronda{scheduleRounds.length !== 1 ? 's' : ''} — cada equipo ya sabe con quién juega en cada una, desde ahora.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {scheduleRounds.map(round => (
+              <div key={round.num} style={{ border: '1px solid var(--grey-100)' }}>
+                <div style={{ padding: '8px 14px', background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-100)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>
+                  Ronda {round.num}
+                  {round.num === game.currentRound && isLive && <span style={{ marginLeft: 8, color: 'var(--court-blue)' }}>● en curso</span>}
+                </div>
+                {round.courts.map(court => (
+                  <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--grey-50)' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', width: 68, flexShrink: 0 }}>Cancha {court.courtNum}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{getPairNames(court.pair1)}</span>
+                    <span style={{ fontSize: 11, color: 'var(--grey-300)' }}>vs</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, flex: 1, textAlign: 'right' }}>{getPairNames(court.pair2)}</span>
+                    {court.status === 'completed' && (
+                      <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-display)', marginLeft: 8 }}>
+                        {court.pair1Score} – {court.pair2Score}
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {round.resting.length > 0 && (
+                  <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--grey-400)' }}>
+                    Descansa: {getPairNames(round.resting)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

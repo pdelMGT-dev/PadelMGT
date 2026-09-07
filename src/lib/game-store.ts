@@ -129,6 +129,7 @@ export function createQuickGame(params: {
   creatorId?: string;
   leagueId?: string;
   seasonId?: string;
+  maxRoundsPerTeam?: number;
 }): ActiveGame {
   const game: ActiveGame = {
     id: generateId(),
@@ -157,6 +158,7 @@ export function createQuickGame(params: {
     creatorId: params.creatorId,
     leagueId: params.leagueId,
     seasonId: params.seasonId,
+    maxRoundsPerTeam: params.maxRoundsPerTeam,
   };
   saveGame(game);
   return game;
