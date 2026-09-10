@@ -35,6 +35,11 @@ export interface ScoreConfig {
   tiebreak?: number;
   deuce?: 'ventaja' | 'oro' | 'plata' | 'ipf';
   allowTies?: boolean;   // round_robin: allow set to end equal (e.g. 6-6)
+  // How a round ends — orthogonal to `type` (traditional/points still governs
+  // HOW score is counted; this governs WHEN a round is over). Undefined means
+  // 'target' (play until the objective is reached), for backward compat.
+  roundLengthMode?: 'target' | 'fixed_time';
+  fixedMinutes?: number;  // only when roundLengthMode === 'fixed_time'
 }
 
 export interface GamePlayer {
