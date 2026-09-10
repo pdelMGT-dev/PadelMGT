@@ -45,8 +45,9 @@ const STATUS_INFO: Record<string, { label: string; color: string; bg: string }> 
 };
 
 function scoreConfigLabel(cfg: ScoreConfig): string {
-  if (cfg.type === 'points') return `Por Puntos · ${cfg.target} pts`;
-  return `Tradicional · ${cfg.setsPerMatch ?? 3} sets`;
+  const base = cfg.type === 'points' ? `Por Puntos · ${cfg.target} pts` : `Tradicional · ${cfg.setsPerMatch ?? 3} sets`;
+  if (cfg.roundLengthMode === 'fixed_time' && cfg.fixedMinutes) return `${base} · ${cfg.fixedMinutes} min/ronda`;
+  return base;
 }
 
 const secTitle: React.CSSProperties = {
@@ -1811,7 +1812,10 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             Cronograma Completo {game.status === 'created' || game.status === 'starting_soon' ? '(vista previa)' : ''}
           </div>
           <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 16 }}>
-            {scheduleRounds.length} ronda{scheduleRounds.length !== 1 ? 's' : ''} — cada equipo ya sabe con quién juega en cada una, desde ahora.
+            {scheduleRounds.length} ronda{scheduleRounds.length !== 1 ? 's' : ''}
+            {game.scoreConfig.roundLengthMode === 'fixed_time' && game.scoreConfig.fixedMinutes
+              ? ` de ${game.scoreConfig.fixedMinutes} min fijos`
+              : ''} — cada equipo ya sabe con quién juega en cada una, desde ahora.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {scheduleRounds.map(round => (
@@ -1893,6 +1897,9 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             <div>
               <div style={{ ...secTitle, marginBottom: 4 }}>
                 Juego En Vivo — Ronda {game.currentRound} de {game.rounds.length}
+                {game.scoreConfig.roundLengthMode === 'fixed_time' && game.scoreConfig.fixedMinutes && (
+                  <span style={{ marginLeft: 8, color: 'var(--court-blue)' }}>⏱ {game.scoreConfig.fixedMinutes} min</span>
+                )}
               </div>
               {currentRoundComplete && !gameComplete && (
                 <div style={{ fontSize: 12, color: 'var(--turf-green)', fontWeight: 600 }}>✓ Ronda {game.currentRound} completada</div>

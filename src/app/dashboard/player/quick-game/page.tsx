@@ -303,6 +303,12 @@ export default function QuickGamePage() {
   const [tiebreak, setTiebreak]         = useState(7);
   const [deuceRule, setDeuceRule]       = useState<DeuceRule>('gold');
   const [pointTarget, setPointTarget]   = useState(16);
+  // Cómo termina cada ronda — orthogonal to scoreType: 'target' plays until
+  // the objective is reached (Tradicional/Por Puntos as configured above);
+  // 'fixed_time' cuts every round off at a fixed clock and the score is
+  // recorded as it stood when time ran out.
+  const [roundLengthMode, setRoundLengthMode] = useState<'target' | 'fixed_time'>('target');
+  const [fixedMinutes, setFixedMinutes] = useState(15);
 
   // Pre-select league when arriving from a League page's "Crear Juego Rápido"
   // link (?leagueId=...) — deep-links into the wizard instead of duplicating
@@ -463,6 +469,7 @@ export default function QuickGamePage() {
     setPairType(null); setRoundsPerTeam(null);
     setCourts(1); setScoreType('traditional'); setSetsPerMatch(1);
     setGamesPerSet(6); setTiebreak(7); setDeuceRule('gold'); setPointTarget(16);
+    setRoundLengthMode('target'); setFixedMinutes(15);
     setSelectedLeagueId(''); setSelectedSeasonId(''); setLeagueSeasons([]);
   }
 
@@ -513,8 +520,8 @@ export default function QuickGamePage() {
     });
 
     const scoreConfig: ScoreConfig = scoreType === 'points'
-      ? { type: 'points', target: pointTarget }
-      : { type: 'traditional', setsPerMatch, gamesPerSet, tiebreak, deuce: deuceRule === 'traditional' ? 'ventaja' : 'oro' };
+      ? { type: 'points', target: pointTarget, roundLengthMode, fixedMinutes: roundLengthMode === 'fixed_time' ? fixedMinutes : undefined }
+      : { type: 'traditional', setsPerMatch, gamesPerSet, tiebreak, deuce: deuceRule === 'traditional' ? 'ventaja' : 'oro', roundLengthMode, fixedMinutes: roundLengthMode === 'fixed_time' ? fixedMinutes : undefined };
 
     const enginePairType = pairType === 'fixed' ? 'parejas' : 'individual';
     const derivedFormat: 'americano' | 'mexicano' = 'americano'; // JR always uses americano rotation internally
@@ -1684,11 +1691,56 @@ export default function QuickGamePage() {
           )}
         </div>
 
+        {/* Round length: play to target vs fixed time */}
+        <div style={card}>
+          <div style={secTitle}>¿Cómo termina cada ronda?</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: roundLengthMode === 'fixed_time' ? 16 : 0 }}>
+            {([
+              { key: 'target' as const, title: 'Al Completar el Objetivo', desc: 'Se juega hasta terminar el set / llegar al puntaje objetivo.' },
+              { key: 'fixed_time' as const, title: 'Tiempo Fijo', desc: 'Cada ronda dura exactamente X minutos; se anota el resultado como haya quedado.' },
+            ]).map(({ key, title, desc }) => (
+              <button key={key} onClick={() => setRoundLengthMode(key)} style={{ padding: '16px', textAlign: 'left', cursor: 'pointer', border: `2px solid ${roundLengthMode === key ? 'var(--black)' : 'var(--grey-200)'}`, background: roundLengthMode === key ? 'var(--black)' : '#fff', color: roundLengthMode === key ? '#fff' : 'var(--black)', transition: 'all 0.12s' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase', marginBottom: 5 }}>{title}</div>
+                <div style={{ fontSize: 11, color: roundLengthMode === key ? 'rgba(255,255,255,0.5)' : 'var(--grey-400)', lineHeight: 1.4 }}>{desc}</div>
+              </button>
+            ))}
+          </div>
+
+          {roundLengthMode === 'fixed_time' && (
+            <div>
+              <label style={lbl}>Minutos por ronda</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[10, 15, 20, 25, 30].map(n => (
+                  <button key={n} onClick={() => setFixedMinutes(n)} style={{ width: 58, height: 48, border: `2px solid ${fixedMinutes === n ? 'var(--black)' : 'var(--grey-200)'}`, background: fixedMinutes === n ? 'var(--black)' : '#fff', color: fixedMinutes === n ? '#fff' : 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer' }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 10 }}>Cada ronda dura {fixedMinutes} minutos exactos.</div>
+            </div>
+          )}
+        </div>
+
         {/* Duration estimate */}
         {(() => {
           const sc: ScoreConfig = scoreType === 'points'
-            ? { type: 'points', target: pointTarget }
-            : { type: 'traditional', setsPerMatch, gamesPerSet, tiebreak, deuce: deuceRule === 'traditional' ? 'ventaja' : 'oro' };
+            ? { type: 'points', target: pointTarget, roundLengthMode, fixedMinutes: roundLengthMode === 'fixed_time' ? fixedMinutes : undefined }
+            : { type: 'traditional', setsPerMatch, gamesPerSet, tiebreak, deuce: deuceRule === 'traditional' ? 'ventaja' : 'oro', roundLengthMode, fixedMinutes: roundLengthMode === 'fixed_time' ? fixedMinutes : undefined };
+
+          if (roundLengthMode === 'fixed_time') {
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', marginBottom: 16 }}>
+                <span style={{ fontSize: 20, flexShrink: 0 }}>⏱</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#166534', marginBottom: 3 }}>Duración por ronda</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#15803d', fontFamily: 'var(--font-display)' }}>
+                    {fixedMinutes} minutos fijos · {courts} cancha{courts > 1 ? 's' : ''}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
           const matchDur = matchDurationMinutes(sc, level ? LEVEL_LABEL[level] : undefined);
           const est = estimateEventDuration({
             format: 'americano',
