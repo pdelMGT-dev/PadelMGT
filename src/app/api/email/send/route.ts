@@ -116,6 +116,14 @@ export async function POST(request: NextRequest) {
     baseVars.dashboardUrl = `${baseVars.appUrl}/dashboard/player`;
   }
 
+  // Optional shareable schedule-card image (Juego Rápido rounds×courts) —
+  // only embedded when the caller actually provided a (same-origin) URL, so
+  // templates without a schedule to show render with an empty block instead
+  // of a broken <img>.
+  baseVars.scheduleCardBlock = baseVars.scheduleCardUrl
+    ? `<div style="margin-bottom:24px;"><img src="${baseVars.scheduleCardUrl}" alt="Cronograma" width="460" style="width:100%;max-width:460px;display:block;border:1px solid #e5e7eb;"/></div>`
+    : '';
+
   // Resolve template: Supabase first, then hardcoded default
   const dbTemplate = await fetchTemplate(type);
   let subjectRaw: string;

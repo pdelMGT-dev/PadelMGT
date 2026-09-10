@@ -66,6 +66,7 @@ function localSummaries(playerId: string): MyLeagueSummary[] {
       id: l.id, name: l.name, description: l.description ?? '', code: l.code,
       role, memberCount: members.length, seasonCount: seasons.length,
       activeSeasonName: active?.name ?? null, status, createdAt: l.createdAt,
+      logoUrl: l.logoUrl,
     };
   });
 }
@@ -161,15 +162,20 @@ export default function LeaguesPage() {
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
                   <td style={{ ...td, paddingLeft: 20, minWidth: 200 }}>
-                    <Link href={`/dashboard/player/leagues/${l.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, textTransform: 'uppercase', color: 'var(--black)', letterSpacing: '-0.01em' }}>
-                        {l.name}
-                      </div>
-                      {l.description && (
-                        <div style={{ fontSize: 12, color: 'var(--grey-500)', marginTop: 2, maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {l.description}
-                        </div>
+                    <Link href={`/dashboard/player/leagues/${l.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {l.logoUrl && (
+                        <img src={l.logoUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
                       )}
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, textTransform: 'uppercase', color: 'var(--black)', letterSpacing: '-0.01em' }}>
+                          {l.name}
+                        </div>
+                        {l.description && (
+                          <div style={{ fontSize: 12, color: 'var(--grey-500)', marginTop: 2, maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {l.description}
+                          </div>
+                        )}
+                      </div>
                     </Link>
                   </td>
                   <td style={td}><RoleBadge role={l.role} /></td>

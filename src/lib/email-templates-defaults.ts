@@ -66,13 +66,14 @@ ${btn('Ir a mi Dashboard', '{{dashboardUrl}}')}
     name: 'Invitación a Partido',
     description: 'Se envía cuando un jugador invita a otro a un juego rápido o torneo.',
     subject: '{{fromName}} te invita a jugar: {{gameName}}',
-    variables: ['toName', 'fromName', 'gameName', 'gameDate', 'gameCity', 'joinUrl', 'appUrl', 'currentYear'],
+    variables: ['toName', 'fromName', 'gameName', 'gameDate', 'gameCity', 'joinUrl', 'scheduleCardUrl', 'scheduleCardBlock', 'appUrl', 'currentYear'],
     is_active: true,
     html_body: base(`
 <tr><td style="padding:48px 40px 32px;">
 <p style="margin:0 0 8px;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#9ca3af;">Invitación a partido</p>
 <h1 style="margin:0 0 24px;font-size:28px;font-weight:700;color:#111;letter-spacing:-.02em;line-height:1.1;">{{fromName}} te invita a jugar</h1>
 ${detail([['Partido', '{{gameName}}'], ['Fecha', '{{gameDate}}'], ['Ciudad', '{{gameCity}}']])}
+{{scheduleCardBlock}}
 ${btn('Aceptar invitación', '{{joinUrl}}', true)}
 <p style="margin:0;font-size:13px;color:#9ca3af;">Si no conoces a {{fromName}} o no querés jugar, podés ignorar este email.</p>
 </td></tr>`),

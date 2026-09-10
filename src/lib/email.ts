@@ -20,6 +20,7 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
 export async function sendInviteEmail(params: {
   to: string; toName: string; fromName: string;
   gameName: string; gameDate: string; gameCity: string; joinUrl: string;
+  scheduleCardUrl?: string;
 }): Promise<void> {
   return send({ type: 'invite', ...params });
 }

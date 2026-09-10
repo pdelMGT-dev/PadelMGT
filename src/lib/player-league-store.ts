@@ -17,6 +17,8 @@ export interface PlayerLeague {
   defaultPointsWin: number;
   defaultPointsDraw: number;
   defaultPointsLoss: number;
+  logoUrl?: string;
+  bannerUrl?: string;
 }
 
 export interface LeagueSeason {
@@ -97,6 +99,7 @@ export interface MyLeagueSummary {
   activeSeasonName: string | null;
   status: 'active' | 'completed' | 'upcoming';
   createdAt: string;
+  logoUrl?: string;
 }
 
 async function pushLeagueBundle(leagueId: string): Promise<void> {
@@ -191,6 +194,8 @@ export async function fetchLeagueByCodeFromSupabase(code: string): Promise<Playe
       defaultPointsWin: d.default_points_win ?? 3,
       defaultPointsDraw: d.default_points_draw ?? 1,
       defaultPointsLoss: d.default_points_loss ?? 0,
+      logoUrl: d.logo_url ?? undefined,
+      bannerUrl: d.banner_url ?? undefined,
     };
   } catch { return null; }
 }
