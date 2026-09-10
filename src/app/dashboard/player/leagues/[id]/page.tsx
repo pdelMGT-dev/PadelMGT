@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
@@ -25,6 +25,7 @@ import {
   reviewJoinRequest,
   fetchJoinRequestsFromSupabase,
   importLeagueJoinRequests,
+  fetchLeagueByCodeFromSupabase,
   type PlayerLeague,
   type LeagueSeason,
   type LeagueMember,
@@ -117,6 +118,12 @@ export default function LeagueDetailPage() {
   const [coAdminSearch,   setCoAdminSearch]   = useState('');
   const [coAdminResults,  setCoAdminResults]  = useState<RegisteredPlayer[]>([]);
 
+  // Branding (logo/banner)
+  const [brandingBusy, setBrandingBusy] = useState<'logo' | 'banner' | null>(null);
+  const [brandingError, setBrandingError] = useState('');
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
   const reload = useCallback(() => {
     if (!user || !id) return;
     const l = getPlayerLeague(id);
@@ -156,6 +163,12 @@ export default function LeagueDetailPage() {
     setSnWin(l.defaultPointsWin);
     setSnDraw(l.defaultPointsDraw);
     setSnLoss(l.defaultPointsLoss);
+    // Branding (logo/banner) is written straight to Supabase by whoever
+    // uploads it — merge it in so it shows up for admins on other devices
+    // too, not just the one that did the upload.
+    fetchLeagueByCodeFromSupabase(l.code).then(remote => {
+      if (remote) setLeague(prev => prev ? { ...prev, logoUrl: remote.logoUrl, bannerUrl: remote.bannerUrl } : prev);
+    }).catch(() => {});
   }, [id, user, selectedSid, router]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -260,6 +273,41 @@ export default function LeagueDetailPage() {
     setTimeout(() => setCfgSaved(false), 3000);
   }
 
+  async function handleUploadBranding(kind: 'logo' | 'banner', file: File) {
+    if (!league || !id) return;
+    setBrandingBusy(kind);
+    setBrandingError('');
+    try {
+      const form = new FormData();
+      form.append('leagueId', id);
+      form.append('kind', kind);
+      form.append('file', file);
+      const res = await fetch('/api/leagues/branding', { method: 'POST', body: form });
+      const json = await res.json();
+      if (!res.ok) { setBrandingError(json.error ?? 'No se pudo subir la imagen.'); return; }
+      const updated: PlayerLeague = { ...league, ...(kind === 'logo' ? { logoUrl: json.url } : { bannerUrl: json.url }) };
+      savePlayerLeague(updated);
+      setLeague(updated);
+    } catch {
+      setBrandingError('No se pudo subir la imagen.');
+    } finally {
+      setBrandingBusy(null);
+    }
+  }
+
+  async function handleRemoveBranding(kind: 'logo' | 'banner') {
+    if (!league || !id) return;
+    setBrandingBusy(kind);
+    try {
+      await fetch(`/api/leagues/branding?leagueId=${encodeURIComponent(id)}&kind=${kind}`, { method: 'DELETE' });
+      const updated: PlayerLeague = { ...league, ...(kind === 'logo' ? { logoUrl: undefined } : { bannerUrl: undefined }) };
+      savePlayerLeague(updated);
+      setLeague(updated);
+    } finally {
+      setBrandingBusy(null);
+    }
+  }
+
   function handleDeleteLeague() {
     if (!id) return;
     if (!confirm(`¿Eliminar la liga "${league?.name}"? Esta acción no se puede deshacer.`)) return;
@@ -330,12 +378,21 @@ export default function LeagueDetailPage() {
   return (
     <div style={{ padding: '40px 32px 80px', maxWidth: 900, margin: '0 auto' }}>
       {/* Header */}
+      {league.bannerUrl && (
+        <div style={{ height: 140, marginBottom: 20, overflow: 'hidden', borderRadius: 4 }}>
+          <img src={league.bannerUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        </div>
+      )}
       <div style={{ marginBottom: 28 }}>
         <Link href="/dashboard/player/leagues" style={{ fontSize: 12, color: 'var(--grey-400)', textDecoration: 'none' }}>
           ← Mis Ligas
         </Link>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 10 }}>
-          <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {league.logoUrl && (
+              <img src={league.logoUrl} alt="" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '1px solid var(--grey-200)' }} />
+            )}
+            <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
               <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.02em', margin: 0 }}>
                 {league.name}
@@ -353,6 +410,7 @@ export default function LeagueDetailPage() {
               {leagueCode && <span style={{ fontSize: 11, color: 'var(--grey-400)', fontFamily: 'monospace' }}>{leagueCode}</span>}
             </div>
             {league.description && <div style={{ fontSize: 13, color: 'var(--grey-500)' }}>{league.description}</div>}
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
             <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>
@@ -623,6 +681,60 @@ export default function LeagueDetailPage() {
       {/* ── Configuración ── */}
       {tab === 'config' && amAdmin && (
         <>
+          {/* Branding */}
+          <div style={card}>
+            <div style={secTitle}>Marca de la Liga</div>
+            <p style={{ fontSize: 12, color: 'var(--grey-400)', margin: '0 0 16px' }}>
+              El logo y el banner aparecen en la página pública de la liga y en el cronograma compartible de los Juegos Rápidos vinculados.
+            </p>
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+              <div>
+                <label style={lbl}>Logo</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 72, height: 72, borderRadius: '50%', border: '1px solid var(--grey-200)', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                    {league.logoUrl
+                      ? <img src={league.logoUrl} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <span style={{ fontSize: 10, color: 'var(--grey-300)' }}>Sin logo</span>}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadBranding('logo', f); e.target.value = ''; }} />
+                    <button onClick={() => logoInputRef.current?.click()} disabled={brandingBusy === 'logo'} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', opacity: brandingBusy === 'logo' ? 0.5 : 1 }}>
+                      {brandingBusy === 'logo' ? 'Subiendo…' : league.logoUrl ? 'Cambiar' : 'Subir logo'}
+                    </button>
+                    {league.logoUrl && (
+                      <button onClick={() => handleRemoveBranding('logo')} disabled={brandingBusy === 'logo'} style={{ padding: '6px 14px', fontSize: 11, background: '#fff', color: 'var(--grey-500)', border: '1px solid var(--grey-200)', cursor: 'pointer' }}>
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ flex: 1, minWidth: 240 }}>
+                <label style={lbl}>Banner</label>
+                <div style={{ marginBottom: 10, height: 80, border: '1px solid var(--grey-200)', background: league.bannerUrl ? 'transparent' : 'var(--grey-50)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {league.bannerUrl
+                    ? <img src={league.bannerUrl} alt="Banner" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontSize: 11, color: 'var(--grey-300)' }}>Sin banner</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input ref={bannerInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadBranding('banner', f); e.target.value = ''; }} />
+                  <button onClick={() => bannerInputRef.current?.click()} disabled={brandingBusy === 'banner'} style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, background: 'var(--black)', color: '#fff', border: 'none', cursor: 'pointer', opacity: brandingBusy === 'banner' ? 0.5 : 1 }}>
+                    {brandingBusy === 'banner' ? 'Subiendo…' : league.bannerUrl ? 'Cambiar' : 'Subir banner'}
+                  </button>
+                  {league.bannerUrl && (
+                    <button onClick={() => handleRemoveBranding('banner')} disabled={brandingBusy === 'banner'} style={{ padding: '6px 14px', fontSize: 11, background: '#fff', color: 'var(--grey-500)', border: '1px solid var(--grey-200)', cursor: 'pointer' }}>
+                      Quitar
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+            {brandingError && <div style={{ marginTop: 10, fontSize: 12, color: '#dc2626' }}>{brandingError}</div>}
+          </div>
+
           {/* Info */}
           <div style={card}>
             <div style={secTitle}>Información de la Liga</div>

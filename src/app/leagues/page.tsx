@@ -12,6 +12,7 @@ interface PublicLeague {
   isOpen: boolean;
   code: string;
   createdAt: string;
+  logoUrl: string;
 }
 
 export default function LeaguesPage() {
@@ -44,6 +45,7 @@ export default function LeaguesPage() {
         isOpen: !!l.is_open,
         code: (l.code as string) ?? '',
         createdAt: (l.created_at as string) ?? '',
+        logoUrl: (l.logo_url as string) ?? '',
       })));
       setLoaded(true);
     }
@@ -123,7 +125,12 @@ export default function LeaguesPage() {
                 <tbody>
                   {filtered.map((l) => (
                     <tr key={l.id}>
-                      <td style={{ paddingLeft: 24, fontWeight: 600, fontSize: 15 }}>{l.name}</td>
+                      <td style={{ paddingLeft: 24, fontWeight: 600, fontSize: 15 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {l.logoUrl && <img src={l.logoUrl} alt="" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+                          {l.name}
+                        </span>
+                      </td>
                       <td style={{ color: 'var(--grey-500)', fontSize: 13 }}>{l.organizer || '—'}</td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{l.code || '—'}</td>
                       <td style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 18, textAlign: 'center' }}>{l.members}</td>

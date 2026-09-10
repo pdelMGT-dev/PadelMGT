@@ -19,6 +19,10 @@ export interface Invitation {
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: string;
   respondedAt?: string;
+  // Public schedule-card image URL (rounds × courts), for fixed-pairs Juegos
+  // Rápidos whose pairing/schedule is already known — embedded in the invite
+  // email so the invitee sees who/where/when without opening the app.
+  scheduleCardUrl?: string;
 }
 
 const _store = createLocalStore<Invitation[]>('padelmgt_invitations_v2', [], { seedOnFirstLoad: false });
@@ -119,6 +123,7 @@ export function createInvitation(params: Omit<Invitation, 'id' | 'status' | 'cre
       gameDate: `${inv.gameDate} ${inv.gameTime ?? ''}`.trim(),
       gameCity: inv.gameCity,
       joinUrl:  `${appUrl}/dashboard/player`,
+      scheduleCardUrl: inv.scheduleCardUrl,
     }).catch(() => {});
   }
 

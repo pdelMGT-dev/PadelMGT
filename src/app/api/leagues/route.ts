@@ -122,6 +122,7 @@ export async function GET(request: NextRequest) {
       activeSeasonName: active,
       status,
       createdAt: (l.created_at as string) ?? '',
+      logoUrl: (l.logo_url as string) || undefined,
     };
   });
 

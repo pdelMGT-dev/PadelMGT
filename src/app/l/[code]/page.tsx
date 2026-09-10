@@ -263,18 +263,23 @@ export default function PublicLeaguePage() {
           )}
 
           {/* League name */}
-          <h1 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(36px, 7vw, 64px)',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '-0.025em',
-            lineHeight: 0.92,
-            color: '#fff',
-            margin: '0 0 20px',
-          }}>
-            {league.name}
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 20 }}>
+            {league.logoUrl && (
+              <img src={league.logoUrl} alt="" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '2px solid rgba(255,255,255,0.2)' }} />
+            )}
+            <h1 style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 'clamp(36px, 7vw, 64px)',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '-0.025em',
+              lineHeight: 0.92,
+              color: '#fff',
+              margin: 0,
+            }}>
+              {league.name}
+            </h1>
+          </div>
 
           {/* Description */}
           {league.description && (

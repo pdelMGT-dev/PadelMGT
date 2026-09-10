@@ -522,6 +522,11 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   function handleInvitePlayer(player: RegisteredPlayer) {
     if (!game || !currentUser) return;
+    // Fixed-pairs games with a locked/live schedule already know who plays
+    // whom — attach the shareable cronograma card to the invite email.
+    const scheduleCardUrl = game.pairType === 'parejas' && (game.rounds.length > 0 || (game.fixedPairs?.length ?? 0) > 0)
+      ? `${window.location.origin}/api/quick-game/card?id=${game.id}`
+      : undefined;
     if (replaceTargetId) {
       // Replace mode: cancel old invitation, create new
       const updatedInvited = game.invitedPlayers.map(ip =>
@@ -552,6 +557,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         toPlayerId: player.id,
         toPlayerName: player.name,
         toPlayerEmail: player.email,
+        scheduleCardUrl,
       });
       setReplaceTargetId(null);
       showToast(`Invitación enviada a ${player.name}`);
@@ -582,6 +588,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         toPlayerId: player.id,
         toPlayerName: player.name,
         toPlayerEmail: player.email,
+        scheduleCardUrl,
       });
       showToast(`Invitación enviada a ${player.name}`);
     }
@@ -815,6 +822,30 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     setGame(updated);
     setPairsLocked(true);
     showToast('Parejas guardadas.');
+  }
+
+  async function handleShareCronograma() {
+    if (!game) return;
+    const cardUrl = `/api/quick-game/card?id=${game.id}`;
+    try {
+      const resp = await fetch(cardUrl);
+      if (!resp.ok) { showToast('El cronograma todavía no está listo — probá de nuevo en un momento.'); return; }
+      const blob = await resp.blob();
+      const filename = `cronograma-${game.code}.png`;
+      const file = new File([blob], filename, { type: 'image/png' });
+      const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean };
+      if (nav.share && nav.canShare?.({ files: [file] })) {
+        await nav.share({ files: [file], title: game.name, text: `Cronograma de ${game.name}` });
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      showToast('No se pudo generar el cronograma.');
+    }
   }
 
   function handleSortearParejas() {
@@ -1808,8 +1839,16 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       {/* ── SECTION B.5: Cronograma Completo ────────────────────────────────── */}
       {scheduleRounds.length > 0 && (
         <div style={cardStyle}>
-          <div style={secTitle}>
-            Cronograma Completo {game.status === 'created' || game.status === 'starting_soon' ? '(vista previa)' : ''}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div style={secTitle}>
+              Cronograma Completo {game.status === 'created' || game.status === 'starting_soon' ? '(vista previa)' : ''}
+            </div>
+            <button
+              onClick={handleShareCronograma}
+              style={{ padding: '8px 16px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
+            >
+              ⬇ Descargar / Compartir
+            </button>
           </div>
           <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 16 }}>
             {scheduleRounds.length} ronda{scheduleRounds.length !== 1 ? 's' : ''}
