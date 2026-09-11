@@ -15,6 +15,7 @@ import {
   isLeagueMember,
   computeLeagueStandings,
   fetchLeagueByCodeFromSupabase,
+  fetchLeagueDetailFromSupabase,
   type PlayerLeague,
   type LeagueSeason,
   type LeagueStandingEntry,
@@ -69,20 +70,31 @@ export default function PublicLeaguePage() {
   useEffect(() => {
     function populate(l: PlayerLeague) {
       setLeague(l);
+      // Instant paint from whatever's cached locally — typically incomplete,
+      // since a device only ever caches games IT played, never a full
+      // league's worth of other members' games. The Supabase fetch below
+      // is what actually makes standings correct for any viewer.
       const allSeasons = getLeagueSeasons(l.id);
       setSeasons(allSeasons);
       const active = getActiveSeason(l.id);
       setActiveSeason(active);
       const members = getLeagueMembers(l.id);
       setMemberCount(members.length);
-      const games = getAllGames();
-      const computed = computeLeagueStandings(l.id, active?.id ?? null, games);
-      setStandings(computed);
+      setStandings(computeLeagueStandings(l.id, active?.id ?? null, getAllGames()));
       if (currentUser) {
         const req = getLeagueJoinRequestForPlayer(l.id, currentUser.id);
         setJoinRequest(req);
         setIsMember(isLeagueMember(l.id, currentUser.id));
       }
+
+      fetchLeagueDetailFromSupabase(l.id).then(detail => {
+        if (!detail) return;
+        setSeasons(detail.seasons);
+        const remoteActive = detail.seasons.find(s => s.status === 'active') ?? null;
+        setActiveSeason(remoteActive);
+        setMemberCount(detail.members.length);
+        setStandings(computeLeagueStandings(l.id, remoteActive?.id ?? null, detail.games));
+      }).catch(() => {});
     }
 
     const local = getPlayerLeagueByCode(code);

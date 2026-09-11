@@ -200,6 +200,54 @@ export async function fetchLeagueByCodeFromSupabase(code: string): Promise<Playe
   } catch { return null; }
 }
 
+export interface LeagueDetail {
+  league: PlayerLeague;
+  members: LeagueMember[];
+  seasons: LeagueSeason[];
+  games: ActiveGame[];
+}
+
+/**
+ * Full league detail (league + members + seasons + every finished game tied
+ * to it) straight from Supabase — the authoritative source. Unlike the local
+ * store getters below, this isn't scoped to "whatever this device happened
+ * to cache": a plain member's browser never caches a league it didn't
+ * create/administer, and even an admin's device only ever caches the games
+ * IT played, not every member's games. Returns null on fetch failure so
+ * callers can fall back to (possibly incomplete) local data.
+ */
+export async function fetchLeagueDetailFromSupabase(leagueId: string): Promise<LeagueDetail | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const res = await fetch(`/api/leagues/detail?id=${encodeURIComponent(leagueId)}`);
+    if (!res.ok) return null;
+    return await res.json() as LeagueDetail;
+  } catch {
+    return null;
+  }
+}
+
+/** Cache a league fetched from Supabase locally (instant paint on next visit),
+ * without pushing it back — this device didn't create/edit it. */
+export function cacheLeagueLocally(league: PlayerLeague): void {
+  const all = leagueStore.load();
+  const idx = all.findIndex(l => l.id === league.id);
+  if (idx >= 0) all[idx] = league; else all.push(league);
+  leagueStore.persist(all);
+}
+
+/** Replace this league's cached members with the authoritative Supabase set. */
+export function importLeagueMembers(leagueId: string, incoming: LeagueMember[]): void {
+  const others = memberStore.load().filter(m => m.leagueId !== leagueId);
+  memberStore.persist([...others, ...incoming]);
+}
+
+/** Replace this league's cached seasons with the authoritative Supabase set. */
+export function importLeagueSeasons(leagueId: string, incoming: LeagueSeason[]): void {
+  const others = seasonStore.load().filter(s => s.leagueId !== leagueId);
+  seasonStore.persist([...others, ...incoming]);
+}
+
 async function syncJoinRequestToSupabase(req: LeagueJoinRequest): Promise<void> {
   if (typeof window === 'undefined') return;
   try {

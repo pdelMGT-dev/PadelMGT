@@ -1,17 +1,16 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import {
   getPlayerLeague,
   getLeagueSeasons,
   getLeagueSeason,
-  getActiveSeason,
   getLeagueMembers,
-  isLeagueAdmin,
   addLeagueMember,
   removeLeagueMember,
   updateMemberRole,
@@ -25,7 +24,10 @@ import {
   reviewJoinRequest,
   fetchJoinRequestsFromSupabase,
   importLeagueJoinRequests,
-  fetchLeagueByCodeFromSupabase,
+  fetchLeagueDetailFromSupabase,
+  cacheLeagueLocally,
+  importLeagueMembers,
+  importLeagueSeasons,
   type PlayerLeague,
   type LeagueSeason,
   type LeagueMember,
@@ -35,9 +37,12 @@ import {
 import { getAllGames } from '@/lib/game-store';
 import { searchPlayers } from '@/lib/player-store';
 import type { RegisteredPlayer } from '@/lib/player-store';
+import type { ActiveGame } from '@/lib/game-engine';
 import { checkLeagueMemberGate, getLimitsForLeagueOwner } from '@/lib/plan-config';
 
-type Tab = 'ranking' | 'members' | 'seasons' | 'requests' | 'config';
+type Tab = 'ranking' | 'history' | 'evolution' | 'members' | 'seasons' | 'requests' | 'config';
+
+const LINE_PALETTE = ['#1eaa52', '#f59e0b', '#a855f7', '#ec4899', '#06b6d4', '#84cc16', '#f97316'];
 
 const inp: React.CSSProperties = {
   width: '100%', padding: '10px 12px', fontSize: 13,
@@ -82,6 +87,7 @@ export default function LeagueDetailPage() {
   const [seasons,      setSeasons]      = useState<LeagueSeason[]>([]);
   const [selectedSid,  setSelectedSid]  = useState<string | null>(null);
   const [standings,    setStandings]    = useState<LeagueStandingEntry[]>([]);
+  const [leagueGames,  setLeagueGames]  = useState<ActiveGame[]>([]);
 
   // Members
   const [members,       setMembers]       = useState<LeagueMember[]>([]);
@@ -126,21 +132,60 @@ export default function LeagueDetailPage() {
 
   const reload = useCallback(() => {
     if (!user || !id) return;
-    const l = getPlayerLeague(id);
-    if (!l) { router.push('/dashboard/player/leagues'); return; }
-    setLeague(l);
-    const adminFlag = isLeagueAdmin(id, user.id);
-    setAmAdmin(adminFlag);
-    setIsCreator(l.createdBy === user.id);
-    const ss = getLeagueSeasons(id);
-    setSeasons(ss);
-    const active = getActiveSeason(id);
-    const sid = selectedSid ?? (active?.id ?? ss[ss.length - 1]?.id ?? null);
-    setSelectedSid(sid);
-    const mem = getLeagueMembers(id);
-    setMembers(mem);
-    const games = getAllGames();
-    setStandings(computeLeagueStandings(id, sid, games));
+
+    // Apply a league + its members/seasons/games to all the derived state
+    // this page renders from. Called once for the (possibly incomplete)
+    // local cache — for instant paint — and again once the authoritative
+    // Supabase fetch below resolves.
+    function applyLeagueData(l: PlayerLeague, mem: LeagueMember[], ss: LeagueSeason[], gms: ActiveGame[]) {
+      setLeague(l);
+      setIsCreator(l.createdBy === user!.id);
+      setAmAdmin(l.createdBy === user!.id || mem.some(m => m.playerId === user!.id && m.role === 'admin'));
+      setSeasons(ss);
+      setMembers(mem);
+      setLeagueGames(gms);
+      const active = ss.find(s => s.status === 'active') ?? null;
+      const sid = selectedSid ?? (active?.id ?? ss[ss.length - 1]?.id ?? null);
+      setSelectedSid(sid);
+      setStandings(computeLeagueStandings(l.id, sid, gms));
+      setCfgName(l.name);
+      setCfgDesc(l.description ?? '');
+      setCfgOpen(l.isOpen);
+      setCfgPublic(l.isPublic);
+      setCfgWin(l.defaultPointsWin);
+      setCfgDraw(l.defaultPointsDraw);
+      setCfgLoss(l.defaultPointsLoss);
+      setSnWin(l.defaultPointsWin);
+      setSnDraw(l.defaultPointsDraw);
+      setSnLoss(l.defaultPointsLoss);
+    }
+
+    // Instant paint from whatever's cached locally. For a plain member who
+    // never created/administered this league (or any device other than the
+    // creator's), this is typically empty/incomplete — that's exactly what
+    // the Supabase fetch below fixes; this step is just to avoid a blank
+    // screen when there IS something to show immediately.
+    const localLeague = getPlayerLeague(id);
+    if (localLeague) {
+      applyLeagueData(localLeague, getLeagueMembers(id), getLeagueSeasons(id), getAllGames());
+    }
+
+    // Authoritative refresh: the league itself, its members, its seasons,
+    // and EVERY finished game tied to it (not just games this device
+    // happens to have cached — a device only ever caches games it created
+    // or played, never a full league's worth of other members' games).
+    // If this also comes back empty and we had nothing locally either, the
+    // league genuinely isn't reachable — only then do we bounce out.
+    fetchLeagueDetailFromSupabase(id).then(detail => {
+      if (!detail) { if (!localLeague) router.push('/dashboard/player/leagues'); return; }
+      cacheLeagueLocally(detail.league);
+      importLeagueMembers(id, detail.members);
+      importLeagueSeasons(id, detail.seasons);
+      applyLeagueData(detail.league, detail.members, detail.seasons, detail.games);
+    }).catch(() => {
+      if (!localLeague) router.push('/dashboard/player/leagues');
+    });
+
     // Requests — local first, then merge from Supabase
     const reqs = getLeagueJoinRequests(id);
     setJoinRequests(reqs);
@@ -151,23 +196,6 @@ export default function LeagueDetailPage() {
       const merged = getLeagueJoinRequests(id);
       setJoinRequests(merged);
       setPendingCount(merged.filter(r => r.status === 'pending').length);
-    }).catch(() => {});
-    // Config
-    setCfgName(l.name);
-    setCfgDesc(l.description ?? '');
-    setCfgOpen(l.isOpen);
-    setCfgPublic(l.isPublic);
-    setCfgWin(l.defaultPointsWin);
-    setCfgDraw(l.defaultPointsDraw);
-    setCfgLoss(l.defaultPointsLoss);
-    setSnWin(l.defaultPointsWin);
-    setSnDraw(l.defaultPointsDraw);
-    setSnLoss(l.defaultPointsLoss);
-    // Branding (logo/banner) is written straight to Supabase by whoever
-    // uploads it — merge it in so it shows up for admins on other devices
-    // too, not just the one that did the upload.
-    fetchLeagueByCodeFromSupabase(l.code).then(remote => {
-      if (remote) setLeague(prev => prev ? { ...prev, logoUrl: remote.logoUrl, bannerUrl: remote.bannerUrl } : prev);
     }).catch(() => {});
   }, [id, user, selectedSid, router]);
 
@@ -191,8 +219,8 @@ export default function LeagueDetailPage() {
 
   useEffect(() => {
     if (!id || !selectedSid) return;
-    setStandings(computeLeagueStandings(id, selectedSid, getAllGames()));
-  }, [id, selectedSid]);
+    setStandings(computeLeagueStandings(id, selectedSid, leagueGames));
+  }, [id, selectedSid, leagueGames]);
 
   // Members tab
   function handleAddMember(player: RegisteredPlayer) {
@@ -351,13 +379,13 @@ export default function LeagueDetailPage() {
     return 'basica';
   })();
   const rankGridCols =
-    classTier === 'basica'   ? '48px 1fr 70px'
-    : classTier === 'completa' ? '48px 1fr 50px 50px 50px 50px 70px'
-    :                            '48px 1fr 50px 50px 50px 50px 58px 58px 70px';
+    classTier === 'basica'   ? '48px 1fr 70px 48px'
+    : classTier === 'completa' ? '48px 1fr 50px 50px 50px 50px 70px 48px'
+    :                            '48px 1fr 50px 50px 50px 50px 58px 58px 70px 48px';
   const rankHeaders =
-    classTier === 'basica'   ? ['#', 'Jugador', 'PTS']
-    : classTier === 'completa' ? ['#', 'Jugador', 'J', 'G', 'E', 'P', 'PTS']
-    :                            ['#', 'Jugador', 'J', 'G', 'E', 'P', '%V', 'DIF', 'PTS'];
+    classTier === 'basica'   ? ['#', 'Jugador', 'PTS', '']
+    : classTier === 'completa' ? ['#', 'Jugador', 'J', 'G', 'E', 'P', 'PTS', '']
+    :                            ['#', 'Jugador', 'J', 'G', 'E', 'P', '%V', 'DIF', 'PTS', ''];
   function rankStatCells(entry: LeagueStandingEntry): (string | number)[] {
     if (classTier === 'basica') return [];
     const base: (string | number)[] = [entry.played, entry.wins, entry.draws, entry.losses];
@@ -366,6 +394,59 @@ export default function LeagueDetailPage() {
     const dif = entry.wins - entry.losses;
     return [...base, `${winPct}%`, dif > 0 ? `+${dif}` : `${dif}`];
   }
+
+  // Finished games for the current league/season, chronological — the base
+  // for the trend column, the personal summary, the Historial tab, and the
+  // Evolución chart. All derived client-side from data the detail fetch
+  // above already loaded; no extra requests.
+  const sortedLeagueGames = useMemo(() => {
+    if (!league) return [];
+    return leagueGames
+      .filter(g => g.leagueId === league.id && (!selectedSid || g.seasonId === selectedSid) && g.status === 'finished')
+      .slice()
+      .sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
+  }, [league, leagueGames, selectedSid]);
+
+  // Standings as they stood right before the most recently played game —
+  // comparing against the current standings gives each player's position
+  // movement ("Subiste 2 puestos").
+  const previousStandings = useMemo(() => {
+    if (!league || sortedLeagueGames.length < 2) return null;
+    return computeLeagueStandings(league.id, selectedSid, sortedLeagueGames.slice(0, -1));
+  }, [league, sortedLeagueGames, selectedSid]);
+
+  function trendFor(playerId: string): number | null {
+    if (!previousStandings) return null;
+    const curIdx = standings.findIndex(s => s.playerId === playerId);
+    const prevIdx = previousStandings.findIndex(s => s.playerId === playerId);
+    if (curIdx < 0 || prevIdx < 0) return null;
+    return prevIdx - curIdx; // positive = moved up (lower index = better rank)
+  }
+
+  function TrendBadge({ playerId }: { playerId: string }) {
+    const delta = trendFor(playerId);
+    if (delta === null || delta === 0) return <span style={{ color: 'var(--grey-300)', fontSize: 12 }}>─</span>;
+    if (delta > 0) return <span style={{ color: '#16a34a', fontSize: 12, fontWeight: 700 }}>▲{delta}</span>;
+    return <span style={{ color: '#dc2626', fontSize: 12, fontWeight: 700 }}>▼{Math.abs(delta)}</span>;
+  }
+
+  // Cumulative-points-per-game snapshots, for the Evolución line chart. Draws
+  // the top 8 by current points, plus the viewer's own line if they're
+  // outside that set — a full-league chart with 20+ lines is unreadable.
+  const evolutionData = useMemo(() => {
+    if (!league || sortedLeagueGames.length === 0) return { rows: [] as Record<string, number | string>[], playerIds: [] as string[], nameById: new Map<string, string>() };
+    const nameById = new Map(standings.map(s => [s.playerId, s.playerName]));
+    const ids = standings.slice(0, 8).map(s => s.playerId);
+    if (user && !ids.includes(user.id) && standings.some(s => s.playerId === user.id)) ids.push(user.id);
+    const rows = sortedLeagueGames.map((g, i) => {
+      const snap = computeLeagueStandings(league.id, selectedSid, sortedLeagueGames.slice(0, i + 1));
+      const byId = new Map(snap.map(s => [s.playerId, s.points]));
+      const row: Record<string, number | string> = { idx: i + 1, date: g.date };
+      for (const pid of ids) row[pid] = byId.get(pid) ?? 0;
+      return row;
+    });
+    return { rows, playerIds: ids, nameById };
+  }, [league, sortedLeagueGames, standings, selectedSid, user]);
 
   const tabStyle = (t: Tab): React.CSSProperties => ({
     padding: '10px 18px', fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -431,6 +512,8 @@ export default function LeagueDetailPage() {
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--grey-200)', marginBottom: 28, overflowX: 'auto' }}>
         <button style={tabStyle('ranking')} onClick={() => setTab('ranking')}>Ranking</button>
+        <button style={tabStyle('history')} onClick={() => setTab('history')}>Historial</button>
+        <button style={tabStyle('evolution')} onClick={() => setTab('evolution')}>Evolución</button>
         <button style={tabStyle('members')} onClick={() => setTab('members')}>Miembros</button>
         <button style={tabStyle('seasons')} onClick={() => setTab('seasons')}>Temporadas</button>
         {amAdmin && (
@@ -451,6 +534,36 @@ export default function LeagueDetailPage() {
       {/* ── Ranking ── */}
       {tab === 'ranking' && (
         <>
+          {user && (() => {
+            const myIdx = standings.findIndex(s => s.playerId === user.id);
+            if (myIdx < 0) return null;
+            const me = standings[myIdx];
+            const delta = trendFor(user.id);
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 28, padding: '20px 24px', background: 'var(--black)', color: '#fff', marginBottom: 20, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <RankMedal pos={myIdx + 1} />
+                  <div>
+                    <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>Tu posición</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700 }}>#{myIdx + 1} de {standings.length}</div>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>Puntos</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700 }}>{me.points}</div>
+                </div>
+                {delta !== null && (
+                  delta === 0 ? (
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Te mantuviste en tu posición en el último partido</div>
+                  ) : (
+                    <div style={{ padding: '6px 14px', background: delta > 0 ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)', color: delta > 0 ? '#4ade80' : '#f87171', fontSize: 13, fontWeight: 700 }}>
+                      {delta > 0 ? `▲ Subiste ${delta} puesto${delta > 1 ? 's' : ''}` : `▼ Bajaste ${Math.abs(delta)} puesto${Math.abs(delta) > 1 ? 's' : ''}`}
+                    </div>
+                  )
+                )}
+              </div>
+            );
+          })()}
           {seasons.length > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
               <label style={{ ...lbl, margin: 0 }}>Temporada:</label>
@@ -494,6 +607,7 @@ export default function LeagueDetailPage() {
                     </div>
                     {rankStatCells(entry).map((v, i) => <div key={i} style={{ textAlign: 'right', fontSize: 12, color: 'var(--grey-600)' }}>{v}</div>)}
                     <div style={{ textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700, color: 'var(--black)' }}>{entry.points}</div>
+                    <div style={{ textAlign: 'right' }}><TrendBadge playerId={entry.playerId} /></div>
                   </div>
                 );
               })}
@@ -503,6 +617,92 @@ export default function LeagueDetailPage() {
               {classTier !== 'avanzada' && ' — subí de plan para ver más detalle'}
             </div>
             </>
+          )}
+        </>
+      )}
+
+      {/* ── Historial de Partidos ── */}
+      {tab === 'history' && (
+        <>
+          {sortedLeagueGames.length === 0 ? (
+            <div style={{ border: '1px dashed var(--grey-300)', padding: '48px 40px', textAlign: 'center', background: 'var(--grey-50)' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', color: 'var(--grey-300)', marginBottom: 8 }}>Sin partidos aún</div>
+              <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>Los Juegos Rápidos y Torneos vinculados a esta liga van a aparecer acá una vez finalizados.</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {sortedLeagueGames.slice().reverse().map(g => {
+                const top = (g.standings ?? []).slice(0, 3);
+                return (
+                  <div key={g.id} style={card}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: top.length > 0 ? 12 : 0, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, textTransform: 'uppercase' }}>{g.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--grey-400)', marginTop: 2 }}>
+                          {new Date(`${g.date}T00:00:00`).toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long' })}
+                          {g.club ? ` · ${g.club}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    {top.length > 0 && (
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                        {top.map((s, i) => (
+                          <div key={s.playerId} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                            <RankMedal pos={i + 1} />
+                            <span style={{ fontWeight: s.playerId === user?.id ? 700 : 500 }}>{s.playerName}</span>
+                            <span style={{ color: 'var(--grey-400)' }}>({s.pts} pts)</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Evolución ── */}
+      {tab === 'evolution' && (
+        <>
+          {evolutionData.rows.length < 2 ? (
+            <div style={{ border: '1px dashed var(--grey-300)', padding: '48px 40px', textAlign: 'center', background: 'var(--grey-50)' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', color: 'var(--grey-300)', marginBottom: 8 }}>Todavía no hay suficientes partidos</div>
+              <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>La evolución se muestra a partir del segundo partido jugado en la liga.</div>
+            </div>
+          ) : (
+            <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '24px 20px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 20 }}>
+                Puntos acumulados por partido {evolutionData.playerIds.length < standings.length ? '(top 8 + vos)' : ''}
+              </div>
+              <ResponsiveContainer width="100%" height={340}>
+                <LineChart data={evolutionData.rows}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="idx" tick={{ fontSize: 11, fill: '#999' }} axisLine={false} tickLine={false} label={{ value: 'Partido #', position: 'insideBottom', offset: -4, fontSize: 10, fill: '#999' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#999' }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ border: '1px solid var(--grey-200)', borderRadius: 4, fontSize: 12 }}
+                    labelStyle={{ fontWeight: 600 }}
+                    labelFormatter={v => `Partido ${v}`}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    formatter={(((value: number, key: string) => [value, evolutionData.nameById.get(key) ?? key]) as any)}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={(key: string) => evolutionData.nameById.get(key) ?? key} />
+                  {evolutionData.playerIds.map((pid, i) => (
+                    <Line
+                      key={pid}
+                      type="monotone"
+                      dataKey={pid}
+                      name={pid}
+                      stroke={pid === user?.id ? 'var(--court-blue)' : LINE_PALETTE[i % LINE_PALETTE.length]}
+                      strokeWidth={pid === user?.id ? 3 : 1.5}
+                      dot={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           )}
         </>
       )}
