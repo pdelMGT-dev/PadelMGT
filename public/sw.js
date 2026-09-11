@@ -3,7 +3,7 @@
 // - Pages & API: network-first (always fresh data), page fallback to cache
 // - Never caches POST/PUT/DELETE, Supabase, Stripe or auth requests
 
-const VERSION = 'padelmgt-v1';
+const VERSION = 'padelmgt-v2';
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGE_CACHE = `${VERSION}-pages`;
 
