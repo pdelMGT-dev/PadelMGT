@@ -14,6 +14,8 @@ import {
   addLeagueMember,
   removeLeagueMember,
   updateMemberRole,
+  updateMemberCategory,
+  DEFAULT_LEAGUE_CATEGORIES,
   createLeagueSeason,
   saveLeagueSeason,
   savePlayerLeague,
@@ -117,6 +119,9 @@ export default function LeagueDetailPage() {
   const [cfgWin,     setCfgWin]     = useState(3);
   const [cfgDraw,    setCfgDraw]    = useState(1);
   const [cfgLoss,    setCfgLoss]    = useState(0);
+  const [cfgCategories, setCfgCategories] = useState<string[]>([]);
+  const [newCategory, setNewCategory]     = useState('');
+  const [rankCategory, setRankCategory]   = useState<string>(''); // '' = todas
   const [cfgSaved,   setCfgSaved]   = useState(false);
   const [qrCopied,   setQrCopied]   = useState(false);
 
@@ -155,6 +160,7 @@ export default function LeagueDetailPage() {
       setCfgWin(l.defaultPointsWin);
       setCfgDraw(l.defaultPointsDraw);
       setCfgLoss(l.defaultPointsLoss);
+      setCfgCategories(l.categories ?? []);
       setSnWin(l.defaultPointsWin);
       setSnDraw(l.defaultPointsDraw);
       setSnLoss(l.defaultPointsLoss);
@@ -252,6 +258,19 @@ export default function LeagueDetailPage() {
     reload();
   }
 
+  function handleSetMemberCategory(playerId: string, category: string) {
+    if (!id) return;
+    updateMemberCategory(id, playerId, category);
+    setMembers(prev => prev.map(m => m.playerId === playerId ? { ...m, category } : m));
+  }
+
+  function handleAddCategory() {
+    const name = newCategory.trim();
+    if (!name || cfgCategories.some(c => c.toLowerCase() === name.toLowerCase())) return;
+    setCfgCategories(prev => [...prev, name]);
+    setNewCategory('');
+  }
+
   // Seasons tab
   function handleCreateSeason() {
     if (!id || !snName.trim()) return;
@@ -295,6 +314,7 @@ export default function LeagueDetailPage() {
       defaultPointsWin: cfgWin,
       defaultPointsDraw: cfgDraw,
       defaultPointsLoss: cfgLoss,
+      categories: cfgCategories,
     });
     setCfgSaved(true);
     reload();
@@ -351,6 +371,79 @@ export default function LeagueDetailPage() {
     });
   }
 
+  // Finished games for the current league/season, chronological — the base
+  // for the trend column, the personal summary, the Historial tab, and the
+  // Evolución chart. All derived client-side from data the detail fetch
+  // above already loaded; no extra requests.
+  const sortedLeagueGames = useMemo(() => {
+    if (!league) return [];
+    return leagueGames
+      .filter(g => g.leagueId === league.id && (!selectedSid || g.seasonId === selectedSid) && g.status === 'finished')
+      .slice()
+      .sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
+  }, [league, leagueGames, selectedSid]);
+
+  // Standings as they stood right before the most recently played game —
+  // comparing against the current standings gives each player's position
+  // movement ("Subiste 2 puestos").
+  const previousStandings = useMemo(() => {
+    if (!league || sortedLeagueGames.length < 2) return null;
+    return computeLeagueStandings(league.id, selectedSid, sortedLeagueGames.slice(0, -1));
+  }, [league, sortedLeagueGames, selectedSid]);
+
+  // Per-category tables: a league with categories (Primera…Quinta) ranks each
+  // member only against her own category. '' = all members together.
+  const leagueCategories = league?.categories ?? [];
+  const categoryOf = useMemo(() => new Map(members.map(m => [m.playerId, m.category ?? ''])), [members]);
+  const inView = useCallback(
+    (playerId: string) => !rankCategory || categoryOf.get(playerId) === rankCategory,
+    [rankCategory, categoryOf],
+  );
+  const viewStandings = useMemo(() => standings.filter(s => inView(s.playerId)), [standings, inView]);
+  const viewPrevious = useMemo(() => previousStandings?.filter(s => inView(s.playerId)) ?? null, [previousStandings, inView]);
+
+  // Default the table to the viewer's own category, once.
+  const rankCategoryInit = useRef(false);
+  useEffect(() => {
+    if (rankCategoryInit.current || !user || leagueCategories.length === 0) return;
+    const mine = categoryOf.get(user.id);
+    if (mine && leagueCategories.includes(mine)) { setRankCategory(mine); rankCategoryInit.current = true; }
+  }, [user, leagueCategories, categoryOf]);
+
+  function trendFor(playerId: string): number | null {
+    if (!viewPrevious) return null;
+    const curIdx = viewStandings.findIndex(s => s.playerId === playerId);
+    const prevIdx = viewPrevious.findIndex(s => s.playerId === playerId);
+    if (curIdx < 0 || prevIdx < 0) return null;
+    return prevIdx - curIdx; // positive = moved up (lower index = better rank)
+  }
+
+  function TrendBadge({ playerId }: { playerId: string }) {
+    const delta = trendFor(playerId);
+    if (delta === null || delta === 0) return <span style={{ color: 'var(--grey-300)', fontSize: 12 }}>─</span>;
+    if (delta > 0) return <span style={{ color: '#16a34a', fontSize: 12, fontWeight: 700 }}>▲{delta}</span>;
+    return <span style={{ color: '#dc2626', fontSize: 12, fontWeight: 700 }}>▼{Math.abs(delta)}</span>;
+  }
+
+  // Cumulative-points-per-game snapshots, for the Evolución line chart. Draws
+  // the top 8 by current points, plus the viewer's own line if they're
+  // outside that set — a full-league chart with 20+ lines is unreadable.
+  const evolutionData = useMemo(() => {
+    if (!league || sortedLeagueGames.length === 0) return { rows: [] as Record<string, number | string>[], playerIds: [] as string[], nameById: new Map<string, string>() };
+    const nameById = new Map(viewStandings.map(s => [s.playerId, s.playerName]));
+    const ids = viewStandings.slice(0, 8).map(s => s.playerId);
+    if (user && !ids.includes(user.id) && viewStandings.some(s => s.playerId === user.id)) ids.push(user.id);
+    const rows = sortedLeagueGames.map((g, i) => {
+      const snap = computeLeagueStandings(league.id, selectedSid, sortedLeagueGames.slice(0, i + 1));
+      const byId = new Map(snap.map(s => [s.playerId, s.points]));
+      const row: Record<string, number | string> = { idx: i + 1, date: g.date };
+      for (const pid of ids) row[pid] = byId.get(pid) ?? 0;
+      return row;
+    });
+    return { rows, playerIds: ids, nameById };
+  }, [league, sortedLeagueGames, viewStandings, selectedSid, user]);
+
+  // NOTE: every hook above must stay above this early return (Rules of Hooks).
   if (!league) return <div style={{ padding: 40, color: 'var(--grey-400)' }}>Cargando...</div>;
 
   const leagueCode = league.code ?? '';
@@ -394,59 +487,6 @@ export default function LeagueDetailPage() {
     const dif = entry.wins - entry.losses;
     return [...base, `${winPct}%`, dif > 0 ? `+${dif}` : `${dif}`];
   }
-
-  // Finished games for the current league/season, chronological — the base
-  // for the trend column, the personal summary, the Historial tab, and the
-  // Evolución chart. All derived client-side from data the detail fetch
-  // above already loaded; no extra requests.
-  const sortedLeagueGames = useMemo(() => {
-    if (!league) return [];
-    return leagueGames
-      .filter(g => g.leagueId === league.id && (!selectedSid || g.seasonId === selectedSid) && g.status === 'finished')
-      .slice()
-      .sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
-  }, [league, leagueGames, selectedSid]);
-
-  // Standings as they stood right before the most recently played game —
-  // comparing against the current standings gives each player's position
-  // movement ("Subiste 2 puestos").
-  const previousStandings = useMemo(() => {
-    if (!league || sortedLeagueGames.length < 2) return null;
-    return computeLeagueStandings(league.id, selectedSid, sortedLeagueGames.slice(0, -1));
-  }, [league, sortedLeagueGames, selectedSid]);
-
-  function trendFor(playerId: string): number | null {
-    if (!previousStandings) return null;
-    const curIdx = standings.findIndex(s => s.playerId === playerId);
-    const prevIdx = previousStandings.findIndex(s => s.playerId === playerId);
-    if (curIdx < 0 || prevIdx < 0) return null;
-    return prevIdx - curIdx; // positive = moved up (lower index = better rank)
-  }
-
-  function TrendBadge({ playerId }: { playerId: string }) {
-    const delta = trendFor(playerId);
-    if (delta === null || delta === 0) return <span style={{ color: 'var(--grey-300)', fontSize: 12 }}>─</span>;
-    if (delta > 0) return <span style={{ color: '#16a34a', fontSize: 12, fontWeight: 700 }}>▲{delta}</span>;
-    return <span style={{ color: '#dc2626', fontSize: 12, fontWeight: 700 }}>▼{Math.abs(delta)}</span>;
-  }
-
-  // Cumulative-points-per-game snapshots, for the Evolución line chart. Draws
-  // the top 8 by current points, plus the viewer's own line if they're
-  // outside that set — a full-league chart with 20+ lines is unreadable.
-  const evolutionData = useMemo(() => {
-    if (!league || sortedLeagueGames.length === 0) return { rows: [] as Record<string, number | string>[], playerIds: [] as string[], nameById: new Map<string, string>() };
-    const nameById = new Map(standings.map(s => [s.playerId, s.playerName]));
-    const ids = standings.slice(0, 8).map(s => s.playerId);
-    if (user && !ids.includes(user.id) && standings.some(s => s.playerId === user.id)) ids.push(user.id);
-    const rows = sortedLeagueGames.map((g, i) => {
-      const snap = computeLeagueStandings(league.id, selectedSid, sortedLeagueGames.slice(0, i + 1));
-      const byId = new Map(snap.map(s => [s.playerId, s.points]));
-      const row: Record<string, number | string> = { idx: i + 1, date: g.date };
-      for (const pid of ids) row[pid] = byId.get(pid) ?? 0;
-      return row;
-    });
-    return { rows, playerIds: ids, nameById };
-  }, [league, sortedLeagueGames, standings, selectedSid, user]);
 
   const tabStyle = (t: Tab): React.CSSProperties => ({
     padding: '10px 18px', fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -534,10 +574,22 @@ export default function LeagueDetailPage() {
       {/* ── Ranking ── */}
       {tab === 'ranking' && (
         <>
+          {leagueCategories.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
+              {['', ...leagueCategories].map(c => (
+                <button key={c || 'all'} onClick={() => setRankCategory(c)}
+                  style={{ padding: '6px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', cursor: 'pointer',
+                    border: `1px solid ${rankCategory === c ? 'var(--black)' : 'var(--grey-200)'}`,
+                    background: rankCategory === c ? 'var(--black)' : '#fff', color: rankCategory === c ? '#fff' : 'var(--grey-500)' }}>
+                  {c || 'Todas'}
+                </button>
+              ))}
+            </div>
+          )}
           {user && (() => {
-            const myIdx = standings.findIndex(s => s.playerId === user.id);
+            const myIdx = viewStandings.findIndex(s => s.playerId === user.id);
             if (myIdx < 0) return null;
-            const me = standings[myIdx];
+            const me = viewStandings[myIdx];
             const delta = trendFor(user.id);
             return (
               <div style={{ display: 'flex', alignItems: 'center', gap: 28, padding: '20px 24px', background: 'var(--black)', color: '#fff', marginBottom: 20, flexWrap: 'wrap' }}>
@@ -545,7 +597,7 @@ export default function LeagueDetailPage() {
                   <RankMedal pos={myIdx + 1} />
                   <div>
                     <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>Tu posición</div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700 }}>#{myIdx + 1} de {standings.length}</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700 }}>#{myIdx + 1} de {viewStandings.length}</div>
                   </div>
                 </div>
                 <div>
@@ -583,7 +635,7 @@ export default function LeagueDetailPage() {
               ))}
             </div>
           )}
-          {standings.length === 0 ? (
+          {viewStandings.length === 0 ? (
             <div style={{ border: '1px dashed var(--grey-300)', padding: '48px 40px', textAlign: 'center', background: 'var(--grey-50)' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', color: 'var(--grey-300)', marginBottom: 8 }}>Sin datos aún</div>
               <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>Al crear un Juego Rápido o Torneo, seleccioná esta liga para que los resultados cuenten aquí.</div>
@@ -596,10 +648,10 @@ export default function LeagueDetailPage() {
                   <div key={i} style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', textAlign: h === 'Jugador' ? 'left' : 'right' }}>{h}</div>
                 ))}
               </div>
-              {standings.map((entry, idx) => {
+              {viewStandings.map((entry, idx) => {
                 const isMe = entry.playerId === user?.id;
                 return (
-                  <div key={entry.playerId} style={{ display: 'grid', gridTemplateColumns: rankGridCols, padding: '12px 20px', borderBottom: idx < standings.length - 1 ? '1px solid var(--grey-100)' : 'none', background: isMe ? 'rgba(26,78,216,0.1)' : 'transparent', alignItems: 'center', minWidth: classTier === 'avanzada' ? 560 : undefined }}>
+                  <div key={entry.playerId} style={{ display: 'grid', gridTemplateColumns: rankGridCols, padding: '12px 20px', borderBottom: idx < viewStandings.length - 1 ? '1px solid var(--grey-100)' : 'none', background: isMe ? 'rgba(26,78,216,0.1)' : 'transparent', alignItems: 'center', minWidth: classTier === 'avanzada' ? 560 : undefined }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><RankMedal pos={idx + 1} /></div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 13, fontWeight: isMe ? 700 : 500, color: 'var(--black)' }}>{entry.playerName}</span>
@@ -666,6 +718,18 @@ export default function LeagueDetailPage() {
       {/* ── Evolución ── */}
       {tab === 'evolution' && (
         <>
+          {leagueCategories.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
+              {['', ...leagueCategories].map(c => (
+                <button key={c || 'all'} onClick={() => setRankCategory(c)}
+                  style={{ padding: '6px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', cursor: 'pointer',
+                    border: `1px solid ${rankCategory === c ? 'var(--black)' : 'var(--grey-200)'}`,
+                    background: rankCategory === c ? 'var(--black)' : '#fff', color: rankCategory === c ? '#fff' : 'var(--grey-500)' }}>
+                  {c || 'Todas'}
+                </button>
+              ))}
+            </div>
+          )}
           {evolutionData.rows.length < 2 ? (
             <div style={{ border: '1px dashed var(--grey-300)', padding: '48px 40px', textAlign: 'center', background: 'var(--grey-50)' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, textTransform: 'uppercase', color: 'var(--grey-300)', marginBottom: 8 }}>Todavía no hay suficientes partidos</div>
@@ -674,7 +738,7 @@ export default function LeagueDetailPage() {
           ) : (
             <div style={{ background: '#fff', border: '1px solid var(--grey-200)', padding: '24px 20px' }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--grey-400)', marginBottom: 20 }}>
-                Puntos acumulados por partido {evolutionData.playerIds.length < standings.length ? '(top 8 + vos)' : ''}
+                Puntos acumulados por partido {evolutionData.playerIds.length < viewStandings.length ? '(top 8 + vos)' : ''}
               </div>
               <ResponsiveContainer width="100%" height={340}>
                 <LineChart data={evolutionData.rows}>
@@ -745,6 +809,18 @@ export default function LeagueDetailPage() {
                   {member.playerId === league.createdBy && <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--grey-400)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Creador</span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {leagueCategories.length > 0 && (amAdmin ? (
+                    <select
+                      value={member.category ?? ''}
+                      onChange={e => handleSetMemberCategory(member.playerId, e.target.value)}
+                      style={{ fontSize: 11, padding: '4px 6px', border: '1px solid var(--grey-200)', background: '#fff', color: member.category ? 'var(--black)' : 'var(--grey-400)' }}
+                    >
+                      <option value="">Sin categoría</option>
+                      {leagueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  ) : member.category ? (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', color: 'var(--grey-600)' }}>{member.category}</span>
+                  ) : null)}
                   <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 8px', background: member.role === 'admin' ? 'rgba(26,78,216,0.18)' : 'var(--grey-50)', color: member.role === 'admin' ? 'var(--black)' : 'var(--grey-400)', border: `1px solid ${member.role === 'admin' ? 'rgba(111,163,255,0.45)' : 'var(--grey-200)'}` }}>
                     {member.role === 'admin' ? 'Admin' : 'Miembro'}
                   </span>
@@ -933,6 +1009,39 @@ export default function LeagueDetailPage() {
               </div>
             </div>
             {brandingError && <div style={{ marginTop: 10, fontSize: 12, color: '#dc2626' }}>{brandingError}</div>}
+          </div>
+
+          {/* Categories */}
+          <div style={card}>
+            <div style={secTitle}>Categorías</div>
+            <p style={{ fontSize: 12, color: 'var(--grey-400)', margin: '0 0 14px' }}>
+              Con categorías, cada jugadora compite en la tabla de su categoría y los Juegos Rápidos de la liga arman los partidos dentro de cada categoría. Asigná la categoría de cada miembro en la pestaña Miembros.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              {cfgCategories.length === 0 && <span style={{ fontSize: 12, color: 'var(--grey-300)' }}>Sin categorías (una sola tabla general)</span>}
+              {cfgCategories.map((c, i) => (
+                <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 600 }}>
+                  {i > 0 && (
+                    <button title="Subir" onClick={() => setCfgCategories(prev => { const n = [...prev]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; })}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--grey-400)', padding: 0, fontSize: 11 }}>◀</button>
+                  )}
+                  {c}
+                  <button title="Quitar" onClick={() => setCfgCategories(prev => prev.filter(x => x !== c))}
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--grey-400)', padding: 0, fontSize: 12 }}>✕</button>
+                </span>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <input style={{ ...inp, width: 200 }} value={newCategory} onChange={e => setNewCategory(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAddCategory(); }} placeholder="Nueva categoría" maxLength={30} />
+              <button onClick={handleAddCategory} style={{ padding: '8px 14px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Agregar</button>
+              {cfgCategories.length === 0 && (
+                <button onClick={() => setCfgCategories(DEFAULT_LEAGUE_CATEGORIES)} style={{ padding: '8px 14px', background: '#fff', color: 'var(--black)', border: '1px solid var(--grey-200)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  Usar Primera – Quinta
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--grey-400)', marginTop: 10 }}>Se guarda con “Guardar cambios”.</div>
           </div>
 
           {/* Info */}

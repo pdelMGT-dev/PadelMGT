@@ -40,6 +40,10 @@ export interface ScoreConfig {
   // 'target' (play until the objective is reached), for backward compat.
   roundLengthMode?: 'target' | 'fixed_time';
   fixedMinutes?: number;  // only when roundLengthMode === 'fixed_time'
+  // Points mode only. 'race' (default): first team to `target` wins.
+  // 'total': exactly `target` points are played in total (A + B = target,
+  // classic americano scoring, e.g. 16 points per match).
+  pointsMode?: 'race' | 'total';
 }
 
 export interface GamePlayer {
@@ -88,6 +92,7 @@ export interface CourtMatch {
   sets?: Array<{ p1: number; p2: number }>; // games per set (traditional mode)
   status: 'pending' | 'completed';
   roundNum?: number;  // for group stage: which RR round this match belongs to (1-indexed)
+  category?: string;  // rotation games played by category (e.g. 'Tercera')
 }
 
 export interface GameRound {
@@ -178,6 +183,15 @@ export interface ActiveGame {
   leagueId?: string;   // player-created league this game belongs to
   seasonId?: string;   // league season this game belongs to
   acceptsFamilyMembers?: boolean; // organizer allows guardians to register family members (minors)
+  // ── Rotation americano (individual mode, large/multi-category groups) ──
+  // When `rotation` is set, rounds come from generateRotationSchedule instead
+  // of the full round-robin: each player plays her quota of games, partners
+  // change every match, and matches only mix players of the same category.
+  rotation?: { rounds: number; avoidConsecutive: boolean };
+  categories?: string[];                    // ordered category names used in this game
+  playerCategory?: Record<string, string>;  // playerId → category
+  playerQuota?: Record<string, number>;     // playerId → games to play (absent = auto/even share)
+  plannedRounds?: GameRound[];              // schedule generated before start, so the preview IS what gets played
 }
 
 export interface KnockoutConfig {
@@ -1052,6 +1066,199 @@ export function generateFixedPairsRounds(
 }
 
 // ---------------------------------------------------------------------------
+// 12b. generateRotationSchedule — americano for large / multi-category groups
+// ---------------------------------------------------------------------------
+// Unlike generateAmericanoRounds (everyone plays every round), this builds a
+// time-boxed night: N rounds × C courts, where each player plays her own quota
+// of games, partners change every match (and ideally never repeat), matches
+// only mix players of the same category, and — optionally — nobody plays two
+// rounds in a row. Randomized greedy with restarts; the best attempt wins.
+
+export interface RotationScheduleOptions {
+  numCourts: number;
+  numRounds: number;
+  avoidConsecutive: boolean;
+  categories?: string[];                   // order used to number courts
+  playerCategory?: Record<string, string>;
+  playerQuota?: Record<string, number>;
+  attempts?: number;
+}
+
+export interface RotationScheduleResult {
+  rounds: GameRound[];
+  gamesByPlayer: Record<string, number>;
+  targetByPlayer: Record<string, number>;
+  shortfall: number;          // sum of games players were owed but didn't get
+  repeatedPartners: number;   // extra times any pair played together
+  emptyCourtSlots: number;    // court-rounds left unused
+}
+
+/** Max games one player can play in the night under the consecutive rule. */
+export function maxRotationGames(numRounds: number, avoidConsecutive: boolean): number {
+  return avoidConsecutive ? Math.ceil(numRounds / 2) : numRounds;
+}
+
+/** Games each player should play: explicit quota, else an even share of the free slots. */
+export function rotationTargets(players: GamePlayer[], opts: RotationScheduleOptions): Record<string, number> {
+  const cap = maxRotationGames(opts.numRounds, opts.avoidConsecutive);
+  const slots = opts.numRounds * opts.numCourts * 4;
+  const quota = opts.playerQuota ?? {};
+  const auto = players.filter(p => quota[p.id] === undefined);
+  const explicitSum = players
+    .filter(p => quota[p.id] !== undefined)
+    .reduce((s, p) => s + Math.min(Math.max(0, quota[p.id]), cap), 0);
+  const autoShare = auto.length > 0 ? Math.floor(Math.max(0, slots - explicitSum) / auto.length) : 0;
+  const out: Record<string, number> = {};
+  for (const p of players) {
+    out[p.id] = quota[p.id] !== undefined ? Math.min(Math.max(0, quota[p.id]), cap) : Math.min(autoShare, cap);
+  }
+  return out;
+}
+
+function rotationPairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+const ROTATION_SPLITS: Array<[[number, number], [number, number]]> = [
+  [[0, 1], [2, 3]],
+  [[0, 2], [1, 3]],
+  [[0, 3], [1, 2]],
+];
+
+function rotationAttempt(
+  players: GamePlayer[],
+  targets: Record<string, number>,
+  opts: RotationScheduleOptions,
+): RotationScheduleResult {
+  const ids = players.map(p => p.id);
+  const catOf = (id: string) => opts.playerCategory?.[id] ?? '';
+  const order = opts.categories ?? [];
+  const catRank = (c: string) => { const i = order.indexOf(c); return i < 0 ? order.length : i; };
+
+  const played: Record<string, number> = {};
+  const last: Record<string, number> = {};
+  for (const id of ids) { played[id] = 0; last[id] = -99; }
+  const partners = new Map<string, number>();
+  const opponents = new Map<string, number>();
+  const rounds: GameRound[] = [];
+  let emptyCourtSlots = 0;
+
+  for (let r = 1; r <= opts.numRounds; r++) {
+    const roundsLeft = opts.numRounds - r + 1;
+    const availLeft = opts.avoidConsecutive ? Math.ceil(roundsLeft / 2) : roundsLeft;
+    const remaining = (id: string) => targets[id] - played[id];
+    const urgent = (id: string) => remaining(id) >= availLeft;
+
+    const eligible = ids.filter(id =>
+      remaining(id) > 0 && !(opts.avoidConsecutive && last[id] === r - 1),
+    );
+    const byCat = new Map<string, string[]>();
+    for (const id of eligible) {
+      const c = catOf(id);
+      if (!byCat.has(c)) byCat.set(c, []);
+      byCat.get(c)!.push(id);
+    }
+
+    // Hand out courts one at a time to the category under most pressure.
+    const alloc = new Map<string, number>();
+    for (let k = 0; k < opts.numCourts; k++) {
+      let best: string | null = null;
+      let bestScore = -Infinity;
+      for (const [c, list] of byCat) {
+        const a = alloc.get(c) ?? 0;
+        if ((a + 1) * 4 > list.length) continue;
+        const need = list.reduce((s, id) => s + remaining(id), 0) - 4 * a;
+        if (need <= 0) continue;
+        const urgentCount = Math.max(0, list.filter(urgent).length - 4 * a);
+        const score = urgentCount * 10 + need + Math.random();
+        if (score > bestScore) { bestScore = score; best = c; }
+      }
+      if (best === null) { emptyCourtSlots += opts.numCourts - k; break; }
+      alloc.set(best, (alloc.get(best) ?? 0) + 1);
+    }
+
+    const courts: CourtMatch[] = [];
+    const cats = [...alloc.keys()].sort((a, b) => catRank(a) - catRank(b));
+    for (const c of cats) {
+      const k = alloc.get(c)!;
+      const rnd = new Map(byCat.get(c)!.map(id => [id, Math.random()]));
+      const chosen = [...byCat.get(c)!]
+        .sort((a, b) =>
+          Number(urgent(b)) - Number(urgent(a)) ||
+          remaining(b) - remaining(a) ||
+          last[a] - last[b] ||
+          rnd.get(a)! - rnd.get(b)!,
+        )
+        .slice(0, k * 4);
+
+      // Split the chosen players into k matches, minimizing repeated partners
+      // (heavily) and repeated opponents (lightly).
+      let bestGroups: Array<[[string, string], [string, string]]> = [];
+      let bestPenalty = Infinity;
+      for (let t = 0; t < 40 && bestPenalty > 0; t++) {
+        const shuffled = fisherYates([...chosen]);
+        const groups: Array<[[string, string], [string, string]]> = [];
+        let penalty = 0;
+        for (let g = 0; g < k; g++) {
+          const four = shuffled.slice(g * 4, g * 4 + 4);
+          let bestSplit: [[string, string], [string, string]] | null = null;
+          let bestSplitPen = Infinity;
+          for (const [[a1, a2], [b1, b2]] of ROTATION_SPLITS) {
+            const p1: [string, string] = [four[a1], four[a2]];
+            const p2: [string, string] = [four[b1], four[b2]];
+            let pen = (partners.get(rotationPairKey(...p1)) ?? 0) * 100
+                    + (partners.get(rotationPairKey(...p2)) ?? 0) * 100;
+            for (const x of p1) for (const y of p2) pen += opponents.get(rotationPairKey(x, y)) ?? 0;
+            if (pen < bestSplitPen) { bestSplitPen = pen; bestSplit = [p1, p2]; }
+          }
+          groups.push(bestSplit!);
+          penalty += bestSplitPen;
+        }
+        if (penalty < bestPenalty) { bestPenalty = penalty; bestGroups = groups; }
+      }
+
+      for (const [p1, p2] of bestGroups) {
+        for (const id of [...p1, ...p2]) { played[id]++; last[id] = r; }
+        partners.set(rotationPairKey(...p1), (partners.get(rotationPairKey(...p1)) ?? 0) + 1);
+        partners.set(rotationPairKey(...p2), (partners.get(rotationPairKey(...p2)) ?? 0) + 1);
+        for (const x of p1) for (const y of p2) {
+          opponents.set(rotationPairKey(x, y), (opponents.get(rotationPairKey(x, y)) ?? 0) + 1);
+        }
+        courts.push({
+          courtNum: courts.length + 1,
+          pair1: p1, pair2: p2,
+          pair1Score: null, pair2Score: null,
+          status: 'pending',
+          ...(c ? { category: c } : {}),
+        });
+      }
+    }
+
+    rounds.push({ num: r, status: 'pending', courts, resting: [] });
+  }
+
+  // A round with no matches could never be completed — drop it.
+  const nonEmpty = rounds.filter(r => r.courts.length > 0).map((r, i) => ({ ...r, num: i + 1 }));
+  const shortfall = ids.reduce((s, id) => s + Math.max(0, targets[id] - played[id]), 0);
+  let repeatedPartners = 0;
+  for (const n of partners.values()) if (n > 1) repeatedPartners += n - 1;
+
+  return { rounds: nonEmpty, gamesByPlayer: played, targetByPlayer: targets, shortfall, repeatedPartners, emptyCourtSlots };
+}
+
+export function generateRotationSchedule(players: GamePlayer[], opts: RotationScheduleOptions): RotationScheduleResult {
+  const targets = rotationTargets(players, opts);
+  let best: RotationScheduleResult | null = null;
+  const score = (r: RotationScheduleResult) => r.shortfall * 1000 + r.repeatedPartners * 50 + r.emptyCourtSlots;
+  for (let i = 0; i < (opts.attempts ?? 80); i++) {
+    const res = rotationAttempt(players, targets, opts);
+    if (!best || score(res) < score(best)) best = res;
+    if (best.shortfall === 0 && best.repeatedPartners === 0) break;
+  }
+  return best!;
+}
+
+// ---------------------------------------------------------------------------
 // 13. startGame
 // ---------------------------------------------------------------------------
 
@@ -1063,6 +1270,33 @@ export function startGame(game: ActiveGame): ActiveGame {
     rounds = generateFixedPairsRounds(game.players, game.courts, game.maxRoundsPerTeam).map((r, i) =>
       i === 0 ? { ...r, status: 'active' as const } : r,
     );
+    return {
+      ...game,
+      status: 'live',
+      rounds,
+      currentRound: 1,
+      standings: calculateStandings({ ...game, rounds: [] }),
+    };
+  }
+
+  // Rotation americano: play the schedule the organizer already previewed in
+  // the lobby (or generate one now if she never did), scores reset.
+  if (game.pairType !== 'parejas' && (game.rotation || (game.plannedRounds?.length ?? 0) > 0)) {
+    const planned = (game.plannedRounds?.length ?? 0) > 0
+      ? game.plannedRounds!
+      : generateRotationSchedule(game.players, {
+          numCourts: game.courts,
+          numRounds: game.rotation!.rounds,
+          avoidConsecutive: game.rotation!.avoidConsecutive,
+          categories: game.categories,
+          playerCategory: game.playerCategory,
+          playerQuota: game.playerQuota,
+        }).rounds;
+    rounds = planned.map((r, i) => ({
+      ...r,
+      status: i === 0 ? ('active' as const) : ('pending' as const),
+      courts: r.courts.map(c => ({ ...c, pair1Score: null, pair2Score: null, status: 'pending' as const })),
+    }));
     return {
       ...game,
       status: 'live',
