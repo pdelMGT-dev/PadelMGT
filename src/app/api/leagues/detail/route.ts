@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
     defaultPointsLoss: (l.default_points_loss as number) ?? 0,
     logoUrl: (l.logo_url as string) || undefined,
     bannerUrl: (l.banner_url as string) || undefined,
+    categories: Array.isArray(l.categories) ? (l.categories as string[]) : undefined,
   };
 
   const members = ((memberRows ?? []) as Record<string, unknown>[]).map(m => ({
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest) {
     playerName: (m.player_name as string) ?? '',
     role: ((m.role as string) === 'admin' ? 'admin' : 'member') as 'admin' | 'member',
     joinedAt: (m.joined_at as string) ?? '',
+    category: (m.category as string) || undefined,
   }));
 
   const seasons = ((seasonRows ?? []) as Record<string, unknown>[]).map(s => ({

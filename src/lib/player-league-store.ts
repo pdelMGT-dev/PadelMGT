@@ -19,7 +19,10 @@ export interface PlayerLeague {
   defaultPointsLoss: number;
   logoUrl?: string;
   bannerUrl?: string;
+  categories?: string[];   // e.g. ['Primera','Segunda','Tercera','Cuarta','Quinta']
 }
+
+export const DEFAULT_LEAGUE_CATEGORIES = ['Primera', 'Segunda', 'Tercera', 'Cuarta', 'Quinta'];
 
 export interface LeagueSeason {
   id: string;
@@ -40,6 +43,7 @@ export interface LeagueMember {
   playerName: string;
   role: 'admin' | 'member';
   joinedAt: string;
+  category?: string;
 }
 
 export interface LeagueJoinRequest {
@@ -102,22 +106,32 @@ export interface MyLeagueSummary {
   logoUrl?: string;
 }
 
-async function pushLeagueBundle(leagueId: string): Promise<void> {
-  if (typeof window === 'undefined') return;
+// Last in-flight push per league. fetchLeagueDetailFromSupabase waits on it so
+// a refresh right after an edit can't read the server before the edit lands.
+const inflightPush = new Map<string, Promise<void>>();
+
+function pushLeagueBundle(leagueId: string): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
   const league = getPlayerLeague(leagueId);
-  if (!league) return;
-  try {
-    await fetch('/api/leagues', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        op: 'sync',
-        leagues: [league],
-        members: getLeagueMembers(leagueId),
-        seasons: getLeagueSeasons(leagueId),
-      }),
-    });
-  } catch { /* fire-and-forget */ }
+  if (!league) return Promise.resolve();
+  const prev = inflightPush.get(leagueId) ?? Promise.resolve();
+  const p = prev.then(async () => {
+    try {
+      await fetch('/api/leagues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          op: 'sync',
+          leagues: [getPlayerLeague(leagueId) ?? league],
+          members: getLeagueMembers(leagueId),
+          seasons: getLeagueSeasons(leagueId),
+        }),
+      });
+    } catch { /* fire-and-forget */ }
+  });
+  inflightPush.set(leagueId, p);
+  p.finally(() => { if (inflightPush.get(leagueId) === p) inflightPush.delete(leagueId); });
+  return p;
 }
 
 /** Push every league the player created (with members + seasons) to Supabase.
@@ -196,6 +210,7 @@ export async function fetchLeagueByCodeFromSupabase(code: string): Promise<Playe
       defaultPointsLoss: d.default_points_loss ?? 0,
       logoUrl: d.logo_url ?? undefined,
       bannerUrl: d.banner_url ?? undefined,
+      categories: Array.isArray(d.categories) ? d.categories : undefined,
     };
   } catch { return null; }
 }
@@ -219,6 +234,7 @@ export interface LeagueDetail {
 export async function fetchLeagueDetailFromSupabase(leagueId: string): Promise<LeagueDetail | null> {
   if (typeof window === 'undefined') return null;
   try {
+    await inflightPush.get(leagueId);
     const res = await fetch(`/api/leagues/detail?id=${encodeURIComponent(leagueId)}`);
     if (!res.ok) return null;
     return await res.json() as LeagueDetail;
@@ -568,6 +584,13 @@ export function updateMemberRole(leagueId: string, playerId: string, role: 'admi
   const all = memberStore.load();
   const idx = all.findIndex(m => m.leagueId === leagueId && m.playerId === playerId);
   if (idx >= 0) { all[idx] = { ...all[idx], role }; memberStore.persist(all); pushLeagueBundle(leagueId).catch(() => {}); }
+}
+
+export function updateMemberCategory(leagueId: string, playerId: string, category: string | undefined): void {
+  const all = memberStore.load();
+  const idx = all.findIndex(m => m.leagueId === leagueId && m.playerId === playerId);
+  // '' (not undefined) so the sync sends it and clears the stored category.
+  if (idx >= 0) { all[idx] = { ...all[idx], category: category || '' }; memberStore.persist(all); pushLeagueBundle(leagueId).catch(() => {}); }
 }
 
 // Join Requests

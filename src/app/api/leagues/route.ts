@@ -20,10 +20,12 @@ interface LeagueIn {
   isOpen?: boolean; isPublic?: boolean;
   defaultPointsWin?: number; defaultPointsDraw?: number; defaultPointsLoss?: number;
   createdAt?: string;
+  categories?: string[];
 }
 interface MemberIn {
   id: string; leagueId: string; playerId: string; playerName?: string;
   role?: 'admin' | 'member'; joinedAt?: string;
+  category?: string;   // '' clears it; absent leaves the stored value untouched
 }
 interface SeasonIn {
   id: string; leagueId: string; name: string; startDate?: string; endDate?: string;
@@ -216,13 +218,22 @@ async function handleSync(svc: Svc, request: NextRequest, body: Body): Promise<N
     }
   }
 
+  // Co-admins may edit an existing league too (config, categories, members) —
+  // previously only the creator could, so co-admin edits were silently dropped.
+  const adminOf = new Set<string>();
+  if (pushedIds.length) {
+    const { data: adminRows } = await svc.from('league_members').select('league_id')
+      .in('league_id', pushedIds).in('player_id', callerIds).eq('role', 'admin');
+    for (const r of (adminRows ?? []) as { league_id: string }[]) adminOf.add(r.league_id);
+  }
+
   const leagues: Array<LeagueIn & { effectiveCreatedBy: string }> = [];
   const creatorRemap = new Map<string, string>(); // old local creator id → canonical
   for (const l of pushed) {
     if (existingById.has(l.id)) {
       const owner = existingById.get(l.id);
-      if (owner && owns.has(owner)) leagues.push({ ...l, effectiveCreatedBy: owner });
-      // else: not the owner → silently skip (defensive; normal clients never hit this)
+      if (owner && (owns.has(owner) || adminOf.has(l.id))) leagues.push({ ...l, effectiveCreatedBy: owner });
+      // else: not the owner/admin → silently skip (defensive; normal clients never hit this)
     } else {
       leagues.push({ ...l, effectiveCreatedBy: owns.has(l.createdBy) ? l.createdBy : canonicalId });
       if (!owns.has(l.createdBy) && l.createdBy) creatorRemap.set(l.createdBy, canonicalId);
@@ -264,6 +275,22 @@ async function handleSync(svc: Svc, request: NextRequest, body: Body): Promise<N
       ...(m.joinedAt ? { joined_at: m.joinedAt } : {}),
     })), { onConflict: 'league_id,player_id' });
     if (error) console.warn('[leagues sync] members', error.message);
+  }
+
+  // Categories are written with targeted updates rather than in the bulk
+  // upserts above: a bulk upsert nulls a column for any row that omits it,
+  // which would wipe categories pushed by an older client.
+  for (const l of leagues) {
+    if (!Array.isArray(l.categories)) continue;
+    const cats = l.categories.map(c => String(c).trim()).filter(Boolean).slice(0, 20);
+    const { error } = await svc.from('player_leagues').update({ categories: cats }).eq('id', l.id);
+    if (error) console.warn('[leagues sync] categories', error.message);
+  }
+  for (const m of members) {
+    if (m.category === undefined) continue;
+    const { error } = await svc.from('league_members').update({ category: m.category || null })
+      .eq('league_id', m.leagueId).eq('player_id', m.playerId);
+    if (error) console.warn('[leagues sync] member category', error.message);
   }
 
   if (seasons.length) {
