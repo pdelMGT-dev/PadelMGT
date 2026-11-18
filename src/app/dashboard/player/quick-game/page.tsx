@@ -19,7 +19,8 @@ import type { RankingEntry } from '@/lib/ranking-store';
 import { getPlayerClubs, syncMyClubs } from '@/lib/club-membership-store';
 import { getSAClubs } from '@/lib/superadmin-data';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { getMyLeagues, getLeagueSeasons, getActiveSeason, type PlayerLeague, type LeagueSeason } from '@/lib/player-league-store';
+import { getMyLeagues, getLeagueSeasons, getActiveSeason, fetchLeagueDetailFromSupabase, DEFAULT_LEAGUE_CATEGORIES, type PlayerLeague, type LeagueSeason } from '@/lib/player-league-store';
+import { maxRotationGames } from '@/lib/game-engine';
 import { getFamilyMembers, fetchFamilyMembersFromSupabase, lookupFamilyMember, RELATION_LABELS, type FamilyMember } from '@/lib/family-store';
 import { createApprovalRequest } from '@/lib/family-approval-store';
 
@@ -288,6 +289,14 @@ export default function QuickGamePage() {
   const [pairType, setPairType] = useState<PairType | null>(null);
   // Pareja fija: rondas que juega cada equipo (null = round robin completo)
   const [roundsPerTeam, setRoundsPerTeam] = useState<number | null>(null);
+  // Intercambio: rotation night (fixed number of rounds, each player with her
+  // own quota of games) instead of the full round-robin where everyone plays
+  // every round. Categories keep matches within the same category.
+  const [useRotation, setUseRotation]         = useState(false);
+  const [rotationRounds, setRotationRounds]   = useState(8);
+  const [avoidConsecutive, setAvoidConsecutive] = useState(true);
+  const [useCategories, setUseCategories]     = useState(false);
+  const [categoriesText, setCategoriesText]   = useState('');
 
   // League (optional)
   const [myLeagues, setMyLeagues]         = useState<PlayerLeague[]>([]);
@@ -303,6 +312,7 @@ export default function QuickGamePage() {
   const [tiebreak, setTiebreak]         = useState(7);
   const [deuceRule, setDeuceRule]       = useState<DeuceRule>('gold');
   const [pointTarget, setPointTarget]   = useState(16);
+  const [pointsMode, setPointsMode]     = useState<'race' | 'total'>('total');
   // Cómo termina cada ronda — orthogonal to scoreType: 'target' plays until
   // the objective is reached (Tradicional/Por Puntos as configured above);
   // 'fixed_time' cuts every round off at a fixed clock and the score is
@@ -328,7 +338,28 @@ export default function QuickGamePage() {
     setLeagueSeasons(ss);
     const active = getActiveSeason(selectedLeagueId);
     setSelectedSeasonId(active?.id ?? ss[ss.length - 1]?.id ?? '');
+    // Authoritative seasons + the league's categories (a league with
+    // categories pre-fills a category-based rotation).
+    let alive = true;
+    fetchLeagueDetailFromSupabase(selectedLeagueId).then(detail => {
+      if (!alive || !detail) return;
+      setLeagueSeasons(detail.seasons);
+      const remoteActive = detail.seasons.find(s => s.status === 'active');
+      setSelectedSeasonId(prev => prev || remoteActive?.id || detail.seasons[detail.seasons.length - 1]?.id || '');
+      const cats = detail.league.categories ?? [];
+      if (cats.length > 0) {
+        setCategoriesText(cats.join(', '));
+        setUseCategories(true);
+        setUseRotation(true);
+      }
+    }).catch(() => {});
+    return () => { alive = false; };
   }, [selectedLeagueId]);
+
+  const parsedCategories = useMemo(
+    () => [...new Set(categoriesText.split(/[,\n]/).map(s => s.trim()).filter(Boolean))].slice(0, 12),
+    [categoriesText],
+  );
 
   // Load friends on step 3
   useEffect(() => {
@@ -467,6 +498,8 @@ export default function QuickGamePage() {
     setSearchQuery(''); setSearchResults([]); setFriendList([]);
     setMyFamily([]); setFamilyIdInput(''); setFamilyLookupMsg(''); setFamilyLooking(false);
     setPairType(null); setRoundsPerTeam(null);
+    setUseRotation(false); setRotationRounds(8); setAvoidConsecutive(true);
+    setUseCategories(false); setCategoriesText(''); setPointsMode('total');
     setCourts(1); setScoreType('traditional'); setSetsPerMatch(1);
     setGamesPerSet(6); setTiebreak(7); setDeuceRule('gold'); setPointTarget(16);
     setRoundLengthMode('target'); setFixedMinutes(15);
@@ -520,10 +553,12 @@ export default function QuickGamePage() {
     });
 
     const scoreConfig: ScoreConfig = scoreType === 'points'
-      ? { type: 'points', target: pointTarget, roundLengthMode, fixedMinutes: roundLengthMode === 'fixed_time' ? fixedMinutes : undefined }
+      ? { type: 'points', target: pointTarget, pointsMode, roundLengthMode, fixedMinutes: roundLengthMode === 'fixed_time' ? fixedMinutes : undefined }
       : { type: 'traditional', setsPerMatch, gamesPerSet, tiebreak, deuce: deuceRule === 'traditional' ? 'ventaja' : 'oro', roundLengthMode, fixedMinutes: roundLengthMode === 'fixed_time' ? fixedMinutes : undefined };
 
     const enginePairType = pairType === 'fixed' ? 'parejas' : 'individual';
+    const rotationOn = enginePairType === 'individual' && useRotation;
+    const gameCategories = rotationOn && useCategories ? parsedCategories : [];
     const derivedFormat: 'americano' | 'mexicano' = 'americano'; // JR always uses americano rotation internally
     const clubName = resolvedClubName();
     const cityName = resolvedCity();
@@ -549,6 +584,8 @@ export default function QuickGamePage() {
       leagueId: selectedLeagueId || undefined,
       seasonId: selectedSeasonId || undefined,
       maxRoundsPerTeam: enginePairType === 'parejas' && roundsPerTeam ? roundsPerTeam : undefined,
+      rotation: rotationOn ? { rounds: rotationRounds, avoidConsecutive } : undefined,
+      categories: gameCategories.length > 0 ? gameCategories : undefined,
     });
 
     incrementUsage('games');
@@ -1266,7 +1303,7 @@ export default function QuickGamePage() {
         <div style={card}>
           <div style={secTitle}>Cantidad máxima de jugadores</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {[4, 6, 8, 10, 12, 16, 20, 24, 28, 32].map(n => {
+            {[4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 40, 48, 64, 80, 100].map(n => {
               const tooFew    = n < invitedList.length + 1;
               const planLimit = getPlayerLimits().maxPlayersPerGame;
               const locked    = planLimit !== -1 && n > planLimit;
@@ -1543,11 +1580,64 @@ export default function QuickGamePage() {
         </div>
 
         {pairType === 'exchange' && (
-          <div style={{ padding: '16px 20px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 12, color: 'var(--grey-600)', lineHeight: 1.6 }}>
-            {level === 'all'
-              ? 'Nivel mixto: se empareja el jugador con mejor ranking con el de peor ranking para equilibrar cada pareja.'
-              : 'Nivel homogéneo: el sistema asigna las parejas aleatoriamente en cada ronda.'}
-          </div>
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              {([
+                { on: false, title: 'Todas contra todas', desc: 'Todas juegan todas las rondas, rotando de pareja. Ideal para grupos chicos (4–12).' },
+                { on: true,  title: 'Rotación por rondas', desc: 'Defines cuántas rondas hay; cada jugadora juega su cupo (ej. 5 o 2 juegos), sin repetir compañera. Ideal para grupos grandes y por categorías.' },
+              ]).map(o => (
+                <button key={o.title} onClick={() => setUseRotation(o.on)} style={{ padding: '16px', textAlign: 'left', cursor: 'pointer', border: `2px solid ${useRotation === o.on ? 'var(--black)' : 'var(--grey-200)'}`, background: useRotation === o.on ? 'var(--black)' : '#fff', color: useRotation === o.on ? '#fff' : 'var(--black)' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>{o.title}</div>
+                  <div style={{ fontSize: 11, color: useRotation === o.on ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)', lineHeight: 1.5 }}>{o.desc}</div>
+                </button>
+              ))}
+            </div>
+
+            {!useRotation && (
+              <div style={{ padding: '16px 20px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)', fontSize: 12, color: 'var(--grey-600)', lineHeight: 1.6 }}>
+                {level === 'all'
+                  ? 'Nivel mixto: se empareja el jugador con mejor ranking con el de peor ranking para equilibrar cada pareja.'
+                  : 'Nivel homogéneo: el sistema asigna las parejas aleatoriamente en cada ronda.'}
+              </div>
+            )}
+
+            {useRotation && (
+              <div style={card}>
+                <div style={secTitle}>Rotación</div>
+                <label style={lbl}>Cantidad de rondas</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                  <button onClick={() => setRotationRounds(r => Math.max(1, r - 1))} style={{ width: 40, height: 40, fontSize: 18, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff' }}>−</button>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, minWidth: 40, textAlign: 'center' }}>{rotationRounds}</div>
+                  <button onClick={() => setRotationRounds(r => Math.min(30, r + 1))} style={{ width: 40, height: 40, fontSize: 18, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--grey-200)', background: '#fff' }}>+</button>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--grey-400)', marginBottom: 16 }}>
+                  Ej: 6:00 a 9:00 con rondas de 15 min = 12 rondas. El cupo de juegos de cada jugadora (por ej. 5 o 2) lo defines después, al cargar la lista.
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 16 }}>
+                  <input type="checkbox" checked={avoidConsecutive} onChange={e => setAvoidConsecutive(e.target.checked)} />
+                  <span style={{ fontSize: 13 }}>Nadie juega dos rondas seguidas <span style={{ color: 'var(--grey-400)' }}>(máx. {maxRotationGames(rotationRounds, true)} juegos por jugadora)</span></span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: useCategories ? 10 : 0 }}>
+                  <input type="checkbox" checked={useCategories} onChange={e => setUseCategories(e.target.checked)} />
+                  <span style={{ fontSize: 13 }}>Jugar por categorías <span style={{ color: 'var(--grey-400)' }}>(cada partido solo con jugadoras de la misma categoría)</span></span>
+                </label>
+                {useCategories && (
+                  <>
+                    <input style={inp} value={categoriesText} onChange={e => setCategoriesText(e.target.value)} placeholder="Primera, Segunda, Tercera, Cuarta, Quinta" />
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                      {parsedCategories.map(c => (
+                        <span key={c} style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', background: 'var(--grey-50)', border: '1px solid var(--grey-200)' }}>{c}</span>
+                      ))}
+                      {parsedCategories.length === 0 && (
+                        <button onClick={() => setCategoriesText(DEFAULT_LEAGUE_CATEGORIES.join(', '))} style={{ fontSize: 11, padding: '4px 10px', border: '1px solid var(--grey-200)', background: '#fff', cursor: 'pointer' }}>Usar Primera – Quinta</button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </>
         )}
 
         {pairType === 'fixed' && (
@@ -1595,8 +1685,8 @@ export default function QuickGamePage() {
         <div style={card}>
           <div style={secTitle}>Canchas disponibles</div>
           <label style={lbl}>¿Cuántas canchas disponibles?</label>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-            {[1, 2, 3, 4, 5].map(n => (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
               <button key={n} onClick={() => setCourts(n)}
                 style={{ width: 52, height: 48, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer', border: `2px solid ${courts === n ? 'var(--black)' : 'var(--grey-200)'}`, background: courts === n ? 'var(--black)' : '#fff', color: courts === n ? '#fff' : 'var(--black)' }}>
                 {n}
@@ -1678,15 +1768,31 @@ export default function QuickGamePage() {
 
           {scoreType === 'points' && (
             <div>
-              <label style={lbl}>Puntaje objetivo</label>
+              <label style={lbl}>Modalidad</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                {([
+                  { key: 'race' as const,  title: 'Primero a X', desc: 'Gana la pareja que llega primero al puntaje.' },
+                  { key: 'total' as const, title: 'X puntos totales', desc: 'Se juegan X puntos en total (A + B = X). Americano clásico.' },
+                ]).map(o => (
+                  <button key={o.key} onClick={() => setPointsMode(o.key)} style={{ padding: '12px', textAlign: 'left', cursor: 'pointer', border: `2px solid ${pointsMode === o.key ? 'var(--black)' : 'var(--grey-200)'}`, background: pointsMode === o.key ? 'var(--black)' : '#fff', color: pointsMode === o.key ? '#fff' : 'var(--black)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 3 }}>{o.title}</div>
+                    <div style={{ fontSize: 11, color: pointsMode === o.key ? 'rgba(255,255,255,0.55)' : 'var(--grey-400)' }}>{o.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <label style={lbl}>Puntaje</label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                {[16, 18, 20, 22, 24].map(n => (
+                {[16, 18, 20, 21, 22, 24, 32].map(n => (
                   <button key={n} onClick={() => setPointTarget(n)} style={{ width: 58, height: 48, border: `2px solid ${pointTarget === n ? 'var(--black)' : 'var(--grey-200)'}`, background: pointTarget === n ? 'var(--black)' : '#fff', color: pointTarget === n ? '#fff' : 'var(--black)', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, cursor: 'pointer' }}>
                     {n}
                   </button>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>El primer equipo en llegar a {pointTarget} puntos gana el set.</div>
+              <div style={{ fontSize: 11, color: 'var(--grey-400)' }}>
+                {pointsMode === 'total'
+                  ? `Cada partido se juega a ${pointTarget} puntos totales: el marcador siempre suma ${pointTarget} (ej. ${Math.ceil(pointTarget / 2) + 1}–${pointTarget - Math.ceil(pointTarget / 2) - 1}).`
+                  : `El primer equipo en llegar a ${pointTarget} puntos gana el set.`}
+              </div>
             </div>
           )}
         </div>

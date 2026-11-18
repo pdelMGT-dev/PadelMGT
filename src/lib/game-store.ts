@@ -130,6 +130,8 @@ export function createQuickGame(params: {
   leagueId?: string;
   seasonId?: string;
   maxRoundsPerTeam?: number;
+  rotation?: ActiveGame['rotation'];
+  categories?: string[];
 }): ActiveGame {
   const game: ActiveGame = {
     id: generateId(),
@@ -159,6 +161,8 @@ export function createQuickGame(params: {
     leagueId: params.leagueId,
     seasonId: params.seasonId,
     maxRoundsPerTeam: params.maxRoundsPerTeam,
+    ...(params.rotation ? { rotation: params.rotation } : {}),
+    ...(params.categories ? { categories: params.categories } : {}),
   };
   saveGame(game);
   return game;
@@ -225,6 +229,10 @@ export function cloneQuickGame(
     creatorId: opts.creatorId,
     leagueId: source.leagueId,
     seasonId: source.seasonId,
+    ...(source.rotation ? { rotation: source.rotation } : {}),
+    ...(source.categories ? { categories: source.categories } : {}),
+    ...(opts.copyRoster && source.playerCategory ? { playerCategory: source.playerCategory } : {}),
+    ...(opts.copyRoster && source.playerQuota ? { playerQuota: source.playerQuota } : {}),
   };
   saveGame(game);
   return game;
