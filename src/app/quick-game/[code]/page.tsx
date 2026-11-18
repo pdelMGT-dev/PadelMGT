@@ -10,6 +10,7 @@ import { submitJoinRequest, getMyJoinRequest, syncMyJoinRequestFromSupabase, typ
 import { getRankingHistoryForGame, fetchRankingHistoryForGameFromSupabase, type RankingEntry } from '@/lib/ranking-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import MatchSetResult from '@/components/MatchSetResult';
+import PlayerAgendas from '@/components/PlayerAgendas';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -471,6 +472,19 @@ export default function PublicQuickGamePage({ params }: { params: Promise<{ code
               <span style={{ fontWeight: 600, fontSize: 13 }}>⏳ Solicitud enviada — esperando aprobación del organizador.</span>
             </div>
           )}
+
+          {/* ── TU AGENDA: rotation nights — each player finds her own matches ── */}
+          {game.rotation && (() => {
+            const agendaRounds = game.rounds.length > 0 ? game.rounds : (game.plannedRounds ?? []);
+            if (agendaRounds.length === 0) return null;
+            return (
+              <div style={{ marginBottom: 32, background: '#fff', border: '1px solid #e8e8e8', padding: '20px 24px' }}>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em', margin: '0 0 6px' }}>TU AGENDA</h2>
+                <p style={{ fontSize: 13, color: 'var(--grey-400)', margin: '0 0 14px' }}>Buscá tu nombre para ver tus partidos: ronda, hora, cancha, compañera y rivales.</p>
+                <PlayerAgendas game={game} rounds={agendaRounds} highlightId={currentUser?.id} />
+              </div>
+            );
+          })()}
 
           {/* Pending: player list */}
           {isPending && (

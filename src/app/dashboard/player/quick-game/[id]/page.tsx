@@ -27,6 +27,9 @@ import type { RankingEntry } from '@/lib/ranking-store';
 import { loadJoinRequests, approveJoinRequest, rejectJoinRequest, syncJoinRequestsFromSupabase, type JoinRequest } from '@/lib/join-request-store';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import MatchSetResult from '@/components/MatchSetResult';
+import RotationPlanner, { isPlanStale } from '@/components/RotationPlanner';
+import PlayerAgendas from '@/components/PlayerAgendas';
+import { roundStartTime } from '@/lib/rotation-agenda';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,7 +48,9 @@ const STATUS_INFO: Record<string, { label: string; color: string; bg: string }> 
 };
 
 function scoreConfigLabel(cfg: ScoreConfig): string {
-  const base = cfg.type === 'points' ? `Por Puntos · ${cfg.target} pts` : `Tradicional · ${cfg.setsPerMatch ?? 3} sets`;
+  const base = cfg.type === 'points'
+    ? (cfg.pointsMode === 'race' ? `Primero a ${cfg.target} pts` : `${cfg.target} pts totales`)
+    : `Tradicional · ${cfg.setsPerMatch ?? 3} sets`;
   if (cfg.roundLengthMode === 'fixed_time' && cfg.fixedMinutes) return `${base} · ${cfg.fixedMinutes} min/ronda`;
   return base;
 }
@@ -230,6 +235,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   const [dropOver, setDropOver]   = useState<string | null>(null);
 
   const [screenW, setScreenW] = useState(1400);
+  const [standCategory, setStandCategory] = useState('');
 
   // ── User loaded via useCurrentUser hook ──────────────────────────────────
 
@@ -396,7 +402,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     return g.players;
   }
 
-  const pairsFullyAssigned = useMemo(() => {
+  const pairsFullyAssigned = (() => {
     if (game.pairType !== 'parejas') return true;
     const usedIds = new Set<string>();
     for (const pa of pairAssignments) {
@@ -406,15 +412,20 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       usedIds.add(pa.player2Id);
     }
     return usedIds.size === game.maxPlayers;
-  }, [pairAssignments, game.pairType, game.maxPlayers]);
+  })();
 
-  const canStart = isPending && allConfirmed && (game.pairType !== 'parejas' || (pairsFullyAssigned && pairsLocked));
+  const isRotation = !!game.rotation && game.pairType !== 'parejas';
+  const planReady = (game.plannedRounds?.length ?? 0) > 0 && !isPlanStale(game);
+  const canStart = isRotation
+    ? isPending && planReady
+    : isPending && allConfirmed && (game.pairType !== 'parejas' || (pairsFullyAssigned && pairsLocked));
 
   // Full schedule (all rounds × courts) — visible from the moment pairs are
   // locked, not revealed round-by-round. Once the game is live/finished,
   // game.rounds already holds the real generated schedule; before that we
   // compute the same preview from the locked pair assignments.
-  const scheduleRounds = useMemo(() => {
+  const scheduleRounds = (() => {
+    if (isRotation) return game.rounds.length > 0 ? game.rounds : planReady ? (game.plannedRounds ?? []) : [];
     if (game.pairType !== 'parejas') return [];
     if (game.rounds.length > 0) return game.rounds;
     if (!pairsLocked || !pairsFullyAssigned) return [];
@@ -426,7 +437,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       if (p2) orderedPlayers.push(p2);
     }
     return generateFixedPairsRounds(orderedPlayers, game.courts, game.maxRoundsPerTeam);
-  }, [game.pairType, game.rounds, game.players, game.courts, game.maxRoundsPerTeam, pairsLocked, pairsFullyAssigned, pairAssignments]);
+  })();
 
   const currentRound = game.rounds.find(r => r.num === game.currentRound) ?? null;
   const currentRoundComplete = currentRound ? isRoundComplete(currentRound) : false;
@@ -439,6 +450,26 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
 
   const isPointsMode = game.scoreConfig.type === 'points';
   const ptTarget = isPointsMode ? (game.scoreConfig.target ?? 24) : null;
+  // Legacy points games (no pointsMode) always auto-completed to the target, i.e. total points.
+  const isTotalPoints = isPointsMode && game.scoreConfig.pointsMode !== 'race';
+
+  // Rotation games by category: each category is its own table.
+  const gameCategories = game.categories ?? [];
+  const shownStandings = standCategory && gameCategories.length > 0
+    ? game.standings.filter(st => game.playerCategory?.[st.playerId] === standCategory)
+    : game.standings;
+  const standingsCategoryChips = gameCategories.length > 0 && game.pairType !== 'parejas' ? (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+      {['', ...gameCategories].map(c => (
+        <button key={c || 'all'} onClick={() => setStandCategory(c)}
+          style={{ padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            border: `1px solid ${standCategory === c ? 'var(--black)' : 'var(--grey-200)'}`,
+            background: standCategory === c ? 'var(--black)' : '#fff', color: standCategory === c ? '#fff' : 'var(--grey-500)' }}>
+          {c || 'Todas'}
+        </button>
+      ))}
+    </div>
+  ) : null;
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -659,6 +690,10 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     const raw = scoreInputs[key] ?? { p1: '', p2: '' };
     const p1 = Math.max(0, parseInt(raw.p1 || '0', 10));
     const p2 = Math.max(0, parseInt(raw.p2 || '0', 10));
+    if (isTotalPoints && ptTarget !== null && p1 + p2 !== ptTarget) {
+      showToast(`El marcador debe sumar ${ptTarget} puntos (ahora suma ${p1 + p2}).`);
+      return;
+    }
     const sets = !isPointsMode
       ? (setInputs[key] ?? [])
           .map(s => ({ p1: parseInt(s.p1 || '0', 10), p2: parseInt(s.p2 || '0', 10) }))
@@ -756,7 +791,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   function handleP1Change(key: string, val: string) {
     setScoreInputs(prev => {
       const current = prev[key] ?? { p1: '', p2: '' };
-      if (isPointsMode && ptTarget !== null) {
+      if (isTotalPoints && ptTarget !== null) {
         const n = parseInt(val, 10);
         if (isNaN(n) || n < 0) return { ...prev, [key]: { ...current, p1: val } };
         const clamped = Math.min(n, ptTarget);
@@ -769,7 +804,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   function handleP2Change(key: string, val: string) {
     setScoreInputs(prev => {
       const current = prev[key] ?? { p1: '', p2: '' };
-      if (isPointsMode && ptTarget !== null) {
+      if (isTotalPoints && ptTarget !== null) {
         const n = parseInt(val, 10);
         if (isNaN(n) || n < 0) return { ...prev, [key]: { ...current, p2: val } };
         const clamped = Math.min(n, ptTarget);
@@ -800,8 +835,21 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
     return game?.players.find(p => p.id === pid)?.name ?? pid;
   }
 
+  // First names, unless two players share one (e.g. several "Laura") — then full names.
+  const dupFirstNames = (() => {
+    const seen = new Map<string, number>();
+    for (const p of game?.players ?? []) {
+      const f = p.name.split(' ')[0].toLowerCase();
+      seen.set(f, (seen.get(f) ?? 0) + 1);
+    }
+    return new Set([...seen].filter(([, n]) => n > 1).map(([f]) => f));
+  })();
   function getPairNames(pids: string[]) {
-    return pids.map(pid => getName(pid).split(' ')[0]).join(' / ');
+    return pids.map(pid => {
+      const full = getName(pid);
+      const first = full.split(' ')[0];
+      return dupFirstNames.has(first.toLowerCase()) ? full : first;
+    }).join(' / ');
   }
 
   function updatePairAssignment(idx: number, field: 'player1Id' | 'player2Id', playerId: string) {
@@ -924,7 +972,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
   }
 
   // Build auto-preview for individual mode (best + worst pairing)
-  const autoPreviewPairs = useMemo(() => {
+  const autoPreviewPairs = (() => {
     if (game.pairType !== 'individual' || game.players.length < 4) return [];
     const sorted = [...game.players].sort((a, b) => b.ranking - a.ranking);
     const pairs: [GamePlayer, GamePlayer][] = [];
@@ -933,7 +981,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       pairs.push([sorted[hi], sorted[lo]]);
     }
     return pairs;
-  }, [game.players, game.pairType]);
+  })();
 
   // ── Render helpers ────────────────────────────────────────────────────────
 
@@ -1379,8 +1427,8 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             </div>
           )}
 
-          {/* Confirmed players (from game.players) */}
-          {game.players.map(p => {
+          {/* Confirmed players (from game.players) — rotation games manage the roster in the planner below */}
+          {!isRotation && game.players.map(p => {
             const isThisCreator = p.id === game.creatorId || p.isCreator;
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--grey-100)' }}>
@@ -1591,8 +1639,21 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
+      {/* ── SECTION B (rotation): Lista, categorías, cupos y cronograma ───── */}
+      {isPending && isRotation && (
+        <div style={cardStyle}>
+          <div style={secTitle}>Rotación — Lista y Cronograma</div>
+          <RotationPlanner
+            game={game}
+            canEdit={canManage}
+            onChange={g => { saveGame(g); setGame(g); }}
+            showToast={showToast}
+          />
+        </div>
+      )}
+
       {/* ── SECTION B: Armar Equipos ──────────────────────────────────────── */}
-      {isPending && allConfirmed && (
+      {isPending && allConfirmed && !isRotation && (
         <div style={cardStyle}>
           <div style={secTitle}>Armar Equipos</div>
 
@@ -1843,29 +1904,35 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             <div style={secTitle}>
               Cronograma Completo {game.status === 'created' || game.status === 'starting_soon' ? '(vista previa)' : ''}
             </div>
-            <button
-              onClick={handleShareCronograma}
-              style={{ padding: '8px 16px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
-            >
-              ⬇ Descargar / Compartir
-            </button>
+            {!isRotation && (
+              <button
+                onClick={handleShareCronograma}
+                style={{ padding: '8px 16px', background: 'var(--black)', color: '#fff', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
+              >
+                ⬇ Descargar / Compartir
+              </button>
+            )}
           </div>
           <p style={{ fontSize: 12, color: 'var(--grey-400)', marginBottom: 16 }}>
             {scheduleRounds.length} ronda{scheduleRounds.length !== 1 ? 's' : ''}
             {game.scoreConfig.roundLengthMode === 'fixed_time' && game.scoreConfig.fixedMinutes
               ? ` de ${game.scoreConfig.fixedMinutes} min fijos`
-              : ''} — cada equipo ya sabe con quién juega en cada una, desde ahora.
+              : ''} — {isRotation ? 'cada jugadora ya sabe con quién y contra quién juega, desde ahora' : 'cada equipo ya sabe con quién juega en cada una, desde ahora'}.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {scheduleRounds.map(round => (
               <div key={round.num} style={{ border: '1px solid var(--grey-100)' }}>
                 <div style={{ padding: '8px 14px', background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-100)', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>
                   Ronda {round.num}
+                  {roundStartTime(game, round.num) && <span style={{ marginLeft: 8 }}>· {roundStartTime(game, round.num)}</span>}
                   {round.num === game.currentRound && isLive && <span style={{ marginLeft: 8, color: 'var(--court-blue)' }}>● en curso</span>}
                 </div>
                 {round.courts.map(court => (
                   <div key={court.courtNum} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--grey-50)' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', width: 68, flexShrink: 0 }}>Cancha {court.courtNum}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--grey-400)', width: 68, flexShrink: 0 }}>
+                      Cancha {court.courtNum}
+                      {court.category && <span style={{ display: 'block', color: 'var(--court-blue)', marginTop: 2 }}>{court.category}</span>}
+                    </span>
                     <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{getPairNames(court.pair1)}</span>
                     <span style={{ fontSize: 11, color: 'var(--grey-300)' }}>vs</span>
                     <span style={{ fontSize: 13, fontWeight: 600, flex: 1, textAlign: 'right' }}>{getPairNames(court.pair2)}</span>
@@ -1887,6 +1954,17 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
+      {/* ── SECTION B.6: Agendas por jugadora (rotation) ─────────────────── */}
+      {isRotation && scheduleRounds.length > 0 && (
+        <div style={cardStyle}>
+          <div style={secTitle}>Agenda de cada jugadora</div>
+          <p style={{ fontSize: 12, color: 'var(--grey-400)', margin: '0 0 12px' }}>
+            Copiá o mandá por WhatsApp la agenda de cada una. También pueden buscarse solas en el link público del juego.
+          </p>
+          <PlayerAgendas game={game} rounds={scheduleRounds} highlightId={currentUser?.id} canCopyAll={canManage} />
+        </div>
+      )}
+
       {/* ── SECTION C: Iniciar Juego ──────────────────────────────────────── */}
       {isPending && (
         <div style={{ ...cardStyle, background: canStart ? 'var(--black)' : '#fff' }}>
@@ -1895,9 +1973,14 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               <div style={{ fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: canStart ? 'var(--bs-light)' : 'var(--grey-400)', marginBottom: 8 }}>
                 Iniciar Juego
               </div>
-              {!allConfirmed && (
+              {!allConfirmed && !isRotation && (
                 <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>
                   Faltan {game.maxPlayers - confirmedCount} jugadores para completar el juego
+                </div>
+              )}
+              {isRotation && !canStart && (
+                <div style={{ fontSize: 13, color: 'var(--grey-400)' }}>
+                  Generá el cronograma (arriba) antes de iniciar
                 </div>
               )}
               {allConfirmed && game.pairType === 'parejas' && !pairsLocked && (
@@ -2002,6 +2085,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', background: 'var(--grey-50)', borderBottom: '1px solid var(--grey-100)' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--grey-500)' }}>
                         Cancha {court.courtNum}
+                        {court.category && <span style={{ marginLeft: 8, color: 'var(--court-blue)' }}>{court.category}</span>}
                         {alreadyDone && <span style={{ marginLeft: 8, color: 'var(--turf-green)' }}>✓ Completada</span>}
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
@@ -2147,6 +2231,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
       {isLive && game.standings.length > 0 && (
         <div style={cardStyle}>
           <div style={secTitle}>Clasificación Actual</div>
+          {standingsCategoryChips}
           {/* Pairs standings (live) */}
           {game.pairType === 'parejas' && (() => {
             const pairStandings = computePairStandings(game, isPointsMode);
@@ -2208,8 +2293,8 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
             </thead>
             <tbody>
               {(() => {
-                const positions = getPositions(game.standings, isPointsMode);
-                return game.standings.map((s, i) => {
+                const positions = getPositions(shownStandings, isPointsMode);
+                return shownStandings.map((s, i) => {
                   const ds = getDisplayStats(s, isPointsMode);
                   const pos = positions[i];
                   return (
@@ -2238,6 +2323,7 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
           {/* Final standings */}
           <div style={cardStyle}>
             <div style={secTitle}>Clasificación Final</div>
+            {standingsCategoryChips}
             {/* Pairs standings */}
             {game.pairType === 'parejas' && (() => {
               const pairStandings = computePairStandings(game, isPointsMode);
@@ -2299,8 +2385,8 @@ export default function QuickGameDetailPage({ params }: { params: Promise<{ id: 
               </thead>
               <tbody>
                 {(() => {
-                  const positions = getPositions(game.standings, isPointsMode);
-                  return game.standings.map((s, i) => {
+                  const positions = getPositions(shownStandings, isPointsMode);
+                  return shownStandings.map((s, i) => {
                     const ds = getDisplayStats(s, isPointsMode);
                     const pos = positions[i];
                     return (
